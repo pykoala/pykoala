@@ -2146,6 +2146,10 @@ if __name__ == "__main__":
     # OFFSETS = [0.05949437860580531, 2.1424443691864097, 1.357097981084074, -0.22020665715518595]
 
 
+
+
+
+
 ###### Tring all together...
 
 # # ---------------------------------------------------------------------------
@@ -3491,141 +3495,6 @@ if __name__ == "__main__":
 #                          valid_wave_min = 3635, valid_wave_max = 5758,
 #                          plot=True, warnings=False)
 
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-#  Taylah again, 18 Apr 2019
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-
-
-#    path_main ="/DATA/KOALA/Taylah/ccd_1_TP_angel/"
-#    date="20161024"
-#    grating="580V"
-
-# # First we read the flat
-
-#    path_flat = path_main
-#    file_flatb=path_flat+"FLAT/24oct10067red.fits"
-#    flat_blue = KOALA_RSS(file_flatb, sky_method="none", do_extinction=False, apply_throughput=False, plot=True)
-# correct_ccd_defects = True, correct_high_cosmics = True, clip_high = 100, step_ccd = 50)
-
-# #
-# # THROUGHPUT CORRECTION USING SKYFLAT
-# #
-# # The very first thing that we need is to get the throughput correction.
-# # We use a skyflat that has not been divided by a flatfield
-# # First, provide path, skyflat file and name of the file that will keep the throughput correction
-#    path_skyflat = path_main
-#    file_skyflatb=path_skyflat+"SKYFLAT/24oct10001red.fits"
-#    throughput_file_blue=path_main+"SKYFLAT/20161024_580V_throughput_correction.dat"
-#
-# # If this has been done before, we can read the file containing the throughput correction
-#    throughput_blue = read_table(throughput_file_blue, ["f"] )
-#
-# # Now we read the RSS file, we ONLY correct for ccd defects and high cosmics
-#    skyflat_blue = KOALA_RSS(file_skyflatb, flat=flat_blue, apply_throughput=False, do_sky=False,
-#                             do_extinction=False, correct_ccd_defects = False,
-#                             correct_high_cosmics = True, clip_high = 100, step_ccd = 50, plot=True)
-
-
-#
-# # Next we find the relative throughput.
-# # If the data have been normalized by the FLATFIELD, we only need a SCALE between fibres,
-# # We consider the median value in the range [wave_min_scale, wave_max_scale] for all fibres and scale
-#
-#    skyflat_blue.find_relative_throughput(ymin=0, ymax=8000, wave_min_scale = 3837., wave_max_scale = 5705.)
-
-# # The relative throughput is an array stored in skyflat_red.relative_throughput
-# # We save that array in a text file that we can read in the future without the need of repeating this
-#    array_to_text_file(skyflat_blue.relative_throughput, filename= throughput_file_blue )
-#
-
-# # Now we read the RSS with the sky
-#    file_sky_b1 = path_main+"SKY/24oct10045red.fits"
-
-#    sky_b1 = KOALA_RSS(file_sky_b1, apply_throughput=True, skyflat = skyflat_blue,
-#                       do_sky=False, is_sky=True, win_sky=151,
-#                       correct_ccd_defects = False, correct_high_cosmics = True, clip_high = 100, step_ccd = 50,
-#                       do_extinction=True, plot=True)
-
-#    file1b=path_main+"24oct10044red.fits"
-
-#    sky1D=np.nanmedian(sky_b1.intensity_corrected, axis=0)
-
-#    taylah_b1 = KOALA_RSS(file1b,
-#                          apply_throughput=True, skyflat = skyflat_blue,
-#                          correct_ccd_defects = True, correct_high_cosmics = True, clip_high = 100, step_ccd=50, remove_5578 = True,
-##                          sky_method="self", n_sky=100,
-##                          sky_method="1D", sky_spectrum=sky1D,
-#                          sky_method="2D", sky_rss=sky_b1,
-#                          valid_wave_min = 3770, valid_wave_max = 5799, plot=True, warnings=False)
-
-#    p05=np.nanpercentile(taylah_b1.intensity_corrected,5)
-#    p95=np.nanpercentile(taylah_b1.intensity_corrected,95)
-#    print p05,p95
-#    max_abs=np.nanmax([np.abs(p05),np.abs(p95)])
-#    print max_abs
-
-#    taylah_b1.RSS_image(cmap="fuego", clow=-10, chigh=100)
-#    taylah_b1.RSS_image(image=taylah_b1.intensity, cmap="binary_r")
-
-
-# READ FLUX CALIBRATION BLUE
-#    path_main ="/DATA/KOALA/Taylah"
-#    flux_cal_file=path_main+"/ccd_1/20161024_580V_0p7_2k1_FLUX_CAL.dat"
-#    w_star,flux_calibration_20161024blue_0p7_2k1 = read_table(flux_cal_file, ["f", "f"] )
-#    print flux_calibration_20161024blue_0p7_2k1
-
-#    file2b=path_main+"24oct10046red.fits"
-#    rss_list=[file1b,file2b]
-#    sky_list=[sky_b1,sky_b1]
-#
-#    fits_file_blue=path_main+"taylah_blue_combined_cube_2_test.fits"
-#
-#    taylah_b2 = KOALA_reduce(rss_list, obj_name="Taylah",  description = "TAYLAH 2 CUBE", #fits_file=fits_file_blue,
-#                     do_rss=True, do_cubing=True, do_alignment=True, make_combined_cube=True,
-#                     # RSS
-#                     apply_throughput=True, skyflat = skyflat_blue,
-#                     #skyflat_list=["","","","","","",""],
-#                     correct_ccd_defects = True, correct_high_cosmics = True,
-#                     clip_high = 100, step_ccd = 50,
-#                     do_extinction=True,
-#                     #telluric_correction = telluric_correction_20161024red,
-#                     #telluric_correction_list=telluric_correction_list,
-#                     #do_sky=True, n_sky=30, sky_fibres=[1000], sky_spectrum=sky_spectrum,  #sky_exptime=[600.],
-#                     sky_method="2D", n_sky=50, sky_spectrum=sky1D, sky_rss=sky_b1, scale_sky_rss=0,
-#                     cut_sky=5., fmin=1, fmax=10, individual_sky_substraction = False,
-#                     #sky_list=[sky1D,sky1D],
-#                     sky_list=sky_list,
-#                     #id_el=True, high_fibres=10, brightest_line="Ha", cut=1.1, plot_id_el=False, broad=3.2,
-#                     #id_list=[6300.30, 6548.03, 6562.82, 6583.41, 6716.47, 6730.85],
-#                     #clean_sky_residuals = True, dclip=4.0, extra_w = 1.3, step_csr = 25,
-#
-#                     # CUBING
-#                     pixel_size_arcsec=.6, kernel_size_arcsec=1.25,   #0.7, 2.1
-#                     #offsets=[1000],
-##                     offsets = [-2.1257852374528596, -1.0207349832117187,
-##                               1.3238267284355543, -0.47277408142538779,
-##                               0.061423210164619491, 1.7355114520665069,
-##                               -0.77341766341993723, -0.80099277876100816,
-##                               -2.4955048635474295, -0.67757387806227876,
-##                               1.2482147909407613, -0.44356439968703953],
-#                     ADR=True,
-#                     flux_calibration=flux_calibration_20161024blue_0p7_2k1,
-#                     #flux_calibration_list=[[0],[0],[0],[0],[0],[0],[0]],
-#                     # COMMON
-#                     valid_wave_min = 3770, valid_wave_max = 5799,
-#                     plot= True, norm=colors.LogNorm(), fig_size=12,
-#                     warnings=False, verbose = False)
 
 
 # -----------------------------------------------------------------------------
