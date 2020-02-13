@@ -10098,8 +10098,8 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
         extra_w=1.3,
         step_csr=25,
         # CUBING
-        pixel_size=0.4,  #removed _arcsec to address name errors
-        kernel_size=1.2,  #removed _arcsec to address name errors
+        pixel_size_arcsec=0.4,
+        kernel_size_arcsec=1.2,
         offsets=[1000],
         ADR=False,
         flux_calibration=[0],
@@ -10128,13 +10128,13 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
         sky_rss_list = [[0], [0], [0], [0], [0], [0], [0], [0], [0], [0]]
         pk = (
             "_"
-            + str(int(pixel_size))
+            + str(int(pixel_size_arcsec))
             + "p"
-            + str(int((abs(pixel_size) - abs(int(pixel_size))) * 10))
+            + str(int((abs(pixel_size_arcsec) - abs(int(pixel_size_arcsec))) * 10))
             + "_"
-            + str(int(kernel_size))
+            + str(int(kernel_size_arcsec))
             + "k"
-            + str(int((abs(kernel_size) - abs(int(kernel_size))) * 100))
+            + str(int((abs(kernel_size_arcsec) - abs(int(kernel_size_arcsec))) * 100))
         )
 
         print("  1. Checking input values: ")
