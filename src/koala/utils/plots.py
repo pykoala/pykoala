@@ -1,16 +1,18 @@
 import matplotlib.pyplot as plt
 
-plot_redshift_peaks(fig_size,
-                    funcion,
-                    wavelength,
-                    lmin,
-                    lmax,
-                    fmin,
-                    fmax,
-                    cut,
-                    peaks,
-                    peaks_name,
-                    label):
+
+def plot_redshift_peaks(fig_size,
+                        funcion,
+                        wavelength,
+                        lmin,
+                        lmax,
+                        fmin,
+                        fmax,
+                        cut,
+                        peaks,
+                        peaks_name,
+                        label):
+
 """
 Check if all redshifts are similar, assuming check_redshift = 0.0003 by default
 # If OK, add id_peaks[i]=1, if not, id_peaks[i]=0
@@ -32,17 +34,19 @@ plt.xlim(lmin, lmax)
         plt.text(peaks[i], 1.8, label)
     plt.show()
 
-plot_weights_for_getting_smooth_spectrum(wlm,
-                                         s,
-                                         running_wave,
-                                         running_step_median,
-                                         fit_median,
-                                         fit_median_interpolated,
-                                         weight_fit_median,
-                                         fit_median_interpolated,
-                                         wave_min,
-                                         wave_max,
-                                         exclude_wlm):
+
+def plot_weights_for_getting_smooth_spectrum(wlm,
+                                             s,
+                                             running_wave,
+                                             running_step_median,
+                                             fit_median,
+                                             fit_median_interpolated,
+                                             weight_fit_median,
+                                             fit_median_interpolated,
+                                             wave_min,
+                                             wave_max,
+                                             exclude_wlm):
+
 """
 Weights for getting smooth spectrum
 """
@@ -79,13 +83,14 @@ plt.plot(wlm, fit_median_interpolated, label="fit median_interp")
     plt.close()
 
 
-plot_correction_in_fibre_p_fibre(fig_size,
-                                 wlm,
-                                 espectro_old,
-                                 espectro_fit_median,
-                                 espectro_new,
-                                 fibre_p,
-                                 clip_high):
+def plot_correction_in_fibre_p_fibre(fig_size,
+                                     wlm,
+                                     espectro_old,
+                                     espectro_fit_median,
+                                     espectro_new,
+                                     fibre_p,
+                                     clip_high):
+
 """
 Plot correction in fibre p_fibre
 """
@@ -123,7 +128,11 @@ plt.axhline(y=clip_high, color="k", linestyle=":", alpha=0.5)
     plt.close()
 
 
-def plot_suspicious_fibres(suspicious_fibres, fig_size, wave_min, wave_max, intensity_corrected_fiber=self.intensity_corrected):
+def plot_suspicious_fibres(suspicious_fibres,
+                           fig_size,
+                           wave_min,
+                           wave_max,
+                           intensity_corrected_fiber=self.intensity_corrected):
     """
     Plotting suspicious fibres
     """
@@ -151,7 +160,9 @@ def plot_suspicious_fibres(suspicious_fibres, fig_size, wave_min, wave_max, inte
         plt.close()
 
 
-def plot_skyline_5578(fig_size, flux_5578, flux_5578_medfilt):
+def plot_skyline_5578(fig_size,
+                      flux_5578,
+                      flux_5578_medfilt):
     """
     Checking throughput correction using skyline 5578
     """
