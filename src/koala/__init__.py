@@ -372,6 +372,9 @@ class RSS(object):
         verbose=False,
         fig_size=12,
     ):
+        """
+        Correct for Cosmic Rays and defects on the CCD
+        """
 
         print "\n> Correcting for high cosmics and CCD defects..."
 
@@ -1500,20 +1503,20 @@ class RSS(object):
 
         # Read data
         data_observatory = np.loadtxt(observatory_file, unpack=True)
-        extinction_curve_wavelenghts = data_observatory[0]
+        extinction_curve_wavelengths = data_observatory[0]
         extinction_curve = data_observatory[1]
         extinction_corrected_airmass = 10 ** (0.4 * self.airmass * extinction_curve)
 
         # Make fit
         tck = interpolate.splrep(
-            extinction_curve_wavelenghts, extinction_corrected_airmass, s=0
+            extinction_curve_wavelengths, extinction_corrected_airmass, s=0
         )
         self.extinction_correction = interpolate.splev(self.wavelength, tck, der=0)
 
         # Plot
         if plot:
             plt.figure(figsize=(10, 5))
-            plt.plot(extinction_curve_wavelenghts, extinction_corrected_airmass, "+")
+            plt.plot(extinction_curve_wavelengths, extinction_corrected_airmass, "+")
             plt.xlim(np.min(self.wavelength), np.max(self.wavelength))
             cinco_por_ciento = 0.05 * (
                 np.max(self.extinction_correction) - np.min(self.extinction_correction)
@@ -7461,7 +7464,7 @@ def spectrum_to_fits_file(
 
     Parameters
     ----------
-    wavelenght: float
+    wavelength: float 
         wavelength.
     flux: float
         flux per wavelenght
@@ -7527,6 +7530,15 @@ def gauss(x, x0, y0, sigma):
 
 
 def gauss_fix_x0(x, x0, y0, sigma):
+    """
+    A Gaussian of fixed location (x0)
+
+    Args:
+        x (array): A list of x locations to make the Gaussian at
+        x0 (float): Location of the Gaussian 
+        y0 (float): Amplitude
+        sigma (float): Gaussian width
+    """
     p = [y0, sigma]
     return p[0] * np.exp(-0.5 * ((x - x0) / p[1]) ** 2)
 
@@ -9274,6 +9286,11 @@ def smooth_spectrum(
     verbose=False,
 ):
 
+    """
+    Smooth a spectrum
+    TODO: More here
+    """
+
     if verbose:
         print "\n> Computing smooth spectrum..."
 
@@ -9391,7 +9408,23 @@ def smooth_spectrum(
 # -----------------------------------------------------------------------------
 def obtain_sky_spectrum(
     sky, low_fibres=200, plot=True, fig_size=12, fcal=False, verbose=True
-):  # It uses the lowest low_fibres fibres to get an integrated spectrum
+):  
+    """
+    Obtain a sky-spectrum using N fibres with the lowest intensity values. 
+    We sort skyfibres by their integrated flux. The lowest `low_fibres` fibres are then used to create a sky-spectrum by median-combining them. We then return this 1D spectrum
+    TODO: Fix argument types
+
+    Args:
+        sky ():
+        low_fibres (int): After sorting, the lowest `low_fibres` are combined together
+        plot (bool): If True, plot the spectrum
+        fcal (bool): Passed to plot_plot
+        verbose (bool): If True, print out the regions we've included
+
+    Returns:
+        array: a 1D sky spectrum. 
+    """
+    # It uses the lowest low_fibres fibres to get an integrated spectrum
     integrated_intensity_sorted = np.argsort(sky.integrated_fibre)
     region = []
     for fibre in range(low_fibres):
@@ -9415,6 +9448,13 @@ def obtain_sky_spectrum(
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def median_filter(intensity_corrected, n_spectra, n_wave, win_sky=151):
+    """
+    Apply a median filter to a two dimensional (n_spectra x n_wave) array of sky spectra. The median filtering occurs at each wavelength slice between the n_spectra sky spectra. The actual filtering is handled by scipy.signal
+    TODO: Check this is correct- I'm unsure why medfilt_sky should be a 2D array too? SPV
+
+    Args:
+        intensity_corrected (array of shape n_spectra x n_wave): Spectra we want to median filter
+    """
 
     medfilt_sky = np.zeros((n_spectra, n_wave))
     for wave in range(n_wave):
@@ -9683,6 +9723,19 @@ def sky_spectrum_from_fibres_using_file(
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def ds9_offsets(x1, y1, x2, y2, pixel_size_arc=0.6):
+    """
+    Print information about offsets in pixels between (x1, y1) and (x2, y2). This assumes that (x1, y1) and (x2, y2) are close on the sky and small amngle approximations are valid!
+
+    Args:
+        x1 (float): x position 1 (in pixels)
+        y1 (float): y position 1 (in pixels
+        x2 (float): x position 2 (in pixels)
+        y2 (float): y position 2 (in pixels)
+        pixel_size_arc (float, default=0.6): The pixel size in arcseconds
+
+    Returns:
+        None
+    """
 
     delta_x = x2 - x1
     delta_y = y2 - y1
@@ -9724,6 +9777,13 @@ def offset_positions(
     dec2s,
     decimals=2,
 ):
+    """
+    Work out offsets between two sky positions and print them to the screen. This could probably be replaced with some astropy functions. 
+    TODO: Include arguments
+
+    Returns: 
+        None
+    """
 
     ra1 = ra1h + ra1m / 60.0 + ra1s / 3600.0
     ra2 = ra2h + ra2m / 60.0 + ra2s / 3600.0
@@ -9839,6 +9899,14 @@ def plot_plot(
 # -----------------------------------------------------------------------------
 # Definition introduced by Matt
 def MAD(x):
+    """
+    Derive the Median Absolute Deviation of an array
+    Args:
+        x (array): Array of numbers to find the median of
+
+    Returns:
+        float: 
+    """
     MAD = np.nanmedian(np.abs(x - np.nanmedian(x)))
     return MAD / 0.6745
 
@@ -9847,6 +9915,17 @@ def MAD(x):
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def rebin_spec(wave, specin, wavnew):
+    """
+    Rebin a spectrum with a new wavelength array
+
+    Args:
+        wave (array): wavelength arrau
+        specin (array): Input spectrum to be shifted
+        shift (float): Shift. Same units as wave?
+
+    Returns:
+        New spectrum at shifted wavelength values
+    """
     spec = spectrum.ArraySourceSpectrum(wave=wave, flux=specin)
     f = np.ones(len(wave))
     filt = spectrum.ArraySpectralElement(wave, f, waveunits="angstrom")
@@ -9858,11 +9937,21 @@ def rebin_spec(wave, specin, wavnew):
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def rebin_spec_shift(wave, specin, shift):
+    """
+    Rebin a spectrum and shift in wavelength. Makes a new wavelength array and then passes this to rebin_spec
+    
+    Args:
+        wave (array): wavelength arrau
+        specin (array): Input spectrum to be shifted
+        shift (float): Shift. Same units as wave?
+
+    Returns:
+        New spectrum at shifted wavelength values
+
+    """
     wavnew = wave + shift
-    spec = spectrum.ArraySourceSpectrum(wave=wave, flux=specin)
-    f = np.ones(len(wave))
-    filt = spectrum.ArraySpectralElement(wave, f, waveunits="angstrom")
-    obs = observation.Observation(spec, filt, binset=wavnew, force="taper")
+    obs = rebin_spec(wave, specin, wavnew)
+
     return obs.binflux
 
 
@@ -9870,6 +9959,16 @@ def rebin_spec_shift(wave, specin, shift):
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def compare_fix_2dfdr_wavelengths(rss1, rss2):
+    """
+    Compare small fixes we've made to the 2dFdr wavelengths between two RSS files. 
+    
+    Args:
+        rss1 (RSS instance): An instance of the RSS class
+        rss2 (RSS instance): An instance of the RSS class
+
+    Returns:
+        None
+    """
 
     print "\n> Comparing small fixing of the 2dFdr wavelengths between two rss..."
 
