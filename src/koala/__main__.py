@@ -67,24 +67,24 @@ if __name__ == "__main__":
     #    file_skyflatr=path_skyflat+"10mar20065red.fits"                                  # FILE  DIVIDED BY THE FLAT, DON'T USE THIS
     #    throughput_file_red=path_skyflat+date+"_"+grating+"_throughput_correction.dat"
 
-        path_skyflat = path_main+"/"+grating+"/"
-        file_skyflatr=path_skyflat+"10mar2_combined.fits"                                  # FILE NOT DIVIDED BY THE FLAT
-        throughput_file_red=path_skyflat+date+"_"+grating+"_throughput_correction.dat"
+    path_skyflat = path_main+"/"+grating+"/"
+    file_skyflatr=path_skyflat+"10mar2_combined.fits"                                  # FILE NOT DIVIDED BY THE FLAT
+    throughput_file_red=path_skyflat+date+"_"+grating+"_throughput_correction.dat"
     #
     ## #
     ## # If this has been done before, we can read the file containing the throughput correction
     ##    throughput_red = read_table(throughput_file_red, ["f"] )
     ## #
     ## # Now we read the RSS file, we ONLY correct for ccd defects and high cosmics
-        skyflat_red = KOALA_RSS(file_skyflatr, flat="", apply_throughput=False, sky_method="none",                 #skyflat = skyflat_red,
-                                 do_extinction=False, correct_ccd_defects = False,
-                                 correct_high_cosmics = False, clip_high = 100, step_ccd = 50, plot=True)
+    skyflat_red = KOALA_RSS(file_skyflatr, flat="", apply_throughput=False, sky_method="none",                 #skyflat = skyflat_red,
+                            do_extinction=False, correct_ccd_defects = False,
+                            correct_high_cosmics = False, clip_high = 100, step_ccd = 50, plot=True)
     ## #
     ## # Next we find the relative throughput.
     ## # If the data have been normalized by the FLATFIELD, we only need a SCALE between fibres,
     ## # We consider the median value in the range [wave_min_scale, wave_max_scale] for all fibres and scale
     ## #
-        skyflat_red.find_relative_throughput(ymin=0, ymax=800000,  wave_min_scale=6300, wave_max_scale=6500)  #
+    skyflat_red.find_relative_throughput(ymin=0, ymax=800000,  wave_min_scale=6300, wave_max_scale=6500)  #
     # #
     # # The relative throughput is an array stored in skyflat_red.relative_throughput
     # # We save that array in a text file that we can read in the future without the need of repeating this
@@ -100,14 +100,14 @@ if __name__ == "__main__":
     # # Uncomment the next two sections and skip the rest till "OBTAIN SKY SPECTRA"
     #
     # # READ FLUX CALIBRATION RED
-        flux_cal_file=path_main+"koala/flux_calibration_20180310_385R_0p6_1k8.dat"
-        w_star,flux_calibration_20161024_1000R_0p6_1k25 = read_table(flux_cal_file, ["f", "f"] )
-        print flux_calibration_20161024_1000R_0p6_1k25
+    flux_cal_file=path_main+"koala/flux_calibration_20180310_385R_0p6_1k8.dat"
+    w_star,flux_calibration_20161024_1000R_0p6_1k25 = read_table(flux_cal_file, ["f", "f"] )
+    print flux_calibration_20161024_1000R_0p6_1k25
     #
     # # READ TELLURIC CORRECTION FROM FILE
-        telluric_correction_file=path_main+"koala/telluric_correction_20180310_385R_0p6_1k25.dat"
-        w_star,telluric_correction_20180310 = read_table(telluric_correction_file, ["f", "f"] )
-        print telluric_correction_20180310
+    telluric_correction_file=path_main+"koala/telluric_correction_20180310_385R_0p6_1k25.dat"
+    w_star,telluric_correction_20180310 = read_table(telluric_correction_file, ["f", "f"] )
+    print telluric_correction_20180310
 
     # # READ STAR 1
     # # First we provide names, paths, files...
@@ -433,31 +433,31 @@ if __name__ == "__main__":
     # #
     # # Using the same files than objects but chosing fibres without object emission
     #
-        file1r=path_main+date+"/"+grating+"/10mar20091red.fits"
-        file2r=path_main+date+"/"+grating+"/10mar20092red.fits"
-        file3r=path_main+date+"/"+grating+"/10mar20093red.fits"
-    
-        file1r=pox4arf
-        sky_r1 = KOALA_RSS(file1r, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
-                           correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
-                           sky_method="none", is_sky=True, win_sky=151,
-                           plot=True)
-    
-        sky1=sky_r1.plot_combined_spectrum(list_spectra=[870,871,872,873,875,876,877,878,879,880,881,882,883,884,885,886,887,888,889,900], median=True)
-    
-        sky_r2 = KOALA_RSS(file2r, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
-                           correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
-                           sky_method="none", is_sky=True, win_sky=151,
-                           plot=True)
-    
-        sky2=sky_r2.plot_combined_spectrum(list_spectra=[870,871,872,873,875,876,877,878,879,880,881,882,883,884,885,886,887,888,889,900], median=True)
+    file1r=path_main+date+"/"+grating+"/10mar20091red.fits"
+    file2r=path_main+date+"/"+grating+"/10mar20092red.fits"
+    file3r=path_main+date+"/"+grating+"/10mar20093red.fits"
 
-        sky_r3 = KOALA_RSS(file3r, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
-                           correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
-                           sky_method="none", is_sky=True, win_sky=151,
-                           plot=True)
-    
-        sky3=sky_r3.plot_combined_spectrum(list_spectra=[870,871,872,873,875,876,877,878,879,880,881,882,883,884,885,886,887,888,889,900], median=True)
+    file1r=pox4arf
+    sky_r1 = KOALA_RSS(file1r, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
+                       correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
+                       sky_method="none", is_sky=True, win_sky=151,
+                       plot=True)
+
+    sky1=sky_r1.plot_combined_spectrum(list_spectra=[870,871,872,873,875,876,877,878,879,880,881,882,883,884,885,886,887,888,889,900], median=True)
+
+    sky_r2 = KOALA_RSS(file2r, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
+                       correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
+                       sky_method="none", is_sky=True, win_sky=151,
+                       plot=True)
+
+    sky2=sky_r2.plot_combined_spectrum(list_spectra=[870,871,872,873,875,876,877,878,879,880,881,882,883,884,885,886,887,888,889,900], median=True)
+
+    sky_r3 = KOALA_RSS(file3r, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
+                       correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
+                       sky_method="none", is_sky=True, win_sky=151,
+                       plot=True)
+
+    sky3=sky_r3.plot_combined_spectrum(list_spectra=[870,871,872,873,875,876,877,878,879,880,881,882,883,884,885,886,887,888,889,900], median=True)
 
     # #
 # #
