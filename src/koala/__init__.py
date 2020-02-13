@@ -9947,8 +9947,9 @@ def rebin_spec_shift(wave, specin, shift):
     """
     wavnew = wave + shift
     obs = rebin_spec(wave, specin, wavnew)
-
-    return obs.binflux
+    # Updating from pull request #16. rebin_spec returns a .binflux object. This function tried to create a
+    # binflux.binflux object.
+    return obs
 
 
 # -----------------------------------------------------------------------------
