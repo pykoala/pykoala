@@ -100,12 +100,12 @@ if __name__ == "__main__":
     # # Uncomment the next two sections and skip the rest till "OBTAIN SKY SPECTRA"
     #
     # # READ FLUX CALIBRATION RED
-    flux_cal_file=path_main+"koala/flux_calibration_20180310_385R_0p6_1k8.dat"
+    flux_cal_file=path_main+"/koala/flux_calibration_20180310_385R_0p6_1k8.dat"
     w_star,flux_calibration_20161024_1000R_0p6_1k25 = read_table(flux_cal_file, ["f", "f"] )
     print flux_calibration_20161024_1000R_0p6_1k25
     #
     # # READ TELLURIC CORRECTION FROM FILE
-    telluric_correction_file=path_main+"koala/telluric_correction_20180310_385R_0p6_1k25.dat"
+    telluric_correction_file=path_main+"/koala/telluric_correction_20180310_385R_0p6_1k25.dat"
     w_star,telluric_correction_20180310 = read_table(telluric_correction_file, ["f", "f"] )
     print telluric_correction_20180310
 
@@ -431,9 +431,9 @@ if __name__ == "__main__":
     # #
     # # Using the same files than objects but chosing fibres without object emission
     #
-    file1r=path_main+date+"/"+grating+"/10mar20091red.fits"
-    file2r=path_main+date+"/"+grating+"/10mar20092red.fits"
-    file3r=path_main+date+"/"+grating+"/10mar20093red.fits"
+    file1r=path_main+"/"+grating+"/10mar20091red.fits"
+    file2r=path_main+"/"+grating+"/10mar20092red.fits"
+    file3r=path_main+"/"+grating+"/10mar20093red.fits"
 
     file1r=pox4arf
     sky_r1 = KOALA_RSS(file1r, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
@@ -477,9 +477,9 @@ if __name__ == "__main__":
    
     OBJECT = "POX4"
     DESCRIPTION = "POX4 CUBE"   
-    file1r=path_main+grating+"/10mar20091red.fits"
-    file2r=path_main+grating+"/10mar20092red.fits"
-    file3r=path_main+grating+"/10mar20093red.fits"
+    file1r=path_main+"/"+grating+"/10mar20091red.fits"
+    file2r=path_main+"/"+grating+"/10mar20092red.fits"
+    file3r=path_main+"/"+grating+"/10mar20093red.fits"
    
      
     rss3_all = KOALA_RSS(file3r, #save_rss_to_fits_file=path_main+"Tol30Ar3_rss_tcwsreu.fits", 
@@ -501,12 +501,12 @@ if __name__ == "__main__":
    
    
     cube_test=Interpolated_cube(rss3_all, pixel_size, kernel_size, flux_calibration=flux_calibration_20180310_385R_0p6_1k8, plot=False)   
-    save_fits_file(cube_test, path_main+date+"/"+grating+"/POX4_d_cube_test.fits", ADR=False)
+    save_fits_file(cube_test, path_main+"/"+grating+"/POX4_d_cube_test.fits", ADR=False)
 
 
     rss_list=[file1r,file2r,file3r]  #,file4r,file5r,file6r,file7r]
     sky_list=[sky1,sky2,sky3]
-    fits_file_red=path_main+date+"/"+grating+"/POX4_A_red_combined_cube_3.fits"
+    fits_file_red=path_main+"/"+grating+"/POX4_A_red_combined_cube_3.fits"
 
 
 
