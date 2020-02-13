@@ -178,3 +178,130 @@ def plot_skyline_5578(fig_size,
     plt.minorticks_on()
     plt.show()
     plt.close()
+
+
+def plot_spec(w, 
+              f, 
+              size=0):
+    """
+    Plot spectrum given wavelength, w, and flux, f.
+    """              
+    if size != 0:
+        plt.figure(figsize=(size, size / 2.5))
+    plt.plot(w, f)
+    return
+
+
+def plot_plot(
+    x,
+    y,
+    xmin=0,
+    xmax=0,
+    ymin=0,
+    ymax=0,
+    ptitle="Pretty plot",
+    xlabel="Wavelength [$\AA$]",
+    ylabel="Flux [counts]",
+    fcal=False,
+    save_file="",
+    frameon=False,
+    loc=0,
+    ncol=4,
+    fig_size=0,
+):
+    """
+    Plot beautiful spectrum 
+    """  
+
+    if fig_size != 0:
+        plt.figure(figsize=(fig_size, fig_size / 2.5))
+        plt.plot(x, y)
+
+    if xmin == 0:
+        xmin = np.nanmin(x)
+    if xmax == 0:
+        xmax = np.nanmax(x)
+    if ymin == 0:
+        ymin = np.nanmin(y)
+    if ymax == 0:
+        ymax = np.nanmax(y)
+
+    plt.xlim(xmin, xmax)
+    plt.ylim(ymin, ymax)
+    plt.title(ptitle)
+    plt.minorticks_on()
+    if loc != 0:
+        plt.legend(frameon=frameon, loc=loc, ncol=ncol)
+    plt.xlabel(xlabel)
+    if fcal:
+        ylabel = "Flux [ erg cm$^{-2}$ s$^{-1}$ A$^{-1}$]"
+    plt.ylabel(ylabel)
+
+    if save_file == "":
+        plt.show()
+    else:
+        plt.savefig(save_file)
+    plt.close()
+
+
+
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+def plot_response(calibration_star_cubes, 
+                  scale=[1, 1, 1, 1]):
+    """
+    Plot response curves for calibration stars.
+    """                   
+            
+    print("\n> Plotting response of standard stars...\n")
+
+    plt.figure(figsize=(11, 8))
+    wavelength = calibration_star_cubes[0].wavelength
+    mean_curve = np.zeros_like(wavelength)
+    mean_values = []
+    i = 0
+    for star in calibration_star_cubes:
+        good = np.where(~np.isnan(star.response_curve))
+        wl = star.response_wavelength[good]
+        R = star.response_curve[good] * scale[i]
+        mean_curve += np.interp(wavelength, wl, R)
+        star.response_full = np.interp(wavelength, wl, R)
+        plt.plot(
+            star.response_wavelength,
+            star.response_curve * scale[i],
+            label=star.description,
+            alpha=0.5,
+            linewidth=2,
+        )
+        print("  Mean value for ", star.object, " = ", np.nanmean(
+            star.response_curve * scale[i]
+        ), "      scale = ", scale[i])
+        mean_values.append(np.nanmean(star.response_curve) * scale[i])
+        i = i + 1
+    mean_curve /= len(calibration_star_cubes)
+
+    response_rms = np.zeros_like(wavelength)
+    for star in calibration_star_cubes:
+        response_rms += np.abs(star.response_full - mean_curve)
+    response_rms /= len(calibration_star_cubes)
+    dispersion = old_div(np.nansum(response_rms), np.nansum(mean_curve))
+    print("  Variation in flux calibrations =  {:.2f} %".format(dispersion * 100.0))
+
+    # dispersion=np.nanmax(mean_values)-np.nanmin(mean_values)
+    # print "  Variation in flux calibrations =  {:.2f} %".format(dispersion/np.nanmedian(mean_values)*100.)
+
+    plt.plot(
+        wavelength,
+        mean_curve,
+        "k",
+        label="mean response curve",
+        alpha=0.2,
+        linewidth=10,
+    )
+    plt.legend(frameon=False, loc=2)
+    plt.ylabel("FLux")
+    plt.xlabel("Wavelength [$\AA$]")
+    plt.title("Response curve for calibration stars")
+    plt.minorticks_on()
+    plt.show()
+
