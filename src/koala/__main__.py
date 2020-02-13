@@ -88,7 +88,7 @@ if __name__ == "__main__":
     # #
     # # The relative throughput is an array stored in skyflat_red.relative_throughput
     # # We save that array in a text file that we can read in the future without the need of repeating this
-        array_to_text_file(skyflat_red.relative_throughput, filename= throughput_file_red )
+    array_to_text_file(skyflat_red.relative_throughput, filename= throughput_file_red )
     # #
     # #
     # # ---------------------------------------------------------------------------
