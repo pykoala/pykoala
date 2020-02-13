@@ -51,5 +51,6 @@ setuptools.setup(
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3 :: Only',
     ],
+    include_package_data=True,
     cmdclass=versioneer.get_cmdclass(),
 )
