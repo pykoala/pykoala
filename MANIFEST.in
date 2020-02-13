@@ -14,3 +14,6 @@ recursive-include docs Makefile
 recursive-include tests *.py
 include *.txt
 recursive-include * .empty
+
+recursive-exclude .circleci *
+exclude .circleci
