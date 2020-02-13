@@ -101,13 +101,13 @@ if __name__ == "__main__":
     #
     # # READ FLUX CALIBRATION RED
     flux_cal_file=path_main+"/koala/flux_calibration_20180310_385R_0p6_1k8.dat"
-    w_star,flux_calibration_20161024_1000R_0p6_1k25 = read_table(flux_cal_file, ["f", "f"] )
-    print flux_calibration_20161024_1000R_0p6_1k25
+    w_star,flux_calibration = read_table(flux_cal_file, ["f", "f"] )
+    print flux_calibration
     #
     # # READ TELLURIC CORRECTION FROM FILE
     telluric_correction_file=path_main+"/koala/telluric_correction_20180310_385R_0p6_1k25.dat"
-    w_star,telluric_correction_20180310 = read_table(telluric_correction_file, ["f", "f"] )
-    print telluric_correction_20180310
+    w_star,telluric_correction = read_table(telluric_correction_file, ["f", "f"] )
+    print telluric_correction
 
     # # READ STAR 1
     # # First we provide names, paths, files...
@@ -435,7 +435,6 @@ if __name__ == "__main__":
     file2r=path_main+"/"+grating+"/10mar20092red.fits"
     file3r=path_main+"/"+grating+"/10mar20093red.fits"
 
-    file1r=pox4arf
     sky_r1 = KOALA_RSS(file1r, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
                        correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
                        sky_method="none", is_sky=True, win_sky=151,
@@ -463,16 +462,7 @@ if __name__ == "__main__":
 # # TIME FOR THE OBJECT !!
 # # ---------------------------------------------------------------------------
 # #
-# #
-# #
-   
-# # READ FLUX CALIBRATION RED  
-    flux_calibration_file = path_main+"flux_calibration_20180310_385R_0p6_1k8.dat"  
-    w_star,flux_calibration_20180310_385R_0p6_1k8 = read_table(flux_calibration_file, ["f", "f"] )
-   
-# # READ TELLURIC CORRECTION FROM FILE   
-    telluric_correction_file = path_main+"telluric_correction_20180310_385R_0p6_1k25.dat"
-    w_star,telluric_correction_20180310 = read_table(telluric_correction_file, ["f", "f"] )
+
    
    
     OBJECT = "POX4"
@@ -491,7 +481,7 @@ if __name__ == "__main__":
                          id_el=False, high_fibres=10, brightest_line="Ha", cut=1.5, plot_id_el=True, broad=1.8, brightest_line_wavelength =6641., #fibre=422, #422
                          id_list=[6300.30, 6312.1, 6363.78, 6548.03, 6562.82, 6583.41, 6678.15, 6716.47, 6730.85, 7065.28, 7135.78, 7318.39, 7329.66, 8750.47, 8862.79, 9014.91, 9069.0],
                          clean_sky_residuals = False, dclip=3.0, extra_w = 1.3, step_csr = 25, fibre = 0,
-                         telluric_correction = telluric_correction_20180310,
+                         telluric_correction = telluric_correction,
                          do_extinction=True, correct_negative_sky = True,
                          plot=False, warnings=True)
    
@@ -500,7 +490,7 @@ if __name__ == "__main__":
    
    
    
-    cube_test=Interpolated_cube(rss3_all, pixel_size, kernel_size, flux_calibration=flux_calibration_20180310_385R_0p6_1k8, plot=False)   
+    cube_test=Interpolated_cube(rss3_all, pixel_size, kernel_size, flux_calibration=flux_calibration, plot=False)   
     save_fits_file(cube_test, path_main+"/"+grating+"/POX4_d_cube_test.fits", ADR=False)
 
 
@@ -522,14 +512,14 @@ if __name__ == "__main__":
                           id_el=False, high_fibres=10, cut=1.5, plot_id_el=True, broad=1.8, 
                           id_list=[6300.30, 6312.1, 6363.78, 6548.03, 6562.82, 6583.41, 6678.15, 6716.47, 6730.85, 7065.28, 7135.78, 7318.39, 7329.66, 8750.47, 8862.79, 9014.91, 9069.0],
                           #clean_sky_residuals = False, dclip=3.0, extra_w = 1.3, step_csr = 25,
-                          telluric_correction = telluric_correction_20180310,
+                          telluric_correction = telluric_correction,
                           do_extinction=True, correct_negative_sky = True,                                          
                                  
                           pixel_size_arcsec=pixel_size, kernel_size_arcsec=kernel_size,
                           #offsets=[-0.54, -0.87, 1.58, -1.26] # EAST-/WEST+  NORTH-/SOUTH+
                                   
                           ADR=False,
-                          flux_calibration=flux_calibration_20180310_385R_0p6_1k25,
+                          flux_calibration=flux_calibration,
                           #size_arcsec=[60,60],
                          
                           valid_wave_min = 6085, valid_wave_max = 9305,
