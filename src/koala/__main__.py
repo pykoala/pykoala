@@ -78,13 +78,13 @@ if __name__ == "__main__":
     ## # Now we read the RSS file, we ONLY correct for ccd defects and high cosmics
     skyflat_red = KOALA_RSS(file_skyflatr, flat="", apply_throughput=False, sky_method="none",                 #skyflat = skyflat_red,
                             do_extinction=False, correct_ccd_defects = False,
-                            correct_high_cosmics = False, clip_high = 100, step_ccd = 50, plot=True)
+                            correct_high_cosmics = False, clip_high = 100, step_ccd = 50, plot=False)
     ## #
     ## # Next we find the relative throughput.
     ## # If the data have been normalized by the FLATFIELD, we only need a SCALE between fibres,
     ## # We consider the median value in the range [wave_min_scale, wave_max_scale] for all fibres and scale
     ## #
-    skyflat_red.find_relative_throughput(ymin=0, ymax=800000,  wave_min_scale=6300, wave_max_scale=6500)  #
+    skyflat_red.find_relative_throughput(ymin=0, ymax=800000,  wave_min_scale=6300, wave_max_scale=6500, plot=False)  #
     # #
     # # The relative throughput is an array stored in skyflat_red.relative_throughput
     # # We save that array in a text file that we can read in the future without the need of repeating this
@@ -439,21 +439,21 @@ if __name__ == "__main__":
     sky_r1 = KOALA_RSS(file1r, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
                        correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
                        sky_method="none", is_sky=True, win_sky=151,
-                       plot=True)
+                       plot=False)
 
     sky1=sky_r1.plot_combined_spectrum(list_spectra=[870,871,872,873,875,876,877,878,879,880,881,882,883,884,885,886,887,888,889,900], median=True)
 
     sky_r2 = KOALA_RSS(file2r, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
                        correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
                        sky_method="none", is_sky=True, win_sky=151,
-                       plot=True)
+                       plot=False)
 
     sky2=sky_r2.plot_combined_spectrum(list_spectra=[870,871,872,873,875,876,877,878,879,880,881,882,883,884,885,886,887,888,889,900], median=True)
 
     sky_r3 = KOALA_RSS(file3r, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
                        correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
                        sky_method="none", is_sky=True, win_sky=151,
-                       plot=True)
+                       plot=False)
 
     sky3=sky_r3.plot_combined_spectrum(list_spectra=[870,871,872,873,875,876,877,878,879,880,881,882,883,884,885,886,887,888,889,900], median=True)
 
@@ -493,14 +493,14 @@ if __name__ == "__main__":
                          clean_sky_residuals = False, dclip=3.0, extra_w = 1.3, step_csr = 25, fibre = 0,
                          telluric_correction = telluric_correction_20180310,
                          do_extinction=True, correct_negative_sky = True,
-                         plot=True, warnings=True)
+                         plot=False, warnings=True)
    
 #      Fitting a second-order polynomy a0x +  a1x * fibre + a2x * fibre**2:  
 #      a0x = 0.119694453613    a1x = -0.000707644207572      a2x = 2.03806478671e-07
    
    
    
-    cube_test=Interpolated_cube(rss3_all, pixel_size, kernel_size, flux_calibration=flux_calibration_20180310_385R_0p6_1k8, plot=True)   
+    cube_test=Interpolated_cube(rss3_all, pixel_size, kernel_size, flux_calibration=flux_calibration_20180310_385R_0p6_1k8, plot=False)   
     save_fits_file(cube_test, path_main+date+"/"+grating+"/POX4_d_cube_test.fits", ADR=False)
 
 
@@ -533,7 +533,7 @@ if __name__ == "__main__":
                           #size_arcsec=[60,60],
                          
                           valid_wave_min = 6085, valid_wave_max = 9305,
-                          plot=True, warnings=False)  
+                          plot=False, warnings=False)  
 end = timer()
 print "\n> Elapsing time = ", end - start, "s"
 # -----------------------------------------------------------------------------
