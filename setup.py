@@ -23,6 +23,7 @@ setuptools.setup(
         "matplotlib==2.2.3",
         "numpy==1.16.6",
         "scipy==1.2.3",
+        'future',
     ],
     #python_requires = '>=3.5',
     #author = "James Tocknell",
