@@ -4,7 +4,7 @@
 # by Angel Lopez-Sanchez and Yago Ascasibar
 # Extra work by Ben Lawson (MQ PACE student)
 # Plus Taylah and Matt (sky substraction)
-version = "Version 0.71 - 1st October 2019"
+version = "Version 0.72 - 13th February 2020"
 
 # -----------------------------------------------------------------------------
 # Start timer
@@ -10083,6 +10083,1472 @@ def compare_fix_2dfdr_wavelengths(rss1, rss2):
     print "\n> The median rms is {:8.6f} A,  resolution = {:5.2f} A,  error = {:5.3} %".format(
         np.nanmedian(dif), resolution, error
     )
+
+
+
+
+
+
+
+
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
+
+
+# -----------------------------------------------------------------------------
+#    MACRO FOR EVERYTHING 19 Sep 2019, including alignment 2-10 cubes
+# -----------------------------------------------------------------------------
+
+class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
+    def __init__(
+        self,
+        rss_list,
+        fits_file="",
+        obj_name="",
+        description="",
+        do_rss=True,
+        do_cubing=True,
+        do_alignment=True,
+        make_combined_cube=True,
+        rss_clean=False,
+        save_rss_to_fits_file_list=["", "", "", "", "", "", "", "", "", ""],
+        save_aligned_cubes=False,
+        # RSS
+        # skyflat_file is a RSS, skyflat and skyflat_list are the names of objects keeping the relative throughput of skyflats
+        apply_throughput=True,
+        skyflat="",
+        skyflat_file="",
+        flat="",
+        skyflat_list=["", "", "", "", "", "", "", "", "", ""],
+        # This line is needed if doing FLAT when reducing (NOT recommended)
+        plot_skyflat=False,
+        wave_min_scale=0,
+        wave_max_scale=0,
+        ymin=0,
+        ymax=0,
+        # Correct CCD defects & high cosmics
+        correct_ccd_defects=False,
+        correct_high_cosmics=False,
+        clip_high=100,
+        step_ccd=50,
+        remove_5578=False,
+        plot_suspicious_fibres=False,
+        # Correct for small shofts in wavelength
+        fix_wavelengths=False,
+        sol=[0, 0, 0],
+        # Correct for extinction
+        do_extinction=True,
+        # Sky substraction
+        sky_method="self",
+        n_sky=50,
+        sky_fibres=[1000],  # do_sky=True
+        sky_spectrum=[0],
+        sky_rss=[0],
+        scale_sky_rss=0,
+        scale_sky_1D=0,
+        correct_negative_sky=False,
+        auto_scale_sky=False,
+        sky_wave_min=0,
+        sky_wave_max=0,
+        cut_sky=5.0,
+        fmin=1,
+        fmax=10,
+        individual_sky_substraction=False,
+        fibre_list=[100, 200, 300, 400, 500, 600, 700, 800, 900],
+        sky_list=[[0], [0], [0], [0], [0], [0], [0], [0], [0], [0]],
+        # Telluric correction
+        telluric_correction=[0],
+        telluric_correction_list=[[0], [0], [0], [0], [0], [0], [0], [0], [0], [0]],
+        # Identify emission lines
+        id_el=False,
+        high_fibres=10,
+        brightest_line="Ha",
+        cut=1.5,
+        plot_id_el=True,
+        broad=2.0,
+        id_list=[0],
+        brightest_line_wavelength=0,
+        # Clean sky residuals
+        clean_sky_residuals=False,
+        dclip=3.0,
+        extra_w=1.3,
+        step_csr=25,
+        # CUBING
+        pixel_size_arcsec=0.4,
+        kernel_size_arcsec=1.2,
+        offsets=[1000],
+        ADR=False,
+        flux_calibration=[0],
+        flux_calibration_list=[[0], [0], [0], [0], [0], [0], [0], [0], [0], [0]],
+        # COMMON TO RSS AND CUBING
+        valid_wave_min=0,
+        valid_wave_max=0,
+        plot=True,
+        norm=colors.LogNorm(),
+        fig_size=12,
+        warnings=False,
+        verbose=False,
+    ):
+        """
+        Example
+        -------
+        >>>  combined_KOALA_cube(['Ben/16jan10049red.fits','Ben/16jan10050red.fits','Ben/16jan10051red.fits'], 
+                fits_file="test_BLUE_reduced.fits", skyflat_file='Ben/16jan10086red.fits', 
+                pixel_size_arcsec=.3, kernel_size_arcsec=1.5, flux_calibration=flux_calibration, 
+                plot= True)    
+        """
+
+        print "\n\n\n======================= REDUCING KOALA data =======================\n\n"
+
+        n_files = len(rss_list)
+        sky_rss_list = [[0], [0], [0], [0], [0], [0], [0], [0], [0], [0]]
+        pk = (
+            "_"
+            + str(int(pixel_size))
+            + "p"
+            + str(int((abs(pixel_size) - abs(int(pixel_size))) * 10))
+            + "_"
+            + str(int(kernel_size))
+            + "k"
+            + str(int((abs(kernel_size) - abs(int(kernel_size))) * 100))
+        )
+
+        print "  1. Checking input values: "
+
+        print "\n  - Using the following RSS files : "
+        for rss in range(n_files):
+            print "    ", rss + 1, ". : ", rss_list[rss]
+        self.rss_list = rss_list
+
+        if rss_clean:
+            print "\n  - These RSS files are ready to be cubed & combined, no further process required ..."
+
+        else:
+
+            if skyflat == "" and skyflat_list[0] == "" and skyflat_file == "":
+                print "\n  - No skyflat file considered, no throughput correction will be applied."
+            else:
+                if skyflat_file == "":
+                    print "\n  - Using skyflat to consider throughput correction ..."
+                    if skyflat != "":
+                        for i in range(n_files):
+                            skyflat_list[i] = skyflat
+                        print "    Using same skyflat for all object files"
+                    else:
+                        print "    List of skyflats provided!"
+                else:
+                    print "\n  - Using skyflat file to derive the throughput correction ..."  # This assumes skyflat_file is the same for all the objects
+                    skyflat = KOALA_RSS(
+                        skyflat_file,
+                        do_sky=False,
+                        do_extinction=False,
+                        apply_throughput=False,
+                        plot=True,
+                    )
+
+                    skyflat.find_relative_throughput(
+                        ymin=ymin,
+                        ymax=ymax,
+                        wave_min_scale=wave_min_scale,
+                        wave_max_scale=wave_max_scale,
+                        plot=plot_skyflat,
+                    )
+
+                    for i in range(n_files):
+                        skyflat_list[i] = skyflat
+                    print "  - Using same skyflat for all object files"
+
+            # sky_method = "self" "1D" "2D" "none" #1Dfit"
+
+            if sky_method == "1D" or sky_method == "1Dfit":
+                if np.nanmedian(sky_spectrum) != 0:
+                    for i in range(n_files):
+                        sky_list[i] = sky_spectrum
+                    print "\n  - Using same 1D sky spectrum provided for all object files"
+                else:
+                    if np.nanmedian(sky_list[0]) == 0:
+                        print "\n  - 1D sky spectrum requested but not found, assuming n_sky = 50 from the same files"
+                        sky_method = "self"
+                    else:
+                        print "\n  - List of 1D sky spectrum provided for each object file"
+
+            if sky_method == "2D":
+                try:
+                    if np.nanmedian(sky_list[0].intensity_corrected) != 0:
+                        print "\n  - List of 2D sky spectra provided for each object file"
+                        for i in range(n_files):
+                            sky_rss_list[i] = sky_list[i]
+                            sky_list[i] = [0]
+                except Exception:
+                    try:
+                        if sky_rss == 0:
+                            print "\n  - 2D sky spectra requested but not found, assuming n_sky = 50 from the same files"
+                            sky_method = "self"
+                    except Exception:
+                        for i in range(n_files):
+                            sky_rss_list[i] = sky_rss
+                        print "\n  - Using same 2D sky spectra provided for all object files"
+
+            if sky_method == "self":
+                for i in range(n_files):
+                    sky_list[i] = 0
+                if n_sky == 0:
+                    n_sky = 50
+                if sky_fibres[0] == 1000:
+                    print "\n  - Using n_sky =", n_sky, "to create a sky spectrum"
+                else:
+                    print "\n  - Using n_sky =", n_sky, "and sky_fibres =", sky_fibres, "to create a sky spectrum"
+
+            if (
+                np.nanmedian(telluric_correction) == 0
+                and np.nanmedian(telluric_correction_list[0]) == 0
+            ):
+                print "\n  - No telluric correction considered"
+            else:
+                if np.nanmedian(telluric_correction_list[0]) == 0:
+                    for i in range(n_files):
+                        telluric_correction_list[i] = telluric_correction
+                    print "\n  - Using same telluric correction for all object files"
+                else:
+                    print "\n  - List of telluric corrections provided!"
+
+        if do_rss:
+            print "\n  2. Reading the data stored in rss files ..."
+            self.rss1 = KOALA_RSS(
+                rss_list[0],
+                rss_clean=rss_clean,
+                save_rss_to_fits_file=save_rss_to_fits_file_list[0],
+                apply_throughput=apply_throughput,
+                skyflat=skyflat_list[0],
+                plot_skyflat=plot_skyflat,
+                correct_ccd_defects=correct_ccd_defects,
+                correct_high_cosmics=correct_high_cosmics,
+                clip_high=clip_high,
+                step_ccd=step_ccd,
+                remove_5578=remove_5578,
+                plot_suspicious_fibres=plot_suspicious_fibres,
+                fix_wavelengths=fix_wavelengths,
+                sol=sol,
+                do_extinction=do_extinction,
+                scale_sky_1D=scale_sky_1D,
+                correct_negative_sky=correct_negative_sky,
+                sky_method=sky_method,
+                n_sky=n_sky,
+                sky_fibres=sky_fibres,
+                sky_spectrum=sky_list[0],
+                sky_rss=sky_rss_list[0],
+                brightest_line_wavelength=brightest_line_wavelength,
+                cut_sky=cut_sky,
+                fmin=fmin,
+                fmax=fmax,
+                individual_sky_substraction=individual_sky_substraction,
+                telluric_correction=telluric_correction_list[0],
+                id_el=id_el,
+                high_fibres=high_fibres,
+                brightest_line=brightest_line,
+                cut=cut,
+                broad=broad,
+                plot_id_el=plot_id_el,
+                id_list=id_list,
+                clean_sky_residuals=clean_sky_residuals,
+                dclip=dclip,
+                extra_w=extra_w,
+                step_csr=step_csr,
+                valid_wave_min=valid_wave_min,
+                valid_wave_max=valid_wave_max,
+                warnings=warnings,
+                verbose=verbose,
+                plot=plot,
+                norm=norm,
+                fig_size=fig_size,
+            )
+
+            if len(rss_list) > 1:
+                self.rss2 = KOALA_RSS(
+                    rss_list[1],
+                    rss_clean=rss_clean,
+                    save_rss_to_fits_file=save_rss_to_fits_file_list[1],
+                    apply_throughput=apply_throughput,
+                    skyflat=skyflat_list[1],
+                    plot_skyflat=plot_skyflat,
+                    correct_ccd_defects=correct_ccd_defects,
+                    correct_high_cosmics=correct_high_cosmics,
+                    clip_high=clip_high,
+                    step_ccd=step_ccd,
+                    remove_5578=remove_5578,
+                    plot_suspicious_fibres=plot_suspicious_fibres,
+                    fix_wavelengths=fix_wavelengths,
+                    sol=sol,
+                    do_extinction=do_extinction,
+                    scale_sky_1D=scale_sky_1D,
+                    correct_negative_sky=correct_negative_sky,
+                    sky_method=sky_method,
+                    n_sky=n_sky,
+                    sky_fibres=sky_fibres,
+                    sky_spectrum=sky_list[1],
+                    sky_rss=sky_rss_list[1],
+                    brightest_line_wavelength=brightest_line_wavelength,
+                    cut_sky=cut_sky,
+                    fmin=fmin,
+                    fmax=fmax,
+                    individual_sky_substraction=individual_sky_substraction,
+                    telluric_correction=telluric_correction_list[1],
+                    id_el=id_el,
+                    high_fibres=high_fibres,
+                    brightest_line=brightest_line,
+                    cut=cut,
+                    broad=broad,
+                    plot_id_el=plot_id_el,
+                    id_list=id_list,
+                    clean_sky_residuals=clean_sky_residuals,
+                    dclip=dclip,
+                    extra_w=extra_w,
+                    step_csr=step_csr,
+                    valid_wave_min=valid_wave_min,
+                    valid_wave_max=valid_wave_max,
+                    warnings=warnings,
+                    verbose=verbose,
+                    plot=plot,
+                    norm=norm,
+                    fig_size=fig_size,
+                )
+
+            if len(rss_list) > 2:
+                self.rss3 = KOALA_RSS(
+                    rss_list[2],
+                    rss_clean=rss_clean,
+                    save_rss_to_fits_file=save_rss_to_fits_file_list[2],
+                    apply_throughput=apply_throughput,
+                    skyflat=skyflat_list[2],
+                    plot_skyflat=plot_skyflat,
+                    correct_ccd_defects=correct_ccd_defects,
+                    correct_high_cosmics=correct_high_cosmics,
+                    clip_high=clip_high,
+                    step_ccd=step_ccd,
+                    remove_5578=remove_5578,
+                    plot_suspicious_fibres=plot_suspicious_fibres,
+                    fix_wavelengths=fix_wavelengths,
+                    sol=sol,
+                    do_extinction=do_extinction,
+                    scale_sky_1D=scale_sky_1D,
+                    correct_negative_sky=correct_negative_sky,
+                    sky_method=sky_method,
+                    n_sky=n_sky,
+                    sky_fibres=sky_fibres,
+                    sky_spectrum=sky_list[2],
+                    sky_rss=sky_rss_list[2],
+                    brightest_line_wavelength=brightest_line_wavelength,
+                    cut_sky=cut_sky,
+                    fmin=fmin,
+                    fmax=fmax,
+                    individual_sky_substraction=individual_sky_substraction,
+                    telluric_correction=telluric_correction_list[2],
+                    id_el=id_el,
+                    high_fibres=high_fibres,
+                    brightest_line=brightest_line,
+                    cut=cut,
+                    broad=broad,
+                    plot_id_el=plot_id_el,
+                    id_list=id_list,
+                    clean_sky_residuals=clean_sky_residuals,
+                    dclip=dclip,
+                    extra_w=extra_w,
+                    step_csr=step_csr,
+                    valid_wave_min=valid_wave_min,
+                    valid_wave_max=valid_wave_max,
+                    warnings=warnings,
+                    verbose=verbose,
+                    plot=plot,
+                    norm=norm,
+                    fig_size=fig_size,
+                )
+
+            if len(rss_list) > 3:
+                self.rss4 = KOALA_RSS(
+                    rss_list[3],
+                    rss_clean=rss_clean,
+                    save_rss_to_fits_file=save_rss_to_fits_file_list[3],
+                    apply_throughput=apply_throughput,
+                    skyflat=skyflat_list[3],
+                    plot_skyflat=plot_skyflat,
+                    correct_ccd_defects=correct_ccd_defects,
+                    correct_high_cosmics=correct_high_cosmics,
+                    clip_high=clip_high,
+                    step_ccd=step_ccd,
+                    remove_5578=remove_5578,
+                    plot_suspicious_fibres=plot_suspicious_fibres,
+                    fix_wavelengths=fix_wavelengths,
+                    sol=sol,
+                    do_extinction=do_extinction,
+                    scale_sky_1D=scale_sky_1D,
+                    correct_negative_sky=correct_negative_sky,
+                    sky_method=sky_method,
+                    n_sky=n_sky,
+                    sky_fibres=sky_fibres,
+                    sky_spectrum=sky_list[3],
+                    sky_rss=sky_rss_list[3],
+                    brightest_line_wavelength=brightest_line_wavelength,
+                    cut_sky=cut_sky,
+                    fmin=fmin,
+                    fmax=fmax,
+                    individual_sky_substraction=individual_sky_substraction,
+                    telluric_correction=telluric_correction_list[3],
+                    id_el=id_el,
+                    high_fibres=high_fibres,
+                    brightest_line=brightest_line,
+                    cut=cut,
+                    broad=broad,
+                    plot_id_el=plot_id_el,
+                    id_list=id_list,
+                    clean_sky_residuals=clean_sky_residuals,
+                    dclip=dclip,
+                    extra_w=extra_w,
+                    step_csr=step_csr,
+                    valid_wave_min=valid_wave_min,
+                    valid_wave_max=valid_wave_max,
+                    warnings=warnings,
+                    verbose=verbose,
+                    plot=plot,
+                    norm=norm,
+                    fig_size=fig_size,
+                )
+
+            if len(rss_list) > 4:
+                self.rss5 = KOALA_RSS(
+                    rss_list[4],
+                    rss_clean=rss_clean,
+                    save_rss_to_fits_file=save_rss_to_fits_file_list[4],
+                    apply_throughput=apply_throughput,
+                    skyflat=skyflat_list[4],
+                    plot_skyflat=plot_skyflat,
+                    correct_ccd_defects=correct_ccd_defects,
+                    correct_high_cosmics=correct_high_cosmics,
+                    clip_high=clip_high,
+                    step_ccd=step_ccd,
+                    remove_5578=remove_5578,
+                    plot_suspicious_fibres=plot_suspicious_fibres,
+                    fix_wavelengths=fix_wavelengths,
+                    sol=sol,
+                    do_extinction=do_extinction,
+                    scale_sky_1D=scale_sky_1D,
+                    correct_negative_sky=correct_negative_sky,
+                    sky_method=sky_method,
+                    n_sky=n_sky,
+                    sky_fibres=sky_fibres,
+                    sky_spectrum=sky_list[4],
+                    sky_rss=sky_rss_list[4],
+                    brightest_line_wavelength=brightest_line_wavelength,
+                    cut_sky=cut_sky,
+                    fmin=fmin,
+                    fmax=fmax,
+                    individual_sky_substraction=individual_sky_substraction,
+                    telluric_correction=telluric_correction_list[4],
+                    id_el=id_el,
+                    high_fibres=high_fibres,
+                    brightest_line=brightest_line,
+                    cut=cut,
+                    broad=broad,
+                    plot_id_el=plot_id_el,
+                    id_list=id_list,
+                    clean_sky_residuals=clean_sky_residuals,
+                    dclip=dclip,
+                    extra_w=extra_w,
+                    step_csr=step_csr,
+                    valid_wave_min=valid_wave_min,
+                    valid_wave_max=valid_wave_max,
+                    warnings=warnings,
+                    verbose=verbose,
+                    plot=plot,
+                    norm=norm,
+                    fig_size=fig_size,
+                )
+
+            if len(rss_list) > 5:
+                self.rss6 = KOALA_RSS(
+                    rss_list[5],
+                    rss_clean=rss_clean,
+                    save_rss_to_fits_file=save_rss_to_fits_file_list[5],
+                    apply_throughput=apply_throughput,
+                    skyflat=skyflat_list[5],
+                    plot_skyflat=plot_skyflat,
+                    correct_ccd_defects=correct_ccd_defects,
+                    correct_high_cosmics=correct_high_cosmics,
+                    clip_high=clip_high,
+                    step_ccd=step_ccd,
+                    remove_5578=remove_5578,
+                    plot_suspicious_fibres=plot_suspicious_fibres,
+                    fix_wavelengths=fix_wavelengths,
+                    sol=sol,
+                    do_extinction=do_extinction,
+                    scale_sky_1D=scale_sky_1D,
+                    correct_negative_sky=correct_negative_sky,
+                    sky_method=sky_method,
+                    n_sky=n_sky,
+                    sky_fibres=sky_fibres,
+                    sky_spectrum=sky_list[5],
+                    sky_rss=sky_rss_list[5],
+                    brightest_line_wavelength=brightest_line_wavelength,
+                    cut_sky=cut_sky,
+                    fmin=fmin,
+                    fmax=fmax,
+                    individual_sky_substraction=individual_sky_substraction,
+                    telluric_correction=telluric_correction_list[5],
+                    id_el=id_el,
+                    high_fibres=high_fibres,
+                    brightest_line=brightest_line,
+                    cut=cut,
+                    broad=broad,
+                    plot_id_el=plot_id_el,
+                    id_list=id_list,
+                    clean_sky_residuals=clean_sky_residuals,
+                    dclip=dclip,
+                    extra_w=extra_w,
+                    step_csr=step_csr,
+                    valid_wave_min=valid_wave_min,
+                    valid_wave_max=valid_wave_max,
+                    warnings=warnings,
+                    verbose=verbose,
+                    plot=plot,
+                    norm=norm,
+                    fig_size=fig_size,
+                )
+
+            if len(rss_list) > 6:
+                self.rss7 = KOALA_RSS(
+                    rss_list[6],
+                    rss_clean=rss_clean,
+                    save_rss_to_fits_file=save_rss_to_fits_file_list[6],
+                    apply_throughput=apply_throughput,
+                    skyflat=skyflat_list[6],
+                    plot_skyflat=plot_skyflat,
+                    correct_ccd_defects=correct_ccd_defects,
+                    correct_high_cosmics=correct_high_cosmics,
+                    clip_high=clip_high,
+                    step_ccd=step_ccd,
+                    remove_5578=remove_5578,
+                    plot_suspicious_fibres=plot_suspicious_fibres,
+                    fix_wavelengths=fix_wavelengths,
+                    sol=sol,
+                    do_extinction=do_extinction,
+                    scale_sky_1D=scale_sky_1D,
+                    correct_negative_sky=correct_negative_sky,
+                    sky_method=sky_method,
+                    n_sky=n_sky,
+                    sky_fibres=sky_fibres,
+                    sky_spectrum=sky_list[6],
+                    sky_rss=sky_rss_list[6],
+                    brightest_line_wavelength=brightest_line_wavelength,
+                    cut_sky=cut_sky,
+                    fmin=fmin,
+                    fmax=fmax,
+                    individual_sky_substraction=individual_sky_substraction,
+                    telluric_correction=telluric_correction_list[6],
+                    id_el=id_el,
+                    high_fibres=high_fibres,
+                    brightest_line=brightest_line,
+                    cut=cut,
+                    broad=broad,
+                    plot_id_el=plot_id_el,
+                    id_list=id_list,
+                    clean_sky_residuals=clean_sky_residuals,
+                    dclip=dclip,
+                    extra_w=extra_w,
+                    step_csr=step_csr,
+                    valid_wave_min=valid_wave_min,
+                    valid_wave_max=valid_wave_max,
+                    warnings=warnings,
+                    verbose=verbose,
+                    plot=plot,
+                    norm=norm,
+                    fig_size=fig_size,
+                )
+
+            if len(rss_list) > 7:
+                self.rss8 = KOALA_RSS(
+                    rss_list[7],
+                    rss_clean=rss_clean,
+                    save_rss_to_fits_file=save_rss_to_fits_file_list[7],
+                    apply_throughput=apply_throughput,
+                    skyflat=skyflat_list[7],
+                    plot_skyflat=plot_skyflat,
+                    correct_ccd_defects=correct_ccd_defects,
+                    correct_high_cosmics=correct_high_cosmics,
+                    clip_high=clip_high,
+                    step_ccd=step_ccd,
+                    remove_5578=remove_5578,
+                    plot_suspicious_fibres=plot_suspicious_fibres,
+                    fix_wavelengths=fix_wavelengths,
+                    sol=sol,
+                    do_extinction=do_extinction,
+                    scale_sky_1D=scale_sky_1D,
+                    correct_negative_sky=correct_negative_sky,
+                    sky_method=sky_method,
+                    n_sky=n_sky,
+                    sky_fibres=sky_fibres,
+                    sky_spectrum=sky_list[7],
+                    sky_rss=sky_rss_list[7],
+                    brightest_line_wavelength=brightest_line_wavelength,
+                    cut_sky=cut_sky,
+                    fmin=fmin,
+                    fmax=fmax,
+                    individual_sky_substraction=individual_sky_substraction,
+                    telluric_correction=telluric_correction_list[7],
+                    id_el=id_el,
+                    high_fibres=high_fibres,
+                    brightest_line=brightest_line,
+                    cut=cut,
+                    broad=broad,
+                    plot_id_el=plot_id_el,
+                    id_list=id_list,
+                    clean_sky_residuals=clean_sky_residuals,
+                    dclip=dclip,
+                    extra_w=extra_w,
+                    step_csr=step_csr,
+                    valid_wave_min=valid_wave_min,
+                    valid_wave_max=valid_wave_max,
+                    warnings=warnings,
+                    verbose=verbose,
+                    plot=plot,
+                    norm=norm,
+                    fig_size=fig_size,
+                )
+
+            if len(rss_list) > 8:
+                self.rss9 = KOALA_RSS(
+                    rss_list[8],
+                    rss_clean=rss_clean,
+                    save_rss_to_fits_file=save_rss_to_fits_file_list[8],
+                    apply_throughput=apply_throughput,
+                    skyflat=skyflat_list[8],
+                    plot_skyflat=plot_skyflat,
+                    correct_ccd_defects=correct_ccd_defects,
+                    correct_high_cosmics=correct_high_cosmics,
+                    clip_high=clip_high,
+                    step_ccd=step_ccd,
+                    remove_5578=remove_5578,
+                    plot_suspicious_fibres=plot_suspicious_fibres,
+                    fix_wavelengths=fix_wavelengths,
+                    sol=sol,
+                    do_extinction=do_extinction,
+                    scale_sky_1D=scale_sky_1D,
+                    correct_negative_sky=correct_negative_sky,
+                    sky_method=sky_method,
+                    n_sky=n_sky,
+                    sky_fibres=sky_fibres,
+                    sky_spectrum=sky_list[8],
+                    sky_rss=sky_rss_list[8],
+                    brightest_line_wavelength=brightest_line_wavelength,
+                    cut_sky=cut_sky,
+                    fmin=fmin,
+                    fmax=fmax,
+                    individual_sky_substraction=individual_sky_substraction,
+                    telluric_correction=telluric_correction_list[8],
+                    id_el=id_el,
+                    high_fibres=high_fibres,
+                    brightest_line=brightest_line,
+                    cut=cut,
+                    broad=broad,
+                    plot_id_el=plot_id_el,
+                    id_list=id_list,
+                    clean_sky_residuals=clean_sky_residuals,
+                    dclip=dclip,
+                    extra_w=extra_w,
+                    step_csr=step_csr,
+                    valid_wave_min=valid_wave_min,
+                    valid_wave_max=valid_wave_max,
+                    warnings=warnings,
+                    verbose=verbose,
+                    plot=plot,
+                    norm=norm,
+                    fig_size=fig_size,
+                )
+
+            if len(rss_list) > 9:
+                self.rss10 = KOALA_RSS(
+                    rss_list[9],
+                    rss_clean=rss_clean,
+                    save_rss_to_fits_file=save_rss_to_fits_file_list[9],
+                    apply_throughput=apply_throughput,
+                    skyflat=skyflat_list[9],
+                    plot_skyflat=plot_skyflat,
+                    correct_ccd_defects=correct_ccd_defects,
+                    correct_high_cosmics=correct_high_cosmics,
+                    clip_high=clip_high,
+                    step_ccd=step_ccd,
+                    remove_5578=remove_5578,
+                    plot_suspicious_fibres=plot_suspicious_fibres,
+                    fix_wavelengths=fix_wavelengths,
+                    sol=sol,
+                    do_extinction=do_extinction,
+                    scale_sky_1D=scale_sky_1D,
+                    correct_negative_sky=correct_negative_sky,
+                    sky_method=sky_method,
+                    n_sky=n_sky,
+                    sky_fibres=sky_fibres,
+                    sky_spectrum=sky_list[9],
+                    sky_rss=sky_rss_list[9],
+                    brightest_line_wavelength=brightest_line_wavelength,
+                    cut_sky=cut_sky,
+                    fmin=fmin,
+                    fmax=fmax,
+                    individual_sky_substraction=individual_sky_substraction,
+                    telluric_correction=telluric_correction_list[9],
+                    id_el=id_el,
+                    high_fibres=high_fibres,
+                    brightest_line=brightest_line,
+                    cut=cut,
+                    broad=broad,
+                    plot_id_el=plot_id_el,
+                    id_list=id_list,
+                    clean_sky_residuals=clean_sky_residuals,
+                    dclip=dclip,
+                    extra_w=extra_w,
+                    step_csr=step_csr,
+                    valid_wave_min=valid_wave_min,
+                    valid_wave_max=valid_wave_max,
+                    warnings=warnings,
+                    verbose=verbose,
+                    plot=plot,
+                    norm=norm,
+                    fig_size=fig_size,
+                )
+
+        if (
+            np.nanmedian(flux_calibration) == 0
+            and np.nanmedian(flux_calibration_list[0]) == 0
+        ):
+            print "\n  3. Cubing without considering any flux calibration ..."
+            fcal = False
+        else:
+            print "\n  3. Cubing applying flux calibration provided ..."
+            fcal = True
+            if np.nanmedian(flux_calibration) != 0:
+                for i in range(n_files):
+                    flux_calibration_list[i] = flux_calibration
+                print "     Using same flux calibration for all object files"
+            else:
+                print "     List of flux calibrations provided !"
+
+        if offsets[0] != 1000:
+            print "\n  Offsets values for alignment have been given, skipping cubing no-aligned rss..."
+            do_cubing = False
+
+        if do_cubing:
+            self.cube1 = Interpolated_cube(
+                self.rss1,
+                pixel_size_arcsec,
+                kernel_size_arcsec,
+                plot=plot,
+                flux_calibration=flux_calibration_list[0],
+                warnings=warnings,
+            )
+            if len(rss_list) > 1:
+                self.cube2 = Interpolated_cube(
+                    self.rss2,
+                    pixel_size_arcsec,
+                    kernel_size_arcsec,
+                    plot=plot,
+                    flux_calibration=flux_calibration_list[1],
+                    warnings=warnings,
+                )
+            if len(rss_list) > 2:
+                self.cube3 = Interpolated_cube(
+                    self.rss3,
+                    pixel_size_arcsec,
+                    kernel_size_arcsec,
+                    plot=plot,
+                    flux_calibration=flux_calibration_list[2],
+                    warnings=warnings,
+                )
+            if len(rss_list) > 3:
+                self.cube4 = Interpolated_cube(
+                    self.rss4,
+                    pixel_size_arcsec,
+                    kernel_size_arcsec,
+                    plot=plot,
+                    flux_calibration=flux_calibration_list[3],
+                    warnings=warnings,
+                )
+            if len(rss_list) > 4:
+                self.cube5 = Interpolated_cube(
+                    self.rss5,
+                    pixel_size_arcsec,
+                    kernel_size_arcsec,
+                    plot=plot,
+                    flux_calibration=flux_calibration_list[4],
+                    warnings=warnings,
+                )
+            if len(rss_list) > 5:
+                self.cube6 = Interpolated_cube(
+                    self.rss6,
+                    pixel_size_arcsec,
+                    kernel_size_arcsec,
+                    plot=plot,
+                    flux_calibration=flux_calibration_list[5],
+                    warnings=warnings,
+                )
+            if len(rss_list) > 6:
+                self.cube7 = Interpolated_cube(
+                    self.rss7,
+                    pixel_size_arcsec,
+                    kernel_size_arcsec,
+                    plot=plot,
+                    flux_calibration=flux_calibration_list[6],
+                    warnings=warnings,
+                )
+            if len(rss_list) > 7:
+                self.cube8 = Interpolated_cube(
+                    self.rss8,
+                    pixel_size_arcsec,
+                    kernel_size_arcsec,
+                    plot=plot,
+                    flux_calibration=flux_calibration_list[7],
+                    warnings=warnings,
+                )
+            if len(rss_list) > 8:
+                self.cube9 = Interpolated_cube(
+                    self.rss9,
+                    pixel_size_arcsec,
+                    kernel_size_arcsec,
+                    plot=plot,
+                    flux_calibration=flux_calibration_list[8],
+                    warnings=warnings,
+                )
+            if len(rss_list) > 9:
+                self.cube10 = Interpolated_cube(
+                    self.rss10,
+                    pixel_size_arcsec,
+                    kernel_size_arcsec,
+                    plot=plot,
+                    flux_calibration=flux_calibration_list[9],
+                    warnings=warnings,
+                )
+
+        if do_alignment:
+            if offsets[0] == 1000:
+                print "\n  4. Aligning individual cubes ..."
+            else:
+                print "\n  4. Checking given offsets data and perform cubing ..."
+
+            rss_list_to_align = [self.rss1, self.rss2]
+            if len(rss_list) > 2:
+                rss_list_to_align.append(self.rss3)
+            if len(rss_list) > 3:
+                rss_list_to_align.append(self.rss4)
+            if len(rss_list) > 4:
+                rss_list_to_align.append(self.rss5)
+            if len(rss_list) > 5:
+                rss_list_to_align.append(self.rss6)
+            if len(rss_list) > 6:
+                rss_list_to_align.append(self.rss7)
+            if len(rss_list) > 7:
+                rss_list_to_align.append(self.rss8)
+            if len(rss_list) > 8:
+                rss_list_to_align.append(self.rss9)
+            if len(rss_list) > 9:
+                rss_list_to_align.append(self.rss10)
+
+            if offsets[0] != 1000:
+                cube_list = []
+            else:
+                cube_list = [self.cube1, self.cube2]
+                if len(rss_list) > 2:
+                    cube_list.append(self.cube3)
+                if len(rss_list) > 3:
+                    cube_list.append(self.cube4)
+                if len(rss_list) > 4:
+                    cube_list.append(self.cube5)
+                if len(rss_list) > 5:
+                    cube_list.append(self.cube6)
+                if len(rss_list) > 6:
+                    cube_list.append(self.cube7)
+                if len(rss_list) > 7:
+                    cube_list.append(self.cube8)
+                if len(rss_list) > 8:
+                    cube_list.append(self.cube9)
+                if len(rss_list) > 9:
+                    cube_list.append(self.cube10)
+
+            cube_aligned_list = align_n_cubes(
+                rss_list_to_align,
+                cube_list=cube_list,
+                flux_calibration_list=flux_calibration_list,
+                pixel_size_arcsec=pixel_size_arcsec,
+                kernel_size_arcsec=kernel_size_arcsec,
+                plot=plot,
+                offsets=offsets,
+                ADR=ADR,
+                warnings=warnings,
+            )
+            self.cube1_aligned = cube_aligned_list[0]
+            self.cube2_aligned = cube_aligned_list[1]
+            if len(rss_list) > 2:
+                self.cube3_aligned = cube_aligned_list[2]
+            if len(rss_list) > 3:
+                self.cube4_aligned = cube_aligned_list[3]
+            if len(rss_list) > 4:
+                self.cube5_aligned = cube_aligned_list[4]
+            if len(rss_list) > 5:
+                self.cube6_aligned = cube_aligned_list[5]
+            if len(rss_list) > 6:
+                self.cube7_aligned = cube_aligned_list[6]
+            if len(rss_list) > 7:
+                self.cube8_aligned = cube_aligned_list[7]
+            if len(rss_list) > 8:
+                self.cube9_aligned = cube_aligned_list[8]
+            if len(rss_list) > 9:
+                self.cube10_aligned = cube_aligned_list[9]
+
+        if make_combined_cube:
+            print "\n  5. Making combined cube ..."
+            print "\n> Checking individual cubes: "
+            print "   Cube         RA_centre             DEC_centre         Pix Size     Kernel Size"
+            print "    1        {:18.12f}   {:18.12f}        {:4.1f}        {:5.2f}".format(
+                self.cube1_aligned.RA_centre_deg,
+                self.cube1_aligned.DEC_centre_deg,
+                self.cube1_aligned.pixel_size_arcsec,
+                self.cube1_aligned.kernel_size_arcsec,
+            )
+            print "    2        {:18.12f}   {:18.12f}        {:4.1f}        {:5.2f}".format(
+                self.cube2_aligned.RA_centre_deg,
+                self.cube2_aligned.DEC_centre_deg,
+                self.cube2_aligned.pixel_size_arcsec,
+                self.cube2_aligned.kernel_size_arcsec,
+            )
+            if len(rss_list) > 2:
+                print "    3        {:18.12f}   {:18.12f}        {:4.1f}        {:5.2f}".format(
+                    self.cube3_aligned.RA_centre_deg,
+                    self.cube3_aligned.DEC_centre_deg,
+                    self.cube3_aligned.pixel_size_arcsec,
+                    self.cube3_aligned.kernel_size_arcsec,
+                )
+            if len(rss_list) > 3:
+                print "    4        {:18.12f}   {:18.12f}        {:4.1f}        {:5.2f}".format(
+                    self.cube4_aligned.RA_centre_deg,
+                    self.cube4_aligned.DEC_centre_deg,
+                    self.cube4_aligned.pixel_size_arcsec,
+                    self.cube4_aligned.kernel_size_arcsec,
+                )
+            if len(rss_list) > 4:
+                print "    5        {:18.12f}   {:18.12f}        {:4.1f}        {:5.2f}".format(
+                    self.cube5_aligned.RA_centre_deg,
+                    self.cube5_aligned.DEC_centre_deg,
+                    self.cube5_aligned.pixel_size_arcsec,
+                    self.cube5_aligned.kernel_size_arcsec,
+                )
+            if len(rss_list) > 5:
+                print "    6        {:18.12f}   {:18.12f}        {:4.1f}        {:5.2f}".format(
+                    self.cube6_aligned.RA_centre_deg,
+                    self.cube6_aligned.DEC_centre_deg,
+                    self.cube6_aligned.pixel_size_arcsec,
+                    self.cube6_aligned.kernel_size_arcsec,
+                )
+            if len(rss_list) > 6:
+                print "    7        {:18.12f}   {:18.12f}        {:4.1f}        {:5.2f}".format(
+                    self.cube7_aligned.RA_centre_deg,
+                    self.cube7_aligned.DEC_centre_deg,
+                    self.cube7_aligned.pixel_size_arcsec,
+                    self.cube7_aligned.kernel_size_arcsec,
+                )
+            if len(rss_list) > 7:
+                print "    8        {:18.12f}   {:18.12f}        {:4.1f}        {:5.2f}".format(
+                    self.cube8_aligned.RA_centre_deg,
+                    self.cube8_aligned.DEC_centre_deg,
+                    self.cube8_aligned.pixel_size_arcsec,
+                    self.cube8_aligned.kernel_size_arcsec,
+                )
+            if len(rss_list) > 8:
+                print "    9        {:18.12f}   {:18.12f}        {:4.1f}        {:5.2f}".format(
+                    self.cube9_aligned.RA_centre_deg,
+                    self.cube9_aligned.DEC_centre_deg,
+                    self.cube9_aligned.pixel_size_arcsec,
+                    self.cube9_aligned.kernel_size_arcsec,
+                )
+            if len(rss_list) > 9:
+                print "   10        {:18.12f}   {:18.12f}        {:4.1f}        {:5.2f}".format(
+                    self.cube10_aligned.RA_centre_deg,
+                    self.cube10_aligned.DEC_centre_deg,
+                    self.cube10_aligned.pixel_size_arcsec,
+                    self.cube10_aligned.kernel_size_arcsec,
+                )
+
+            ####   THIS SHOULD BE A DEF within Interpolated_cube...
+            # Create a cube with zero
+            shape = [
+                self.cube1_aligned.data.shape[1],
+                self.cube1_aligned.data.shape[2],
+            ]
+            self.combined_cube = Interpolated_cube(
+                self.rss1,
+                self.cube1_aligned.pixel_size_arcsec,
+                self.cube1_aligned.kernel_size_arcsec,
+                zeros=True,
+                shape=shape,
+                offsets_files=self.cube1_aligned.offsets_files,
+            )
+
+            if obj_name != "":
+                self.combined_cube.object = obj_name
+            if description == "":
+                self.combined_cube.description = (
+                    self.combined_cube.object + " - COMBINED CUBE"
+                )
+            else:
+                self.combined_cube.description = description
+
+            print "\n> Combining cubes..."
+            if len(rss_list) == 2:
+                if ADR:
+                    print "  Using data corrected for ADR to get combined cube..."
+                    self.combined_cube.data = np.nanmedian(
+                        [self.cube1_aligned.data_ADR, self.cube2_aligned.data_ADR],
+                        axis=0,
+                    )
+                else:
+                    print "  No ADR correction considered..."
+                    self.combined_cube.data = np.nanmedian(
+                        [self.cube1_aligned.data, self.cube2_aligned.data], axis=0
+                    )
+                self.combined_cube.PA = np.mean(
+                    [self.cube1_aligned.PA, self.cube2_aligned.PA]
+                )
+
+            if len(rss_list) == 3:
+                if ADR:
+                    print "  Using data corrected for ADR to get combined cube..."
+                    self.combined_cube.data = np.nanmedian(
+                        [
+                            self.cube1_aligned.data_ADR,
+                            self.cube2_aligned.data_ADR,
+                            self.cube3_aligned.data_ADR,
+                        ],
+                        axis=0,
+                    )
+                else:
+                    print "  No ADR correction considered..."
+                    self.combined_cube.data = np.nanmedian(
+                        [
+                            self.cube1_aligned.data,
+                            self.cube2_aligned.data,
+                            self.cube3_aligned.data,
+                        ],
+                        axis=0,
+                    )
+                self.combined_cube.PA = np.mean(
+                    [
+                        self.cube1_aligned.PA,
+                        self.cube2_aligned.PA,
+                        self.cube3_aligned.PA,
+                    ]
+                )
+            if len(rss_list) == 4:
+                if ADR:
+                    print "  Using data corrected for ADR to get combined cube..."
+                    self.combined_cube.data = np.nanmedian(
+                        [
+                            self.cube1_aligned.data_ADR,
+                            self.cube2_aligned.data_ADR,
+                            self.cube3_aligned.data_ADR,
+                            self.cube4_aligned.data_ADR,
+                        ],
+                        axis=0,
+                    )
+                else:
+                    print "  No ADR correction considered..."
+                    self.combined_cube.data = np.nanmedian(
+                        [
+                            self.cube1_aligned.data,
+                            self.cube2_aligned.data,
+                            self.cube3_aligned.data,
+                            self.cube4_aligned.data,
+                        ],
+                        axis=0,
+                    )
+                self.combined_cube.PA = np.mean(
+                    [
+                        self.cube1_aligned.PA,
+                        self.cube2_aligned.PA,
+                        self.cube3_aligned.PA,
+                        self.cube4_aligned.PA,
+                    ]
+                )
+
+            if len(rss_list) == 5:
+                if ADR:
+                    print "  Using data corrected for ADR to get combined cube..."
+                    self.combined_cube.data = np.nanmedian(
+                        [
+                            self.cube1_aligned.data_ADR,
+                            self.cube2_aligned.data_ADR,
+                            self.cube3_aligned.data_ADR,
+                            self.cube4_aligned.data_ADR,
+                            self.cube5_aligned.data_ADR,
+                        ],
+                        axis=0,
+                    )
+                else:
+                    print "  No ADR correction considered..."
+                    self.combined_cube.data = np.nanmedian(
+                        [
+                            self.cube1_aligned.data,
+                            self.cube2_aligned.data,
+                            self.cube3_aligned.data,
+                            self.cube4_aligned.data,
+                            self.cube5_aligned.data,
+                        ],
+                        axis=0,
+                    )
+                self.combined_cube.PA = np.mean(
+                    [
+                        self.cube1_aligned.PA,
+                        self.cube2_aligned.PA,
+                        self.cube3_aligned.PA,
+                        self.cube4_aligned.PA,
+                        self.cube5_aligned.PA,
+                    ]
+                )
+
+            if len(rss_list) == 6:
+                if ADR:
+                    print "  Using data corrected for ADR to get combined cube..."
+                    self.combined_cube.data = np.nanmedian(
+                        [
+                            self.cube1_aligned.data_ADR,
+                            self.cube2_aligned.data_ADR,
+                            self.cube3_aligned.data_ADR,
+                            self.cube4_aligned.data_ADR,
+                            self.cube5_aligned.data_ADR,
+                            self.cube6_aligned.data_ADR,
+                        ],
+                        axis=0,
+                    )
+                else:
+                    print "  No ADR correction considered..."
+                    self.combined_cube.data = np.nanmedian(
+                        [
+                            self.cube1_aligned.data,
+                            self.cube2_aligned.data,
+                            self.cube3_aligned.data,
+                            self.cube4_aligned.data,
+                            self.cube5_aligned.data,
+                            self.cube6_aligned.data,
+                        ],
+                        axis=0,
+                    )
+                self.combined_cube.PA = np.mean(
+                    [
+                        self.cube1_aligned.PA,
+                        self.cube2_aligned.PA,
+                        self.cube3_aligned.PA,
+                        self.cube4_aligned.PA,
+                        self.cube5_aligned.PA,
+                        self.cube6_aligned.PA,
+                    ]
+                )
+
+            if len(rss_list) == 7:
+                if ADR:
+                    print "  Using data corrected for ADR to get combined cube..."
+                    self.combined_cube.data = np.nanmedian(
+                        [
+                            self.cube1_aligned.data_ADR,
+                            self.cube2_aligned.data_ADR,
+                            self.cube3_aligned.data_ADR,
+                            self.cube4_aligned.data_ADR,
+                            self.cube5_aligned.data_ADR,
+                            self.cube6_aligned.data_ADR,
+                            self.cube7_aligned.data_ADR,
+                        ],
+                        axis=0,
+                    )
+                else:
+                    print "  No ADR correction considered..."
+                    self.combined_cube.data = np.nanmedian(
+                        [
+                            self.cube1_aligned.data,
+                            self.cube2_aligned.data,
+                            self.cube3_aligned.data,
+                            self.cube4_aligned.data,
+                            self.cube5_aligned.data,
+                            self.cube6_aligned.data,
+                            self.cube7_aligned.data,
+                        ],
+                        axis=0,
+                    )
+                self.combined_cube.PA = np.mean(
+                    [
+                        self.cube1_aligned.PA,
+                        self.cube2_aligned.PA,
+                        self.cube3_aligned.PA,
+                        self.cube4_aligned.PA,
+                        self.cube5_aligned.PA,
+                        self.cube6_aligned.PA,
+                        self.cube7_aligned.PA,
+                    ]
+                )
+
+            if len(rss_list) == 8:
+                if ADR:
+                    print "  Using data corrected for ADR to get combined cube..."
+                    self.combined_cube.data = np.nanmedian(
+                        [
+                            self.cube1_aligned.data_ADR,
+                            self.cube2_aligned.data_ADR,
+                            self.cube3_aligned.data_ADR,
+                            self.cube4_aligned.data_ADR,
+                            self.cube5_aligned.data_ADR,
+                            self.cube6_aligned.data_ADR,
+                            self.cube7_aligned.data_ADR,
+                            self.cube8_aligned.data_ADR,
+                        ],
+                        axis=0,
+                    )
+                else:
+                    print "  No ADR correction considered..."
+                    self.combined_cube.data = np.nanmedian(
+                        [
+                            self.cube1_aligned.data,
+                            self.cube2_aligned.data,
+                            self.cube3_aligned.data,
+                            self.cube4_aligned.data,
+                            self.cube5_aligned.data,
+                            self.cube6_aligned.data,
+                            self.cube7_aligned.data,
+                            self.cube8_aligned.data,
+                        ],
+                        axis=0,
+                    )
+                self.combined_cube.PA = np.mean(
+                    [
+                        self.cube1_aligned.PA,
+                        self.cube2_aligned.PA,
+                        self.cube3_aligned.PA,
+                        self.cube4_aligned.PA,
+                        self.cube5_aligned.PA,
+                        self.cube6_aligned.PA,
+                        self.cube7_aligned.PA,
+                        self.cube8_aligned.PA,
+                    ]
+                )
+
+            if len(rss_list) == 9:
+                if ADR:
+                    print "  Using data corrected for ADR to get combined cube..."
+                    self.combined_cube.data = np.nanmedian(
+                        [
+                            self.cube1_aligned.data_ADR,
+                            self.cube2_aligned.data_ADR,
+                            self.cube3_aligned.data_ADR,
+                            self.cube4_aligned.data_ADR,
+                            self.cube5_aligned.data_ADR,
+                            self.cube6_aligned.data_ADR,
+                            self.cube7_aligned.data_ADR,
+                            self.cube8_aligned.data_ADR,
+                            self.cube9_aligned.data_ADR,
+                        ],
+                        axis=0,
+                    )
+                else:
+                    print "  No ADR correction considered..."
+                    self.combined_cube.data = np.nanmedian(
+                        [
+                            self.cube1_aligned.data,
+                            self.cube2_aligned.data,
+                            self.cube3_aligned.data,
+                            self.cube4_aligned.data,
+                            self.cube5_aligned.data,
+                            self.cube6_aligned.data,
+                            self.cube7_aligned.data,
+                            self.cube8_aligned.data,
+                            self.cube9_aligned.data,
+                        ],
+                        axis=0,
+                    )
+                self.combined_cube.PA = np.mean(
+                    [
+                        self.cube1_aligned.PA,
+                        self.cube2_aligned.PA,
+                        self.cube3_aligned.PA,
+                        self.cube4_aligned.PA,
+                        self.cube5_aligned.PA,
+                        self.cube6_aligned.PA,
+                        self.cube7_aligned.PA,
+                        self.cube8_aligned.PA,
+                        self.cube9_aligned.PA,
+                    ]
+                )
+
+            if len(rss_list) == 10:
+                print (ADR)
+                if ADR:
+                    print "  Using data corrected for ADR to get combined cube..."
+                    self.combined_cube.data = np.nanmedian(
+                        [
+                            self.cube1_aligned.data_ADR,
+                            self.cube2_aligned.data_ADR,
+                            self.cube3_aligned.data_ADR,
+                            self.cube4_aligned.data_ADR,
+                            self.cube5_aligned.data_ADR,
+                            self.cube6_aligned.data_ADR,
+                            self.cube7_aligned.data_ADR,
+                            self.cube8_aligned.data_ADR,
+                            self.cube9_aligned.data_ADR,
+                            self.cube10_aligned.data_ADR,
+                        ],
+                        axis=0,
+                    )
+                else:
+                    print "  No ADR correction considered..."
+                    self.combined_cube.data = np.nanmedian(
+                        [
+                            self.cube1_aligned.data,
+                            self.cube2_aligned.data,
+                            self.cube3_aligned.data,
+                            self.cube4_aligned.data,
+                            self.cube5_aligned.data,
+                            self.cube6_aligned.data,
+                            self.cube7_aligned.data,
+                            self.cube8_aligned.data,
+                            self.cube9_aligned.data,
+                            self.cube10_aligned.data,
+                        ],
+                        axis=0,
+                    )
+                self.combined_cube.PA = np.mean(
+                    [
+                        self.cube1_aligned.PA,
+                        self.cube2_aligned.PA,
+                        self.cube3_aligned.PA,
+                        self.cube4_aligned.PA,
+                        self.cube5_aligned.PA,
+                        self.cube6_aligned.PA,
+                        self.cube7_aligned.PA,
+                        self.cube8_aligned.PA,
+                        self.cube9_aligned.PA,
+                        self.cube10_aligned.PA,
+                    ]
+                )
+
+            # Include flux calibration, assuming it is the same to all cubes (need to be updated to combine data taken in different nights)
+            #            if fcal:
+            if np.nanmedian(self.cube1_aligned.flux_calibration) == 0:
+                print "  Flux calibration not considered"
+                fcal = False
+            else:
+                self.combined_cube.flux_calibration = flux_calibration
+                print "  Flux calibration included!"
+                fcal = True
+
+            #            # Check this when using files taken on different nights  --> Data in self.combined_cube
+            #            self.wavelength=self.rss1.wavelength
+            #            self.valid_wave_min=self.rss1.valid_wave_min
+            #            self.valid_wave_max=self.rss1.valid_wave_max
+
+            self.combined_cube.trace_peak(plot=plot)
+            self.combined_cube.get_integrated_map_and_plot(fcal=fcal, plot=plot)
+
+            self.combined_cube.total_exptime = self.rss1.exptime + self.rss2.exptime
+            if len(rss_list) > 2:
+                self.combined_cube.total_exptime = (
+                    self.combined_cube.total_exptime + self.rss3.exptime
+                )
+            if len(rss_list) > 3:
+                self.combined_cube.total_exptime = (
+                    self.combined_cube.total_exptime + self.rss4.exptime
+                )
+            if len(rss_list) > 4:
+                self.combined_cube.total_exptime = (
+                    self.combined_cube.total_exptime + self.rss5.exptime
+                )
+            if len(rss_list) > 5:
+                self.combined_cube.total_exptime = (
+                    self.combined_cube.total_exptime + self.rss6.exptime
+                )
+            if len(rss_list) > 6:
+                self.combined_cube.total_exptime = (
+                    self.combined_cube.total_exptime + self.rss7.exptime
+                )
+            if len(rss_list) > 7:
+                self.combined_cube.total_exptime = (
+                    self.combined_cube.total_exptime + self.rss8.exptime
+                )
+            if len(rss_list) > 8:
+                self.combined_cube.total_exptime = (
+                    self.combined_cube.total_exptime + self.rss9.exptime
+                )
+            if len(rss_list) > 9:
+                self.combined_cube.total_exptime = (
+                    self.combined_cube.total_exptime + self.rss10.exptime
+                )
+
+            print "\n  Total exposition time = ", self.combined_cube.total_exptime, "seconds adding the ", len(
+                rss_list
+            ), " files"
+
+        # Save it to a fits file
+
+        if save_aligned_cubes:
+            print "\n  Saving aligned cubes to fits files ..."
+            for i in range(n_files):
+                if i < 9:
+                    replace_text = (
+                        "_"
+                        + obj_name
+                        + "_aligned_cube_0"
+                        + np.str(i + 1)
+                        + pk
+                        + ".fits"
+                    )
+                else:
+                    replace_text = "_aligned_cube_" + np.str(i + 1) + pk + ".fits"
+
+                aligned_cube_name = rss_list[i].replace(".fits", replace_text)
+
+                if i == 0:
+                    save_fits_file(self.cube1_aligned, aligned_cube_name, ADR=ADR)
+                if i == 1:
+                    save_fits_file(self.cube2_aligned, aligned_cube_name, ADR=ADR)
+                if i == 2:
+                    save_fits_file(self.cube3_aligned, aligned_cube_name, ADR=ADR)
+                if i == 3:
+                    save_fits_file(self.cube4_aligned, aligned_cube_name, ADR=ADR)
+                if i == 4:
+                    save_fits_file(self.cube5_aligned, aligned_cube_name, ADR=ADR)
+                if i == 5:
+                    save_fits_file(self.cube6_aligned, aligned_cube_name, ADR=ADR)
+                if i == 6:
+                    save_fits_file(self.cube7_aligned, aligned_cube_name, ADR=ADR)
+                if i == 7:
+                    save_fits_file(self.cube8_aligned, aligned_cube_name, ADR=ADR)
+                if i == 8:
+                    save_fits_file(self.cube9_aligned, aligned_cube_name, ADR=ADR)
+                if i == 9:
+                    save_fits_file(self.cube10_aligned, aligned_cube_name, ADR=ADR)
+
+        if fits_file == "":
+            print "\n  As requested, the combined cube will not be saved to a fits file"
+        else:
+            print "\n  6. Saving combined cube to a fits file ..."
+
+            check_if_path = fits_file.replace("path:", "")
+
+            if len(fits_file) != len(check_if_path):
+                fits_file = (
+                    check_if_path
+                    + obj_name
+                    + "_"
+                    + self.combined_cube.grating
+                    + pk
+                    + "_combining_"
+                    + np.str(n_files)
+                    + "_cubes.fits"
+                )
+
+            save_fits_file(self.combined_cube, fits_file, ADR=ADR)
+
+        print "\n================== REDUCING KOALA DATA COMPLETED ====================\n\n"
 
 
 # -----------------------------------------------------------------------------
