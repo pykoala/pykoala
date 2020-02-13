@@ -1,4 +1,9 @@
 from koala import *
+import os.path as pth
+
+
+path_main = pth.join(pth.dirname(__file__), "data")
+
 
 if __name__ == "__main__":
 
@@ -1474,6 +1479,7 @@ if __name__ == "__main__":
     #    offset_positions(10, 10, 10.1, 20, 20, 10.1, 10, 10, 10.1, 20, 20, 15.1)
 
 
+
     #path_main = "/Users/alopez/Documents/DATA/GAUSS/2018_03_Run_04_GAUSS/"
     #date = "20180310"
     #grating = "385R"
@@ -1489,6 +1495,7 @@ if __name__ == "__main__":
     #    + "k"
     #    + str(int((abs(kernel_size) - abs(int(kernel_size))) * 100))
     #)
+
 
     # # ---------------------------------------------------------------------------
     # # THROUGHPUT CORRECTION USING SKYFLAT
