@@ -18,14 +18,24 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information -----------------------------------------------------
 
 project = 'koala'
-copyright = '2020, Ángel López-Sánchez'
-author = 'Ángel López-Sánchez'
+copyright = u'2020, Ángel López-Sánchez'
+author = u'Ángel López-Sánchez'
 
 # The full version, including alpha/beta/rc tags
 import koala
 version = '.'.join(koala.__version__.split(".")[0:2])
 # The full version, including alpha/beta/rc tags.
 release = koala.__version__
+
+
+
+source_suffix = '.rst'
+
+# The encoding of source files.
+#source_encoding = 'utf-8-sig'
+
+# The master toctree document.
+master_doc = 'index'
 
 
 
@@ -42,7 +52,7 @@ extensions = [
     'sphinx.ext.coverage',
     'sphinx.ext.mathjax',
     'sphinx.ext.viewcode',
-    'napoleon',
+    'sphinx.ext.napoleon',
 ]
 
 # Add any paths that contain templates here, relative to this directory.

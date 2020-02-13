@@ -7,9 +7,9 @@ Welcome to koala's documentation!
 =================================
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+    :maxdepth: 2
 
+    api
 
 
 Indices and tables

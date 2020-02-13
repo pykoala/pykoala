@@ -7394,7 +7394,7 @@ def array_to_text_file(data, filename="array.dat"):
     Parameters
     ----------
     data: float
-        flux per wavelenght
+        flux per wavelength
     filename: string (default = "array.dat")
         name of the text file where the data will be written.
 
@@ -7421,10 +7421,10 @@ def spectrum_to_text_file(wavelength, flux, filename="spectrum.txt"):
 
     Parameters
     ----------
-    wavelenght: float
+    wavelength: float
         wavelength.
     flux: float
-        flux per wavelenght
+        flux per wavelength
     filename: string (default = "spectrum.txt")
         name of the text file where the data will be written.
 
@@ -7464,7 +7464,7 @@ def spectrum_to_fits_file(
     wavelength: float
         wavelength.
     flux: float
-        flux per wavelenght
+        flux per wavelength
     filename: string (default = "spectrum.fits")
         name of the fits file where the data will be written.
     Example
@@ -7800,8 +7800,8 @@ def fluxes(
              flux = core * sigma * sqrt (2*pi)\n
              eq. width = abs (flux) / cont\n
 
-    Result
-    ------
+    Returns
+    -------
 
     This routine provides a list compiling the results. The list has the the following format:
 
@@ -7811,16 +7811,16 @@ def fluxes(
 
     Parameters
     ----------
-    wavelenght: float
+    wavelength: float
         wavelength.
     spectrum: float
-        flux per wavelenght
+        flux per wavelength
     line: float
         approx. observed central wavelength of emission line to fit.
     lmin, lmax: float
-        wavelength range to be analized
-    fmin, fmax: float (defaut = 0, 0.)
-        minimum and maximun values of flux to be plotted.
+        wavelength range to be analysed
+    fmin, fmax: float (default = 0, 0.)
+        minimum and maximum values of flux to be plotted.
         If 0 is given (i.e. defaul) the routine uses the nanmin and nanmax values of the given spectrum.
     plot: boolean (default = True)
         Plot a figure with the emission lines identifications.
@@ -7828,7 +7828,7 @@ def fluxes(
         Print results.
     fit_continuum: boolean (default = True)
         Perform a linear fit of the continuum using all data, otherwise it just does a linear fit considering only the two median values in each continuum range.
-    median_kernel: odd integer (defaut = 35)
+    median_kernel: odd integer (default = 35)
         size of the median filter to be applied to the continuum.
     Example
     -------
@@ -8420,10 +8420,10 @@ def dfluxes(
              flux = core * sigma * sqrt (2*pi)\n
              eq. width = abs (flux) / cont\n
 
-    Result
-    ------
+    Returns
+    -------
 
-    This routine provides a list compiling the results. The list has the the following format:
+    This routine provides a list compiling the results. The list has the following format:
 
         resultado = [rms_cont, fit[0], fit_error[0], gaussian_flux, gaussian_flux_error, fwhm, fwhm_error, flux, flux_error, ew, ew_error, spectrum  ]
 
@@ -8431,16 +8431,16 @@ def dfluxes(
 
     Parameters
     ----------
-    wavelenght: float
+    wavelength: float
         wavelength.
     spectrum: float
-        flux per wavelenght
+        flux per wavelength
     line: float
         approx. observed central wavelength of emission line to fit.
     lmin, lmax: float
-        wavelength range to be analized
-    fmin, fmax: float (defaut = 0, 0.)
-        minimum and maximun values of flux to be plotted.
+        wavelength range to be analysed
+    fmin, fmax: float (default = 0, 0.)
+        minimum and maximum values of flux to be plotted.
         If 0 is given (i.e. defaul) the routine uses the nanmin and nanmax values of the given spectrum.
     plot: boolean (default = True)
         Plot a figure with the emission lines identifications.
@@ -8448,8 +8448,9 @@ def dfluxes(
         Print results.
     fit_continuum: boolean (default = True)
         Perform a linear fit of the continuum using all data, otherwise it just does a linear fit considering only the two median values in each continuum range.
-    median_kernel: odd integer (defaut = 35)
+    median_kernel: odd integer (default = 35)
         size of the median filter to be applied to the continuum.
+
     Example
     -------
     >>> resultado = fluxes(wavelength, spectrum, 6603, fmin=-5.0E-17, fmax=2.0E-16, plot=True, verbose=False)
@@ -9022,8 +9023,8 @@ def search_peaks(
     If abs(difference in wavelength) > 2.5, we don't consider the line identified.\n
     Finally, it checks if all redshifts are similar, assuming "check_redshift" = 0.0003 by default.
 
-    Result
-    ------
+    Returns
+    -------
 
     The routine returns FOUR lists:
 
@@ -9040,16 +9041,16 @@ def search_peaks(
 
     Parameters
     ----------
-    wavelenght: float
+    wavelength: float
         wavelength.
     flux: float
-        flux per wavelenght
+        flux per wavelength
     smooth_points: float (default = 20)
         Number of points for a smooth spectrum to get a rough estimation of the global continuum
     lmin, lmax: float
-        wavelength range to be analized
-    fmin, fmax: float (defaut = 0.5, 2.)
-        minimum and maximun values of flux/continuum to be plotted
+        wavelength range to be analysed
+    fmin, fmax: float (default = 0.5, 2.)
+        minimum and maximum values of flux/continuum to be plotted
     emission_line_file: string (default = "lineas_c89_python.dat")
         tex file with a list of emission lines to be found.
         This text file has to have the following format per line:
