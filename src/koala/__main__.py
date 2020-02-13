@@ -1,4 +1,9 @@
 from koala import *
+import os.path as pth
+
+
+path_main = pth.join(pth.dirname(__file__), "data")
+
 
 if __name__ == "__main__":
 
@@ -1521,7 +1526,6 @@ if __name__ == "__main__":
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
 
-    path_main = "/Users/alopez/Documents/DATA/GAUSS/2018_03_Run_04_GAUSS/"
     date = "20180310"
     grating = "385R"
     pixel_size = 0.6  # Just 0.1 precision
