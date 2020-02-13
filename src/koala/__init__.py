@@ -10027,6 +10027,12 @@ def rebin_spec_shift(wave, specin, shift):
     """
     wavnew = wave + shift
     obs = rebin_spec(wave, specin, wavnew)
+    # Blake reverting changes from pull request #16. when removing redundent code below change return to
+    # obs, instead of obs.binflux
+    spec = spectrum.ArraySourceSpectrum(wave=wave, flux=specin)
+    f = np.ones(len(wave))
+    filt = spectrum.ArraySpectralElement(wave, f, waveunits="angstrom")
+    obs = observation.Observation(spec, filt, binset=wavnew, force="taper")
 
     return obs.binflux
 
@@ -10176,8 +10182,8 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
         extra_w=1.3,
         step_csr=25,
         # CUBING
-        pixel_size_arcsec=0.4,
-        kernel_size_arcsec=1.2,
+        pixel_size_arcsec=0.4,   # NOTE: changed pixel_size_arcsec to kernel_size to fix name errors
+        kernel_size_arcsec=1.2, # NOTE: changed kernel_size_arcsec to kernel_size to fix name errors
         offsets=[1000],
         ADR=False,
         flux_calibration=[0],
@@ -10206,13 +10212,13 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
         sky_rss_list = [[0], [0], [0], [0], [0], [0], [0], [0], [0], [0]]
         pk = (
             "_"
-            + str(int(pixel_size))
+            + str(int(pixel_size_arcsec))
             + "p"
-            + str(int((abs(pixel_size) - abs(int(pixel_size))) * 10))
+            + str(int((abs(pixel_size_arcsec) - abs(int(pixel_size_arcsec))) * 10))
             + "_"
-            + str(int(kernel_size))
+            + str(int(kernel_size_arcsec))
             + "k"
-            + str(int((abs(kernel_size) - abs(int(kernel_size))) * 100))
+            + str(int((abs(kernel_size_arcsec) - abs(int(kernel_size_arcsec))) * 100))
         )
 
         print "  1. Checking input values: "
