@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/pykoala/koala.svg?branch=master)](https://travis-ci.com/pykoala/koala)
+
 # koala
 
 ## Getting started with developing koala
