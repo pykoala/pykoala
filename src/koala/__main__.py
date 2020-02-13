@@ -67,7 +67,8 @@ if __name__ == "__main__":
     #    file_skyflatr=path_skyflat+"10mar20065red.fits"                                  # FILE  DIVIDED BY THE FLAT, DON'T USE THIS
     #    throughput_file_red=path_skyflat+date+"_"+grating+"_throughput_correction.dat"
 
-    path_skyflat = path_main+"/data/"+grating+"/"
+    path_skyflat = path_main+"/" \
+                             ""+grating+"/"
     file_skyflatr=path_skyflat+"10mar2_combined.fits"                                  # FILE NOT DIVIDED BY THE FLAT
     throughput_file_red=path_skyflat+date+"_"+grating+"_throughput_correction.dat"
     #
@@ -100,12 +101,12 @@ if __name__ == "__main__":
     # # Uncomment the next two sections and skip the rest till "OBTAIN SKY SPECTRA"
     #
     # # READ FLUX CALIBRATION RED
-    flux_cal_file=path_main+"/data/flux_calibration_20180310_385R_0p6_1k8.dat"
+    flux_cal_file=path_main+"/flux_calibration_20180310_385R_0p6_1k8.dat"
     w_star,flux_calibration = read_table(flux_cal_file, ["f", "f"] )
     print flux_calibration
     #
     # # READ TELLURIC CORRECTION FROM FILE
-    telluric_correction_file=path_main+"/data/telluric_correction_20180310_385R_0p6_1k25.dat"
+    telluric_correction_file=path_main+"/telluric_correction_20180310_385R_0p6_1k25.dat"
     w_star,telluric_correction = read_table(telluric_correction_file, ["f", "f"] )
     print telluric_correction
 
@@ -431,9 +432,9 @@ if __name__ == "__main__":
     # #
     # # Using the same files than objects but chosing fibres without object emission
     #
-    file1r=path_main+"/data/"+grating+"/10mar20091red.fits"
-    file2r=path_main+"/data/"+grating+"/10mar20092red.fits"
-    file3r=path_main+"/data/"+grating+"/10mar20093red.fits"
+    file1r=path_main+"/"+grating+"/10mar20091red.fits"
+    file2r=path_main+"/"+grating+"/10mar20092red.fits"
+    file3r=path_main+"/"+grating+"/10mar20093red.fits"
 
     sky_r1 = KOALA_RSS(file1r, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
                        correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
@@ -477,12 +478,12 @@ if __name__ == "__main__":
                          correct_ccd_defects = True,
                          fix_wavelengths = True, sol = [0.119694453613, -0.000707644207572, 2.03806478671e-07],
                          #sky_method="none",
-                         sky_method="1Dfit", sky_spectrum=sky3, auto_scale_sky = True,
+                         sky_method="1D", sky_spectrum=sky3, auto_scale_sky = True,
                          id_el=False, high_fibres=10, brightest_line="Ha", cut=1.5, plot_id_el=True, broad=1.8, brightest_line_wavelength =6641., #fibre=422, #422
                          id_list=[6300.30, 6312.1, 6363.78, 6548.03, 6562.82, 6583.41, 6678.15, 6716.47, 6730.85, 7065.28, 7135.78, 7318.39, 7329.66, 8750.47, 8862.79, 9014.91, 9069.0],
                          clean_sky_residuals = False, dclip=3.0, extra_w = 1.3, step_csr = 25, fibre = 0,
                          telluric_correction = telluric_correction,
-                         do_extinction=True, correct_negative_sky = True,
+                         do_extinction=False, correct_negative_sky = True,
                          plot=False, warnings=True)
    
 #      Fitting a second-order polynomy a0x +  a1x * fibre + a2x * fibre**2:  
@@ -513,7 +514,7 @@ if __name__ == "__main__":
                           id_list=[6300.30, 6312.1, 6363.78, 6548.03, 6562.82, 6583.41, 6678.15, 6716.47, 6730.85, 7065.28, 7135.78, 7318.39, 7329.66, 8750.47, 8862.79, 9014.91, 9069.0],
                           #clean_sky_residuals = False, dclip=3.0, extra_w = 1.3, step_csr = 25,
                           telluric_correction = telluric_correction,
-                          do_extinction=True, correct_negative_sky = True,                                          
+                          do_extinction=False, correct_negative_sky = True,
                                  
                           pixel_size_arcsec=pixel_size, kernel_size_arcsec=kernel_size,
                           #offsets=[-0.54, -0.87, 1.58, -1.26] # EAST-/WEST+  NORTH-/SOUTH+
