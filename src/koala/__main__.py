@@ -67,7 +67,7 @@ if __name__ == "__main__":
     #    file_skyflatr=path_skyflat+"10mar20065red.fits"                                  # FILE  DIVIDED BY THE FLAT, DON'T USE THIS
     #    throughput_file_red=path_skyflat+date+"_"+grating+"_throughput_correction.dat"
 
-    path_skyflat = path_main+"/"+grating+"/"
+    path_skyflat = path_main+"/data/"+grating+"/"
     file_skyflatr=path_skyflat+"10mar2_combined.fits"                                  # FILE NOT DIVIDED BY THE FLAT
     throughput_file_red=path_skyflat+date+"_"+grating+"_throughput_correction.dat"
     #
@@ -100,12 +100,12 @@ if __name__ == "__main__":
     # # Uncomment the next two sections and skip the rest till "OBTAIN SKY SPECTRA"
     #
     # # READ FLUX CALIBRATION RED
-    flux_cal_file=path_main+"/koala/flux_calibration_20180310_385R_0p6_1k8.dat"
+    flux_cal_file=path_main+"/data/flux_calibration_20180310_385R_0p6_1k8.dat"
     w_star,flux_calibration = read_table(flux_cal_file, ["f", "f"] )
     print flux_calibration
     #
     # # READ TELLURIC CORRECTION FROM FILE
-    telluric_correction_file=path_main+"/koala/telluric_correction_20180310_385R_0p6_1k25.dat"
+    telluric_correction_file=path_main+"/data/telluric_correction_20180310_385R_0p6_1k25.dat"
     w_star,telluric_correction = read_table(telluric_correction_file, ["f", "f"] )
     print telluric_correction
 
@@ -431,9 +431,9 @@ if __name__ == "__main__":
     # #
     # # Using the same files than objects but chosing fibres without object emission
     #
-    file1r=path_main+"/"+grating+"/10mar20091red.fits"
-    file2r=path_main+"/"+grating+"/10mar20092red.fits"
-    file3r=path_main+"/"+grating+"/10mar20093red.fits"
+    file1r=path_main+"/data/"+grating+"/10mar20091red.fits"
+    file2r=path_main+"/data/"+grating+"/10mar20092red.fits"
+    file3r=path_main+"/data/"+grating+"/10mar20093red.fits"
 
     sky_r1 = KOALA_RSS(file1r, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
                        correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
