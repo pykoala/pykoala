@@ -307,8 +307,6 @@ if __name__ == "__main__":
     #    plt.ylabel("Flux [counts]")
     #    #plt.legend(frameon=True, loc=2, ncol=4)
     #    plt.minorticks_on()
-    #    plt.show()
-    #    plt.close()
     #
     #
     #
