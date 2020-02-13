@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import setuptools
 
 import versioneer
@@ -13,7 +14,7 @@ import versioneer
 
 
 setuptools.setup(
-    name = "koala",
+    name = "aat-koala",
     version = versioneer.get_version(),
     packages = setuptools.find_packages('src'),
     package_dir = {'': 'src'},
@@ -26,30 +27,29 @@ setuptools.setup(
         'future',
     ],
     #python_requires = '>=3.5',
-    #author = "James Tocknell",
-    #author_email = "aragilar@gmail.com",
-    #description = "Thin wrapper around h5py, inspired by camel",
+    author = u"Ángel López-Sánchez",
+    author_email = "angel.lopez-sanchez@mq.edu.au",
+    description = "Data reduction tools for KOALA IFU.",
     #long_description = long_description,
     license = "3-clause BSD",
-    #keywords = "hdf5",
-    url = "https://koala.readthedocs.io",
+    keywords = "astronomy aat koala",
+    url = "https://pykoala.readthedocs.io",
     project_urls={
-        'Documentation': 'https://koala.readthedocs.io',
+        'Documentation': 'https://pykoala.readthedocs.io',
         'Source': 'https://github.com/pykoala/koala/',
         'Tracker': 'https://github.com/pykoala/koala/issues',
     },
     classifiers=[
         'Development Status :: 3 - Alpha',
-        'Intended Audience :: Developers',
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: BSD License',
         'Topic :: Scientific/Engineering',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.5',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
-        'Programming Language :: Python :: 3 :: Only',
+        #'Programming Language :: Python :: 3',
+        #'Programming Language :: Python :: 3.5',
+        #'Programming Language :: Python :: 3.6',
+        #'Programming Language :: Python :: 3.7',
+        #'Programming Language :: Python :: 3.8',
+        #'Programming Language :: Python :: 3 :: Only',
     ],
     include_package_data=True,
     cmdclass=versioneer.get_cmdclass(),
