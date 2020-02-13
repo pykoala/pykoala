@@ -7464,7 +7464,7 @@ def spectrum_to_fits_file(
 
     Parameters
     ----------
-    wavelength: float 
+    wavelength: float
         wavelength.
     flux: float
         flux per wavelenght
@@ -7535,7 +7535,7 @@ def gauss_fix_x0(x, x0, y0, sigma):
 
     Args:
         x (array): A list of x locations to make the Gaussian at
-        x0 (float): Location of the Gaussian 
+        x0 (float): Location of the Gaussian
         y0 (float): Amplitude
         sigma (float): Gaussian width
     """
@@ -9285,7 +9285,6 @@ def smooth_spectrum(
     plot=False,
     verbose=False,
 ):
-
     """
     Smooth a spectrum
     TODO: More here
@@ -9408,9 +9407,9 @@ def smooth_spectrum(
 # -----------------------------------------------------------------------------
 def obtain_sky_spectrum(
     sky, low_fibres=200, plot=True, fig_size=12, fcal=False, verbose=True
-):  
+):
     """
-    Obtain a sky-spectrum using N fibres with the lowest intensity values. 
+    Obtain a sky-spectrum using N fibres with the lowest intensity values.
     We sort skyfibres by their integrated flux. The lowest `low_fibres` fibres are then used to create a sky-spectrum by median-combining them. We then return this 1D spectrum
     TODO: Fix argument types
 
@@ -9422,7 +9421,7 @@ def obtain_sky_spectrum(
         verbose (bool): If True, print out the regions we've included
 
     Returns:
-        array: a 1D sky spectrum. 
+        array: a 1D sky spectrum.
     """
     # It uses the lowest low_fibres fibres to get an integrated spectrum
     integrated_intensity_sorted = np.argsort(sky.integrated_fibre)
@@ -9778,10 +9777,10 @@ def offset_positions(
     decimals=2,
 ):
     """
-    Work out offsets between two sky positions and print them to the screen. This could probably be replaced with some astropy functions. 
+    Work out offsets between two sky positions and print them to the screen. This could probably be replaced with some astropy functions.
     TODO: Include arguments
 
-    Returns: 
+    Returns:
         None
     """
 
@@ -9905,7 +9904,7 @@ def MAD(x):
         x (array): Array of numbers to find the median of
 
     Returns:
-        float: 
+        float:
     """
     MAD = np.nanmedian(np.abs(x - np.nanmedian(x)))
     return MAD / 0.6745
@@ -9939,7 +9938,7 @@ def rebin_spec(wave, specin, wavnew):
 def rebin_spec_shift(wave, specin, shift):
     """
     Rebin a spectrum and shift in wavelength. Makes a new wavelength array and then passes this to rebin_spec
-    
+
     Args:
         wave (array): wavelength arrau
         specin (array): Input spectrum to be shifted
@@ -9960,8 +9959,8 @@ def rebin_spec_shift(wave, specin, shift):
 # -----------------------------------------------------------------------------
 def compare_fix_2dfdr_wavelengths(rss1, rss2):
     """
-    Compare small fixes we've made to the 2dFdr wavelengths between two RSS files. 
-    
+    Compare small fixes we've made to the 2dFdr wavelengths between two RSS files.
+
     Args:
         rss1 (RSS instance): An instance of the RSS class
         rss2 (RSS instance): An instance of the RSS class
