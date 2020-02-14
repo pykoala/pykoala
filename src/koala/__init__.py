@@ -132,7 +132,7 @@ class RSS(object):
     Attributes
     ----------
     wavelength: np.array(float)
-      Wavelength, in Angstrom.
+      Wavelength, in Angstroms.
     intensity: np.array(float)
       Intensity :math:`I_\lambda` per unit wavelength.
     variance: np.array(float)
@@ -188,15 +188,15 @@ class RSS(object):
             (default = , if they all 0 we use [self.valid_wave_min,self.valid_wave_max]
         min_value: float (default 0)
             For values lower than min_value, we set them as min_value
-        plot : boolean (default = False)
+        plot : Boolean (default = False)
             Plot
         title : string
             Tittle for the plot
         text: string
             A bit of extra text
-        warnings : boolean (default = False)
+        warnings : Boolean (default = False)
             Write warnings, e.g. when the integrated flux is negative
-        correct_negative_sky : boolean (default = False)
+        correct_negative_sky : Boolean (default = False)
             Corrects negative values making 0 the integrated flux of the lowest fibre
 
         Example
@@ -291,11 +291,11 @@ class RSS(object):
         plot=True,
     ):
         """
-        Identify fibers with highest intensity (high_fibres=10).
+        Identify fibres with highest intensity (high_fibres=10).
         Add all in a single spectrum.
         Identify emission features.
         These emission features should be those expected in all the cube!
-        Also, chosing fibre=number, it identifies el in a particular fibre.
+        Also, choosing fibre=number, it identifies el in a particular fibre.
 
         Parameters
         ----------
