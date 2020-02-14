@@ -15,7 +15,7 @@ matrix:
   include:
     - python: 2.7
       env:
-      - TOXENV=py27
+      - TOXENV=py27 MPLBACKEND=agg
         #- python: 3.5
         #  env:
         #  - TOXENV=py35
