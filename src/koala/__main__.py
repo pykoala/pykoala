@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from builtins import str
-from koala import *
 import os.path as pth
+from timeit import default_timer as timer
+from koala import *
 
 import matplotlib.pyplot as plt
 plt.ion()
@@ -39,6 +40,8 @@ SCIENCE_RED_3_FILENAME = pth.join(PATH_MAIN, GRATING, "10mar20093red.fits")
 fits_file_red = pth.join(
     PATH_MAIN, GRATING, "POX4_A_red_combined_cube_2_TEST_GitHub.fits"
 )
+
+start = timer()
 
 
 if __name__ == "__main__":
