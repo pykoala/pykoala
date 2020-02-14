@@ -30,6 +30,11 @@ import copy
 
 import os.path as pth
 
+from .._version import get_versions
+
+version = get_versions()["version"]
+del get_versions
+
 
 def read_table(fichero, formato):
     """
