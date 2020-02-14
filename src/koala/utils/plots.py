@@ -15,7 +15,8 @@ def plot_redshift_peaks(fig_size,
                         cut,
                         peaks,
                         peaks_name,
-                        label):
+                        label, 
+                        show_plot=False):
     """
     Check if all redshifts are similar, assuming check_redshift = 0.0003 by default
     # If OK, add id_peaks[i]=1, if not, id_peaks[i]=0
@@ -35,8 +36,9 @@ def plot_redshift_peaks(fig_size,
         ax.axvline(x=peaks[i], color="k", linestyle=":", alpha=0.5)
         label = peaks_name[i]
         ax.text(peaks[i], 1.8, label)
-    
-    plt.show()
+
+    if show_plot:
+        plt.show()
     return fig
 
 
@@ -49,7 +51,8 @@ def plot_weights_for_getting_smooth_spectrum(wlm,
                                              weight_fit_median,
                                              wave_min,
                                              wave_max,
-                                             exclude_wlm):
+                                             exclude_wlm, 
+                                             show_plot=False):
     """
     Weights for getting smooth spectrum
     """
@@ -78,7 +81,8 @@ def plot_weights_for_getting_smooth_spectrum(wlm,
         for i in range(len(exclude_wlm)):
             ax.axvspan(exclude_wlm[i][0], exclude_wlm[i][1], color="r", alpha=0.1)
 
-    plt.show()
+    if show_plot:
+        plt.show()
     return fig
 
 
@@ -88,7 +92,8 @@ def plot_correction_in_fibre_p_fibre(fig_size,
                                      espectro_fit_median,
                                      espectro_new,
                                      fibre_p,
-                                     clip_high):
+                                     clip_high, 
+                                     show_plot=False):
     """
     Plot correction in fibre p_fibre
     """
@@ -122,7 +127,8 @@ def plot_correction_in_fibre_p_fibre(fig_size,
     ax.set_title("Checking correction in fibre {}".format(str(fibre_p)))
     ax.legend(frameon=False, loc=1, ncol=4)
 
-    plt.show()
+    if show_plot:
+        plt.show()
     return fig
 
 
@@ -130,7 +136,8 @@ def plot_suspicious_fibres(suspicious_fibres,
                            fig_size,
                            wave_min,
                            wave_max,
-                           intensity_corrected_fiber):
+                           intensity_corrected_fiber, 
+                           show_plot=False):
     """
     Plotting suspicious fibres
     """
@@ -150,14 +157,16 @@ def plot_suspicious_fibres(suspicious_fibres,
         )
         ax.set_title("Checking spectrum of suspicious fibre {}. Do you see a cosmic?".format(np.str(fibre)))
         self.plot_spectrum(fibre)
+    if show_plot:
         plt.show()
-        figures.append(fig)
+    
+    figures.append(fig)
     return figures
 
 
 def plot_skyline_5578(fig_size,
                       flux_5578,
-                      flux_5578_medfilt):
+                      flux_5578_medfilt, show_plot=False):
     """
     Checking throughput correction using skyline 5578
     """
@@ -171,12 +180,13 @@ def plot_skyline_5578(fig_size,
     ax.set_ylim(p01, p99)
     ax.set_title(r"Checking throughput correction using skyline 5578 $\AA$")
     ax.tick_params(axis='both', which='minor')
-    plt.show()
+    if show_plot:
+        plt.show()
 
     return fig
 
 
-def plot_offset_between_cubes(cube, x, y, wl, medfilt_window=151):
+def plot_offset_between_cubes(cube, x, y, wl, medfilt_window=151, show_plot=False):
 
     """
     Plot the offset between two cubes
@@ -187,6 +197,7 @@ def plot_offset_between_cubes(cube, x, y, wl, medfilt_window=151):
         y (array): ?
         wl (array): A wavelenhgth array
         medfilt_window (int): Window size for median filtering
+        show_plot (bool, default=False): Show the plot to the screen
     """
 
     smooth_x = signal.medfilt(x, medfilt_window)
@@ -204,12 +215,13 @@ def plot_offset_between_cubes(cube, x, y, wl, medfilt_window=151):
     #    plt.plot(wl, x_max-np.nanmedian(x_max), 'g-')
     #    plt.plot(wl, y_max-np.nanmedian(y_max), 'y-')
     ax.set_ylim(-1.6, 1.6)
-    plt.show()
+    if show_plot:
+        plt.show()
     return fig
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def plot_response(calibration_star_cubes, scale=[1, 1, 1, 1]):
+def plot_response(calibration_star_cubes, scale=[1, 1, 1, 1], show_plot=False):
 
     """
     Plot the response of standard stars. TODO rename this function to make it more explicit
@@ -217,6 +229,7 @@ def plot_response(calibration_star_cubes, scale=[1, 1, 1, 1]):
     Args:
         calibration_star_cubes (list): A list of standard star objects
         scale (list): ?
+        show_plot (bool, default=False): Show the plot to the screen
     """
 
     print("\n> Plotting response of standard stars...\n")
@@ -267,12 +280,14 @@ def plot_response(calibration_star_cubes, scale=[1, 1, 1, 1]):
     ax.set_xlabel(r"Wavelength [$\AA$]")
     ax.set_title("Response curve for calibration stars")
     ax.tick_params(axis='both', which='minor')
-    plt.show()
+
+    if show_plot:
+        plt.show()
 
     return fig
 
 
-def plot_telluric_correction(wlm, telluric_correction_list, telluric_correction, figsize=12):
+def plot_telluric_correction(wlm, telluric_correction_list, telluric_correction, figsize=12, show_plot=False):
     """
     Make a plot of the telluric corretion as well as all of the individual stars which have gone into this telluric correction.
 
@@ -281,6 +296,7 @@ def plot_telluric_correction(wlm, telluric_correction_list, telluric_correction,
         telluric_correction_list (list): A list of standard star spectra
         telluric_correction (array): The final telluric correction we'll use
         figsize (int, default=12): Size of the figure in inches
+        show_plot (bool, default=False): Show the plot to the screen
 
     Returns:
         A matplotlib figure object
@@ -295,5 +311,4 @@ def plot_telluric_correction(wlm, telluric_correction_list, telluric_correction,
 
     ax.plot(wlm, telluric_correction, alpha=0.5, color="k", label="Median")
     plt.minorticks_on()
-    plt.show()
 
