@@ -3,6 +3,10 @@ from builtins import str
 from koala import *
 import os.path as pth
 
+import matplotlib.pyplot as plt
+plt.ion()
+
+
 
 path_main = pth.join(pth.dirname(__file__), "data")
 
