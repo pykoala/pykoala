@@ -1,3 +1,5 @@
+from __future__ import print_function
+from builtins import str
 from koala import *
 import os.path as pth
 
@@ -7,7 +9,7 @@ path_main = pth.join(pth.dirname(__file__), "data")
 
 if __name__ == "__main__":
 
-    print "\n> Testing KOALA RSS class. Running", version
+    print("\n> Testing KOALA RSS class. Running", version)
 
     
 
@@ -85,12 +87,12 @@ if __name__ == "__main__":
     # # READ FLUX CALIBRATION RED
     flux_cal_file=path_main+"/flux_calibration_20180310_385R_0p6_1k8.dat"
     w_star,flux_calibration = read_table(flux_cal_file, ["f", "f"] )
-    print flux_calibration
+    print(flux_calibration)
     #
     # # READ TELLURIC CORRECTION FROM FILE
     telluric_correction_file=path_main+"/telluric_correction_20180310_385R_0p6_1k25.dat"
     w_star,telluric_correction = read_table(telluric_correction_file, ["f", "f"] )
-    print telluric_correction
+    print(telluric_correction)
 
     # # READ STAR 1
     # # First we provide names, paths, files...
@@ -444,7 +446,7 @@ if __name__ == "__main__":
                           valid_wave_min = 6085, valid_wave_max = 9305,
                           plot=False, warnings=False)  
 end = timer()
-print "\n> Elapsing time = ", end - start, "s"
+print("\n> Elapsing time = ", end - start, "s")
 # -----------------------------------------------------------------------------
 #                                     ... Paranoy@ Rulz! ;^D  & Angel R. :-)
 # -----------------------------------------------------------------------------
