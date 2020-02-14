@@ -67,9 +67,13 @@ from scipy.ndimage.interpolation import shift
 import datetime
 import copy
 
+import os.path as pth
+
 # -----------------------------------------------------------------------------
 # Define constants
 # -----------------------------------------------------------------------------
+
+DATA_PATH = pth.join(pth.dirname(__file__), "data")
 
 pc = 3.086e18  # pc in cm
 C = 299792.458  # c in km/s
@@ -1523,7 +1527,9 @@ class RSS(object):
 
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
-    def do_extinction_curve(self, observatory_file="ssoextinct.dat", plot=True):
+    def do_extinction_curve(
+        self, observatory_file=pth.join(DATA_PATH, "ssoextinct.dat"), plot=True
+    ):
 
         print("\n> Computing extinction at given airmass...")
 
@@ -3420,7 +3426,7 @@ class KOALA_RSS(RSS):
         self.airmass = old_div(1, np.cos(np.radians(ZD)))
         self.extinction_correction = np.ones(self.n_wave)
         if do_extinction:
-            self.do_extinction_curve("ssoextinct.dat", plot=plot)
+            self.do_extinction_curve(pth.join(DATA_PATH, "ssoextinct.dat"), plot=plot)
 
         # Check if telluric correction is needed & apply
         if telluric_correction[0] != 0:
@@ -9365,8 +9371,8 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
         extra_w=1.3,
         step_csr=25,
         # CUBING
-        pixel_size_arcsec=0.4,
-        kernel_size_arcsec=1.2,
+        pixel_size_arcsec=0.4,   # NOTE: changed pixel_size_arcsec to kernel_size to fix name errors
+        kernel_size_arcsec=1.2, # NOTE: changed kernel_size_arcsec to kernel_size to fix name errors
         offsets=[1000],
         ADR=False,
         flux_calibration=[0],
