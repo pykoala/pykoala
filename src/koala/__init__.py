@@ -28,8 +28,8 @@ import matplotlib.colors as colors
 
 import numpy as np
 
-from pysynphot import observation
-from pysynphot import spectrum
+from synphot import observation
+from synphot import spectrum
 
 from scipy import interpolate
 from scipy.ndimage.interpolation import shift
@@ -44,23 +44,16 @@ import scipy.signal as sig
 # Import Python routines
 # -----------------------------------------------------------------------------
 
-from koala.utils.plots import (plot_redshift_peaks,
+from .utils.plots import (plot_redshift_peaks,
                                plot_weights_for_getting_smooth_spectrum,
                                plot_correction_in_fibre_p_fibre,
                                plot_suspicious_fibres,
                                plot_skyline_5578,
-                               plot_plot,
-                               plot_spec,
-                               plot_response)
-
-from koala.utils.io import (read_table,
-                            array_to_text_file,
-                            spectrum_to_text_file,
-                            spectrum_to_fits_file,
-                            save_bluered_fits_file,
-                            save_fits_file,
-                            save_rss_fits)
-
+                               plot_offset_between_cubes,
+                               plot_response,
+                               plot_telluric_correction,
+                               )
+from .utils.io import *
 
 
 # -----------------------------------------------------------------------------
@@ -609,12 +602,12 @@ class RSS(object):
             plt.plot(median_running, "k", label="Median", alpha=0.6)
             plt.legend(frameon=False, loc=1, ncol=3)
             plt.minorticks_on()
-            plt.show()
-            plt.close()
+            #plt.show()
+            #plt.close()
 
         if plot_suspicious_fibres == True and len(suspicious_fibres) > 0:
             # Plotting suspicious fibres..
-            plot_suspicious_fibres(suspicious_fibres,
+            figures = plot_suspicious_fibres(suspicious_fibres,
                                    fig_size,
                                    wave_min,
                                    wave_max,
@@ -629,7 +622,7 @@ class RSS(object):
             # plt.show()
             # plt.close()
             if plot:
-                plot_skyline_5578(fig_size, flux_5578, flux_5578_medfilt)
+                fig = plot_skyline_5578(fig_size, flux_5578, flux_5578_medfilt)
 
             print("  Variations in throughput between", np.nanmin(
                 extra_throughput_correction
@@ -897,8 +890,8 @@ class RSS(object):
                     plt.minorticks_on()
                     plt.xlabel("Wavelength [$\AA$]")
                     plt.ylabel("Flux / continuum")
-                    plt.show()
-                    plt.close()
+                    # plt.show()
+                    # plt.close()
 
             self.intensity_corrected[fibre, :] = s
 
@@ -1449,8 +1442,8 @@ class RSS(object):
                         )
                 for i in range(len(dsky2) - 1):
                     plt.axvline(x=dsky2[i], color="orange", linestyle="--", alpha=0.6)
-                plt.show()
-                plt.close()
+                # plt.show()
+                # plt.close()
 
             offset = np.nanmedian(
                 np.array(object_sl_gaussian_center) - np.array(sl_gauss_center)
@@ -1563,8 +1556,8 @@ class RSS(object):
             plt.title("Correction for extinction using airmass = " + str(self.airmass))
             plt.ylabel("Flux correction")
             plt.xlabel("Wavelength [$\AA$]")
-            plt.show()
-            plt.close()
+            # plt.show()
+            # plt.close()
 
         # Correct for extinction at given airmass
         print("  Airmass = ", self.airmass)
@@ -1657,8 +1650,8 @@ class RSS(object):
             plt.minorticks_on()
             plt.title(self.description + " - Combined Sky Spectrum")
             plt.legend(frameon=False)
-            plt.show()
-            plt.close()
+            # plt.show()
+            # plt.close()
 
         # Substract sky in all intensities
         self.intensity_sky_corrected = np.zeros_like(self.intensity)
@@ -1702,8 +1695,8 @@ class RSS(object):
             plt.ylim([np.nanmin(median_sky_corrected), np.nanmax(median_sky_corrected)])
             plt.title(self.description)
             plt.legend(frameon=False)
-            plt.show()
-            plt.close()
+            # plt.show()
+            # plt.close()
 
         print("  Sky spectrum obtained and stored in self.sky_emission !! ")
         print("  Intensities corrected for sky emission and stored in self.intensity_corrected !")
@@ -1776,8 +1769,8 @@ class RSS(object):
             plt.xlabel("Fibre")
             plt.ylabel("Throughput using scale")
             plt.title("Throughput correction using scale")
-            plt.show()
-            plt.close()
+            # plt.show()
+            # plt.close()
 
             # print "\n  Plotting spectra WITHOUT considering throughput correction..."
             plt.figure(figsize=(10, 4))
@@ -1788,8 +1781,8 @@ class RSS(object):
             plt.xlim(self.wavelength[0] - 10, self.wavelength[-1] + 10)
             plt.ylim(ymin, ymax)
             plt.minorticks_on()
-            plt.show()
-            plt.close()
+            # plt.show()
+            # plt.close()
 
             # print "  Plotting spectra CONSIDERING throughput correction..."
             plt.figure(figsize=(10, 4))
@@ -1804,8 +1797,8 @@ class RSS(object):
             plt.xlim(self.wavelength[0] - 10, self.wavelength[-1] + 10)
             plt.axvline(x=wave_min_scale, color="k", linestyle="--")
             plt.axvline(x=wave_max_scale, color="k", linestyle="--")
-            plt.show()
-            plt.close()
+            # plt.show()
+            # plt.close()
 
         print("\n>  Using median value of skyflat considering a median filter of", kernel_sky_spectrum, "...")  # LUKE
         median_sky_spectrum = np.nanmedian(self.intensity, axis=0)
@@ -1852,8 +1845,8 @@ class RSS(object):
                     plt.title(ptitle)
                     plt.xlabel("Wavelength [$\AA$]")
                     plt.legend(frameon=False, loc=3, ncol=1)
-                    plt.show()
-                    plt.close()
+                    # plt.show()
+                    # plt.close()
                     if pf < len(plot_fibres) - 1:
                         pf = pf + 1
 
@@ -2026,8 +2019,8 @@ class RSS(object):
                         exclude_wlm[i][0], exclude_wlm[i][1], color="r", alpha=0.1
                     )
             plt.minorticks_on()
-            plt.show()
-            plt.close()
+            # plt.show()
+            # plt.close()
 
         if apply_tc:  # Check this
             print("  Applying telluric correction to this star...")
@@ -2091,8 +2084,8 @@ class RSS(object):
             plt.ylabel("Relative Flux")
             plt.xlim(xmin, xmax)
             plt.ylim(ymin, ymax)
-            plt.show()
-            plt.close()
+            # plt.show()
+            # plt.close()
 
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
@@ -2146,7 +2139,8 @@ class RSS(object):
             self.plot_spectrum(i, sky)
 
         if save_file == "":
-            plt.show()
+            #plt.show()
+            pass
         else:
             plt.savefig(save_file)
         plt.close()
@@ -2229,7 +2223,8 @@ class RSS(object):
             plt.ylim(ymin, ymax)
 
             if save_file == "":
-                plt.show()
+                #plt.show()
+                pass
             else:
                 plt.savefig(save_file)
             plt.close()
@@ -2353,8 +2348,8 @@ class RSS(object):
         cbar.set_label(str(color_bar_text), rotation=90, labelpad=40)
         cbar.ax.tick_params()
 
-        plt.show()
-        plt.close()
+        # plt.show()
+        # plt.close()
 
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
@@ -2398,8 +2393,8 @@ class RSS(object):
         cbar.set_label(str(color_bar_text), rotation=90, labelpad=labelpad)
         cbar.ax.tick_params()
 
-        plt.show()
-        plt.close()
+        # plt.show()
+        # plt.close()
 
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
@@ -2432,8 +2427,8 @@ class RSS(object):
             + " fibres with highest intensity"
         )
         plt.legend(frameon=False, loc=4, ncol=2)
-        plt.show()
-        plt.close()
+        # plt.show()
+        # plt.close()
 
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
@@ -2978,8 +2973,8 @@ class KOALA_RSS(RSS):
                 plt.minorticks_on()
                 plt.xlabel("Wavelength [$\AA$]")
                 plt.title("Spectra WITHOUT CONSIDERING throughput correction")
-                plt.show()
-                plt.close()
+                # plt.show()
+                # plt.close()
 
             print("\n> Applying relative throughput correction using median skyflat values per fibre...")
             self.relative_throughput = skyflat.relative_throughput
@@ -3009,8 +3004,8 @@ class KOALA_RSS(RSS):
                 plt.title(
                     "Spectra CONSIDERING throughput correction (median value per fibre)"
                 )
-                plt.show()
-                plt.close()
+                # plt.show()
+                # plt.close()
 
             print("  Intensities corrected for relative throughput stored in self.intensity_corrected !")
             text_for_integrated_fibre = "after throughput correction..."
@@ -3209,8 +3204,8 @@ class KOALA_RSS(RSS):
                         plt.xlim(self.wavelength[0] - 10, self.wavelength[-1] + 10)
                         plt.title("Sky spectrum provided (Scaled)")
                         plt.xlabel("Wavelength [$\AA$]")
-                        plt.show()
-                        plt.close()
+                        # plt.show()
+                        # plt.close()
                     print("  Intensities corrected for sky emission and stored in self.intensity_corrected !")
                     self.sky_emission = sky_spectrum
                 else:
@@ -3385,8 +3380,8 @@ class KOALA_RSS(RSS):
                             plt.legend(frameon=False, loc=1, ncol=2)
                         plt.title(text)
                         plt.xlabel("Fibre")
-                        plt.show()
-                        plt.close()
+                        # plt.show()
+                        # plt.close()
 
                     self.intensity_corrected = (
                         self.intensity_corrected - self.sky_emission
@@ -3443,8 +3438,8 @@ class KOALA_RSS(RSS):
                 plt.ylim(0.9, 2)
                 plt.title("Telluric correction")
                 plt.xlabel("Wavelength [$\AA$]")
-                plt.show()
-                plt.close()
+                # plt.show()
+                # plt.close()
 
             if plot:
                 integrated_intensity_sorted = np.argsort(self.integrated_fibre)
@@ -3496,8 +3491,8 @@ class KOALA_RSS(RSS):
                     np.nanmax(self.intensity_corrected[region[0]]),
                 )  # CHECK THIS AUTOMATICALLY
                 plt.xlabel("Wavelength [$\AA$]")
-                plt.show()
-                plt.close()
+                # plt.show()
+                # plt.close()
 
         # Check if identify emission lines is requested & do
         if id_el:
@@ -3636,8 +3631,8 @@ class KOALA_RSS(RSS):
                 + " fibres with highest intensity"
             )
             plt.legend(frameon=False, loc=4, ncol=2)
-            plt.show()
-            plt.close()
+            # plt.show()
+            # plt.close()
 
             region = []
             for fibre_ in range(high_fibres):
@@ -3670,8 +3665,8 @@ class KOALA_RSS(RSS):
                 + " fibres with lowest intensity"
             )
             plt.legend(frameon=False, loc=4, ncol=2)
-            plt.show()
-            plt.close()
+            # plt.show()
+            # plt.close()
 
         # Plot RSS_image
         if plot:
@@ -4332,10 +4327,11 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 plt.plot([i * (1 + z), i * (1 + z)], [fmin, fmax], "r:", alpha=0.95)
 
         if save_file == "":
-            plt.show()
+            #plt.show()
+            pass
         else:
             plt.savefig(save_file)
-        plt.close()
+        #plt.close()
 
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
@@ -4396,10 +4392,11 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         plt.ylabel(ylabel)
 
         if save_file == "":
-            plt.show()
+            #plt.show()
+            pass
         else:
             plt.savefig(save_file)
-        plt.close()
+        #plt.close()
 
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
@@ -4634,7 +4631,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         #        cbar.ax.set_yticklabels(['< -1', '0', '> 1'])# vertically oriented colorbar
 
         if save_file == "":
-            plt.show()
+            #plt.show()
+            pass
         else:
             plt.savefig(save_file)
         plt.close()
@@ -4755,8 +4753,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             plt.ylabel("$\Delta$ offset [arcsec]")
             plt.xlabel("Wavelength [$\AA$]")
             plt.title(self.description)
-            plt.show()
-            plt.close()
+            # plt.show()
+            # plt.close()
         print("> Peak coordinates tracing all wavelengths found in spaxel: ({:.2f}, {:.2f})".format(
             self.x_peak_median, self.y_peak_median
         ))
@@ -4947,8 +4945,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             plt.ylabel("$\Delta$ offset [arcsec]")
             plt.xlabel("Wavelength [$\AA$]")
             plt.title(self.description)
-            plt.show()
-            plt.close()
+            # plt.show()
+            # plt.close()
         print("> Peak coordinates tracing all wavelengths found in spaxel: ({:.2f}, {:.2f})".format(
             self.x_peak_median, self.y_peak_median
         ))
@@ -5055,8 +5053,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 y=np.interp([6], r_norm, F_norm), color="r", linestyle="--", alpha=0.2
             )
             plt.minorticks_on()
-            plt.show()
-            plt.close()
+            # plt.show()
+            # plt.close()
 
         return r2_growth_curve, F_growth_curve, F_guess, r2_half_light
 
@@ -5147,8 +5145,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             plt.axvline(x=max_wave, color="k", linestyle="--", alpha=0.5)
             plt.minorticks_on()
             plt.legend(frameon=False, loc=1)
-            plt.show()
-            plt.close()
+            # plt.show()
+            # plt.close()
         if r_max == 5:
             print("  Saving this integrated star flux in self.integrated_star_flux")
             self.integrated_star_flux = np.array(intensity)
@@ -5425,8 +5423,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             plt.axvline(x=min_wave, color="k", linestyle="--", alpha=0.5)
             plt.axvline(x=max_wave, color="k", linestyle="--", alpha=0.5)
             plt.minorticks_on()
-            plt.show()
-            plt.close()
+            # plt.show()
+            # plt.close()
 
             plt.figure(figsize=(10, 8))
             if fit_degree > 0:
@@ -5465,8 +5463,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             plt.axvline(x=min_wave, color="k", linestyle="--", alpha=0.5)
             plt.axvline(x=max_wave, color="k", linestyle="--", alpha=0.5)
             plt.legend(frameon=True, loc=4, ncol=4)
-            plt.show()
-            plt.close()
+            # plt.show()
+            # plt.close()
 
         interpolated_flat = interpolate.splrep(response_wavelength, fx)  # , s=smooth)
         self.response_curve = interpolate.splev(
@@ -5622,23 +5620,7 @@ def offset_between_cubes(cube1, cube2, plot=True):
     if plot:
         x -= delta_RA_pix
         y -= delta_DEC_pix
-        smooth_x = sig.medfilt(x, 151)
-        smooth_y = sig.medfilt(y, 151)
-
-        print(np.nanmean(smooth_x))
-        print(np.nanmean(smooth_y))
-
-        plt.figure(figsize=(10, 5))
-        wl = cube1.RSS.wavelength
-        plt.plot(wl, x, "k.", alpha=0.1)
-        plt.plot(wl, y, "r.", alpha=0.1)
-        plt.plot(wl, smooth_x, "k-")
-        plt.plot(wl, smooth_y, "r-")
-        #    plt.plot(wl, x_max-np.nanmedian(x_max), 'g-')
-        #    plt.plot(wl, y_max-np.nanmedian(y_max), 'y-')
-        plt.ylim(-1.6, 1.6)
-        plt.show()
-        plt.close()
+        fig = plot_offset_between_cubes(cube1, delta_RA_pix, delta_DEC_pix, wl, medfilt_window=151)
 
     return delta_RA_arcsec, delta_DEC_arcsec
 
@@ -5668,13 +5650,9 @@ def compare_cubes(cube1, cube2, line=0):
         plt.title("{:.2f} AA".format(line))
     else:
         plt.title("Integrated Map")
-    plt.show()
-    plt.close()
-    print("  Medium scatter : ", scatter)
+    # plt.show()
+    # plt.close()
 
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
 def obtain_flux_calibration(calibration_star_cubes):
     #    print "\n> Obtaining flux calibration...\n"
     vector_wave = []
@@ -5700,25 +5678,20 @@ def obtain_flux_calibration(calibration_star_cubes):
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def obtain_telluric_correction(wlm, telluric_correction_list, plot=True):
+    """
+    Take a list of telluric correction spectra and make a single median telluric spectrum
+
+    Args:
+        wlm (array): A wavelength array. Only used for plotting- should refactor this!
+        telluric_correction_list (list): A list of telluric correction spectra
+        plot (bool, default=True): Whether or not to plot the resulting spectrum. 
+    """
     telluric_correction = np.nanmedian(telluric_correction_list, axis=0)
     if plot:
-        fig_size = 12
-        plt.figure(figsize=(fig_size, fig_size / 2.5))
-        plt.title("Telluric correction")
-        for i in range(len(telluric_correction_list)):
-            label = "star" + str(i + 1)
-            plt.plot(wlm, telluric_correction_list[i], alpha=0.3, label=label)
-        plt.plot(wlm, telluric_correction, alpha=0.5, color="k", label="Median")
-        plt.minorticks_on()
-        plt.legend(frameon=False, loc=2, ncol=1)
-        step_up = 1.15 * np.nanmax(telluric_correction)
-        plt.ylim(0.9, step_up)
-        plt.xlim(wlm[0] - 10, wlm[-1] + 10)
-        plt.show()
-        plt.close()
+        fig = plot_telluric_correction(wlm, telluric_correction_list, telluric_correction, figsize=12)
 
-    print("\n> Telluric correction = ", telluric_correction)
-    print("\n  Telluric correction obtained!")
+    print("\n\t>Telluric correction = {}".format(telluric_correction))
+    print("\n\tTelluric correction obtained!")
     return telluric_correction
 
 
@@ -6664,7 +6637,8 @@ class CUBE(RSS, Interpolated_cube):
         #        cbar.set_ticklabels([1.5,2,3,4,5,6])
 
         if save_file == "":
-            plt.show()
+            #plt.show()
+            pass
         else:
             plt.savefig(save_file)
         plt.close()
@@ -6776,7 +6750,8 @@ class CUBE(RSS, Interpolated_cube):
         plt.ylabel(ylabel, fontsize=fig_size * 1)
 
         if save_file == "":
-            plt.show()
+            #plt.show()
+            pass
         else:
             plt.savefig(save_file)
         plt.close()
@@ -7097,8 +7072,8 @@ def substract_given_gaussian(
                 # Plot residuals
                 # plt.plot(w_spec, residuals, 'k')
                 # plt.title('Fit: x0=%.2f y0=%.2e sigma=%.2f  flux=%.2e  rms=%.3e' % (fit[0], fit[1], fit[2], gaussian_flux, rms_fit))
-                plt.show()
-                plt.close()
+                # plt.show()
+                # plt.close()
 
                 plt.figure(figsize=(10, 4))
                 plt.plot(wavelength, spectrum, "r")
@@ -7111,8 +7086,8 @@ def substract_given_gaussian(
                     plt.ylabel("Flux [ counts ]")
                 plt.xlim(lmin, lmax)
                 plt.ylim(fmin, fmax)
-                plt.show()
-                plt.close()
+                # plt.show()
+                # plt.close()
         else:
             s_s = spectrum
     return s_s
@@ -7550,7 +7525,7 @@ def fluxes(
                 "Fit: x0=%.2f y0=%.2e sigma=%.2f  flux=%.2e  rms=%.3e"
                 % (fit[0], fit[1], fit[2], gaussian_flux, rms_fit)
             )
-            plt.show()
+            #plt.show()
 
         # Printing results
         if verbose:
@@ -7616,8 +7591,8 @@ def fluxes(
                 plt.ylabel("Flux [ counts ]")
             plt.xlim(lmin, lmax)
             plt.ylim(fmin, fmax)
-            plt.show()
-            plt.close()
+            # plt.show()
+            # plt.close()
 
         #                     0      1         2                3               4              5      6         7        8        9     10      11
         resultado = [
@@ -7660,9 +7635,9 @@ def fluxes(
             plt.figure(figsize=(10, 4))
             plt.plot(np.array(w_spec), np.array(f_spec), "b", lw=3, alpha=0.5)
             plt.minorticks_on()
-            plt.xlabel("Wavelength [$\AA$]")
+            plt.xlabel(r"Wavelength [$\AA$]")
             if fcal:
-                plt.ylabel("Flux [ erg cm$^{-2}$ s$^{-1}$ A$^{-1}$]")
+                plt.ylabel(r"Flux [ erg cm$^{-2}$ s$^{-1}$ A$^{-1}$]")
             else:
                 plt.ylabel("Flux [ counts ]")
             plt.xlim(lmin, lmax)
@@ -7699,7 +7674,7 @@ def fluxes(
             # Plot residuals
             #            plt.plot(w_spec, residuals, 'k')
             plt.title("No Gaussian fit obtained...")
-            plt.show()
+            #plt.show()
 
         return resultado
 
@@ -8163,7 +8138,7 @@ def dfluxes(
             plt.title(
                 "Double Gaussian Fit"
             )  # Fit: x0=%.2f y0=%.2e sigma=%.2f  flux=%.2e  rms=%.3e' % (fit[0], fit[1], fit[2], gaussian_flux, rms_fit))
-            plt.show()
+            #plt.show()
 
         # Printing results
         if verbose:
@@ -8229,8 +8204,8 @@ def dfluxes(
                 plt.ylabel("Flux [ counts ]")
             plt.xlim(lmin, lmax)
             plt.ylim(fmin, fmax)
-            plt.show()
-            plt.close()
+            # plt.show()
+            # plt.close()
 
         #                     0      1         2                3               4              5      6         7        8        9     10      11   12       13      14
         resultado = [
@@ -8318,7 +8293,7 @@ def dfluxes(
             # Plot residuals
             #            plt.plot(w_spec, residuals, 'k')
             plt.title("No Gaussian fit obtained...")
-            plt.show()
+            #plt.show()
 
         return resultado
 
@@ -8557,7 +8532,7 @@ def search_peaks(
             id_peaks.append(1)
 
     if plot:
-        plot_redshift_peaks(fig_size,
+        fig = plot_redshift_peaks(fig_size,
                             funcion,
                             wavelength,
                             lmin,
@@ -8711,7 +8686,7 @@ def smooth_spectrum(
 
     if plot:
 
-        plot_weights_for_getting_smooth_spectrum(
+        fig = plot_weights_for_getting_smooth_spectrum(
             wlm,
             s,
             running_wave,
@@ -8926,8 +8901,8 @@ def scale_sky_spectrum(
         plt.xlabel("Wavelength [$\AA$]")
         plt.ylabel("OBJECT / SKY")
         plt.minorticks_on()
-        plt.show()
-        plt.close()
+        # plt.show()
+        # plt.close()
 
         if verbose:
             print("  Using this fit to scale sky spectrum to object, the median value is ", fit_line, "...")
