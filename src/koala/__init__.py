@@ -29,19 +29,6 @@ from koala.utils.plots import (plot_redshift_peaks,
                                plot_weights_for_getting_smooth_spectrum,
                                plot_correction_in_fibre_p_fibre,
                                plot_suspicious_fibres,
-                               plot_skyline_5578,
-                               plot_plot,
-                               plot_spec,
-                               plot_response)
-
-from koala.utils.io import (read_table,
-                            array_to_text_file,
-                            spectrum_to_text_file,
-                            spectrum_to_fits_file,
-                            save_bluered_fits_file,
-                            save_fits_file,
-                            save_rss_fits)
-
 
 
 from astropy.io import fits
@@ -613,7 +600,7 @@ class RSS(object):
 
         if plot_suspicious_fibres == True and len(suspicious_fibres) > 0:
             # Plotting suspicious fibres..
-            plot_suspicious_fibres(suspicious_fibres,
+            figures = plot_suspicious_fibres(suspicious_fibres,
                                    fig_size,
                                    wave_min,
                                    wave_max,
@@ -628,7 +615,7 @@ class RSS(object):
             # plt.show()
             # plt.close()
             if plot:
-                plot_skyline_5578(fig_size, flux_5578, flux_5578_medfilt)
+                fig = plot_skyline_5578(fig_size, flux_5578, flux_5578_medfilt)
 
             print("  Variations in throughput between", np.nanmin(
                 extra_throughput_correction
@@ -5621,23 +5608,7 @@ def offset_between_cubes(cube1, cube2, plot=True):
     if plot:
         x -= delta_RA_pix
         y -= delta_DEC_pix
-        smooth_x = signal.medfilt(x, 151)
-        smooth_y = signal.medfilt(y, 151)
-
-        print(np.nanmean(smooth_x))
-        print(np.nanmean(smooth_y))
-
-        plt.figure(figsize=(10, 5))
-        wl = cube1.RSS.wavelength
-        plt.plot(wl, x, "k.", alpha=0.1)
-        plt.plot(wl, y, "r.", alpha=0.1)
-        plt.plot(wl, smooth_x, "k-")
-        plt.plot(wl, smooth_y, "r-")
-        #    plt.plot(wl, x_max-np.nanmedian(x_max), 'g-')
-        #    plt.plot(wl, y_max-np.nanmedian(y_max), 'y-')
-        plt.ylim(-1.6, 1.6)
-        plt.show()
-        plt.close()
+        fig = plot_offset_between_cubes(cube1, delta_RA_pix, delta_DEC_pix, wl, medfilt_window=151)
 
     return delta_RA_arcsec, delta_DEC_arcsec
 
@@ -5669,11 +5640,7 @@ def compare_cubes(cube1, cube2, line=0):
         plt.title("Integrated Map")
     plt.show()
     plt.close()
-    print("  Medium scatter : ", scatter)
 
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
 def obtain_flux_calibration(calibration_star_cubes):
     #    print "\n> Obtaining flux calibration...\n"
     vector_wave = []
@@ -5699,25 +5666,20 @@ def obtain_flux_calibration(calibration_star_cubes):
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def obtain_telluric_correction(wlm, telluric_correction_list, plot=True):
+    """
+    Take a list of telluric correction spectra and make a single median telluric spectrum
+
+    Args:
+        wlm (array): A wavelength array. Only used for plotting- should refactor this!
+        telluric_correction_list (list): A list of telluric correction spectra
+        plot (bool, default=True): Whether or not to plot the resulting spectrum. 
+    """
     telluric_correction = np.nanmedian(telluric_correction_list, axis=0)
     if plot:
-        fig_size = 12
-        plt.figure(figsize=(fig_size, fig_size / 2.5))
-        plt.title("Telluric correction")
-        for i in range(len(telluric_correction_list)):
-            label = "star" + str(i + 1)
-            plt.plot(wlm, telluric_correction_list[i], alpha=0.3, label=label)
-        plt.plot(wlm, telluric_correction, alpha=0.5, color="k", label="Median")
-        plt.minorticks_on()
-        plt.legend(frameon=False, loc=2, ncol=1)
-        step_up = 1.15 * np.nanmax(telluric_correction)
-        plt.ylim(0.9, step_up)
-        plt.xlim(wlm[0] - 10, wlm[-1] + 10)
-        plt.show()
-        plt.close()
+        fig = plot_telluric_correction(wlm, telluric_correction_list, telluric_correction, figsize=12)
 
-    print("\n> Telluric correction = ", telluric_correction)
-    print("\n  Telluric correction obtained!")
+    print("\n\t>Telluric correction = {}".format(telluric_correction))
+    print("\n\tTelluric correction obtained!")
     return telluric_correction
 
 
@@ -7659,9 +7621,9 @@ def fluxes(
             plt.figure(figsize=(10, 4))
             plt.plot(np.array(w_spec), np.array(f_spec), "b", lw=3, alpha=0.5)
             plt.minorticks_on()
-            plt.xlabel("Wavelength [$\AA$]")
+            plt.xlabel(r"Wavelength [$\AA$]")
             if fcal:
-                plt.ylabel("Flux [ erg cm$^{-2}$ s$^{-1}$ A$^{-1}$]")
+                plt.ylabel(r"Flux [ erg cm$^{-2}$ s$^{-1}$ A$^{-1}$]")
             else:
                 plt.ylabel("Flux [ counts ]")
             plt.xlim(lmin, lmax)
@@ -8556,7 +8518,7 @@ def search_peaks(
             id_peaks.append(1)
 
     if plot:
-        plot_redshift_peaks(fig_size,
+        fig = plot_redshift_peaks(fig_size,
                             funcion,
                             wavelength,
                             lmin,
@@ -8710,7 +8672,7 @@ def smooth_spectrum(
 
     if plot:
 
-        plot_weights_for_getting_smooth_spectrum(
+        fig = plot_weights_for_getting_smooth_spectrum(
             wlm,
             s,
             running_wave,
