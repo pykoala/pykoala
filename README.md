@@ -1,9 +1,17 @@
+# KOALA
 [![Build Status](https://travis-ci.com/pykoala/koala.svg?branch=master)](https://travis-ci.com/pykoala/koala)
+---------------------------------------------
 
-# koala
+[KOALA][koala_website], the Kilofibre Optical AAT Lenslet Array, is a wide-field, high efficiency, integral field unit used by the 
+AAOmega spectrograph on the 3.9m AAT ([Anglo-Australian Telescope][aat_website]) at Siding Spring Observatory. **PyKOALA** is the forthcoming data reduction pipeline for 
+creating science-ready 3D data cubes using Raw Stacked Spectra (RSS) images created with [2dfdr][2dfdr_website].
 
-## Getting started with developing koala
+[koala_website]: https://aat.anu.edu.au/science/instruments/current/koala/overview
+[aat_website]: https://www.aao.gov.au/about-us/AAT
+[2dfdr_website]: https://aat.anu.edu.au/science/instruments/current/AAOmega/reduction
 
+Helping to develop PyKOALA 
+---------------------------------------------
 1. Fork koala into your github account
 2. Clone your fork onto your laptop:
 ```
@@ -21,7 +29,8 @@
 6. Push up your changes
 7. Create a PR, and wait for someone to review it
 
-## Reviewing commits
+Reviewing commits
+---------------------------------------------
 1. Look through the changes, and provide comments
 2. Once the PR is ready, type bors r+, then bors will handle the merge (DON'T
    HIT THE MERGE BUTTON).

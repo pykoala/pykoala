@@ -14,7 +14,7 @@ import versioneer
 
 
 setuptools.setup(
-    name = "aat-koala",
+    name = "pykoala-ifs",
     version = versioneer.get_version(),
     packages = setuptools.find_packages('src'),
     package_dir = {'': 'src'},
