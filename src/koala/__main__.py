@@ -7,19 +7,29 @@ import os.path as pth
 import matplotlib.pyplot as plt
 plt.ion()
 
-
-
-PATH_MAIN = pth.join(pth.dirname(__file__), "data")
-SKY_FLAT_RED_FILENAME = "10mar2_combined.fits"
+DO_PLOTTING = False
 
 DATE = "20180310"
 GRATING = "385R"
 PIXEL_SIZE = 0.6  # Just 0.1 precision
 KERNEL_SIZE = 1.25
+OBJECT = "POX4"
+DESCRIPTION = "POX4 CUBE"
 
+PATH_MAIN = pth.join(pth.dirname(__file__), "data")
+PATH_SKYFLAT = pth.join(PATH_MAIN, GRATING)
+
+SKY_FLAT_RED_FILENAME = "10mar2_combined.fits"
 THROUGHPUT_RED_FILENAME = DATE+"_"+GRATING+"_throughput_correction.dat"
 FLUX_CALIBRATION_RED_FILENAME = "flux_calibration_20180310_385R_0p6_1k8.dat"
 TELLURIC_CORRECTION_RED_FILENAME = "telluric_correction_20180310_385R_0p6_1k25.dat"
+
+FILE_SKY_FLAT_RED = pth.join(
+    PATH_SKYFLAT, SKY_FLAT_RED_FILENAME
+) # FILE NOT DIVIDED BY THE FLAT
+THROUGHPUT_FILE_RED = pth.join(PATH_SKYFLAT, THROUGHPUT_RED_FILENAME)
+FLUX_CAL_FILE = pth.join(PATH_MAIN, FLUX_CALIBRATION_RED_FILENAME)
+TELLURIC_CORRECTION_FILE = pth.join(PATH_MAIN, TELLURIC_CORRECTION_RED_FILENAME)
 
 SCIENCE_RED_1_FILENAME = pth.join(PATH_MAIN, GRATING, "10mar20091red.fits")
 SCIENCE_RED_2_FILENAME = pth.join(PATH_MAIN, GRATING, "10mar20092red.fits")
@@ -36,23 +46,10 @@ if __name__ == "__main__":
     print("\n> Testing KOALA RSS class. Running", version)
     print("\n\n\n> ANGEL is having a lot of FUN with GitHub!")
 
-
-
-
-    # -----------------------------------------------------------------------------
-    # -----------------------------------------------------------------------------
-    # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
     # TESTING PyKOALA in GitHub  - Taylah, Sarah, James, Sam, Blake, Ángel
     # -----------------------------------------------------------------------------
-    # -----------------------------------------------------------------------------
-    # -----------------------------------------------------------------------------
-    # -----------------------------------------------------------------------------
-
-    # -----------------------------------------------------------------------------
-    # -----------------------------------------------------------------------------
     #  Data are 10 Mar 2018  RED
-    # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
 
     pk = (
@@ -72,22 +69,23 @@ if __name__ == "__main__":
     #
     # The very first thing that we need is to get the throughput correction.
     # IMPORTANT: We use a skyflat that has not been divided by a flatfield in 2dFdr !!!!!!
-
-    path_skyflat = pth.join(PATH_MAIN, GRATING)
-    file_skyflatr = pth.join(path_skyflat, SKY_FLAT_RED_FILENAME) # FILE NOT DIVIDED BY THE FLAT
-    throughput_file_red = pth.join(path_skyflat, THROUGHPUT_RED_FILENAME)
-
-
     # If this has been done before, we can read the file containing the throughput correction
-    #throughput_red = read_table(throughput_file_red, ["f"] )
+    # TODO: throughput_red isn't used anywhere
+    #throughput_red = read_table(THROUGHPUT_FILE_RED, ["f"] )
 
     # Now we read the RSS file, we ONLY correct for ccd defects and high cosmics
     skyflat_red = KOALA_RSS(
-        file_skyflatr, flat="", apply_throughput=False, sky_method="none",
+        FILE_SKY_FLAT_RED,
+        flat="",
+        apply_throughput=False,
+        sky_method="none",
         #skyflat = skyflat_red,
-        do_extinction=False, correct_ccd_defects = False,
-        correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
-        plot=False,
+        do_extinction=False,
+        correct_ccd_defects = False,
+        correct_high_cosmics = False,
+        clip_high = 100,
+        step_ccd = 50,
+        plot=DO_PLOTTING,
     )
 
     # Next we find the relative throughput.
@@ -96,8 +94,11 @@ if __name__ == "__main__":
     # [wave_min_scale, wave_max_scale] for all fibres and scale
 
     skyflat_red.find_relative_throughput(
-        ymin=0, ymax=800000, wave_min_scale=6300, wave_max_scale=6500,
-        plot=False,
+        ymin=0,
+        ymax=800000,
+        wave_min_scale=6300,
+        wave_max_scale=6500,
+        plot=DO_PLOTTING,
     )
 
     # The relative throughput is an array stored in
@@ -105,7 +106,7 @@ if __name__ == "__main__":
     # We save that array in a text file that we can read in the future without
     # the need of repeating this
     array_to_text_file(
-        skyflat_red.relative_throughput, filename=throughput_file_red
+        skyflat_red.relative_throughput, filename=THROUGHPUT_FILE_RED
     )
 
 
@@ -118,15 +119,11 @@ if __name__ == "__main__":
     # Uncomment the next two sections and skip the rest till "OBTAIN SKY SPECTRA"
 
     # Read flux calibration red
-    flux_cal_file = pth.join(PATH_MAIN, FLUX_CALIBRATION_RED_FILENAME)
-    w_star,flux_calibration = read_table(flux_cal_file, ["f", "f"] )
+    w_star, flux_calibration = read_table(FLUX_CAL_FILE, ["f", "f"] )
     print(flux_calibration)
 
     # Read telluric correction from file
-    telluric_correction_file = pth.join(
-        PATH_MAIN, TELLURIC_CORRECTION_RED_FILENAME
-    )
-    w_star, telluric_correction = read_table(telluric_correction_file, ["f", "f"] )
+    w_star, telluric_correction = read_table(TELLURIC_CORRECTION_FILE, ["f", "f"])
     print(telluric_correction)
 
     # # READ STAR 1
@@ -150,7 +147,7 @@ if __name__ == "__main__":
     #                       sky_method="self", n_sky=400,
     #                       correct_ccd_defects = True, correct_high_cosmics = True, clip_high = 50, step_ccd=50,
     #                       valid_wave_min = 6085, valid_wave_max = 9305,
-    #                       plot=True, warnings=True)
+    #                       plot=DO_PLOTTING, warnings=True)
     #
     # # Now we search for the telluric correction
     # # For this we stack n_fibres=15 highest intensity fibres, derive a continuum in steps of step=15 A
@@ -167,7 +164,7 @@ if __name__ == "__main__":
     # # Next we CREATE THE CUBE for this star, using THE SAME PARAMETERS we will later using for our objects
     # # 0.6 is the pixel size, 1.25 is the kernel size.
     # #
-    #    cubes1r=Interpolated_cube(star1r, PIXEL_SIZE, KERNEL_SIZE, plot=True, ADR=True) #, force_ADR = True)     # CASCA con lo de Matt
+    #    cubes1r=Interpolated_cube(star1r, PIXEL_SIZE, KERNEL_SIZE, plot=DO_PLOTTING, ADR=True) #, force_ADR = True)     # CASCA con lo de Matt
     # #
     # #
     # # -------------------   IF USING AT LEAST 2 FILES FOR CALIBRATION STAR -----------
@@ -182,11 +179,11 @@ if __name__ == "__main__":
     #                           pixel_size_arcsec=PIXEL_SIZE, kernel_size_arcsec=KERNEL_SIZE,
     #                           ADR= False,
     #                           valid_wave_min = 6085, valid_wave_max = 9305,
-    #                           plot= True, warnings=False )
+    #                           plot=DO_PLOTTING, warnings=False )
     # #
     # # Extract the integrated spectrum of the star & save it
     # #
-    #    H600r.combined_cube.half_light_spectrum(r_max=5, plot=True)
+    #    H600r.combined_cube.half_light_spectrum(r_max=5, plot=DO_PLOTTING)
     #    spectrum_to_text_file(H600r.combined_cube.wavelength,H600r.combined_cube.integrated_star_flux, filename=fits_file_red+"_integrated_star_flux.dat")
     # #
     # # Find telluric correction CAREFUL WITH apply_tc=True
@@ -207,7 +204,7 @@ if __name__ == "__main__":
     # # For this BE CAREFUL WITH ABSORPTIONS (Halpha) and check behaviour in the edges of the CCD
     # # Change fit_degree (3,5,7), step, min_wave, max_wave to get better fits !!!
     #
-    #    H600r.combined_cube.do_response_curve('FLUX_CAL/fhilt600_edited.dat', plot=True, min_wave=6110., max_wave=9305.,
+    #    H600r.combined_cube.do_response_curve('FLUX_CAL/fhilt600_edited.dat', plot=DO_PLOTTING, min_wave=6110., max_wave=9305.,
     #                              step=20, exp_time=120., fit_degree=7)
 
     # # Now we can save this calibration as a text file
@@ -231,9 +228,9 @@ if __name__ == "__main__":
     #                           pixel_size_arcsec=PIXEL_SIZE, kernel_size_arcsec=KERNEL_SIZE,
     #                           ADR= False,
     #                           valid_wave_min = 6085, valid_wave_max = 9305,
-    #                           plot= True, warnings=False )
+    #                           plot=DO_PLOTTING, warnings=False )
     # #
-    #    HD60753r.combined_cube.half_light_spectrum(r_max=5, plot=True)
+    #    HD60753r.combined_cube.half_light_spectrum(r_max=5, plot=DO_PLOTTING)
     #    spectrum_to_text_file(HD60753r.combined_cube.wavelength,HD60753r.combined_cube.integrated_star_flux, filename=fits_file_red+"_integrated_star_flux.dat")
     # #
     #    telluric_correction_star2 = HD60753r.get_telluric_correction(apply_tc=True,  combined_cube = True,
@@ -243,7 +240,7 @@ if __name__ == "__main__":
     # #
     #    spectrum_to_text_file(HD60753r.combined_cube.wavelength,telluric_correction_star2, filename=telluric_file)
     # #
-    #    HD60753r.combined_cube.do_response_curve('FLUX_CAL/fhd60753.dat', plot=True, min_wave=6110., max_wave=9305.,
+    #    HD60753r.combined_cube.do_response_curve('FLUX_CAL/fhd60753.dat', plot=DO_PLOTTING, min_wave=6110., max_wave=9305.,
     #                              step=20, exp_time=15., fit_degree=5)
     #
     #    spectrum_to_text_file(HD60753r.combined_cube.response_wavelength,HD60753r.combined_cube.response_curve, filename=response_file_red)
@@ -266,9 +263,9 @@ if __name__ == "__main__":
     #                           pixel_size_arcsec=PIXEL_SIZE, kernel_size_arcsec=KERNEL_SIZE,
     #                           ADR= False,
     #                           valid_wave_min = 6085, valid_wave_max = 9305,
-    #                           plot= True, warnings=False )
+    #                           plot=DO_PLOTTING, warnings=False )
     # #
-    #    HR3454r.combined_cube.half_light_spectrum(r_max=5, plot=True)
+    #    HR3454r.combined_cube.half_light_spectrum(r_max=5, plot=DO_PLOTTING)
     #    spectrum_to_text_file(HR3454r.combined_cube.wavelength,HR3454r.combined_cube.integrated_star_flux, filename=fits_file_red+"_integrated_star_flux.dat")
     # #
     #    telluric_correction_star3 = HR3454r.get_telluric_correction(apply_tc=True,  combined_cube = True,
@@ -278,7 +275,7 @@ if __name__ == "__main__":
     # #
     #    spectrum_to_text_file(HR3454r.combined_cube.wavelength,telluric_correction_star3, filename=telluric_file)
     # #
-    #    HR3454r.combined_cube.do_response_curve('FLUX_CAL/fhr3454_edited.dat', plot=True, min_wave=6110., max_wave=9305.,
+    #    HR3454r.combined_cube.do_response_curve('FLUX_CAL/fhr3454_edited.dat', plot=DO_PLOTTING, min_wave=6110., max_wave=9305.,
     #                              step=20, exp_time=2., fit_degree=7)
     #
     #    spectrum_to_text_file(HR3454r.combined_cube.response_wavelength,HR3454r.combined_cube.response_curve, filename=response_file_red)
@@ -303,11 +300,11 @@ if __name__ == "__main__":
     #                       sky_method="self", n_sky=50, correct_negative_sky = True,
     #                       telluric_correction = telluric_correction_20180310,
     #                       valid_wave_min = 6085, valid_wave_max = 9305,
-    #                       plot=True, warnings=True)
+    #                       plot=DO_PLOTTING, warnings=True)
     #
-    #    cubes3r=Interpolated_cube(star3r, PIXEL_SIZE, KERNEL_SIZE, plot=True) #, force_ADR = True)
+    #    cubes3r=Interpolated_cube(star3r, PIXEL_SIZE, KERNEL_SIZE, plot=DO_PLOTTING) #, force_ADR = True)
     #
-    #    cubes3r.do_response_curve('FLUX_CAL/feg274_edited.dat', plot=True, min_wave=6100., max_wave=9305.,
+    #    cubes3r.do_response_curve('FLUX_CAL/feg274_edited.dat', plot=DO_PLOTTING, min_wave=6100., max_wave=9305.,
     #                              step=25, exp_time=180., fit_degree=7, ha_width=150)
 
     #    rss_list = [starpos1r,starpos2r,starpos3r]
@@ -319,9 +316,9 @@ if __name__ == "__main__":
     #                           pixel_size_arcsec=PIXEL_SIZE, kernel_size_arcsec=KERNEL_SIZE,
     #                           ADR= False,
     #                           valid_wave_min = 6085, valid_wave_max = 9305,
-    #                           plot= True, warnings=False )
+    #                           plot=DO_PLOTTING, warnings=False )
     #
-    #    EG274r.combined_cube.half_light_spectrum(r_max=5, plot=True)
+    #    EG274r.combined_cube.half_light_spectrum(r_max=5, plot=DO_PLOTTING)
     ###    spectrum_to_text_file(EG274r.combined_cube.wavelength,EG274r.combined_cube.integrated_star_flux, filename=fits_file_red+"_integrated_star_flux.dat")
     #
     #    telluric_correction_star4 = EG274r.get_telluric_correction(apply_tc=True,  combined_cube = True,
@@ -331,7 +328,7 @@ if __name__ == "__main__":
     # #
     #    spectrum_to_text_file(EG274r.combined_cube.wavelength,telluric_correction_star4, filename=telluric_file)
     # #
-    #    EG274r.combined_cube.do_response_curve('FLUX_CAL/feg274_edited.dat', plot=True, min_wave=6080., max_wave=9305.,    # FIX BLUE END !!!
+    #    EG274r.combined_cube.do_response_curve('FLUX_CAL/feg274_edited.dat', plot=DO_PLOTTING, min_wave=6080., max_wave=9305.,    # FIX BLUE END !!!
     #                              step=10, exp_time=180., fit_degree=7, ha_width=150)
     # #
     #    spectrum_to_text_file(EG274r.combined_cube.response_wavelength,EG274r.combined_cube.response_curve, filename=response_file_red)
@@ -381,33 +378,43 @@ if __name__ == "__main__":
 #    sky_r1 = KOALA_RSS(SCIENCE_RED_1_FILENAME, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
 #                       correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
 #                       sky_method="none", is_sky=True, win_sky=151,
-#                       plot=False)
+#                       plot=DO_PLOTTING)
 #
 #    sky1=sky_r1.plot_combined_spectrum(list_spectra=[870,871,872,873,875,876,877,878,879,880,881,882,883,884,885,886,887,888,889,900], median=True)
 #
 #    sky_r2 = KOALA_RSS(SCIENCE_RED_2_FILENAME, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
 #                       correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
 #                       sky_method="none", is_sky=True, win_sky=151,
-#                       plot=False)
+#                       plot=DO_PLOTTING)
 #
 #    sky2=sky_r2.plot_combined_spectrum(list_spectra=[870,871,872,873,875,876,877,878,879,880,881,882,883,884,885,886,887,888,889,900], median=True)
-#
-    sky_r3 = KOALA_RSS(SCIENCE_RED_3_FILENAME, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
-                       correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
-                       sky_method="none", is_sky=True, win_sky=151,
-                       plot=False)
 
-    sky3=sky_r3.plot_combined_spectrum(list_spectra=[870,871,872,873,875,876,877,878,879,880,881,882,883,884,885,886,887,888,889,900], median=True)
+    sky_r3 = KOALA_RSS(
+        SCIENCE_RED_3_FILENAME,
+        apply_throughput=True,
+        skyflat=skyflat_red,
+        do_extinction=False,
+        correct_ccd_defects=True,
+        correct_high_cosmics=False,
+        clip_high=100,
+        step_ccd=50,
+        sky_method="none",
+        is_sky=True,
+        win_sky=151,
+        plot=DO_PLOTTING
+    )
 
-# #
-# #
-# # ---------------------------------------------------------------------------
-# # TIME FOR THE OBJECT !!
-# # ---------------------------------------------------------------------------
-# #
+    sky3 = sky_r3.plot_combined_spectrum(
+        list_spectra = [
+            870, 871, 872, 873, 875, 876, 877, 878, 879, 880, 881, 882, 883,
+            884, 885, 886, 887, 888, 889, 900
+        ], median=True
+    )
 
-    OBJECT = "POX4"
-    DESCRIPTION = "POX4 CUBE"
+# ---------------------------------------------------------------------------
+# TIME FOR THE OBJECT !!
+# ---------------------------------------------------------------------------
+
 
 
 #    rss3_all = KOALA_RSS(SCIENCE_RED_3_FILENAME, #save_rss_to_fits_file=PATH_MAIN+"Tol30Ar3_rss_tcwsreu.fits", 
@@ -421,24 +428,25 @@ if __name__ == "__main__":
 #                         clean_sky_residuals = False, dclip=3.0, extra_w = 1.3, step_csr = 25, fibre = 0,
 #                         telluric_correction = telluric_correction,
 #                         do_extinction=False, correct_negative_sky = True,
-#                         plot=False, warnings=True)
+#                         plot=DO_PLOTTING, warnings=True)
 #   
 #      Fitting a second-order polynomy a0x +  a1x * fibre + a2x * fibre**2:  
 #      a0x = 0.119694453613    a1x = -0.000707644207572      a2x = 2.03806478671e-07
    
    
    
-#    cube_test=Interpolated_cube(rss3_all, PIXEL_SIZE, KERNEL_SIZE, flux_calibration=flux_calibration, plot=False)   
+#    cube_test=Interpolated_cube(rss3_all, PIXEL_SIZE, KERNEL_SIZE, flux_calibration=flux_calibration, plot=DO_PLOTTING)   
 #    save_fits_file(cube_test, PATH_MAIN+"/"+GRATING+"/POX4_d_cube_test.fits", ADR=False)
 
 
-    rss_list=[SCIENCE_RED_2_FILENAME,SCIENCE_RED_3_FILENAME] #,SCIENCE_RED_3_FILENAME]  #,file4r,file5r,file6r,file7r]
+    rss_list = [
+        SCIENCE_RED_2_FILENAME,SCIENCE_RED_3_FILENAME
+    ] #,SCIENCE_RED_3_FILENAME]  #,file4r,file5r,file6r,file7r]
 #    sky_list=[sky1,sky2,sky3]
 
-    sky_list=[sky3,sky3]
-
-
-
+    sky_list = [
+        sky3, sky3
+    ]
 
     hikids_red = KOALA_reduce(
         rss_list,
@@ -457,13 +465,10 @@ if __name__ == "__main__":
         #fix_wavelengths=True,
         #sol=[0.119694453613, -0.000707644207572, 2.03806478671e-07],
         #sky_method="1Dfit",
-        #sky_list=sky_list,
-        #scale_sky_1D=1.,
-        #auto_scale_sky=True,
         sky_method="1D",
         sky_list=sky_list,
-        scale_sky_1D = 1.,
-        auto_scale_sky = True,
+        scale_sky_1D=1.,
+        auto_scale_sky=True,
         brightest_line="Ha",
         brightest_line_wavelength = 6641.,
         id_el=False,
@@ -482,7 +487,7 @@ if __name__ == "__main__":
         #step_csr = 25,
         telluric_correction=telluric_correction,
         do_extinction=True,
-        correct_negative_sky = False,
+        correct_negative_sky=False,
         pixel_size_arcsec=PIXEL_SIZE,
         kernel_size_arcsec=KERNEL_SIZE,
         #offsets=[-0.54, -0.87, 1.58, -1.26] # EAST-/WEST+  NORTH-/SOUTH+
@@ -491,7 +496,7 @@ if __name__ == "__main__":
         #size_arcsec=[60,60],
         valid_wave_min = 6085,
         valid_wave_max = 9305,
-        plot=False,
+        plot=DO_PLOTTING,
         warnings=False
     )
 
