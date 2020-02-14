@@ -29,12 +29,25 @@ from koala.utils.plots import (plot_redshift_peaks,
                                plot_weights_for_getting_smooth_spectrum,
                                plot_correction_in_fibre_p_fibre,
                                plot_suspicious_fibres,
+<<<<<<< HEAD
                                plot_skyline_5578,
-                               plot_offset_between_cubes,
-                               plot_response,
-                               plot_telluric_correction,
-                               )
+                               plot_plot,
+                               plot_spec,
+                               plot_response)
 
+from koala.utils.io import (read_table,
+                            array_to_text_file,
+                            spectrum_to_text_file,
+                            spectrum_to_fits_file,
+                            save_bluered_fits_file,
+                            save_fits_file,
+                            save_rss_fits)
+
+
+=======
+                               plot_skyline_5578, 
+                               plot_offset_between_cubes)
+>>>>>>> Added koala.mplstyle to MANIFEST.in
 
 from astropy.io import fits
 from astropy.wcs import WCS
@@ -5645,7 +5658,15 @@ def compare_cubes(cube1, cube2, line=0):
         plt.title("Integrated Map")
     plt.show()
     plt.close()
+<<<<<<< HEAD
+    print("  Medium scatter : ", scatter)
+=======
+    print("  Median scatter : ", scatter)
+>>>>>>> Added koala.mplstyle to MANIFEST.in
 
+
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 def obtain_flux_calibration(calibration_star_cubes):
     #    print "\n> Obtaining flux calibration...\n"
     vector_wave = []
