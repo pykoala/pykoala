@@ -28,8 +28,8 @@ import matplotlib.colors as colors
 
 import numpy as np
 
-from pysynphot import observation
-from pysynphot import spectrum
+from synphot import observation
+from synphot import spectrum
 
 from scipy import interpolate
 from scipy.ndimage.interpolation import shift
