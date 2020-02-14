@@ -3,7 +3,7 @@
 # # PyKOALA: KOALA data processing and analysis
 # by Angel Lopez-Sanchez and Yago Ascasibar
 # Extra work by Ben Lawson (MQ PACE student)
-# Plus Taylah and Matt (sky substraction)
+# Plus Taylah and Matt (sky subtraction)
 from __future__ import division
 from __future__ import print_function
 from builtins import str
@@ -62,7 +62,7 @@ pc = 3.086e18  # pc in cm
 C = 299792.458  # c in km/s
 
 # -----------------------------------------------------------------------------
-# Define COLOR scales
+# Define COLOUR scales
 # -----------------------------------------------------------------------------
 
 fuego_color_map = colors.LinearSegmentedColormap.from_list(
@@ -79,7 +79,7 @@ fuego_color_map = colors.LinearSegmentedColormap.from_list(
     N=256,
     gamma=1.0,
 )
-fuego_color_map.set_bad("lightgray")  # ('black')
+fuego_color_map.set_bad("lightgray")
 plt.register_cmap(cmap=fuego_color_map)
 
 projo = [0.25, 0.5, 1, 1.0, 1.00, 1, 1]
