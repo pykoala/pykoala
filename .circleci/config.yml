@@ -27,6 +27,10 @@ orbs:
               keys:
               - pip-
           - run: pwd
+          - run:
+            name: "Setup matplotlib backend"
+            command: |
+                echo 'export MPLBACKEND="agg"' >> $BASH_ENV
           - run: env
       tox_install:
         steps:
