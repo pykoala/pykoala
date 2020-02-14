@@ -10,6 +10,8 @@ path_main = pth.join(pth.dirname(__file__), "data")
 if __name__ == "__main__":
 
     print("\n> Testing KOALA RSS class. Running", version)
+    print("\n\n\n> ANGEL is having a lot of FUN with GitHub!")
+
 
     
 
