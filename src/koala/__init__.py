@@ -12,14 +12,33 @@ from builtins import object
 from past.utils import old_div
 version = "Version 0.72 - 13th February 2020"
 
-# -----------------------------------------------------------------------------
-# Start timer
-# -----------------------------------------------------------------------------
 
-
+import copy
+import datetime
+import os.path as pth
+import sys
 from timeit import default_timer as timer
 
-start = timer()
+from astropy.convolution import Gaussian2DKernel, interpolate_replace_nans
+from astropy.io import fits
+from astropy.wcs import WCS
+
+import matplotlib.pyplot as plt
+import matplotlib.colors as colors
+
+import numpy as np
+
+from pysynphot import observation
+from pysynphot import spectrum
+
+from scipy import interpolate
+from scipy.ndimage.interpolation import shift
+from scipy.optimize import curve_fit
+import scipy.signal as sig
+
+# from scipy.optimize import leastsq
+
+
 
 # -----------------------------------------------------------------------------
 # Import Python routines
@@ -44,30 +63,12 @@ from koala.utils.io import (read_table,
 
 
 
-from astropy.io import fits
-from astropy.wcs import WCS
+# -----------------------------------------------------------------------------
+# Start timer
+# -----------------------------------------------------------------------------
 
-from pysynphot import observation
-from pysynphot import spectrum
+start = timer()
 
-import matplotlib.pyplot as plt
-import matplotlib.colors as colors
-import numpy as np
-import sys
-
-from scipy import interpolate, signal, optimize
-from scipy.optimize import curve_fit
-import scipy.signal as sig
-
-# from scipy.optimize import leastsq
-
-from astropy.convolution import Gaussian2DKernel, interpolate_replace_nans
-from scipy.ndimage.interpolation import shift
-
-import datetime
-import copy
-
-import os.path as pth
 
 # -----------------------------------------------------------------------------
 # Define constants
@@ -4717,14 +4718,14 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         # fit, trimming edges
         valid_wl = wl[edgelow: len(wl) - edgehigh]
         valid_x = x[edgelow: len(wl) - edgehigh]
-        wlm = signal.medfilt(valid_wl, odd_number)
-        wx = signal.medfilt(valid_x, odd_number)
+        wlm = sig.medfilt(valid_wl, odd_number)
+        wx = sig.medfilt(valid_x, odd_number)
         a3x, a2x, a1x, a0x = np.polyfit(wlm, wx, 3)
         fx = a0x + a1x * wl + a2x * wl ** 2 + a3x * wl ** 3
         fxm = a0x + a1x * wlm + a2x * wlm ** 2 + a3x * wlm ** 3
 
         valid_y = y[edgelow: len(wl) - edgehigh]
-        wy = signal.medfilt(valid_y, odd_number)
+        wy = sig.medfilt(valid_y, odd_number)
         a3y, a2y, a1y, a0y = np.polyfit(wlm, wy, 3)
         fy = a0y + a1y * wl + a2y * wl ** 2 + a3y * wl ** 3
         fym = a0y + a1y * wlm + a2y * wlm ** 2 + a3y * wlm ** 3
@@ -4745,8 +4746,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             plt.plot(wl, x, "k.", alpha=0.2)
             plt.plot(wl, y, "r.", alpha=0.2)
 
-            plt.plot(wl, signal.medfilt(x, odd_number), "k-")
-            plt.plot(wl, signal.medfilt(y, odd_number), "r-")
+            plt.plot(wl, sig.medfilt(x, odd_number), "k-")
+            plt.plot(wl, sig.medfilt(y, odd_number), "r-")
 
             hi = np.max([np.nanpercentile(x, 95), np.nanpercentile(y, 95)])
             lo = np.min([np.nanpercentile(x, 5), np.nanpercentile(y, 5)])
@@ -4843,8 +4844,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         )[0]
         valid_wl = wl[valid_ind]
         valid_x = x[valid_ind]
-        wlm = signal.medfilt(valid_wl, odd_number)
-        wx = signal.medfilt(valid_x, odd_number)
+        wlm = sig.medfilt(valid_wl, odd_number)
+        wx = sig.medfilt(valid_x, odd_number)
 
         # iteratively clip and refit for WX
         maxit = 10
@@ -4888,7 +4889,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             & (~np.isnan(y))
         )[0]
         valid_y = y[valid_ind]
-        wy = signal.medfilt(valid_y, odd_number)
+        wy = sig.medfilt(valid_y, odd_number)
 
         # iteratively clip and refit for WY
         maxit = 10
@@ -4937,8 +4938,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             plt.plot(wl, x, "k.", alpha=0.2)
             plt.plot(wl, y, "r.", alpha=0.2)
 
-            plt.plot(wl, signal.medfilt(x, odd_number), "k-")
-            plt.plot(wl, signal.medfilt(y, odd_number), "r-")
+            plt.plot(wl, sig.medfilt(x, odd_number), "k-")
+            plt.plot(wl, sig.medfilt(y, odd_number), "r-")
 
             hi = np.max([np.nanpercentile(x, 95), np.nanpercentile(y, 95)])
             lo = np.min([np.nanpercentile(x, 5), np.nanpercentile(y, 5)])
@@ -5098,8 +5099,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         )  # 0,1E30 ??
         # print "\n> Computing growth-curve spectrum..."
         intensity = []
-        smooth_x = signal.medfilt(self.x_peak, smooth)  # originally, smooth = 11
-        smooth_y = signal.medfilt(self.y_peak, smooth)
+        smooth_x = sig.medfilt(self.x_peak, smooth)  # originally, smooth = 11
+        smooth_y = sig.medfilt(self.y_peak, smooth)
         edgelow = (np.abs(self.wavelength - min_wave)).argmin()
         edgehigh = (np.abs(self.wavelength - max_wave)).argmin()
         valid_wl = self.wavelength[edgelow:edgehigh]
@@ -5116,8 +5117,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             intensity.append(np.nansum(self.data[l][spaxels]))
 
         valid_intensity = intensity[edgelow:edgehigh]
-        valid_wl_smooth = signal.medfilt(valid_wl, smooth)
-        valid_intensity_smooth = signal.medfilt(valid_intensity, smooth)
+        valid_wl_smooth = sig.medfilt(valid_wl, smooth)
+        valid_intensity_smooth = sig.medfilt(valid_intensity, smooth)
 
         if plot:
             fig_size = 12
@@ -5355,10 +5356,10 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         # print valid_ind
         # valid_wl = wl[edgelow:-edgehigh] # wl[valid_ind]
         # valid_x = x[edgelow:-edgehigh] #x[valid_ind]
-        # wlm = signal.medfilt(valid_wl, odd_number)
-        # wx = signal.medfilt(valid_x, odd_number)
-        wlm = signal.medfilt(wl, odd_number)
-        wx = signal.medfilt(x, odd_number)
+        # wlm = sig.medfilt(valid_wl, odd_number)
+        # wx = sig.medfilt(valid_x, odd_number)
+        wlm = sig.medfilt(wl, odd_number)
+        wx = sig.medfilt(x, odd_number)
 
         # iteratively clip and refit for WX
         maxit = 10
@@ -5548,7 +5549,7 @@ def fit_Moffat(
     provided an initial guess of the total flux and half-light radius squared.
     """
     index_cut = np.searchsorted(r2_growth_curve, r2_half_light * r_max ** 2)
-    fit, cov = optimize.curve_fit(
+    fit, cov = curve_fit(
         cumulaive_Moffat,
         r2_growth_curve[:index_cut],
         F_growth_curve[:index_cut],
@@ -5621,8 +5622,8 @@ def offset_between_cubes(cube1, cube2, plot=True):
     if plot:
         x -= delta_RA_pix
         y -= delta_DEC_pix
-        smooth_x = signal.medfilt(x, 151)
-        smooth_y = signal.medfilt(y, 151)
+        smooth_x = sig.medfilt(x, 151)
+        smooth_y = sig.medfilt(y, 151)
 
         print(np.nanmean(smooth_x))
         print(np.nanmean(smooth_y))
