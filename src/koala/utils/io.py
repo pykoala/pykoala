@@ -1,8 +1,34 @@
 from __future__ import division
+from __future__ import print_function
 from builtins import str
 from builtins import range
+from builtins import object
 from past.utils import old_div
 
+from astropy.io import fits
+from astropy.wcs import WCS
+
+from pysynphot import observation
+from pysynphot import spectrum
+
+import matplotlib.pyplot as plt
+import matplotlib.colors as colors
+import numpy as np
+import sys
+
+from scipy import interpolate, signal, optimize
+from scipy.optimize import curve_fit
+import scipy.signal as sig
+
+# from scipy.optimize import leastsq
+
+from astropy.convolution import Gaussian2DKernel, interpolate_replace_nans
+from scipy.ndimage.interpolation import shift
+
+import datetime
+import copy
+
+import os.path as pth
 
 
 def read_table(fichero, formato):
