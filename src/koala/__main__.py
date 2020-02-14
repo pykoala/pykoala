@@ -15,21 +15,15 @@ if __name__ == "__main__":
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
-    # -----------------------------------------------------------------------------
-    # -----------------------------------------------------------------------------
-    # Reducing Hi-KIDS data in AAOMC104IT - 10 Sep 2019
-    # -----------------------------------------------------------------------------
-    # -----------------------------------------------------------------------------
+    # TESTING PyKOALA in GitHub  - Taylah, Sarah, James, Sam, Blake, Ángel
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
 
-    #    offset_positions(10, 10, 10.1, 20, 20, 10.1, 10, 10, 10.1, 20, 20, 15.1)
-
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
-    #  Data 10 Mar 2018  RED
+    #  Data are 10 Mar 2018  RED
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
 
@@ -54,19 +48,7 @@ if __name__ == "__main__":
     # #
     # # The very first thing that we need is to get the throughput correction.
     # # IMPORTANT: We use a skyflat that has not been divided by a flatfield in 2dFdr !!!!!!
-    # #
-    # # We may also need a normalized flatfield:
-#        path_flat = path_main
-#        file_flatr=path_flat+"data/flat_10mar20092red.fits"
-#        flat_red = KOALA_RSS(file_flatr, sky_method="none", do_extinction=False, apply_throughput=False, plot=True)
-#                            # correct_ccd_defects = True, correct_high_cosmics = True, clip_high = 100, step_ccd = 50)
-    # #
-    # # Provide path, skyflat file and name of the file that will keep the throughput correction
-
-    #    path_skyflat = path_main+date+"/"+grating+"/skyflats_normalized/"
-    #    file_skyflatr=path_skyflat+"10mar20065red.fits"                                  # FILE  DIVIDED BY THE FLAT, DON'T USE THIS
-    #    throughput_file_red=path_skyflat+date+"_"+grating+"_throughput_correction.dat"
-
+ 
     path_skyflat = path_main+"/" \
                              ""+grating+"/"
     file_skyflatr=path_skyflat+"10mar2_combined.fits"                                  # FILE NOT DIVIDED BY THE FLAT
@@ -264,74 +246,7 @@ if __name__ == "__main__":
     #
     #    spectrum_to_text_file(HR3454r.combined_cube.response_wavelength,HR3454r.combined_cube.response_curve, filename=response_file_red)
 
-    ##### Star 4 bis
 
-    #    starpos3r = path_star+"test_flat/10mar20106red.fits"
-    #    star3r = KOALA_RSS(starpos3r,
-    #                       apply_throughput=True, skyflat = skyflat_red, plot_skyflat=False,
-    #                       correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 50, step_ccd=50,
-    #                       sky_method="self", n_sky=50,
-    #                       telluric_correction = telluric_correction_20180310,
-    #                       valid_wave_min = 6085, valid_wave_max = 9305,
-    #                       plot=True, warnings=True)
-    #
-    #    cubes3r=Interpolated_cube(star3r, pixel_size, kernel_size, plot=True) #, force_ADR = True)
-    #
-    #    cubes3r.do_response_curve('FLUX_CAL/feg274_edited.dat', plot=True, min_wave=6100., max_wave=9300.,
-    #                              step=50, exp_time=180., fit_degree=9, ha_width=150)
-
-    #### POX 4 quick skyflat as flat
-
-    #    pox4arf = path_star+"10mar20091red.fits"
-    #    pox4arf = "10mar20091red.fits"
-
-    #    pox4ar_test_ = KOALA_RSS(pox4arf,
-    #                       apply_throughput=True, skyflat = skyflat_red, plot_skyflat=False,
-    #                       correct_ccd_defects = True, #correct_high_cosmics = False, clip_high = 50, step_ccd=50,
-    #                       sky_method="1Dfit", sky_spectrum=sky1, brightest_line_wavelength = 6640.,
-    #                       do_extinction=True,
-    #                       #sky_method="self", n_sky=50,
-    #                       #sky_method="1D", sky_spectrum=sky1, scale_sky_1D = 1.0,  #0.97,
-    #                       #telluric_correction = telluric_correction_20180310,
-    #                       valid_wave_min = 6085, valid_wave_max = 9305,
-    #                       plot=True, warnings=True)
-
-    #    w=pox4ar_test.wavelength
-    #    s=pox4ar_test.intensity_corrected[500]
-    #    plt.plot(w,s)
-    #    plt.plot(w,pox4ar_test.intensity[500])
-    #    #plt.xlim(6000,6500)
-    #    plt.ylim(-10,1000)
-    #    #ptitle = "Fibre "+np.str(fibre)#+" with rms = "+np.str(rms[i])
-    #    #plt.title(ptitle)
-    #    plt.xlabel("Wavelength [$\AA$]")
-    #    plt.ylabel("Flux [counts]")
-    #    #plt.legend(frameon=True, loc=2, ncol=4)
-    #    plt.minorticks_on()
-    #
-    #
-    #
-    #    pox4ar_no = KOALA_RSS(pox4arf,
-    #                       apply_throughput=True, skyflat = skyflat_red, plot_skyflat=False,
-    #                       correct_ccd_defects = True, #correct_high_cosmics = False, clip_high = 50, step_ccd=50,
-    #                       sky_method="none", do_extinction=False,
-    #                       #sky_method="self", n_sky=50,
-    #                       #sky_method="1D", sky_spectrum=sky1, scale_sky_1D = 1.0,  #0.97,
-    #                       #individual_sky_substraction = True,
-    #                       #telluric_correction = telluric_correction_20180310,
-    ##                       id_el=True, high_fibres=10, brightest_line="Ha", cut=1.5, plot_id_el=True, broad=1.8, # fibre=422, #422
-    ##                       id_list=[6300.30, 6548.03, 6562.82, 6583.41, 6678.15, 6716.47, 6730.85, 7065.28, 7135.78, 7318.39,7329.66, 9069.0],
-    ##                       clean_sky_residuals = True, dclip=3.0, extra_w = 1.3, step_csr = 25,
-    #
-    #                       valid_wave_min = 6085, valid_wave_max = 9305,
-    #                       plot=True, warnings=True)
-    #
-    #    cubes_pox4ar=Interpolated_cube(pox4ar, pixel_size, kernel_size, plot=True) #, force_ADR = True)
-    #    save_fits_file(cubes_pox4ar, path_star+"/POX4_a_test_nskyflat.fits", ADR=False)
-
-    #    stars=[cubes3r]
-    #    plot_response(stars)
-    #    flux_calibration_=obtain_flux_calibration(stars)
 
     # STAR 4
     #    star="EG274"
@@ -436,20 +351,20 @@ if __name__ == "__main__":
     file2r=path_main+"/"+grating+"/10mar20092red.fits"
     file3r=path_main+"/"+grating+"/10mar20093red.fits"
 
-    sky_r1 = KOALA_RSS(file1r, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
-                       correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
-                       sky_method="none", is_sky=True, win_sky=151,
-                       plot=False)
-
-    sky1=sky_r1.plot_combined_spectrum(list_spectra=[870,871,872,873,875,876,877,878,879,880,881,882,883,884,885,886,887,888,889,900], median=True)
-
-    sky_r2 = KOALA_RSS(file2r, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
-                       correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
-                       sky_method="none", is_sky=True, win_sky=151,
-                       plot=False)
-
-    sky2=sky_r2.plot_combined_spectrum(list_spectra=[870,871,872,873,875,876,877,878,879,880,881,882,883,884,885,886,887,888,889,900], median=True)
-
+#    sky_r1 = KOALA_RSS(file1r, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
+#                       correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
+#                       sky_method="none", is_sky=True, win_sky=151,
+#                       plot=False)
+#
+#    sky1=sky_r1.plot_combined_spectrum(list_spectra=[870,871,872,873,875,876,877,878,879,880,881,882,883,884,885,886,887,888,889,900], median=True)
+#
+#    sky_r2 = KOALA_RSS(file2r, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
+#                       correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
+#                       sky_method="none", is_sky=True, win_sky=151,
+#                       plot=False)
+#
+#    sky2=sky_r2.plot_combined_spectrum(list_spectra=[870,871,872,873,875,876,877,878,879,880,881,882,883,884,885,886,887,888,889,900], median=True)
+#
     sky_r3 = KOALA_RSS(file3r, apply_throughput=True, skyflat = skyflat_red, do_extinction=False,
                        correct_ccd_defects = True, correct_high_cosmics = False, clip_high = 100, step_ccd = 50,
                        sky_method="none", is_sky=True, win_sky=151,
@@ -457,7 +372,7 @@ if __name__ == "__main__":
 
     sky3=sky_r3.plot_combined_spectrum(list_spectra=[870,871,872,873,875,876,877,878,879,880,881,882,883,884,885,886,887,888,889,900], median=True)
 
-    # #
+# #
 # #
 # # ---------------------------------------------------------------------------
 # # TIME FOR THE OBJECT !!
@@ -473,31 +388,34 @@ if __name__ == "__main__":
     file3r=path_main+"/"+grating+"/10mar20093red.fits"
    
      
-    rss3_all = KOALA_RSS(file3r, #save_rss_to_fits_file=path_main+"Tol30Ar3_rss_tcwsreu.fits", 
-                         apply_throughput=True, skyflat = skyflat_red,
-                         correct_ccd_defects = True,
-                         fix_wavelengths = True, sol = [0.119694453613, -0.000707644207572, 2.03806478671e-07],
-                         #sky_method="none",
-                         sky_method="1D", sky_spectrum=sky3, auto_scale_sky = True,
-                         id_el=False, high_fibres=10, brightest_line="Ha", cut=1.5, plot_id_el=True, broad=1.8, brightest_line_wavelength =6641., #fibre=422, #422
-                         id_list=[6300.30, 6312.1, 6363.78, 6548.03, 6562.82, 6583.41, 6678.15, 6716.47, 6730.85, 7065.28, 7135.78, 7318.39, 7329.66, 8750.47, 8862.79, 9014.91, 9069.0],
-                         clean_sky_residuals = False, dclip=3.0, extra_w = 1.3, step_csr = 25, fibre = 0,
-                         telluric_correction = telluric_correction,
-                         do_extinction=False, correct_negative_sky = True,
-                         plot=False, warnings=True)
-   
+#    rss3_all = KOALA_RSS(file3r, #save_rss_to_fits_file=path_main+"Tol30Ar3_rss_tcwsreu.fits", 
+#                         apply_throughput=True, skyflat = skyflat_red,
+#                         correct_ccd_defects = True,
+#                         fix_wavelengths = True, sol = [0.119694453613, -0.000707644207572, 2.03806478671e-07],
+#                         #sky_method="none",
+#                         sky_method="1D", sky_spectrum=sky3, auto_scale_sky = True,
+#                         id_el=False, high_fibres=10, brightest_line="Ha", cut=1.5, plot_id_el=True, broad=1.8, brightest_line_wavelength =6641., #fibre=422, #422
+#                         id_list=[6300.30, 6312.1, 6363.78, 6548.03, 6562.82, 6583.41, 6678.15, 6716.47, 6730.85, 7065.28, 7135.78, 7318.39, 7329.66, 8750.47, 8862.79, 9014.91, 9069.0],
+#                         clean_sky_residuals = False, dclip=3.0, extra_w = 1.3, step_csr = 25, fibre = 0,
+#                         telluric_correction = telluric_correction,
+#                         do_extinction=False, correct_negative_sky = True,
+#                         plot=False, warnings=True)
+#   
 #      Fitting a second-order polynomy a0x +  a1x * fibre + a2x * fibre**2:  
 #      a0x = 0.119694453613    a1x = -0.000707644207572      a2x = 2.03806478671e-07
    
    
    
-    cube_test=Interpolated_cube(rss3_all, pixel_size, kernel_size, flux_calibration=flux_calibration, plot=False)   
-    save_fits_file(cube_test, path_main+"/"+grating+"/POX4_d_cube_test.fits", ADR=False)
+#    cube_test=Interpolated_cube(rss3_all, pixel_size, kernel_size, flux_calibration=flux_calibration, plot=False)   
+#    save_fits_file(cube_test, path_main+"/"+grating+"/POX4_d_cube_test.fits", ADR=False)
 
 
-    rss_list=[file1r,file2r,file3r]  #,file4r,file5r,file6r,file7r]
-    sky_list=[sky1,sky2,sky3]
-    fits_file_red=path_main+"/"+grating+"/POX4_A_red_combined_cube_3.fits"
+    rss_list=[file2r,file3r] #,file3r]  #,file4r,file5r,file6r,file7r]
+#    sky_list=[sky1,sky2,sky3]
+
+    sky_list=[sky3,sky3]
+
+    fits_file_red=path_main+"/"+grating+"/POX4_A_red_combined_cube_2_TEST_GitHub.fits"
 
 
 
@@ -514,7 +432,7 @@ if __name__ == "__main__":
                           id_list=[6300.30, 6312.1, 6363.78, 6548.03, 6562.82, 6583.41, 6678.15, 6716.47, 6730.85, 7065.28, 7135.78, 7318.39, 7329.66, 8750.47, 8862.79, 9014.91, 9069.0],
                           #clean_sky_residuals = False, dclip=3.0, extra_w = 1.3, step_csr = 25,
                           telluric_correction = telluric_correction,
-                          do_extinction=False, correct_negative_sky = True,
+                          do_extinction=True, correct_negative_sky = False,
                                  
                           pixel_size_arcsec=pixel_size, kernel_size_arcsec=kernel_size,
                           #offsets=[-0.54, -0.87, 1.58, -1.26] # EAST-/WEST+  NORTH-/SOUTH+
