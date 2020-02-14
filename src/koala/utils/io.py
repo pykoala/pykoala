@@ -8,8 +8,8 @@ from past.utils import old_div
 from astropy.io import fits
 from astropy.wcs import WCS
 
-from pysynphot import observation
-from pysynphot import spectrum
+from synphot import observation
+from synphot import spectrum
 
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors

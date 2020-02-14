@@ -44,7 +44,7 @@ import scipy.signal as sig
 # Import Python routines
 # -----------------------------------------------------------------------------
 
-from koala.utils.plots import (plot_redshift_peaks,
+from .utils.plots import (plot_redshift_peaks,
                                plot_weights_for_getting_smooth_spectrum,
                                plot_correction_in_fibre_p_fibre,
                                plot_suspicious_fibres,
@@ -53,6 +53,7 @@ from koala.utils.plots import (plot_redshift_peaks,
                                plot_response,
                                plot_telluric_correction,
                                )
+from .utils.io import *
 
 
 # -----------------------------------------------------------------------------
