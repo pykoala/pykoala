@@ -17,8 +17,7 @@ KERNEL_SIZE = 1.25
 OBJECT = "POX4"
 DESCRIPTION = "POX4 CUBE"
 
-PATH_MAIN = pth.join(pth.dirname(__file__), "data")
-PATH_SKYFLAT = pth.join(PATH_MAIN, GRATING)
+PATH_SKYFLAT = pth.join(DATA_PATH, GRATING)
 
 SKY_FLAT_RED_FILENAME = "10mar2_combined.fits"
 THROUGHPUT_RED_FILENAME = DATE+"_"+GRATING+"_throughput_correction.dat"
@@ -29,16 +28,16 @@ FILE_SKY_FLAT_RED = pth.join(
     PATH_SKYFLAT, SKY_FLAT_RED_FILENAME
 ) # FILE NOT DIVIDED BY THE FLAT
 THROUGHPUT_FILE_RED = pth.join(PATH_SKYFLAT, THROUGHPUT_RED_FILENAME)
-FLUX_CAL_FILE = pth.join(PATH_MAIN, FLUX_CALIBRATION_RED_FILENAME)
-TELLURIC_CORRECTION_FILE = pth.join(PATH_MAIN, TELLURIC_CORRECTION_RED_FILENAME)
+FLUX_CAL_FILE = pth.join(DATA_PATH, FLUX_CALIBRATION_RED_FILENAME)
+TELLURIC_CORRECTION_FILE = pth.join(DATA_PATH, TELLURIC_CORRECTION_RED_FILENAME)
 
-SCIENCE_RED_1_FILENAME = pth.join(PATH_MAIN, GRATING, "10mar20091red.fits")
-SCIENCE_RED_2_FILENAME = pth.join(PATH_MAIN, GRATING, "10mar20092red.fits")
-SCIENCE_RED_3_FILENAME = pth.join(PATH_MAIN, GRATING, "10mar20093red.fits")
+SCIENCE_RED_1_FILENAME = pth.join(DATA_PATH, GRATING, "10mar20091red.fits")
+SCIENCE_RED_2_FILENAME = pth.join(DATA_PATH, GRATING, "10mar20092red.fits")
+SCIENCE_RED_3_FILENAME = pth.join(DATA_PATH, GRATING, "10mar20093red.fits")
 
 # NOTE: name appear to be generated in commented code
 fits_file_red = pth.join(
-    PATH_MAIN, GRATING, "POX4_A_red_combined_cube_2_TEST_GitHub.fits"
+    DATA_PATH, GRATING, "POX4_A_red_combined_cube_2_TEST_GitHub.fits"
 )
 
 start = timer()
@@ -132,7 +131,7 @@ if __name__ == "__main__":
     # # READ STAR 1
     # # First we provide names, paths, files...
     #    star1="H600"
-    #    path_star1 = PATH_MAIN+DATE+"/"+GRATING+"/"
+    #    path_star1 = DATA_PATH+DATE+"/"+GRATING+"/"
     #    starpos1r = path_star1+"10mar20082red.fits"
     #    starpos2r = path_star1+"10mar20083red.fits"
     #    starpos3r = path_star1+"10mar20084red.fits"
@@ -215,7 +214,7 @@ if __name__ == "__main__":
 
     # # STAR 2
     #    star="HD60753"
-    #    path_star = PATH_MAIN+DATE+"/"+GRATING+"/"
+    #    path_star = DATA_PATH+DATE+"/"+GRATING+"/"
     #    starpos1r = path_star+"10mar20079red.fits"
     #    starpos2r = path_star+"10mar20080red.fits"
     #    starpos3r = path_star+"10mar20081red.fits"
@@ -250,7 +249,7 @@ if __name__ == "__main__":
 
     # # STAR 3
     #    star="HR3454"
-    #    path_star = PATH_MAIN+DATE+"/"+GRATING+"/"
+    #    path_star = DATA_PATH+DATE+"/"+GRATING+"/"
     #    starpos1r = path_star+"10mar20094red.fits"
     #    starpos2r = path_star+"10mar20095red.fits"
     #    starpos3r = path_star+"10mar20096red.fits"
@@ -287,7 +286,7 @@ if __name__ == "__main__":
 
     # STAR 4
     #    star="EG274"
-    #    path_star = PATH_MAIN+DATE+"/"+GRATING+"/"
+    #    path_star = DATA_PATH+DATE+"/"+GRATING+"/"
     #    starpos1r = path_star+"10mar20104red.fits"
     #    starpos2r = path_star+"10mar20105red.fits"
     #    starpos3r = path_star+"10mar20106red.fits"
@@ -358,7 +357,7 @@ if __name__ == "__main__":
     #    flux_calibration_20180310_385R_0p6_1k25 = obtain_flux_calibration(stars)
 
     # # And we save this absolute flux calibration as a text file
-    #    flux_calibration_file = PATH_MAIN+DATE+"/flux_calibration_"+DATE+"_"+GRATING+pk+".dat"
+    #    flux_calibration_file = DATA_PATH+DATE+"/flux_calibration_"+DATE+"_"+GRATING+pk+".dat"
     #    spectrum_to_text_file(H600r.combined_cube.wavelength,flux_calibration_20180310_385R_0p6_1k8, filename=flux_calibration_file)
 
     # #   CHECK AND GET THE TELLURIC CORRECTION
@@ -369,7 +368,7 @@ if __name__ == "__main__":
     #    telluric_correction_20180310 = obtain_telluric_correction(EG274r.combined_cube.wavelength, telluric_correction_list)
 
     # # Save this telluric correction to a file
-    #    telluric_correction_file = PATH_MAIN+DATE+"/telluric_correction_"+DATE+"_"+GRATING+pk+".dat"
+    #    telluric_correction_file = DATA_PATH+DATE+"/telluric_correction_"+DATE+"_"+GRATING+pk+".dat"
     #    spectrum_to_text_file(EG274r.combined_cube.wavelength,telluric_correction_20180310, filename=telluric_correction_file )
 
     # ---------------------------------------------------------------------------
@@ -420,7 +419,7 @@ if __name__ == "__main__":
 
 
 
-#    rss3_all = KOALA_RSS(SCIENCE_RED_3_FILENAME, #save_rss_to_fits_file=PATH_MAIN+"Tol30Ar3_rss_tcwsreu.fits", 
+#    rss3_all = KOALA_RSS(SCIENCE_RED_3_FILENAME, #save_rss_to_fits_file=DATA_PATH+"Tol30Ar3_rss_tcwsreu.fits", 
 #                         apply_throughput=True, skyflat = skyflat_red,
 #                         correct_ccd_defects = True,
 #                         fix_wavelengths = True, sol = [0.119694453613, -0.000707644207572, 2.03806478671e-07],
@@ -439,7 +438,7 @@ if __name__ == "__main__":
    
    
 #    cube_test=Interpolated_cube(rss3_all, PIXEL_SIZE, KERNEL_SIZE, flux_calibration=flux_calibration, plot=DO_PLOTTING)   
-#    save_fits_file(cube_test, PATH_MAIN+"/"+GRATING+"/POX4_d_cube_test.fits", ADR=False)
+#    save_fits_file(cube_test, DATA_PATH+"/"+GRATING+"/POX4_d_cube_test.fits", ADR=False)
 
 
     rss_list = [
