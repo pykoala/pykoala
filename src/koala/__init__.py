@@ -2634,7 +2634,7 @@ class KOALA_RSS(RSS):
     """
     This class reads the FITS files returned by
     `2dfdr
-    <https://www.aao.gov.au/science/software/2dfdr>`_
+    <https://aat.anu.edu.au/science/instruments/current/AAOmega/reduction>`_
     and performs basic analysis tasks (see description under each method).
 
     Parameters
