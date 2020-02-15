@@ -4,4 +4,4 @@ pytest-cov==2.8.1
 #pytest-mpl
 #pytest-regtest
 #pytest-xdist
-sybil==1.2.0
+sybil==1.2.1
