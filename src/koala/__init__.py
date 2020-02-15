@@ -4,11 +4,9 @@
 # by Angel Lopez-Sanchez and Yago Ascasibar
 # Extra work by Ben Lawson (MQ PACE student)
 # Plus Taylah and Matt (sky subtraction)
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 from builtins import str
 from builtins import range
-from builtins import object
 from past.utils import old_div
 version = "Version 0.72 - 13th February 2020"
 
