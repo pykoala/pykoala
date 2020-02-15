@@ -1,0 +1,7 @@
+pytest
+pytest-cov
+#pytest-datadir
+#pytest-mpl
+#pytest-regtest
+#pytest-xdist
+sybil
