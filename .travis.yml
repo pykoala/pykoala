@@ -27,22 +27,22 @@ matrix:
    #  - TOXENV=py38 MPLBACKEND=agg
    #- python: 3.7
    #  env:
-   #  - TOXENV=flake8
+   #  - TOXENV=flake8 MPLBACKEND=agg
    #- python: 3.7
    #  env:
-   #  - TOXENV=pylint
+   #  - TOXENV=pylint MPLBACKEND=agg
     - python: 3.7
       env:
-      - TOXENV=docs
+      - TOXENV=docs MPLBACKEND=agg
    #- python: 3.7
    #  env:
    #  - TOXENV=doctest
     - python: 3.7
       env:
-      - TOXENV=check-manifest
+      - TOXENV=check-manifest MPLBACKEND=agg
    #- python: 3.7
    #  env:
-   #  - TOXENV=checkreadme
+   #  - TOXENV=checkreadme MPLBACKEND=agg
 
 before_install:
   - pip install codecov # for coverage
