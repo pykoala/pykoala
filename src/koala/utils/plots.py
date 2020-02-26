@@ -4,7 +4,7 @@ from builtins import str
 from past.utils import old_div
 
 import matplotlib.pyplot as plt
-
+import numpy as np
 
 def plot_redshift_peaks(fig_size,
                         funcion,
