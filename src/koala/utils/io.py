@@ -1,35 +1,13 @@
 # -*- coding: utf-8 -*-
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
+
 from builtins import str
-from builtins import range
-from builtins import object
 from past.utils import old_div
 
-from astropy.io import fits
-from astropy.wcs import WCS
-
-from synphot import observation
-from synphot import spectrum
-
-import matplotlib.pyplot as plt
-import matplotlib.colors as colors
-import numpy as np
-import sys
-
-from scipy import interpolate, signal, optimize
-from scipy.optimize import curve_fit
-import scipy.signal as sig
-
-# from scipy.optimize import leastsq
-
-from astropy.convolution import Gaussian2DKernel, interpolate_replace_nans
-from scipy.ndimage.interpolation import shift
-
 import datetime
-import copy
 
-import os.path as pth
+from astropy.io import fits
+import numpy as np
 
 from .._version import get_versions
 
@@ -636,10 +614,8 @@ def save_rss_fits(
     cols = fits.ColDefs([col1, col2, col3, col4, col5, col6, col7, col8])
     header2_hdu = fits.BinTableHDU.from_columns(cols)
 
-    header2_hdu.header["CENRA"] = old_div(rss.RA_centre_deg, (
-        old_div(180, np.pi)
-    ))  # Must be in radians
-    header2_hdu.header["CENDEC"] = old_div(rss.DEC_centre_deg, (old_div(180, np.pi)))
+    header2_hdu.header["CENRA"] = rss.RA_centre_deg / 180 / np.pi # Must be in radians
+    header2_hdu.header["CENDEC"] = rss.DEC_centre_deg / 180 / np.pi
 
     hdu_list = fits.HDUList(
         [fits_image_hdu, error_hdu, header2_hdu]
@@ -647,6 +623,3 @@ def save_rss_fits(
 
     hdu_list.writeto(fits_file, overwrite=True)
     print("  RSS data saved to file ", fits_file)
-
-
-
