@@ -6,6 +6,7 @@ from past.utils import old_div
 import matplotlib.pyplot as plt
 import numpy as np
 
+
 def plot_redshift_peaks(fig_size,
                         funcion,
                         wavelength,
@@ -157,7 +158,7 @@ def plot_suspicious_fibres(suspicious_fibres,
             np.nanmax(intensity_corrected_fiber[fibre]) + old_div(scale, 15),
         )
         ax.set_title("Checking spectrum of suspicious fibre {}. Do you see a cosmic?".format(np.str(fibre)))
-        self.plot_spectrum(fibre)
+        self.plot_spectrum(fibre)  # TODO: self? is plot_splectrum a function of a class which broke during creation of plots.
     if show_plot:
         plt.show()
     
@@ -196,12 +197,12 @@ def plot_offset_between_cubes(cube, x, y, wl, medfilt_window=151, show_plot=Fals
         cube (Cube object): A cube instance
         x (array): ?
         y (array): ?
-        wl (array): A wavelenhgth array
+        wl (array): A wavelength array
         medfilt_window (int): Window size for median filtering
         show_plot (bool, default=False): Show the plot to the screen
     """
 
-    smooth_x = signal.medfilt(x, medfilt_window)
+    smooth_x = signal.medfilt(x, medfilt_window)  # TODO: is signal an input to this function or an attr of a class.
     smooth_y = signal.medfilt(y, medfilt_window)
 
     print(np.nanmean(smooth_x))
@@ -222,6 +223,8 @@ def plot_offset_between_cubes(cube, x, y, wl, medfilt_window=151, show_plot=Fals
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
+
+
 def plot_response(calibration_star_cubes, scale=[1, 1, 1, 1], show_plot=False):
 
     """
@@ -288,7 +291,7 @@ def plot_response(calibration_star_cubes, scale=[1, 1, 1, 1], show_plot=False):
     return fig
 
 
-def plot_telluric_correction(wlm, telluric_correction_list, telluric_correction, figsize=12, show_plot=False):
+def plot_telluric_correction(wlm, telluric_correction_list, telluric_correction, fig_size=12, show_plot=False):
     """
     Make a plot of the telluric corretion as well as all of the individual stars which have gone into this telluric correction.
 
@@ -296,7 +299,7 @@ def plot_telluric_correction(wlm, telluric_correction_list, telluric_correction,
         wlm (array): Wavelength array
         telluric_correction_list (list): A list of standard star spectra
         telluric_correction (array): The final telluric correction we'll use
-        figsize (int, default=12): Size of the figure in inches
+        fig_size (int, default=12): Size of the figure in inches
         show_plot (bool, default=False): Show the plot to the screen
 
     Returns:
