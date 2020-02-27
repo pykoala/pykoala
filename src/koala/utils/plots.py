@@ -316,3 +316,55 @@ def plot_telluric_correction(wlm, telluric_correction_list, telluric_correction,
     ax.plot(wlm, telluric_correction, alpha=0.5, color="k", label="Median")
     plt.minorticks_on()
 
+
+def plot_plot(
+    x,
+    y,
+    xmin=0,
+    xmax=0,
+    ymin=0,
+    ymax=0,
+    ptitle="Pretty plot",
+    xlabel="Wavelength [$\AA$]",
+    ylabel="Flux [counts]",
+    fcal=False,
+    save_file="",
+    frameon=False,
+    loc=0,
+    ncol=4,
+    fig_size=0,
+):
+
+    """
+    Plot beautiful spectrum
+    """
+
+    if fig_size != 0:
+        plt.figure(figsize=(fig_size, fig_size / 2.5))
+        plt.plot(x, y)
+
+    if xmin == 0:
+        xmin = np.nanmin(x)
+    if xmax == 0:
+        xmax = np.nanmax(x)
+    if ymin == 0:
+        ymin = np.nanmin(y)
+    if ymax == 0:
+        ymax = np.nanmax(y)
+
+    plt.xlim(xmin, xmax)
+    plt.ylim(ymin, ymax)
+    plt.title(ptitle)
+    plt.minorticks_on()
+    if loc != 0:
+        plt.legend(frameon=frameon, loc=loc, ncol=ncol)
+    plt.xlabel(xlabel)
+    if fcal:
+        ylabel = "Flux [ erg cm$^{-2}$ s$^{-1}$ A$^{-1}$]"
+    plt.ylabel(ylabel)
+
+    if save_file == "":
+        plt.show()
+    else:
+        plt.savefig(save_file)
+    plt.close()
