@@ -10,10 +10,8 @@ from builtins import range
 from past.utils import old_div
 version = "Version 0.72 - 13th February 2020"
 
-# from .utils.io import *
 from .utils.io import read_table, save_rss_fits, save_fits_file
 from .utils.plots import plot_plot
-
 
 import copy
 import os.path as pth
@@ -28,8 +26,8 @@ import matplotlib.colors as colors
 
 import numpy as np
 
-from synphot import observation
-from synphot import spectrum
+from pysynphot import observation
+from pysynphot import spectrum
 
 from scipy import interpolate
 from scipy.ndimage.interpolation import shift
@@ -56,8 +54,8 @@ del get_versions
 
 DATA_PATH = pth.join(pth.dirname(__file__), "data")
 
-pc = 3.086e18  # pc in cm
-C = 299792.458  # c in km/s
+from .constants import C, PARSEC as pc
+
 
 # -----------------------------------------------------------------------------
 # Define COLOUR scales
