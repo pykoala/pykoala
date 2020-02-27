@@ -368,3 +368,15 @@ def plot_plot(
     else:
         plt.savefig(save_file)
     plt.close()
+
+
+def plot_spec(w,
+              f,
+              size=0):
+    """
+    Plot spectrum given wavelength, w, and flux, f.
+    """              
+    if size != 0:
+        plt.figure(figsize=(size, size / 2.5))
+    plt.plot(w, f)
+    return
