@@ -10,9 +10,12 @@ from builtins import range
 from past.utils import old_div
 version = "Version 0.72 - 13th February 2020"
 
+# from .utils.io import *
+from .utils.io import read_table, save_rss_fits, save_fits_file
+from .utils.plots import plot_plot
+
 
 import copy
-import datetime
 import os.path as pth
 import sys
 
@@ -42,7 +45,6 @@ from .utils.plots import (
     plot_correction_in_fibre_p_fibre, plot_suspicious_fibres, plot_skyline_5578,
     plot_offset_between_cubes, plot_response, plot_telluric_correction,
 )
-from .utils.io import *
 from ._version import get_versions
 
 __version__ = get_versions()["version"]
@@ -5560,7 +5562,7 @@ def offset_between_cubes(cube1, cube2, plot=True):
     if plot:
         x -= delta_RA_pix
         y -= delta_DEC_pix
-        fig = plot_offset_between_cubes(cube1, delta_RA_pix, delta_DEC_pix, wl, medfilt_window=151)
+        fig = plot_offset_between_cubes(cube1, delta_RA_pix, delta_DEC_pix, wl, medfilt_window=151)  # TODO: wl is unresolved, additionally plot_offset... does not require wl as a input.
 
     return delta_RA_arcsec, delta_DEC_arcsec
 
@@ -5592,6 +5594,7 @@ def compare_cubes(cube1, cube2, line=0):
         plt.title("Integrated Map")
     # plt.show()
     # plt.close()
+
 
 def obtain_flux_calibration(calibration_star_cubes):
     #    print "\n> Obtaining flux calibration...\n"
@@ -8450,7 +8453,7 @@ def search_peaks(
                             cut,
                             peaks,
                             peaks_name,
-                            label)
+                            label)  # TODO: label is unreferenced.
 
     continuum_limits = [peaks_lowlow, peaks_lowhigh, peaks_highlow, peaks_highhigh]
 
