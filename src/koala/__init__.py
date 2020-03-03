@@ -26,8 +26,8 @@ import matplotlib.colors as colors
 
 import numpy as np
 
-from pysynphot import observation
-from pysynphot import spectrum
+from synphot import observation
+from synphot import spectrum
 
 from scipy import interpolate
 from scipy.ndimage.interpolation import shift
@@ -905,7 +905,7 @@ class RSS(object):
             brightest_line, brightest_line_wavelength_rest, brightest_line_wavelength
         ))
 
-        redshift = old_div(brightest_line_wavelength, brightest_line_wavelength_rest) - 1.0 
+        redshift = brightest_line_wavelength/brightest_line_wavelength_rest - 1.0
 
         if w == 1000:
             w = self.wavelength
@@ -3177,7 +3177,6 @@ class KOALA_RSS(RSS):
 
             # (2) If a 2D sky, sky_rss, is provided
             if sky_method == "2D":  # if np.nanmedian(sky_rss.intensity_corrected) != 0:
-                print("SM3, went in")
                 if scale_sky_rss != 0:
                     print("\n> Using sky image provided to substract sky, considering a scale of", scale_sky_rss, "...")
                     self.sky_emission = scale_sky_rss * sky_rss.intensity_corrected
@@ -3489,7 +3488,6 @@ class KOALA_RSS(RSS):
                 print("\n> Checking if identified emission lines agree with list provided")
                 # Read list with all emission lines to get the name of emission lines
                 import os
-                print("SM3", os.getcwd())
                 emission_line_file = "data/lineas_c89_python.dat"
                 el_center, el_name = read_table(emission_line_file, ["f", "s"])
 
