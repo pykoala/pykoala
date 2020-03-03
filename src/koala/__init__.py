@@ -138,7 +138,7 @@ class RSS(object):
         correct_negative_sky=False,
     ):
         """
-        Compute the integrated flux of a fibre in a particular range
+        Compute the integrated flux of a fibre in a particular range, valid_wave_min to valid_wave_max.
 
         Parameters
         ----------
@@ -146,14 +146,14 @@ class RSS(object):
             list with the number of fibres for computing integrated value
             if using "all" it does all fibres
         valid_wave_min, valid_wave_max :  float
-            the integrated flux value will be computed in the range [valid_wave_min,valid_wave_max]
-            (default = , if they all 0 we use [self.valid_wave_min,self.valid_wave_max]
+            the integrated flux value will be computed in the range [valid_wave_min, valid_wave_max]
+            (default = , if they all 0 we use [self.valid_wave_min, self.valid_wave_max]
         min_value: float (default 0)
             For values lower than min_value, we set them as min_value
         plot : Boolean (default = False)
             Plot
         title : string
-            Tittle for the plot
+            Title for the plot
         text: string
             A bit of extra text
         warnings : Boolean (default = False)
@@ -187,9 +187,10 @@ class RSS(object):
             self.integrated_fibre[i] = np.nansum(self.intensity_corrected[i, region])
             if self.integrated_fibre[i] < 0:
                 if warnings:
-                    print("  WARNING: The integrated flux in fibre {:4} is negative, flux/wave = {:10.2f}, (probably sky), CHECK !".format(
-                        i, old_div(self.integrated_fibre[i], waves_in_region)
-                    ))
+                    print(
+                        "  WARNING: The integrated flux in fibre {:4} is negative, flux/wave = {:10.2f}, (probably sky), CHECK !".format(
+                            i, self.integrated_fibre[i]/waves_in_region
+                        ))
                 n_negative_fibres = n_negative_fibres + 1
                 # self.integrated_fibre[i] = min_value
                 negative_fibres.append(i)
@@ -201,7 +202,7 @@ class RSS(object):
 
             negative_fibres_sorted = []
             integrated_intensity_sorted = np.argsort(
-                old_div(self.integrated_fibre, waves_in_region)
+                self.integrated_fibre/waves_in_region
             )
             for fibre_ in range(n_negative_fibres):
                 negative_fibres_sorted.append(integrated_intensity_sorted[fibre_])
@@ -210,21 +211,23 @@ class RSS(object):
 
             if correct_negative_sky:
                 min_sky_value = self.integrated_fibre[negative_fibres_sorted[0]]
-                min_sky_value_per_wave = old_div(min_sky_value, waves_in_region)
-                print("\n> Correcting negative values making 0 the integrated flux of the lowest fibre, which is {:4} with {:10.2f} counts/wave".format(
-                    negative_fibres_sorted[0], min_sky_value_per_wave
-                ))
+                min_sky_value_per_wave = min_sky_value/waves_in_region
+                print(
+                    "\n> Correcting negative values making 0 the integrated flux of the lowest fibre, which is {:4} with {:10.2f} counts/wave".format(
+                        negative_fibres_sorted[0], min_sky_value_per_wave
+                    ))
                 # print self.integrated_fibre[negative_fibres_sorted[0]]
                 self.integrated_fibre = self.integrated_fibre - min_sky_value
                 for i in range(self.n_spectra):
                     self.intensity_corrected[i] = (
-                        self.intensity_corrected[i] - min_sky_value_per_wave
+                            self.intensity_corrected[i] - min_sky_value_per_wave
                     )
 
             else:
-                print("\n> Adopting integrated flux = {:5.2f} for all fibres with negative integrated flux (for presentation purposes)".format(
-                    min_value
-                ))
+                print(
+                    "\n> Adopting integrated flux = {:5.2f} for all fibres with negative integrated flux (for presentation purposes)".format(
+                        min_value
+                    ))
                 for i in negative_fibres_sorted:
                     self.integrated_fibre[i] = min_value
 
@@ -360,7 +363,6 @@ class RSS(object):
         """
         Correct for Cosmic Rays and defects on the CCD
         """
-
         print("\n> Correcting for high cosmics and CCD defects...")
 
         wave_min = self.valid_wave_min  # CHECK ALL OF THIS...
@@ -396,20 +398,22 @@ class RSS(object):
             s = self.intensity_corrected[fibre]
             running_wave = []
             running_step_median = []
-            cuts = np.int(old_div(self.n_wave, step))
+            cuts = np.int(self.n_wave/step)  # using np.int instead of // for improved readability
             for corte in range(cuts):
                 if corte == 0:
                     next_wave = wave_min
                 else:
                     next_wave = np.nanmedian(
-                        old_div((wlm[np.int(corte * step)] + wlm[np.int((corte + 1) * step)]), 2)
+                        (wlm[np.int(corte * step)] + wlm[np.int((corte + 1) * step)])/2
                     )
                 if next_wave < wave_max:
                     running_wave.append(next_wave)
+                    # print("SEARCHFORME1", step, running_wave[corte])
                     region = np.where(
-                        (wlm > running_wave[corte] - old_div(step, 2))
-                        & (wlm < running_wave[corte] + old_div(step, 2))
+                        (wlm > running_wave[corte] - old_div(step, 2))   # TODO: check //
+                        & (wlm < running_wave[corte] + old_div(step, 2))   # TODO: check //
                     )
+                    # print('SEARCHFORME3', region)
                     running_step_median.append(
                         np.nanmedian(self.intensity_corrected[fibre, region])
                     )
@@ -457,21 +461,17 @@ class RSS(object):
                 ):  # NEW 15 Feb 2019, v7.1 2dFdr takes well cosmic rays
                     if s[wave] > clip_high * fit_median[wave]:
                         if verbose:
-                            print("  CLIPPING HIGH =", clip_high, "in fibre", fibre, "w =", wlm[
-                                wave
-                            ], "value=", s[
-                                wave
-                            ], "v/median=", old_div(s[
-                                wave
-                            ], fit_median[
-                                wave
-                            ]))  # " median=",fit_median[wave]
+                            print("  "
+                                  "CLIPPING HIGH =", clip_high,
+                                  "in fibre", fibre,
+                                  "w =", wlm[wave],
+                                  "value=", s[wave],
+                                  "v/median=", old_div(s[wave], fit_median[wave]))  # " median=",fit_median[wave]
                         s[wave] = fit_median[wave]
 
             if fibre == fibre_p:
                 espectro_new = copy.copy(s)
-
-            max_ratio_list.append(np.nanmax(old_div(s, fit_median)))
+            max_ratio_list.append(np.nanmax(s/fit_median))
             self.intensity_corrected[fibre, :] = s
 
             # Removing Skyline 5578 using Gaussian fit if requested
@@ -549,17 +549,13 @@ class RSS(object):
                 if skip == 0:
                     median_value = np.nanmedian(
                         self.integrated_fibre[
-                            fibre - np.int(old_div(step_f, 2)): fibre + np.int(old_div(step_f, 2))
+                            fibre - np.int(old_div(step_f, 2)): fibre + np.int(old_div(step_f, 2))  # TODO: check //
                         ]
                     )
                 median_running.append(median_value)
-
-                if old_div(self.integrated_fibre[fibre], median_running[fibre]) > max_value:
-                    print("  Fibre ", fibre, " has a integrated/median ratio of ", old_div(self.integrated_fibre[
-                        fibre
-                    ], median_running[
-                        fibre
-                    ]), "  -> Might be a cosmic left!")
+                if self.integrated_fibre[fibre]/median_running[fibre] > max_value:
+                    print("  Fibre ", fibre, " has a integrated/median ratio of ",
+                        self.integrated_fibre[fibre]/median_running[fibre], "  -> Might be a cosmic left!")
                     label = np.str(fibre)
                     plt.axvline(x=fibre, color="k", linestyle="--")
                     plt.text(fibre, self.integrated_fibre[fibre] / 2.0, label)
@@ -585,7 +581,7 @@ class RSS(object):
             print("  Skyline 5578 has been removed. Checking throughput correction...")
             flux_5578_medfilt = sig.medfilt(flux_5578, np.int(5))
             median_flux_5578_medfilt = np.nanmedian(flux_5578_medfilt)
-            extra_throughput_correction = old_div(flux_5578_medfilt, median_flux_5578_medfilt)
+            extra_throughput_correction = old_div(flux_5578_medfilt, median_flux_5578_medfilt)  # TODO: check \\, need blue
             # plt.plot(extra_throughput_correction)
             # plt.show()
             # plt.close()
@@ -599,7 +595,7 @@ class RSS(object):
 
             for i in range(self.n_spectra):
                 self.intensity_corrected[i, :] = (
-                    old_div(self.intensity_corrected[i, :], extra_throughput_correction[i])
+                    self.intensity_corrected[i, :]/extra_throughput_correction[i]
                 )
             self.relative_throughput = (
                 self.relative_throughput * extra_throughput_correction
@@ -909,7 +905,7 @@ class RSS(object):
             brightest_line, brightest_line_wavelength_rest, brightest_line_wavelength
         ))
 
-        redshift = old_div(brightest_line_wavelength, brightest_line_wavelength_rest) - 1.0
+        redshift = old_div(brightest_line_wavelength, brightest_line_wavelength_rest) - 1.0 
 
         if w == 1000:
             w = self.wavelength
@@ -1722,7 +1718,7 @@ class RSS(object):
             median_region[i] = np.nanmedian(self.intensity[i, region])
 
         median_value_skyflat = np.nanmedian(median_region)
-        self.relative_throughput = old_div(median_region, median_value_skyflat)
+        self.relative_throughput = median_region/median_value_skyflat
         print("  Median value of skyflat in the [", wave_min_scale, ",", wave_max_scale, "] range = ", median_value_skyflat)
         print("  Individual fibre corrections:  min =", np.nanmin(
             self.relative_throughput
@@ -1756,7 +1752,7 @@ class RSS(object):
             plt.figure(figsize=(10, 4))
             for i in range(self.n_spectra):
                 # self.intensity_corrected[i,] = self.intensity[i,] * self.relative_throughput[i]
-                plot_this = old_div(self.intensity[i, ], self.relative_throughput[i])
+                plot_this = self.intensity[i, ]/self.relative_throughput[i]
                 plt.plot(self.wavelength, plot_this)
             plt.ylim(ymin, ymax)
             plt.minorticks_on()
@@ -1776,14 +1772,14 @@ class RSS(object):
         pf = 0
         for i in range(self.n_spectra):
             self.response_sky_spectrum[i] = (
-                old_div(old_div(self.intensity[i], self.relative_throughput[i]), median_sky_spectrum)
+                (self.intensity[i]/self.relative_throughput[i])/median_sky_spectrum
             )
             filter_response_sky_spectrum = sig.medfilt(
                 self.response_sky_spectrum[i], kernel_size=kernel_sky_spectrum
             )
-            rms[i] = old_div(np.nansum(
+            rms[i] = np.nansum(
                 np.abs(self.response_sky_spectrum[i] - filter_response_sky_spectrum)
-            ), np.nansum(self.response_sky_spectrum[i]))
+            )/np.nansum(self.response_sky_spectrum[i])
 
             if plot:
                 if i == plot_fibres[pf]:
@@ -1803,7 +1799,7 @@ class RSS(object):
                     )
                     plt.plot(
                         self.wavelength,
-                        old_div(self.response_sky_spectrum[i], filter_response_sky_spectrum),
+                        self.response_sky_spectrum[i]/filter_response_sky_spectrum,
                         alpha=1,
                         label="Normalized Skyflat",
                     )
@@ -1882,7 +1878,7 @@ class RSS(object):
         fig_size=12,
         verbose=False,
     ):
-        """
+        """  # TODO BLAKE: always use false, use plots to make sure it's good. prob just save as a different file.
         Get telluric correction using a spectrophotometric star
 
         Parameters
@@ -1943,7 +1939,7 @@ class RSS(object):
         telluric_correction = np.ones(len(wlm))
         for l in range(len(wlm)):
             if wlm[l] > correct_from and wlm[l] < correct_to:
-                telluric_correction[l] = old_div(smooth_med_star[l], estrella[l])
+                telluric_correction[l] = smooth_med_star[l]/estrella[l]  # TODO: should be float, check when have star data
 
         if plot:
             plt.figure(figsize=(fig_size, fig_size / 2.5))
@@ -2737,8 +2733,8 @@ class KOALA_RSS(RSS):
         #  General info:
         self.object = RSS_fits_file[0].header["OBJECT"]
         self.description = self.object + " - " + filename
-        self.RA_centre_deg = old_div(RSS_fits_file[2].header["CENRA"] * 180, np.pi)
-        self.DEC_centre_deg = old_div(RSS_fits_file[2].header["CENDEC"] * 180, np.pi)
+        self.RA_centre_deg = RSS_fits_file[2].header["CENRA"] * 180/np.pi
+        self.DEC_centre_deg = RSS_fits_file[2].header["CENDEC"] * 180/np.pi
         self.exptime = RSS_fits_file[0].header["EXPOSED"]
         #  WARNING: Something is probably wrong/inaccurate here!
         #  Nominal offsets between pointings are totally wrong!
@@ -2802,11 +2798,10 @@ class KOALA_RSS(RSS):
             )  # These are the good fibres
             variance = RSS_fits_file[1].data[good_spaxels]  # CHECK FOR ERRORS
 
-        self.ZDSTART = RSS_fits_file[0].header["ZDSTART"]
+        self.ZDSTART = RSS_fits_file[0].header["ZDSTART"]  # Zenith distance (degrees?)
         self.ZDEND = RSS_fits_file[0].header["ZDEND"]
-
         # KOALA-specific stuff
-        self.PA = RSS_fits_file[0].header["TEL_PA"]
+        self.PA = RSS_fits_file[0].header["TEL_PA"]   # Position angle?
         self.grating = RSS_fits_file[0].header["GRATID"]
         # Check RED / BLUE arm for AAOmega
         if RSS_fits_file[0].header["SPECTID"] == "RD":
@@ -2816,7 +2811,7 @@ class KOALA_RSS(RSS):
 
         # For WCS
         self.CRVAL1_CDELT1_CRPIX1 = []
-        self.CRVAL1_CDELT1_CRPIX1.append(RSS_fits_file[0].header["CRVAL1"])
+        self.CRVAL1_CDELT1_CRPIX1.append(RSS_fits_file[0].header["CRVAL1"])  # see https://idlastro.gsfc.nasa.gov/ftp/pro/astrom/aaareadme.txt maybe?
         self.CRVAL1_CDELT1_CRPIX1.append(RSS_fits_file[0].header["CDELT1"])
         self.CRVAL1_CDELT1_CRPIX1.append(RSS_fits_file[0].header["CRPIX1"])
 
@@ -2927,12 +2922,11 @@ class KOALA_RSS(RSS):
         # Divide by flatfield if needed
         if flat != "":
             print("\n> Dividing the data by the flatfield provided...")
-            self.intensity_corrected = (
-                old_div(self.intensity_corrected, flat.intensity_corrected)
-            )
+            self.intensity_corrected = (self.intensity_corrected/flat.intensity_corrected)  # todo: check division per pixel works.
 
         # Check if apply relative throughput & apply it if requested
         if apply_throughput:
+
             if plot_skyflat:
                 plt.figure(figsize=(10, 4))
                 for i in range(self.n_spectra):
@@ -2949,7 +2943,7 @@ class KOALA_RSS(RSS):
             self.response_sky_spectrum = skyflat.response_sky_spectrum
             for i in range(self.n_spectra):
                 self.intensity_corrected[i, :] = (
-                    old_div(self.intensity_corrected[i, :], self.relative_throughput[i])
+                    self.intensity_corrected[i, :]/self.relative_throughput[i]
                 )
 
             if nskyflat:
@@ -2959,7 +2953,7 @@ class KOALA_RSS(RSS):
                 ), "and ", np.nanmax(skyflat.response_sky_spectrum))
                 print(" ")
                 self.intensity_corrected = (
-                    old_div(self.intensity_corrected, self.response_sky_spectrum)
+                    self.intensity_corrected/self.response_sky_spectrum
                 )
 
             if plot_skyflat:
@@ -3183,6 +3177,7 @@ class KOALA_RSS(RSS):
 
             # (2) If a 2D sky, sky_rss, is provided
             if sky_method == "2D":  # if np.nanmedian(sky_rss.intensity_corrected) != 0:
+                print("SM3, went in")
                 if scale_sky_rss != 0:
                     print("\n> Using sky image provided to substract sky, considering a scale of", scale_sky_rss, "...")
                     self.sky_emission = scale_sky_rss * sky_rss.intensity_corrected
@@ -3245,7 +3240,7 @@ class KOALA_RSS(RSS):
                             highhigh=highhigh,
                         )  # fmin=-5.0E-17, fmax=2.0E-16,
 
-                        scale_per_fibre[fibre_sky] = old_div(skyline_spec[3], skyline_sky[3])
+                        scale_per_fibre[fibre_sky] = old_div(skyline_spec[3], skyline_sky[3])    # TODO: get data for 2D and test if can remove
                         self.sky_emission[fibre_sky] = skyline_sky[11]
 
                     if sky_line_2 != 0:
@@ -3278,7 +3273,7 @@ class KOALA_RSS(RSS):
                             )  # fmin=-5.0E-17, fmax=2.0E-16,
 
                             scale_per_fibre_2[fibre_sky] = (
-                                old_div(skyline_spec[3], skyline_sky[3])
+                                old_div(skyline_spec[3], skyline_sky[3])  # TODO: get data for 2D and test if can remove
                             )
                             self.sky_emission[fibre_sky] = skyline_sky[11]
 
@@ -3288,7 +3283,7 @@ class KOALA_RSS(RSS):
                         self.sky_emission = self.sky_emission * scale_sky_rss
                     else:
                         scale_sky_rss = np.nanmedian(
-                            old_div((scale_per_fibre + scale_per_fibre_2), 2)
+                            old_div((scale_per_fibre + scale_per_fibre_2), 2)  # TODO: get data for 2D and test if can remove
                         )
                         # Make linear fit
                         scale_sky_rss_1 = np.nanmedian(scale_per_fibre)
@@ -3305,7 +3300,7 @@ class KOALA_RSS(RSS):
                         ), "]")
 
                         b = old_div((scale_sky_rss_1 - scale_sky_rss_2), (
-                            sky_line - sky_line_2
+                            sky_line - sky_line_2   # TODO: get data for 2D and test if can remove
                         ))
                         a = scale_sky_rss_1 - b * sky_line
                         # ,a+b*sky_line,a+b*sky_line_2
@@ -3386,8 +3381,8 @@ class KOALA_RSS(RSS):
             print("  Median filter applied, results stored in self.intensity_corrected !")
 
         # Get airmass and correct for extinction AFTER SKY SUBTRACTION
-        ZD = old_div((self.ZDSTART + self.ZDEND), 2)
-        self.airmass = old_div(1, np.cos(np.radians(ZD)))
+        ZD = (self.ZDSTART + self.ZDEND)/2
+        self.airmass = 1/np.cos(np.radians(ZD))
         self.extinction_correction = np.ones(self.n_wave)
         if do_extinction:
             self.do_extinction_curve(pth.join(DATA_PATH, "ssoextinct.dat"), plot=plot)
@@ -3493,14 +3488,16 @@ class KOALA_RSS(RSS):
             if id_el:
                 print("\n> Checking if identified emission lines agree with list provided")
                 # Read list with all emission lines to get the name of emission lines
-                emission_line_file = "lineas_c89_python.dat"
+                import os
+                print("SM3", os.getcwd())
+                emission_line_file = "data/lineas_c89_python.dat"
                 el_center, el_name = read_table(emission_line_file, ["f", "s"])
 
                 # Find brightest line to get redshift
                 for i in range(len(self.el[0])):
                     if self.el[0][i] == brightest_line:
                         obs_wave = self.el[2][i]
-                        redshift = old_div((self.el[2][i] - self.el[1][i]), self.el[1][i])
+                        redshift = (self.el[2][i] - self.el[1][i])/self.el[1][i]
                 print("  Brightest emission line", brightest_line, "found at ", obs_wave, ", redshift = ", redshift)
 
                 el_identified = [[], [], [], []]
@@ -5511,7 +5508,7 @@ def fit_Moffat(
 # -----------------------------------------------------------------------------
 def KOALA_offsets(s, pa):
     print("\n> Offsets towards North and East between pointings," "according to KOALA manual, for pa =", pa, "degrees")
-    pa *= old_div(np.pi, 180)
+    pa *= np.pi/180
     print("  a -> b :", s * np.sin(pa), -s * np.cos(pa))
     print("  a -> c :", -s * np.sin(60 - pa), -s * np.cos(60 - pa))
     print("  b -> d :", -np.sqrt(3) * s * np.cos(pa), -np.sqrt(3) * s * np.sin(pa))
