@@ -399,19 +399,20 @@ class RSS(object):
             running_wave = []
             running_step_median = []
             cuts = np.int(self.n_wave/step)  # using np.int instead of // for improved readability
-            for corte in range(cuts):
-                if corte == 0:
+            for cut in range(cuts):
+                if cut == 0:
                     next_wave = wave_min
                 else:
                     next_wave = np.nanmedian(
-                        (wlm[np.int(corte * step)] + wlm[np.int((corte + 1) * step)])/2
+                        (wlm[np.int(cut * step)] + wlm[np.int((cut + 1) * step)])/2
                     )
+
                 if next_wave < wave_max:
                     running_wave.append(next_wave)
-                    # print("SEARCHFORME1", step, running_wave[corte])
+                    # print("SEARCHFORME1", step, running_wave[cut])
                     region = np.where(
-                        (wlm > running_wave[corte] - old_div(step, 2))   # TODO: check //
-                        & (wlm < running_wave[corte] + old_div(step, 2))   # TODO: check //
+                        (wlm > running_wave[cut] - np.int(step/2))   # step/2 doesn't need to be an int, but probably
+                        & (wlm < running_wave[cut] + np.int(step/2))   # want it to be so the cuts are uniform.
                     )
                     # print('SEARCHFORME3', region)
                     running_step_median.append(
@@ -466,7 +467,7 @@ class RSS(object):
                                   "in fibre", fibre,
                                   "w =", wlm[wave],
                                   "value=", s[wave],
-                                  "v/median=", old_div(s[wave], fit_median[wave]))  # " median=",fit_median[wave]
+                                  "v/median=", s[wave]/fit_median[wave])  # " median=",fit_median[wave]
                         s[wave] = fit_median[wave]
 
             if fibre == fibre_p:
@@ -549,7 +550,7 @@ class RSS(object):
                 if skip == 0:
                     median_value = np.nanmedian(
                         self.integrated_fibre[
-                            fibre - np.int(old_div(step_f, 2)): fibre + np.int(old_div(step_f, 2))  # TODO: check //
+                            fibre - np.int(step_f/2): fibre + np.int(step_f/2)  # np.int is used instead of // of readability
                         ]
                     )
                 median_running.append(median_value)
@@ -581,7 +582,7 @@ class RSS(object):
             print("  Skyline 5578 has been removed. Checking throughput correction...")
             flux_5578_medfilt = sig.medfilt(flux_5578, np.int(5))
             median_flux_5578_medfilt = np.nanmedian(flux_5578_medfilt)
-            extra_throughput_correction = old_div(flux_5578_medfilt, median_flux_5578_medfilt)  # TODO: check \\, need blue
+            extra_throughput_correction = old_div(flux_5578_medfilt, median_flux_5578_medfilt)  # TODO: check \\, need blue data and routine in main
             # plt.plot(extra_throughput_correction)
             # plt.show()
             # plt.close()
@@ -1290,7 +1291,7 @@ class RSS(object):
 
                 ratio_object_sky_sl_gaussian.append(
                     old_div(object_sl_gaussian_flux[i], sl_gaussian_flux[i])
-                )
+                )  # TODO: to remove once sky_line_fitting is active and we can do 1Dfit
 
             # Scale sky lines that are located in emission lines or provided negative values in fit
             # reference_sl = 1 # Position in the file! Position 1 is sky line 6363.4
@@ -2242,6 +2243,7 @@ class RSS(object):
         right_max,
         list_spectra=[],
     ):
+        # TODO: can remove old_div once this function is understood, currently not called in whole module.
         if len(list_spectra) == 0:
             list_spectra = list(range(self.n_spectra))
 
@@ -2383,7 +2385,7 @@ class RSS(object):
         plt.xlim(self.wavelength[0] - 10, self.wavelength[-1] + 10)
         plt.axvline(x=self.valid_wave_min, color="k", linestyle="--")
         plt.axvline(x=self.valid_wave_max, color="k", linestyle="--")
-        plt.ylim([I_ymin - old_div(I_rango, 10), I_ymax + old_div(I_rango, 10)])
+        plt.ylim([I_ymin - (I_rango/10), I_ymax + (I_rango/10)])
         plt.title(
             self.object
             + " - Combined spectrum - "
