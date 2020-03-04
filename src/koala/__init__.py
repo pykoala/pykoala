@@ -5462,13 +5462,13 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
 # -----------------------------------------------------------------------------
 def running_mean(x, N):
     cumsum = np.cumsum(np.insert(x, 0, 0))
-    return old_div((cumsum[N:] - cumsum[:-N]), N)
+    return (cumsum[N:] - cumsum[:-N])/N
 
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def cumulaive_Moffat(r2, L_star, alpha2, beta):
-    return L_star * (1 - np.power(1 + (old_div(r2, alpha2)), -beta))
+    return L_star * (1 - np.power(1 + (r2/alpha2), -beta))
 
 
 # -----------------------------------------------------------------------------
@@ -5493,10 +5493,10 @@ def fit_Moffat(
         print("Best-fit: L_star =", fit[0])
         print("          alpha =", np.sqrt(fit[1]))
         print("          beta =", fit[2])
-        r_norm = np.sqrt(old_div(np.array(r2_growth_curve), r2_half_light))
+        r_norm = np.sqrt(np.array(r2_growth_curve)/r2_half_light)
         plt.plot(
             r_norm,
-            old_div(cumulaive_Moffat(np.array(r2_growth_curve), fit[0], fit[1], fit[2]), fit[0]),
+            cumulaive_Moffat(np.array(r2_growth_curve), fit[0], fit[1], fit[2])/fit[0],
             ":",
         )
 
@@ -6342,11 +6342,11 @@ class CUBE(RSS, Interpolated_cube):
         self.RA_centre_deg = RSS_fits_file[0].header["RAcen"]
         self.DEC_centre_deg = RSS_fits_file[0].header["DECcen"]
         self.PA = RSS_fits_file[0].header["PA"]
-        self.wavelength = RSS_fits_file[1].data
+        self.wavelength = RSS_fits_file[1].data   # TODO: why is this 1? shouldn't it be [0], maybe cause we are doing the biggest variance?
         self.flux_calibration = RSS_fits_file[2].data
         self.n_wave = len(self.wavelength)
         self.data = RSS_fits_file[0].data
-        self.wave_resolution = old_div((self.wavelength[-1] - self.wavelength[0]), self.n_wave)
+        self.wave_resolution = (self.wavelength[-1] - self.wavelength[0])/self.n_wave
 
         self.n_cols = RSS_fits_file[0].header["Ncols"]
         self.n_rows = RSS_fits_file[0].header["Nrows"]
@@ -6626,7 +6626,7 @@ class CUBE(RSS, Interpolated_cube):
             spectrum = self.data[:, x, y]
             ylabel = "Flux [relative units]"
         else:
-            spectrum = old_div(old_div(self.data[:, x, y], self.flux_calibration), 1e16)
+            spectrum = (self.data[:, x, y]/self.flux_calibration)/1e16
             # ylabel="Flux [ 10$^{-16}$ * erg cm$^{-2}$ s$^{-1}$ A$^{-1}$]"
             ylabel = "Flux [ erg cm$^{-2}$ s$^{-1}$ A$^{-1}$]"
         # Remove NaN values from spectrum and replace them with zero.
@@ -6696,7 +6696,7 @@ class CUBE(RSS, Interpolated_cube):
         if fcal == False:
             spectrum = self.data[:, x, y]
         else:
-            spectrum = old_div(old_div(self.data[:, x, y], self.flux_calibration), 1e16)
+            spectrum = (self.data[:, x, y]/self.flux_calibration)/1e16
             spectrum = np.nan_to_num(spectrum)
         subSpectrum = self.subtractContinuum(spectrum)
         aValues = []
@@ -6713,7 +6713,7 @@ class CUBE(RSS, Interpolated_cube):
             tempIndex = tempIndex + 1
         bMax = np.nanmax(bValues)
 
-        return old_div(aMax, bMax)
+        return aMax/bMax
 
     def createRatioMap(self, aStart, aEnd, bStart, bEnd, fcal=False):
         xLength = len(self.data[0, :, 0])
@@ -6729,7 +6729,7 @@ class CUBE(RSS, Interpolated_cube):
                 if fcal == False:
                     spectrum = self.data[:, x, y]
                 else:
-                    spectrum = old_div(old_div(self.data[:, x, y], self.flux_calibration), 1e16)
+                    spectrum = (self.data[:, x, y]/self.flux_calibration)/1e16
                 spectrum = np.nan_to_num(spectrum)
                 subSpectrum = self.subtractContinuum(spectrum)
                 subAvg = np.average(subSpectrum)
@@ -6749,7 +6749,7 @@ class CUBE(RSS, Interpolated_cube):
                 bMax = np.nanmax(bValues)
 
                 if aMax > subAvg and bMax > subAvg:
-                    ratio = old_div(aMax, bMax)
+                    ratio = aMax/bMax
                 else:
                     ratio = 0
                 ratioMap[x][y] = ratio
@@ -6763,7 +6763,7 @@ class CUBE(RSS, Interpolated_cube):
 
 def gauss(x, x0, y0, sigma):
     p = [x0, y0, sigma]
-    return p[1] * np.exp(-0.5 * (old_div((x - p[0]), p[2])) ** 2)
+    return p[1] * np.exp(-0.5 * ((x - p[0])/p[2]) ** 2)
 
 
 def gauss_fix_x0(x, x0, y0, sigma):
@@ -6777,7 +6777,7 @@ def gauss_fix_x0(x, x0, y0, sigma):
         sigma (float): Gaussian width
     """
     p = [y0, sigma]
-    return p[0] * np.exp(-0.5 * (old_div((x - x0), p[1])) ** 2)
+    return p[0] * np.exp(-0.5 * ((x - x0)/p[1]) ** 2)
 
 
 def gauss_flux(y0, sigma):  # THIS DOES NOT WORK...
@@ -6820,12 +6820,12 @@ def substract_given_gaussian(
 
     if peak == 0 and flux != 0 and sigma != 0:
         # flux = peak * sigma * np.sqrt(2*np.pi)
-        peak = old_div(flux, (sigma * np.sqrt(2 * np.pi)))
+        peak = flux/(sigma * np.sqrt(2 * np.pi))
         do_it = True
 
     if sigma == 0 and flux != 0 and peak != 0:
         # flux = peak * sigma * np.sqrt(2*np.pi)
-        sigma = old_div(flux, (peak * np.sqrt(2 * np.pi)))
+        sigma = flux/(peak * np.sqrt(2 * np.pi))
         do_it = True
 
     if flux == 0 and sigma != 0 and peak != 0:
@@ -7188,18 +7188,18 @@ def fluxes(
         median_w_cont_high = np.nanmedian(w_cont_high)
         median_f_cont_high = np.nanmedian(f_cont_high)
 
-        b = old_div((median_f_cont_low - median_f_cont_high), (
+        b = (median_f_cont_low - median_f_cont_high)/(
             median_w_cont_low - median_w_cont_high
-        ))
+        )
         a = median_f_cont_low - b * median_w_cont_low
 
         continuum = a + b * np.array(w_spec)
         c_cont = b * np.array(w_cont) + a
 
     # rms continuum
-    rms_cont = old_div(np.nansum(
+    rms_cont = np.nansum(
         [np.abs(f_cont[i] - c_cont[i]) for i in range(len(w_cont))]
-    ), len(c_cont))
+    )/len(c_cont)
 
     # Search for index here w_spec(index) closest to line
     min_w = np.abs(np.array(w_spec) - line)
@@ -7232,13 +7232,13 @@ def fluxes(
     ws = []
     for ii in range(len(w_fit) - 1, 1, -1):
         if (
-            old_div(f_fit[ii], c_fit[ii]) < 1.05
-            and old_div(f_fit[ii - 1], c_fit[ii - 1]) < 1.05
+            (f_fit[ii]/c_fit[ii]) < 1.05
+            and (f_fit[ii - 1]/c_fit[ii - 1]) < 1.05
             and low_limit == 0
         ):
             low_limit = w_fit[ii]
         #        if f_fit[ii]/c_fit[ii] < 1.05 and low_limit == 0: low_limit = w_fit[ii]
-        fs.append(old_div(f_fit[ii], c_fit[ii]))
+        fs.append(f_fit[ii]/c_fit[ii])
         ws.append(w_fit[ii])
     if low_limit == 0:
         sorted_by_flux = np.argsort(fs)
@@ -7267,13 +7267,13 @@ def fluxes(
     ws = []
     for ii in range(len(w_fit) - 1):
         if (
-            old_div(f_fit[ii], c_fit[ii]) < 1.05
-            and old_div(f_fit[ii + 1], c_fit[ii + 1]) < 1.05
+            (f_fit[ii]/c_fit[ii]) < 1.05
+            and (f_fit[ii + 1]/c_fit[ii + 1]) < 1.05
             and high_limit == 0
         ):
             high_limit = w_fit[ii]
         #        if f_fit[ii]/c_fit[ii] < 1.05 and high_limit == 0: high_limit = w_fit[ii]
-        fs.append(old_div(f_fit[ii], c_fit[ii]))
+        fs.append(f_fit[ii], c_fit[ii])
         ws.append(w_fit[ii])
     if high_limit == 0:
         sorted_by_flux = np.argsort(fs)
@@ -7342,7 +7342,7 @@ def fluxes(
         residuals = f_spec - gaussian_fit - continuum
         rms_fit = np.nansum(
             [
-                (old_div((residuals[i] ** 2), (len(residuals) - 2))) ** 0.5
+                ((residuals[i] ** 2)/(len(residuals) - 2)) ** 0.5
                 for i in range(len(w_spec))
                 if (w_spec[i] >= low_limit and w_spec[i] <= high_limit)
             ]
@@ -7352,15 +7352,15 @@ def fluxes(
         gaussian_flux = gauss_flux(fit[1], fit[2])
         error1 = np.abs(gauss_flux(fit[1] + fit_error[1], fit[2]) - gaussian_flux)
         error2 = np.abs(gauss_flux(fit[1], fit[2] + fit_error[2]) - gaussian_flux)
-        gaussian_flux_error = old_div(1, (old_div(1, error1 ** 2) + old_div(1, error2 ** 2)) ** 0.5)
+        gaussian_flux_error = (1/((1/error1 ** 2) + (1/error2 ** 2)) ** 0.5)
 
         fwhm = fit[2] * 2.355
         fwhm_error = fit_error[2] * 2.355
-        fwhm_vel = old_div(fwhm, fit[0]) * C
-        fwhm_vel_error = old_div(fwhm_error, fit[0]) * C
+        fwhm_vel = (fwhm/fit[0]) * C
+        fwhm_vel_error = (fwhm_error/fit[0]) * C
 
-        gaussian_ew = old_div(gaussian_flux, np.nanmedian(f_cont))
-        gaussian_ew_error = old_div(gaussian_ew * gaussian_flux_error, gaussian_flux)
+        gaussian_ew = gaussian_flux/np.nanmedian(f_cont)
+        gaussian_ew_error = gaussian_ew * gaussian_flux_error/gaussian_flux
 
         # Integrated flux
         # IRAF: flux = sum ((I(i)-C(i)) * (w(i2) - w(i1)) / (i2 - i2)
@@ -7372,16 +7372,16 @@ def fluxes(
             ]
         )
         flux_error = rms_cont * (high_limit - low_limit)
-        wave_resolution = old_div((wavelength[-1] - wavelength[0]), len(wavelength))
+        wave_resolution = (wavelength[-1] - wavelength[0])/len(wavelength)
         ew = wave_resolution * np.nansum(
             [
-                (1 - old_div(f_spec[i], continuum[i]))
+                (1 - (f_spec[i]/continuum[i]))
                 for i in range(len(w_spec))
                 if (w_spec[i] >= low_limit and w_spec[i] <= high_limit)
             ]
         )
-        ew_error = np.abs(old_div(ew * flux_error, flux))
-        gauss_to_integrated = old_div(gaussian_flux, flux) * 100.0
+        ew_error = np.abs(ew * flux_error/flux)
+        gauss_to_integrated = (gaussian_flux/flux) * 100.0
 
         # Plotting
         if plot:
@@ -7441,8 +7441,8 @@ def fluxes(
                 fit_error[0],
             ))
             print("                         y0 = ( %.3f +- %.3f )  1E-16 erg/cm2/s/A" % (
-                old_div(fit[1], 1e-16),
-                old_div(fit_error[1], 1e-16),
+                (fit[1]/1e-16),
+                (fit_error[1]/1e-16),
             ))
             print("                      sigma = ( %.3f +- %.3f )  A" % (
                 fit[2],
@@ -7450,9 +7450,9 @@ def fluxes(
             ))
             print("                    rms fit = %.3e erg/cm2/s/A" % (rms_fit))
             print("Gaussian Flux = ( %.2f +- %.2f ) 1E-16 erg/s/cm2         (error = %.1f per cent)" % (
-                old_div(gaussian_flux, 1e-16),
-                old_div(gaussian_flux_error, 1e-16),
-                old_div(gaussian_flux_error, gaussian_flux) * 100,
+                (gaussian_flux/1e-16),
+                (gaussian_flux_error/1e-16),
+                (gaussian_flux_error/gaussian_flux) * 100,
             ))
             print("FWHM          = ( %.3f +- %.3f ) A    =   ( %.1f +- %.1f ) km/s " % (
                 fwhm,
@@ -7465,9 +7465,9 @@ def fluxes(
                 gaussian_ew_error,
             ))
             print("\nIntegrated flux  = ( %.2f +- %.2f ) 1E-16 erg/s/cm2      (error = %.1f per cent) " % (
-                old_div(flux, 1e-16),
-                old_div(flux_error, 1e-16),
-                old_div(flux_error, flux) * 100,
+                (flux/1e-16),
+                (flux_error/1e-16),
+                (flux_error/flux) * 100,
             ))
             print("Eq. Width        = ( %.1f +- %.1f ) A" % (ew, ew_error))
             print("Gauss/Integrated = %.2f per cent " % gauss_to_integrated)
@@ -7590,8 +7590,8 @@ def fluxes(
 def dgauss(x, x0, y0, sigma0, x1, y1, sigma1):
     p = [x0, y0, sigma0, x1, y1, sigma1]
     #         0   1    2      3    4  5
-    return p[1] * np.exp(-0.5 * (old_div((x - p[0]), p[2])) ** 2) + p[4] * np.exp(
-        -0.5 * (old_div((x - p[3]), p[5])) ** 2
+    return p[1] * np.exp(-0.5 * ((x - p[0])/p[2]) ** 2) + p[4] * np.exp(
+        -0.5 * ((x - p[3])/p[5]) ** 2
     )
 
 
@@ -7772,7 +7772,7 @@ def dfluxes(
         median_w_cont_high = np.nanmedian(w_cont_high)
         median_f_cont_high = np.nanmedian(f_cont_high)
 
-        b = old_div((median_f_cont_low - median_f_cont_high), (
+        b = ((median_f_cont_low - median_f_cont_high)/(
             median_w_cont_low - median_w_cont_high
         ))
         a = median_f_cont_low - b * median_w_cont_low
@@ -7781,9 +7781,9 @@ def dfluxes(
         c_cont = b * np.array(w_cont) + a
 
     # rms continuum
-    rms_cont = old_div(np.nansum(
+    rms_cont = (np.nansum(
         [np.abs(f_cont[i] - c_cont[i]) for i in range(len(w_cont))]
-    ), len(c_cont))
+    )/len(c_cont))
 
     # Search for index here w_spec(index) closest to line
     min_w = np.abs(np.array(w_spec) - line1)
@@ -7823,13 +7823,13 @@ def dfluxes(
     ws = []
     for ii in range(len(w_fit) - 1, 1, -1):
         if (
-            old_div(f_fit[ii], c_fit[ii]) < 1.05
-            and old_div(f_fit[ii - 1], c_fit[ii - 1]) < 1.05
+            (f_fit[ii]/c_fit[ii]) < 1.05
+            and (f_fit[ii - 1]/c_fit[ii - 1]) < 1.05
             and low_limit == 0
         ):
             low_limit = w_fit[ii]
         #        if f_fit[ii]/c_fit[ii] < 1.05 and low_limit == 0: low_limit = w_fit[ii]
-        fs.append(old_div(f_fit[ii], c_fit[ii]))
+        fs.append((f_fit[ii]/c_fit[ii]))
         ws.append(w_fit[ii])
     if low_limit == 0:
         sorted_by_flux = np.argsort(fs)
@@ -7858,13 +7858,13 @@ def dfluxes(
     ws = []
     for ii in range(len(w_fit) - 1):
         if (
-            old_div(f_fit[ii], c_fit[ii]) < 1.05
-            and old_div(f_fit[ii + 1], c_fit[ii + 1]) < 1.05
+            (f_fit[ii]/c_fit[ii]) < 1.05
+            and (f_fit[ii + 1]/c_fit[ii + 1]) < 1.05
             and high_limit == 0
         ):
             high_limit = w_fit[ii]
         #        if f_fit[ii]/c_fit[ii] < 1.05 and high_limit == 0: high_limit = w_fit[ii]
-        fs.append(old_div(f_fit[ii], c_fit[ii]))
+        fs.append((f_fit[ii]/c_fit[ii]))
         ws.append(w_fit[ii])
     if high_limit == 0:
         sorted_by_flux = np.argsort(fs)
@@ -7952,7 +7952,7 @@ def dfluxes(
         residuals = f_spec - gaussian_fit - continuum
         rms_fit = np.nansum(
             [
-                (old_div((residuals[i] ** 2), (len(residuals) - 2))) ** 0.5
+                (((residuals[i] ** 2)/(len(residuals) - 2))) ** 0.5
                 for i in range(len(w_spec))
                 if (w_spec[i] >= low_limit and w_spec[i] <= high_limit)
             ]
@@ -7962,15 +7962,15 @@ def dfluxes(
         gaussian_flux = gauss_flux(fit[1], fit[2])
         error1 = np.abs(gauss_flux(fit[1] + fit_error[1], fit[2]) - gaussian_flux)
         error2 = np.abs(gauss_flux(fit[1], fit[2] + fit_error[2]) - gaussian_flux)
-        gaussian_flux_error = old_div(1, (old_div(1, error1 ** 2) + old_div(1, error2 ** 2)) ** 0.5)
+        gaussian_flux_error = (1/((1/error1 ** 2) + (1/error2 ** 2)) ** 0.5)
 
         fwhm = fit[2] * 2.355
         fwhm_error = fit_error[2] * 2.355
-        fwhm_vel = old_div(fwhm, fit[0]) * C
-        fwhm_vel_error = old_div(fwhm_error, fit[0]) * C
+        fwhm_vel = (fwhm/fit[0]) * C
+        fwhm_vel_error = (fwhm_error/fit[0]) * C
 
-        gaussian_ew = old_div(gaussian_flux, np.nanmedian(f_cont))
-        gaussian_ew_error = old_div(gaussian_ew * gaussian_flux_error, gaussian_flux)
+        gaussian_ew = (gaussian_flux/np.nanmedian(f_cont))
+        gaussian_ew_error = (gaussian_ew * gaussian_flux_error/gaussian_flux)
 
         # Integrated flux
         # IRAF: flux = sum ((I(i)-C(i)) * (w(i2) - w(i1)) / (i2 - i2)
@@ -7982,16 +7982,16 @@ def dfluxes(
             ]
         )
         flux_error = rms_cont * (high_limit - low_limit)
-        wave_resolution = old_div((wavelength[-1] - wavelength[0]), len(wavelength))
+        wave_resolution = ((wavelength[-1] - wavelength[0])/len(wavelength))
         ew = wave_resolution * np.nansum(
             [
-                (1 - old_div(f_spec[i], continuum[i]))
+                (1 - (f_spec[i]/continuum[i]))
                 for i in range(len(w_spec))
                 if (w_spec[i] >= low_limit and w_spec[i] <= high_limit)
             ]
         )
-        ew_error = np.abs(old_div(ew * flux_error, flux))
-        gauss_to_integrated = old_div(gaussian_flux, flux) * 100.0
+        ew_error = np.abs((ew * flux_error/flux))
+        gauss_to_integrated = (gaussian_flux/flux) * 100.0
 
         # Plotting
         if plot:
@@ -8003,7 +8003,7 @@ def dfluxes(
                 plt.ylabel("Flux [ erg cm$^{-2}$ s$^{-1}$ A$^{-1}$]")
             else:
                 plt.ylabel("Flux [ counts ]")
-            plt.xlim(old_div((line1 + line2), 2) - 40, old_div((line1 + line2), 2) + 40)
+            plt.xlim(((line1 + line2)/2) - 40, ((line1 + line2)/2) + 40)
             plt.ylim(fmin, fmax)
 
             # Vertical line at guess_centre
@@ -8054,8 +8054,8 @@ def dfluxes(
                 fit_error[0],
             ))
             print("                         y0 = ( %.3f +- %.3f )  1E-16 erg/cm2/s/A" % (
-                old_div(fit[1], 1e-16),
-                old_div(fit_error[1], 1e-16),
+                (fit[1]/1e-16),
+                (fit_error[1]/1e-16),
             ))
             print("                      sigma = ( %.3f +- %.3f )  A" % (
                 fit[2],
@@ -8063,9 +8063,9 @@ def dfluxes(
             ))
             print("                    rms fit = %.3e erg/cm2/s/A" % (rms_fit))
             print("Gaussian Flux = ( %.2f +- %.2f ) 1E-16 erg/s/cm2         (error = %.1f per cent)" % (
-                old_div(gaussian_flux, 1e-16),
-                old_div(gaussian_flux_error, 1e-16),
-                old_div(gaussian_flux_error, gaussian_flux) * 100,
+                (gaussian_flux/1e-16),
+                (gaussian_flux_error/1e-16),
+                (gaussian_flux_error/gaussian_flux) * 100,
             ))
             print("FWHM          = ( %.3f +- %.3f ) A    =   ( %.1f +- %.1f ) km/s " % (
                 fwhm,
@@ -8078,9 +8078,9 @@ def dfluxes(
                 gaussian_ew_error,
             ))
             print("\nIntegrated flux  = ( %.2f +- %.2f ) 1E-16 erg/s/cm2      (error = %.1f per cent) " % (
-                old_div(flux, 1e-16),
-                old_div(flux_error, 1e-16),
-                old_div(flux_error, flux) * 100,
+                (flux/1e-16),
+                (flux_error/1e-16),
+                (flux_error/flux) * 100,
             ))
             print("Eq. Width        = ( %.1f +- %.1f ) A" % (ew, ew_error))
             print("Gauss/Integrated = %.2f per cent " % gauss_to_integrated)
@@ -8299,7 +8299,7 @@ def search_peaks(
 
     # Fit a smooth continuum
     # smooth_points = 20      # Points in the interval
-    step = np.int(old_div(len(wavelength), smooth_points))  # step
+    step = np.int((len(wavelength)/smooth_points))  # step
     w_cont_smooth = np.zeros(smooth_points)
     f_cont_smooth = np.zeros(smooth_points)
 
@@ -8327,7 +8327,7 @@ def search_peaks(
         wavelength, interpolated_continuum_smooth, der=0
     )
 
-    funcion = old_div(flux, interpolated_continuum)
+    funcion = (flux/interpolated_continuum)
 
     # Searching for peaks using cut = 1.2 by default
     peaks = []
@@ -8381,7 +8381,7 @@ def search_peaks(
     # Estimate redshift of the brightest line ( Halpha line by default)
     Ha_index_list = el_name.tolist().index(brightest_line)
     Ha_w_rest = el_center[Ha_index_list]
-    Ha_redshift = old_div((Ha_w_obs - Ha_w_rest), Ha_w_rest)
+    Ha_redshift = ((Ha_w_obs - Ha_w_rest)/Ha_w_rest)
     if verbose:
         print("\n> Detected %i emission lines using %8s at %8.2f A as brightest line!!\n" % (
             len(peaks),
@@ -8401,12 +8401,12 @@ def search_peaks(
     peaks_highhigh = np.zeros(len(peaks))
 
     for i in range(len(peaks)):
-        minimo_w = np.abs(old_div(peaks[i], (1 + Ha_redshift)) - el_center)
+        minimo_w = np.abs((peaks[i]/(1 + Ha_redshift)) - el_center)
         if np.nanmin(minimo_w) < 2.5:
             indice = minimo_w.tolist().index(np.nanmin(minimo_w))
             peaks_name[i] = el_name[indice]
             peaks_rest[i] = el_center[indice]
-            peaks_redshift[i] = old_div((peaks[i] - el_center[indice]), el_center[indice])
+            peaks_redshift[i] = ((peaks[i] - el_center[indice])/el_center[indice])
             peaks_lowlow[i] = el_lowlow[indice]
             peaks_lowhigh[i] = el_lowhigh[indice]
             peaks_highlow[i] = el_highlow[indice]
@@ -8447,8 +8447,8 @@ def search_peaks(
                             cut,
                             peaks,
                             peaks_name,
-                            label)  # TODO: label is unreferenced.
-
+                            #label)  # TODO: label is unreferenced.
+        )
     continuum_limits = [peaks_lowlow, peaks_lowhigh, peaks_highlow, peaks_highhigh]
 
     if only_id_lines:
@@ -8512,7 +8512,7 @@ def smooth_spectrum(
 
     running_wave = []
     running_step_median = []
-    cuts = np.int(old_div((wave_max - wave_min), step))
+    cuts = np.int(((wave_max - wave_min)/step))
 
     exclude = 0
     corte_index = -1
@@ -8540,8 +8540,8 @@ def smooth_spectrum(
                 running_wave.append(next_wave)
                 # print running_wave
                 region = np.where(
-                    (wlm > running_wave[corte_index] - old_div(step, 2))
-                    & (wlm < running_wave[corte_index] + old_div(step, 2))
+                    (wlm > running_wave[corte_index] - np.int(step/2))
+                    & (wlm < running_wave[corte_index] + np.int(step/2))
                 )
                 running_step_median.append(np.nanmedian(s[region]))
                 if next_wave > exclude_wlm[exclude][1]:
@@ -8776,16 +8776,16 @@ def scale_sky_spectrum(
         object_spectrum_data = np.nanmedian(object_spectrum_data_gauss)
         object_spectrum_data_i = np.nanmedian(object_spectrum_data_integrated)
 
-        if fmin < old_div(object_spectrum_data, sky_spectrum_data[3]) < fmax:
+        if fmin < (object_spectrum_data/sky_spectrum_data[3]) < fmax:
             n_sky_lines_found = n_sky_lines_found + 1
             valid_peaks.append(peaks[i])
-            ratio_list.append(old_div(object_spectrum_data, sky_spectrum_data[3]))
+            ratio_list.append(object_spectrum_data/sky_spectrum_data[3])
             if verbose:
                 print("{:3.0f}   {:5.3f}         {:2.3f}             {:2.3f}".format(
                     n_sky_lines_found,
                     peaks[i],
-                    old_div(object_spectrum_data, sky_spectrum_data[3]),
-                    old_div(object_spectrum_data_i, sky_spectrum_data[7]),
+                    (object_spectrum_data/sky_spectrum_data[3]),
+                    (object_spectrum_data_i/sky_spectrum_data[7]),
                 ))
 
     # print "ratio_list =", ratio_list
@@ -9008,7 +9008,7 @@ def offset_positions(
     else:
         dec2 = dec2d + dec2m / 60.0 + dec2s / 3600.0
 
-    avdec = old_div((dec1 + dec2), 2)
+    avdec = (dec1 + dec2)/2
 
     deltadec = round(3600.0 * (dec2 - dec1), decimals)
     deltara = round(15 * 3600.0 * (ra2 - ra1) * (np.cos(np.radians(avdec))), decimals)
@@ -9155,7 +9155,7 @@ def compare_fix_2dfdr_wavelengths(rss1, rss2):
     )
 
     resolution = rss1.wavelength[1] - rss1.wavelength[0]
-    error = old_div(np.nanmedian(dif), resolution) * 100.0
+    error = (np.nanmedian(dif)/resolution) * 100.0
     print("\n> The median rms is {:8.6f} A,  resolution = {:5.2f} A,  error = {:5.3} %".format(
         np.nanmedian(dif), resolution, error
     ))
