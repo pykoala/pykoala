@@ -134,7 +134,7 @@ def plot_correction_in_fibre_p_fibre(fig_size,
     return fig
 
 
-def plot_suspicious_fibres(suspicious_fibres,
+def plot_suspicious_fibres_graph(self, suspicious_fibres,
                            fig_size,
                            wave_min,
                            wave_max,

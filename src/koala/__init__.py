@@ -40,7 +40,7 @@ import scipy.signal as sig
 
 from .utils.plots import (
     plot_redshift_peaks, plot_weights_for_getting_smooth_spectrum,
-    plot_correction_in_fibre_p_fibre, plot_suspicious_fibres, plot_skyline_5578,
+    plot_correction_in_fibre_p_fibre, plot_suspicious_fibres_graph, plot_skyline_5578,
     plot_offset_between_cubes, plot_response, plot_telluric_correction,
 )
 from ._version import get_versions
@@ -572,11 +572,13 @@ class RSS(object):
 
         if plot_suspicious_fibres == True and len(suspicious_fibres) > 0:
             # Plotting suspicious fibres..
-            figures = plot_suspicious_fibres(suspicious_fibres,
-                                   fig_size,
-                                   wave_min,
-                                   wave_max,
-                                   intensity_corrected_fiber=self.intensity_corrected)
+            figures = plot_suspicious_fibres_graph(
+                self,
+                suspicious_fibres,
+                fig_size,
+                wave_min,
+                wave_max,
+                intensity_corrected_fiber=self.intensity_corrected)
 
         if remove_5578 and wave_min < 5578:
             print("  Skyline 5578 has been removed. Checking throughput correction...")
