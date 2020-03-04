@@ -3764,7 +3764,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         self.pixel_size_arcsec = pixel_size_arcsec
         self.kernel_size_arcsec = kernel_size_arcsec
         self.kernel_size_pixels = (
-            old_div(kernel_size_arcsec, pixel_size_arcsec)
+            float(kernel_size_arcsec/pixel_size_arcsec)
         )  # must be a float number!
 
         self.wavelength = RSS.wavelength
@@ -3827,22 +3827,21 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             self.yoffset_centre_arcsec = (
                 self.DEC_centre_deg - RSS.DEC_centre_deg
             ) * 3600.0
-
         if len(size_arcsec) == 2:
-            self.n_cols = np.int(old_div(size_arcsec[0], self.pixel_size_arcsec)) + 2 * np.int(
-                old_div(self.kernel_size_arcsec, self.pixel_size_arcsec)
+            self.n_cols = np.int((size_arcsec[0]/self.pixel_size_arcsec)) + 2 * np.int(
+                (self.kernel_size_arcsec/self.pixel_size_arcsec)
             )
-            self.n_rows = np.int(old_div(size_arcsec[1], self.pixel_size_arcsec)) + 2 * np.int(
-                old_div(self.kernel_size_arcsec, self.pixel_size_arcsec)
+            self.n_rows = np.int((size_arcsec[1]/self.pixel_size_arcsec)) + 2 * np.int(
+                (self.kernel_size_arcsec/self.pixel_size_arcsec)
             )
         else:
             self.n_cols = (
                 2
                 * (
                     np.int(
-                        old_div(np.nanmax(
+                        (np.nanmax(
                             np.abs(RSS.offset_RA_arcsec - self.xoffset_centre_arcsec)
-                        ), self.pixel_size_arcsec)
+                        )/self.pixel_size_arcsec)
                     )
                     + np.int(self.kernel_size_pixels)
                 )
@@ -3852,9 +3851,9 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 2
                 * (
                     np.int(
-                        old_div(np.nanmax(
+                        (np.nanmax(
                             np.abs(RSS.offset_DEC_arcsec - self.yoffset_centre_arcsec)
-                        ), self.pixel_size_arcsec)
+                        )/self.pixel_size_arcsec)
                     )
                     + np.int(self.kernel_size_pixels)
                 )
@@ -3900,18 +3899,17 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                     sys.stdout.write("{:5.2f}%".format(i * 100.0 / RSS.n_spectra))
                     sys.stdout.flush()
                     next_output = i + output_every_few
-                offset_rows = old_div((
+                offset_rows = ((
                     RSS.offset_DEC_arcsec[i] - self.yoffset_centre_arcsec
-                ), pixel_size_arcsec)
-                offset_cols = old_div((
+                )/pixel_size_arcsec)
+                offset_cols = ((
                     -RSS.offset_RA_arcsec[i] + self.xoffset_centre_arcsec
-                ), pixel_size_arcsec)
+                )/pixel_size_arcsec)
                 corrected_intensity = RSS.intensity_corrected[i]
                 self.add_spectrum(
                     corrected_intensity, offset_rows, offset_cols, warnings=warnings
                 )
-
-            self.data = old_div(self._weighted_I, self._weight)
+            self.data = self._weighted_I/self._weight
             self.trace_peak(plot=plot)
 
             # Check flux calibration
@@ -3924,7 +3922,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 for x in range(self.n_rows):
                     for y in range(self.n_cols):
                         self.data[:, x, y] = (
-                            old_div(old_div(old_div(self.data[:, x, y], self.flux_calibration), 1e16), self.RSS.exptime)
+                            (((self.data[:, x, y]/self.flux_calibration)/1e16)/self.RSS.exptime)
                         )
             #                        plt.plot(self.wavelength,self.data[:,x,y]) #
             # ylabel="Flux [ erg cm$^{-2}$ s$^{-1}$ A$^{-1}$]"
@@ -3959,8 +3957,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         # First we check if it is needed (unless forced)...
 
         if (
-            self.ADR_x_max < old_div(self.pixel_size_arcsec, 2)
-            and self.ADR_y_max < old_div(self.pixel_size_arcsec, 2)
+            self.ADR_x_max < self.pixel_size_arcsec/2
+            and self.ADR_y_max < self.pixel_size_arcsec/2
         ):
             print("\n> Atmospheric Differential Refraction (ADR) correction is NOT needed.")
             print("  The computed max ADR values ({:.2f},{:.2f}) are smaller than half the pixel size of {:.2f} arcsec".format(
@@ -3997,16 +3995,16 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 tmp_shift = shift(
                     tmp_nonan,
                     [
-                        old_div(-2 * self.ADR_y[l], self.pixel_size_arcsec),
-                        old_div(-2 * self.ADR_x[l], self.pixel_size_arcsec),
+                        (-2 * self.ADR_y[l]/self.pixel_size_arcsec),
+                        (-2 * self.ADR_x[l]/self.pixel_size_arcsec),
                     ],
                     cval=np.nan,
                 )
                 mask_shift = shift(
                     mask,
                     [
-                        old_div(-2 * self.ADR_y[l], self.pixel_size_arcsec),
-                        old_div(-2 * self.ADR_x[l], self.pixel_size_arcsec),
+                        (-2 * self.ADR_y[l]/self.pixel_size_arcsec),
+                        (-2 * self.ADR_x[l]/self.pixel_size_arcsec),
                     ],
                     cval=np.nan,
                 )
@@ -4058,8 +4056,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         self.max_y, self.max_x = np.unravel_index(
             self.integrated_map.argmax(), self.integrated_map.shape
         )
-        self.spaxel_RA0 = old_div(self.n_cols, 2) + 1
-        self.spaxel_DEC0 = old_div(self.n_rows, 2) + 1
+        self.spaxel_RA0 = np.int(self.n_cols/2) + 1   # Using np.int for readability
+        self.spaxel_DEC0 = np.int(self.n_rows/2) + 1  # Using np.int for readability
         self.offset_from_center_x_arcsec_integrated = (
             self.max_x - self.spaxel_RA0 + 1
         ) * self.pixel_size_arcsec  # Offset from center using INTEGRATED map
@@ -4115,23 +4113,22 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         x_max = int(kernel_centre_x + self.kernel_size_pixels) + 1
         n_points_x = x_max - x_min
         x = (
-            old_div(np.linspace(x_min - kernel_centre_x, x_max - kernel_centre_x, n_points_x), self.kernel_size_pixels)
+            (np.linspace(x_min - kernel_centre_x, x_max - kernel_centre_x, n_points_x)/self.kernel_size_pixels)
         )
         x[0] = -1.0
         x[-1] = 1.0
-        weight_x = np.diff(old_div((3.0 * x - x ** 3 + 2.0), 4))
+        weight_x = np.diff(((3.0 * x - x ** 3 + 2.0)/4))
 
         kernel_centre_y = 0.5 * self.n_rows + offset_rows
         y_min = int(kernel_centre_y - self.kernel_size_pixels)
         y_max = int(kernel_centre_y + self.kernel_size_pixels) + 1
         n_points_y = y_max - y_min
         y = (
-            old_div(np.linspace(y_min - kernel_centre_y, y_max - kernel_centre_y, n_points_y), self.kernel_size_pixels)
+            (np.linspace(y_min - kernel_centre_y, y_max - kernel_centre_y, n_points_y)/self.kernel_size_pixels)
         )
         y[0] = -1.0
         y[-1] = 1.0
-        weight_y = np.diff(old_div((3.0 * y - y ** 3 + 2.0), 4))
-
+        weight_y = np.diff(((3.0 * y - y ** 3 + 2.0)/4))
         if x_min < 0 or x_max >= self.n_cols or y_min < 0 or y_max >= self.n_rows:
             if warnings:
                 print("**** WARNING **** : Spectra outside field of view:", x_min, kernel_centre_x, x_max)
@@ -4204,7 +4201,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 print("  Adding spaxel ", i + 2, " = [", x[i + 1], ",", y[i + 1], "]")
                 ylabel = "Flux [relative units]"
             if fcal:
-                spectrum = old_div(old_div(spectrum, self.flux_calibration), 1e16)
+                spectrum = (spectrum/self.flux_calibration)/1e16
                 ylabel = "Flux [ erg cm$^{-2}$ s$^{-1}$ A$^{-1}$]"
 
         # Set limits
@@ -4642,8 +4639,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         xw = x[np.newaxis, np.newaxis, :] * weight
         yw = y[np.newaxis, :, np.newaxis] * weight
         w = np.nansum(weight, axis=(1, 2))
-        self.x_peak = old_div(np.nansum(xw, axis=(1, 2)), w)
-        self.y_peak = old_div(np.nansum(yw, axis=(1, 2)), w)
+        self.x_peak = old_div(np.nansum(xw, axis=(1, 2)), w)  # TODO: function is never called, check once func. understood
+        self.y_peak = old_div(np.nansum(yw, axis=(1, 2)), w)  # TODO: function is never called, check once func. understood
         self.x_peak_median = np.nanmedian(self.x_peak)
         self.y_peak_median = np.nanmedian(self.y_peak)
         self.x_peak_median_index = np.nanargmin(
@@ -4661,7 +4658,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             self.y_peak - self.y_peak[self.y_peak_median_index]
         ) * self.pixel_size_arcsec
         odd_number = (
-            smoothfactor * int(old_div(np.sqrt(self.n_wave), 2)) + 1
+            smoothfactor * int(old_div(np.sqrt(self.n_wave), 2)) + 1  # TODO: function is never called, check once func. understood
         )  # Originarily, smoothfactor = 2
 
         # fit, trimming edges
@@ -4761,8 +4758,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         xw = x[np.newaxis, np.newaxis, :] * weight
         yw = y[np.newaxis, :, np.newaxis] * weight
         w = np.nansum(weight, axis=(1, 2))
-        self.x_peak = old_div(np.nansum(xw, axis=(1, 2)), w)
-        self.y_peak = old_div(np.nansum(yw, axis=(1, 2)), w)
+        self.x_peak = np.nansum(xw, axis=(1, 2))/w
+        self.y_peak = np.nansum(yw, axis=(1, 2))/w
         self.x_peak_median = np.nanmedian(self.x_peak)
         self.y_peak_median = np.nanmedian(self.y_peak)
         self.x_peak_median_index = np.nanargmin(
@@ -4780,7 +4777,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             self.y_peak - self.y_peak[self.y_peak_median_index]
         ) * self.pixel_size_arcsec
         odd_number = (
-            smoothfactor * int(old_div(np.sqrt(self.n_wave), 2)) + 1
+            smoothfactor * int((np.sqrt(self.n_wave)/2)) + 1
         )  # Originarily, smoothfactor = 2
         print("  Using medfilt window = ", odd_number)
         # fit, trimming edges
@@ -4972,11 +4969,11 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         self.seeing = np.sqrt(r2_half_light) * self.pixel_size_arcsec
 
         if plot:
-            r_norm = np.sqrt(old_div(np.array(r2_growth_curve), r2_half_light))
-            F_norm = old_div(np.array(F_growth_curve), F_guess)
+            r_norm = np.sqrt(old_div(np.array(r2_growth_curve), r2_half_light))  # TODO, function is not called. fix once called
+            F_norm = old_div(np.array(F_growth_curve), F_guess)  # TODO, function is not called. fix once called
             print("      Flux guess =", F_guess, np.nansum(
                 intensity
-            ), " ratio = ", old_div(np.nansum(intensity), F_guess))
+            ), " ratio = ", old_div(np.nansum(intensity), F_guess))   # TODO, function is not called. fix once called
             print("      Half-light radius:", self.seeing, " arcsec  = seeing if object is a star ")
             print("      Light within 2, 3, 4, 5 half-light radii:", np.interp(
                 [2, 3, 4, 5], r_norm, F_norm
@@ -5193,7 +5190,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             self.flux_cal_measured_counts = measured_counts
 
         _response_curve_ = (
-            old_div(old_div(measured_counts, flux_cal), exp_time)
+            old_div(old_div(measured_counts, flux_cal), exp_time)  # TODO, function is not called. fix once called
         )  # Added exp_time Jan 2019       counts / (ergs/cm/cm/s/A * 10**16) / s  = counts * ergs*cm*cm*A / 10**16
 
         if np.isnan(_response_curve_[0]) == True:
@@ -5294,7 +5291,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         wl = response_wavelength  # response_wavelength
         x = response_curve
         odd_number = (
-            smoothfactor * int(old_div(np.sqrt(len(wl)), 2)) - 1
+            smoothfactor * int((np.sqrt(len(wl))/2)) - 1
         )  # Originarily, smoothfactor = 2
         print("  Using medfilt window = ", odd_number, " for fitting...")
         # fit, trimming edges
@@ -5350,7 +5347,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             plt.figure(figsize=(10, 8))
             plt.plot(
                 lambda_cal,
-                old_div(measured_counts, exp_time),
+                old_div(measured_counts, exp_time),  # TODO, function is not called. fix once called
                 "g+",
                 ms=10,
                 mew=3,
