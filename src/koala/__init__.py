@@ -11,7 +11,7 @@ from past.utils import old_div
 version = "Version 0.72 - 13th February 2020"
 
 from .utils.io import read_table, save_rss_fits, save_fits_file
-from .utils.plots import plot_plot
+from .utils.utils import FitsExt, FitsFibresIFUIndex
 
 import copy
 import os.path as pth
@@ -41,7 +41,7 @@ import scipy.signal as sig
 from .utils.plots import (
     plot_redshift_peaks, plot_weights_for_getting_smooth_spectrum,
     plot_correction_in_fibre_p_fibre, plot_suspicious_fibres_graph, plot_skyline_5578,
-    plot_offset_between_cubes, plot_response, plot_telluric_correction,
+    plot_offset_between_cubes, plot_response, plot_telluric_correction, plot_plot
 )
 from ._version import get_versions
 
@@ -2735,17 +2735,17 @@ class KOALA_RSS(RSS):
         self.rss_list = []
 
         #  General info:
-        self.object = RSS_fits_file[0].header["OBJECT"]
+        self.object = RSS_fits_file[FitsExt.main].header["OBJECT"]
         self.description = self.object + " - " + filename
-        self.RA_centre_deg = RSS_fits_file[2].header["CENRA"] * 180/np.pi
-        self.DEC_centre_deg = RSS_fits_file[2].header["CENDEC"] * 180/np.pi
-        self.exptime = RSS_fits_file[0].header["EXPOSED"]
+        self.RA_centre_deg = RSS_fits_file[FitsExt.fibres_ifu].header["CENRA"] * 180/np.pi
+        self.DEC_centre_deg = RSS_fits_file[FitsExt.fibres_ifu].header["CENDEC"] * 180/np.pi
+        self.exptime = RSS_fits_file[FitsExt.main].header["EXPOSED"]
         #  WARNING: Something is probably wrong/inaccurate here!
         #  Nominal offsets between pointings are totally wrong!
 
         # Read good/bad spaxels
-        all_spaxels = list(range(len(RSS_fits_file[2].data)))
-        quality_flag = [RSS_fits_file[2].data[i][1] for i in all_spaxels]
+        all_spaxels = list(range(len(RSS_fits_file[FitsExt.fibres_ifu].data)))
+        quality_flag = [RSS_fits_file[FitsExt.fibres_ifu].data[i][FitsFibresIFUIndex.quality_flag] for i in all_spaxels]
         good_spaxels = [i for i in all_spaxels if quality_flag[i] == 1]
         bad_spaxels = [i for i in all_spaxels if quality_flag[i] == 0]
 
@@ -2754,14 +2754,14 @@ class KOALA_RSS(RSS):
         #
 
         # Create wavelength, intensity, and variance arrays only for good spaxels
-        wcsKOALA = WCS(RSS_fits_file[0].header)
+        wcsKOALA = WCS(RSS_fits_file[FitsExt.main].header)
         # variance = RSS_fits_file[1].data[good_spaxels]
-        index_wave = np.arange(RSS_fits_file[0].header["NAXIS1"])
+        index_wave = np.arange(RSS_fits_file[FitsExt.main].header["NAXIS1"])
         wavelength = wcsKOALA.dropaxis(1).wcs_pix2world(index_wave, 0)[0]
-        intensity = RSS_fits_file[0].data[good_spaxels]
+        intensity = RSS_fits_file[FitsExt.main].data[good_spaxels]
 
         print("\n  Number of spectra in this RSS =", len(
-            RSS_fits_file[0].data
+            RSS_fits_file[FitsExt.main].data
         ), ",  number of good spectra =", len(
             good_spaxels
         ), " ,  number of bad spectra =", len(
@@ -2773,7 +2773,7 @@ class KOALA_RSS(RSS):
         # self.header1 = RSS_fits_file[1].data      # CHECK WHEN DOING ERRORS !!!
 
         # Read spaxel positions on sky using RSS_fits_file[2]
-        self.header2_data = RSS_fits_file[2].data
+        self.header2_data = RSS_fits_file[FitsExt.fibres_ifu].data
 
         # CAREFUL !! header 2 has the info of BAD fibres, if we are reading from our created RSS files we have to do it in a different way...
 
@@ -2783,41 +2783,41 @@ class KOALA_RSS(RSS):
             offset_RA_arcsec_ = []
             offset_DEC_arcsec_ = []
             for i in range(len(good_spaxels)):
-                offset_RA_arcsec_.append(self.header2_data[i][5])
-                offset_DEC_arcsec_.append(self.header2_data[i][6])
+                offset_RA_arcsec_.append(self.header2_data[i][FitsFibresIFUIndex.ra_offset])
+                offset_DEC_arcsec_.append(self.header2_data[i][FitsFibresIFUIndex.dec_offset])
             offset_RA_arcsec = np.array(offset_RA_arcsec_)
             offset_DEC_arcsec = np.array(offset_DEC_arcsec_)
             variance = np.zeros_like(intensity)  # CHECK FOR ERRORS
 
         else:
             offset_RA_arcsec = np.array(
-                [RSS_fits_file[2].data[i][5] for i in good_spaxels]
+                [RSS_fits_file[FitsExt.fibres_ifu].data[i][FitsFibresIFUIndex.ra_offset] for i in good_spaxels]
             )
             offset_DEC_arcsec = np.array(
-                [RSS_fits_file[2].data[i][6] for i in good_spaxels]
+                [RSS_fits_file[FitsExt.fibres_ifu].data[i][FitsFibresIFUIndex.dec_offset] for i in good_spaxels]
             )
 
             self.ID = np.array(
-                [RSS_fits_file[2].data[i][0] for i in good_spaxels]
+                [RSS_fits_file[FitsExt.fibres_ifu].data[i][FitsFibresIFUIndex.spec_id] for i in good_spaxels]
             )  # These are the good fibres
-            variance = RSS_fits_file[1].data[good_spaxels]  # CHECK FOR ERRORS
+            variance = RSS_fits_file[FitsExt.var].data[good_spaxels]  # CHECK FOR ERRORS
 
-        self.ZDSTART = RSS_fits_file[0].header["ZDSTART"]  # Zenith distance (degrees?)
-        self.ZDEND = RSS_fits_file[0].header["ZDEND"]
+        self.ZDSTART = RSS_fits_file[FitsExt.main].header["ZDSTART"]  # Zenith distance (degrees?)
+        self.ZDEND = RSS_fits_file[FitsExt.main].header["ZDEND"]
         # KOALA-specific stuff
-        self.PA = RSS_fits_file[0].header["TEL_PA"]   # Position angle?
-        self.grating = RSS_fits_file[0].header["GRATID"]
+        self.PA = RSS_fits_file[FitsExt.main].header["TEL_PA"]   # Position angle?
+        self.grating = RSS_fits_file[FitsExt.main].header["GRATID"]
         # Check RED / BLUE arm for AAOmega
-        if RSS_fits_file[0].header["SPECTID"] == "RD":
+        if RSS_fits_file[FitsExt.main].header["SPECTID"] == "RD":
             AAOmega_Arm = "RED"
-        if RSS_fits_file[0].header["SPECTID"] == "BL":
+        if RSS_fits_file[FitsExt.main].header["SPECTID"] == "BL":
             AAOmega_Arm = "BLUE"
 
         # For WCS
         self.CRVAL1_CDELT1_CRPIX1 = []
-        self.CRVAL1_CDELT1_CRPIX1.append(RSS_fits_file[0].header["CRVAL1"])  # see https://idlastro.gsfc.nasa.gov/ftp/pro/astrom/aaareadme.txt maybe?
-        self.CRVAL1_CDELT1_CRPIX1.append(RSS_fits_file[0].header["CDELT1"])
-        self.CRVAL1_CDELT1_CRPIX1.append(RSS_fits_file[0].header["CRPIX1"])
+        self.CRVAL1_CDELT1_CRPIX1.append(RSS_fits_file[FitsExt.main].header["CRVAL1"])  # see https://idlastro.gsfc.nasa.gov/ftp/pro/astrom/aaareadme.txt maybe?
+        self.CRVAL1_CDELT1_CRPIX1.append(RSS_fits_file[FitsExt.main].header["CDELT1"])
+        self.CRVAL1_CDELT1_CRPIX1.append(RSS_fits_file[FitsExt.main].header["CRPIX1"])
 
         # SET RSS
         # FROM HERE IT WAS self.set_data before   ------------------------------------------
@@ -3491,7 +3491,6 @@ class KOALA_RSS(RSS):
             if id_el:
                 print("\n> Checking if identified emission lines agree with list provided")
                 # Read list with all emission lines to get the name of emission lines
-                import os
                 emission_line_file = "data/lineas_c89_python.dat"
                 el_center, el_name = read_table(emission_line_file, ["f", "s"])
 
