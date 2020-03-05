@@ -10,9 +10,10 @@ from builtins import range
 from past.utils import old_div
 version = "Version 0.72 - 13th February 2020"
 
+from .utils.io import read_table, save_rss_fits, save_fits_file
+from .utils.plots import plot_plot
 
 import copy
-import datetime
 import os.path as pth
 import sys
 
@@ -39,10 +40,9 @@ import scipy.signal as sig
 
 from .utils.plots import (
     plot_redshift_peaks, plot_weights_for_getting_smooth_spectrum,
-    plot_correction_in_fibre_p_fibre, plot_suspicious_fibres, plot_skyline_5578,
+    plot_correction_in_fibre_p_fibre, plot_suspicious_fibres_graph, plot_skyline_5578,
     plot_offset_between_cubes, plot_response, plot_telluric_correction,
 )
-from .utils.io import *
 from ._version import get_versions
 
 __version__ = get_versions()["version"]
@@ -54,8 +54,8 @@ del get_versions
 
 DATA_PATH = pth.join(pth.dirname(__file__), "data")
 
-pc = 3.086e18  # pc in cm
-C = 299792.458  # c in km/s
+from .constants import C, PARSEC as pc
+
 
 # -----------------------------------------------------------------------------
 # Define COLOUR scales
@@ -138,7 +138,7 @@ class RSS(object):
         correct_negative_sky=False,
     ):
         """
-        Compute the integrated flux of a fibre in a particular range
+        Compute the integrated flux of a fibre in a particular range, valid_wave_min to valid_wave_max.
 
         Parameters
         ----------
@@ -146,14 +146,14 @@ class RSS(object):
             list with the number of fibres for computing integrated value
             if using "all" it does all fibres
         valid_wave_min, valid_wave_max :  float
-            the integrated flux value will be computed in the range [valid_wave_min,valid_wave_max]
-            (default = , if they all 0 we use [self.valid_wave_min,self.valid_wave_max]
+            the integrated flux value will be computed in the range [valid_wave_min, valid_wave_max]
+            (default = , if they all 0 we use [self.valid_wave_min, self.valid_wave_max]
         min_value: float (default 0)
             For values lower than min_value, we set them as min_value
         plot : Boolean (default = False)
             Plot
         title : string
-            Tittle for the plot
+            Title for the plot
         text: string
             A bit of extra text
         warnings : Boolean (default = False)
@@ -187,9 +187,10 @@ class RSS(object):
             self.integrated_fibre[i] = np.nansum(self.intensity_corrected[i, region])
             if self.integrated_fibre[i] < 0:
                 if warnings:
-                    print("  WARNING: The integrated flux in fibre {:4} is negative, flux/wave = {:10.2f}, (probably sky), CHECK !".format(
-                        i, old_div(self.integrated_fibre[i], waves_in_region)
-                    ))
+                    print(
+                        "  WARNING: The integrated flux in fibre {:4} is negative, flux/wave = {:10.2f}, (probably sky), CHECK !".format(
+                            i, self.integrated_fibre[i]/waves_in_region
+                        ))
                 n_negative_fibres = n_negative_fibres + 1
                 # self.integrated_fibre[i] = min_value
                 negative_fibres.append(i)
@@ -201,7 +202,7 @@ class RSS(object):
 
             negative_fibres_sorted = []
             integrated_intensity_sorted = np.argsort(
-                old_div(self.integrated_fibre, waves_in_region)
+                self.integrated_fibre/waves_in_region
             )
             for fibre_ in range(n_negative_fibres):
                 negative_fibres_sorted.append(integrated_intensity_sorted[fibre_])
@@ -210,21 +211,23 @@ class RSS(object):
 
             if correct_negative_sky:
                 min_sky_value = self.integrated_fibre[negative_fibres_sorted[0]]
-                min_sky_value_per_wave = old_div(min_sky_value, waves_in_region)
-                print("\n> Correcting negative values making 0 the integrated flux of the lowest fibre, which is {:4} with {:10.2f} counts/wave".format(
-                    negative_fibres_sorted[0], min_sky_value_per_wave
-                ))
+                min_sky_value_per_wave = min_sky_value/waves_in_region
+                print(
+                    "\n> Correcting negative values making 0 the integrated flux of the lowest fibre, which is {:4} with {:10.2f} counts/wave".format(
+                        negative_fibres_sorted[0], min_sky_value_per_wave
+                    ))
                 # print self.integrated_fibre[negative_fibres_sorted[0]]
                 self.integrated_fibre = self.integrated_fibre - min_sky_value
                 for i in range(self.n_spectra):
                     self.intensity_corrected[i] = (
-                        self.intensity_corrected[i] - min_sky_value_per_wave
+                            self.intensity_corrected[i] - min_sky_value_per_wave
                     )
 
             else:
-                print("\n> Adopting integrated flux = {:5.2f} for all fibres with negative integrated flux (for presentation purposes)".format(
-                    min_value
-                ))
+                print(
+                    "\n> Adopting integrated flux = {:5.2f} for all fibres with negative integrated flux (for presentation purposes)".format(
+                        min_value
+                    ))
                 for i in negative_fibres_sorted:
                     self.integrated_fibre[i] = min_value
 
@@ -360,7 +363,6 @@ class RSS(object):
         """
         Correct for Cosmic Rays and defects on the CCD
         """
-
         print("\n> Correcting for high cosmics and CCD defects...")
 
         wave_min = self.valid_wave_min  # CHECK ALL OF THIS...
@@ -396,20 +398,23 @@ class RSS(object):
             s = self.intensity_corrected[fibre]
             running_wave = []
             running_step_median = []
-            cuts = np.int(old_div(self.n_wave, step))
-            for corte in range(cuts):
-                if corte == 0:
+            cuts = np.int(self.n_wave/step)  # using np.int instead of // for improved readability
+            for cut in range(cuts):
+                if cut == 0:
                     next_wave = wave_min
                 else:
                     next_wave = np.nanmedian(
-                        old_div((wlm[np.int(corte * step)] + wlm[np.int((corte + 1) * step)]), 2)
+                        (wlm[np.int(cut * step)] + wlm[np.int((cut + 1) * step)])/2
                     )
+
                 if next_wave < wave_max:
                     running_wave.append(next_wave)
+                    # print("SEARCHFORME1", step, running_wave[cut])
                     region = np.where(
-                        (wlm > running_wave[corte] - old_div(step, 2))
-                        & (wlm < running_wave[corte] + old_div(step, 2))
+                        (wlm > running_wave[cut] - np.int(step/2))   # step/2 doesn't need to be an int, but probably
+                        & (wlm < running_wave[cut] + np.int(step/2))   # want it to be so the cuts are uniform.
                     )
+                    # print('SEARCHFORME3', region)
                     running_step_median.append(
                         np.nanmedian(self.intensity_corrected[fibre, region])
                     )
@@ -457,21 +462,17 @@ class RSS(object):
                 ):  # NEW 15 Feb 2019, v7.1 2dFdr takes well cosmic rays
                     if s[wave] > clip_high * fit_median[wave]:
                         if verbose:
-                            print("  CLIPPING HIGH =", clip_high, "in fibre", fibre, "w =", wlm[
-                                wave
-                            ], "value=", s[
-                                wave
-                            ], "v/median=", old_div(s[
-                                wave
-                            ], fit_median[
-                                wave
-                            ]))  # " median=",fit_median[wave]
+                            print("  "
+                                  "CLIPPING HIGH =", clip_high,
+                                  "in fibre", fibre,
+                                  "w =", wlm[wave],
+                                  "value=", s[wave],
+                                  "v/median=", s[wave]/fit_median[wave])  # " median=",fit_median[wave]
                         s[wave] = fit_median[wave]
 
             if fibre == fibre_p:
                 espectro_new = copy.copy(s)
-
-            max_ratio_list.append(np.nanmax(old_div(s, fit_median)))
+            max_ratio_list.append(np.nanmax(s/fit_median))
             self.intensity_corrected[fibre, :] = s
 
             # Removing Skyline 5578 using Gaussian fit if requested
@@ -549,17 +550,13 @@ class RSS(object):
                 if skip == 0:
                     median_value = np.nanmedian(
                         self.integrated_fibre[
-                            fibre - np.int(old_div(step_f, 2)): fibre + np.int(old_div(step_f, 2))
+                            fibre - np.int(step_f/2): fibre + np.int(step_f/2)  # np.int is used instead of // of readability
                         ]
                     )
                 median_running.append(median_value)
-
-                if old_div(self.integrated_fibre[fibre], median_running[fibre]) > max_value:
-                    print("  Fibre ", fibre, " has a integrated/median ratio of ", old_div(self.integrated_fibre[
-                        fibre
-                    ], median_running[
-                        fibre
-                    ]), "  -> Might be a cosmic left!")
+                if self.integrated_fibre[fibre]/median_running[fibre] > max_value:
+                    print("  Fibre ", fibre, " has a integrated/median ratio of ",
+                        self.integrated_fibre[fibre]/median_running[fibre], "  -> Might be a cosmic left!")
                     label = np.str(fibre)
                     plt.axvline(x=fibre, color="k", linestyle="--")
                     plt.text(fibre, self.integrated_fibre[fibre] / 2.0, label)
@@ -575,17 +572,19 @@ class RSS(object):
 
         if plot_suspicious_fibres == True and len(suspicious_fibres) > 0:
             # Plotting suspicious fibres..
-            figures = plot_suspicious_fibres(suspicious_fibres,
-                                   fig_size,
-                                   wave_min,
-                                   wave_max,
-                                   intensity_corrected_fiber=self.intensity_corrected)
+            figures = plot_suspicious_fibres_graph(
+                self,
+                suspicious_fibres,
+                fig_size,
+                wave_min,
+                wave_max,
+                intensity_corrected_fiber=self.intensity_corrected)
 
         if remove_5578 and wave_min < 5578:
             print("  Skyline 5578 has been removed. Checking throughput correction...")
             flux_5578_medfilt = sig.medfilt(flux_5578, np.int(5))
             median_flux_5578_medfilt = np.nanmedian(flux_5578_medfilt)
-            extra_throughput_correction = old_div(flux_5578_medfilt, median_flux_5578_medfilt)
+            extra_throughput_correction = old_div(flux_5578_medfilt, median_flux_5578_medfilt)  # TODO: check \\, need blue data and routine in main
             # plt.plot(extra_throughput_correction)
             # plt.show()
             # plt.close()
@@ -599,7 +598,7 @@ class RSS(object):
 
             for i in range(self.n_spectra):
                 self.intensity_corrected[i, :] = (
-                    old_div(self.intensity_corrected[i, :], extra_throughput_correction[i])
+                    self.intensity_corrected[i, :]/extra_throughput_correction[i]
                 )
             self.relative_throughput = (
                 self.relative_throughput * extra_throughput_correction
@@ -909,7 +908,7 @@ class RSS(object):
             brightest_line, brightest_line_wavelength_rest, brightest_line_wavelength
         ))
 
-        redshift = old_div(brightest_line_wavelength, brightest_line_wavelength_rest) - 1.0
+        redshift = brightest_line_wavelength/brightest_line_wavelength_rest - 1.0
 
         if w == 1000:
             w = self.wavelength
@@ -1294,7 +1293,7 @@ class RSS(object):
 
                 ratio_object_sky_sl_gaussian.append(
                     old_div(object_sl_gaussian_flux[i], sl_gaussian_flux[i])
-                )
+                )  # TODO: to remove once sky_line_fitting is active and we can do 1Dfit
 
             # Scale sky lines that are located in emission lines or provided negative values in fit
             # reference_sl = 1 # Position in the file! Position 1 is sky line 6363.4
@@ -1722,7 +1721,7 @@ class RSS(object):
             median_region[i] = np.nanmedian(self.intensity[i, region])
 
         median_value_skyflat = np.nanmedian(median_region)
-        self.relative_throughput = old_div(median_region, median_value_skyflat)
+        self.relative_throughput = median_region/median_value_skyflat
         print("  Median value of skyflat in the [", wave_min_scale, ",", wave_max_scale, "] range = ", median_value_skyflat)
         print("  Individual fibre corrections:  min =", np.nanmin(
             self.relative_throughput
@@ -1756,7 +1755,7 @@ class RSS(object):
             plt.figure(figsize=(10, 4))
             for i in range(self.n_spectra):
                 # self.intensity_corrected[i,] = self.intensity[i,] * self.relative_throughput[i]
-                plot_this = old_div(self.intensity[i, ], self.relative_throughput[i])
+                plot_this = self.intensity[i, ]/self.relative_throughput[i]
                 plt.plot(self.wavelength, plot_this)
             plt.ylim(ymin, ymax)
             plt.minorticks_on()
@@ -1776,14 +1775,14 @@ class RSS(object):
         pf = 0
         for i in range(self.n_spectra):
             self.response_sky_spectrum[i] = (
-                old_div(old_div(self.intensity[i], self.relative_throughput[i]), median_sky_spectrum)
+                (self.intensity[i]/self.relative_throughput[i])/median_sky_spectrum
             )
             filter_response_sky_spectrum = sig.medfilt(
                 self.response_sky_spectrum[i], kernel_size=kernel_sky_spectrum
             )
-            rms[i] = old_div(np.nansum(
+            rms[i] = np.nansum(
                 np.abs(self.response_sky_spectrum[i] - filter_response_sky_spectrum)
-            ), np.nansum(self.response_sky_spectrum[i]))
+            )/np.nansum(self.response_sky_spectrum[i])
 
             if plot:
                 if i == plot_fibres[pf]:
@@ -1803,7 +1802,7 @@ class RSS(object):
                     )
                     plt.plot(
                         self.wavelength,
-                        old_div(self.response_sky_spectrum[i], filter_response_sky_spectrum),
+                        self.response_sky_spectrum[i]/filter_response_sky_spectrum,
                         alpha=1,
                         label="Normalized Skyflat",
                     )
@@ -1882,7 +1881,7 @@ class RSS(object):
         fig_size=12,
         verbose=False,
     ):
-        """
+        """  # TODO BLAKE: always use false, use plots to make sure it's good. prob just save as a different file.
         Get telluric correction using a spectrophotometric star
 
         Parameters
@@ -1943,7 +1942,7 @@ class RSS(object):
         telluric_correction = np.ones(len(wlm))
         for l in range(len(wlm)):
             if wlm[l] > correct_from and wlm[l] < correct_to:
-                telluric_correction[l] = old_div(smooth_med_star[l], estrella[l])
+                telluric_correction[l] = smooth_med_star[l]/estrella[l]  # TODO: should be float, check when have star data
 
         if plot:
             plt.figure(figsize=(fig_size, fig_size / 2.5))
@@ -2246,6 +2245,7 @@ class RSS(object):
         right_max,
         list_spectra=[],
     ):
+        # TODO: can remove old_div once this function is understood, currently not called in whole module.
         if len(list_spectra) == 0:
             list_spectra = list(range(self.n_spectra))
 
@@ -2387,7 +2387,7 @@ class RSS(object):
         plt.xlim(self.wavelength[0] - 10, self.wavelength[-1] + 10)
         plt.axvline(x=self.valid_wave_min, color="k", linestyle="--")
         plt.axvline(x=self.valid_wave_max, color="k", linestyle="--")
-        plt.ylim([I_ymin - old_div(I_rango, 10), I_ymax + old_div(I_rango, 10)])
+        plt.ylim([I_ymin - (I_rango/10), I_ymax + (I_rango/10)])
         plt.title(
             self.object
             + " - Combined spectrum - "
@@ -2737,8 +2737,8 @@ class KOALA_RSS(RSS):
         #  General info:
         self.object = RSS_fits_file[0].header["OBJECT"]
         self.description = self.object + " - " + filename
-        self.RA_centre_deg = old_div(RSS_fits_file[2].header["CENRA"] * 180, np.pi)
-        self.DEC_centre_deg = old_div(RSS_fits_file[2].header["CENDEC"] * 180, np.pi)
+        self.RA_centre_deg = RSS_fits_file[2].header["CENRA"] * 180/np.pi
+        self.DEC_centre_deg = RSS_fits_file[2].header["CENDEC"] * 180/np.pi
         self.exptime = RSS_fits_file[0].header["EXPOSED"]
         #  WARNING: Something is probably wrong/inaccurate here!
         #  Nominal offsets between pointings are totally wrong!
@@ -2802,11 +2802,10 @@ class KOALA_RSS(RSS):
             )  # These are the good fibres
             variance = RSS_fits_file[1].data[good_spaxels]  # CHECK FOR ERRORS
 
-        self.ZDSTART = RSS_fits_file[0].header["ZDSTART"]
+        self.ZDSTART = RSS_fits_file[0].header["ZDSTART"]  # Zenith distance (degrees?)
         self.ZDEND = RSS_fits_file[0].header["ZDEND"]
-
         # KOALA-specific stuff
-        self.PA = RSS_fits_file[0].header["TEL_PA"]
+        self.PA = RSS_fits_file[0].header["TEL_PA"]   # Position angle?
         self.grating = RSS_fits_file[0].header["GRATID"]
         # Check RED / BLUE arm for AAOmega
         if RSS_fits_file[0].header["SPECTID"] == "RD":
@@ -2816,7 +2815,7 @@ class KOALA_RSS(RSS):
 
         # For WCS
         self.CRVAL1_CDELT1_CRPIX1 = []
-        self.CRVAL1_CDELT1_CRPIX1.append(RSS_fits_file[0].header["CRVAL1"])
+        self.CRVAL1_CDELT1_CRPIX1.append(RSS_fits_file[0].header["CRVAL1"])  # see https://idlastro.gsfc.nasa.gov/ftp/pro/astrom/aaareadme.txt maybe?
         self.CRVAL1_CDELT1_CRPIX1.append(RSS_fits_file[0].header["CDELT1"])
         self.CRVAL1_CDELT1_CRPIX1.append(RSS_fits_file[0].header["CRPIX1"])
 
@@ -2927,12 +2926,11 @@ class KOALA_RSS(RSS):
         # Divide by flatfield if needed
         if flat != "":
             print("\n> Dividing the data by the flatfield provided...")
-            self.intensity_corrected = (
-                old_div(self.intensity_corrected, flat.intensity_corrected)
-            )
+            self.intensity_corrected = (self.intensity_corrected/flat.intensity_corrected)  # todo: check division per pixel works.
 
         # Check if apply relative throughput & apply it if requested
         if apply_throughput:
+
             if plot_skyflat:
                 plt.figure(figsize=(10, 4))
                 for i in range(self.n_spectra):
@@ -2949,7 +2947,7 @@ class KOALA_RSS(RSS):
             self.response_sky_spectrum = skyflat.response_sky_spectrum
             for i in range(self.n_spectra):
                 self.intensity_corrected[i, :] = (
-                    old_div(self.intensity_corrected[i, :], self.relative_throughput[i])
+                    self.intensity_corrected[i, :]/self.relative_throughput[i]
                 )
 
             if nskyflat:
@@ -2959,7 +2957,7 @@ class KOALA_RSS(RSS):
                 ), "and ", np.nanmax(skyflat.response_sky_spectrum))
                 print(" ")
                 self.intensity_corrected = (
-                    old_div(self.intensity_corrected, self.response_sky_spectrum)
+                    self.intensity_corrected/self.response_sky_spectrum
                 )
 
             if plot_skyflat:
@@ -3245,7 +3243,7 @@ class KOALA_RSS(RSS):
                             highhigh=highhigh,
                         )  # fmin=-5.0E-17, fmax=2.0E-16,
 
-                        scale_per_fibre[fibre_sky] = old_div(skyline_spec[3], skyline_sky[3])
+                        scale_per_fibre[fibre_sky] = old_div(skyline_spec[3], skyline_sky[3])    # TODO: get data for 2D and test if can remove
                         self.sky_emission[fibre_sky] = skyline_sky[11]
 
                     if sky_line_2 != 0:
@@ -3278,7 +3276,7 @@ class KOALA_RSS(RSS):
                             )  # fmin=-5.0E-17, fmax=2.0E-16,
 
                             scale_per_fibre_2[fibre_sky] = (
-                                old_div(skyline_spec[3], skyline_sky[3])
+                                old_div(skyline_spec[3], skyline_sky[3])  # TODO: get data for 2D and test if can remove
                             )
                             self.sky_emission[fibre_sky] = skyline_sky[11]
 
@@ -3288,7 +3286,7 @@ class KOALA_RSS(RSS):
                         self.sky_emission = self.sky_emission * scale_sky_rss
                     else:
                         scale_sky_rss = np.nanmedian(
-                            old_div((scale_per_fibre + scale_per_fibre_2), 2)
+                            old_div((scale_per_fibre + scale_per_fibre_2), 2)  # TODO: get data for 2D and test if can remove
                         )
                         # Make linear fit
                         scale_sky_rss_1 = np.nanmedian(scale_per_fibre)
@@ -3305,7 +3303,7 @@ class KOALA_RSS(RSS):
                         ), "]")
 
                         b = old_div((scale_sky_rss_1 - scale_sky_rss_2), (
-                            sky_line - sky_line_2
+                            sky_line - sky_line_2   # TODO: get data for 2D and test if can remove
                         ))
                         a = scale_sky_rss_1 - b * sky_line
                         # ,a+b*sky_line,a+b*sky_line_2
@@ -3386,8 +3384,8 @@ class KOALA_RSS(RSS):
             print("  Median filter applied, results stored in self.intensity_corrected !")
 
         # Get airmass and correct for extinction AFTER SKY SUBTRACTION
-        ZD = old_div((self.ZDSTART + self.ZDEND), 2)
-        self.airmass = old_div(1, np.cos(np.radians(ZD)))
+        ZD = (self.ZDSTART + self.ZDEND)/2
+        self.airmass = 1/np.cos(np.radians(ZD))
         self.extinction_correction = np.ones(self.n_wave)
         if do_extinction:
             self.do_extinction_curve(pth.join(DATA_PATH, "ssoextinct.dat"), plot=plot)
@@ -3493,14 +3491,15 @@ class KOALA_RSS(RSS):
             if id_el:
                 print("\n> Checking if identified emission lines agree with list provided")
                 # Read list with all emission lines to get the name of emission lines
-                emission_line_file = "lineas_c89_python.dat"
+                import os
+                emission_line_file = "data/lineas_c89_python.dat"
                 el_center, el_name = read_table(emission_line_file, ["f", "s"])
 
                 # Find brightest line to get redshift
                 for i in range(len(self.el[0])):
                     if self.el[0][i] == brightest_line:
                         obs_wave = self.el[2][i]
-                        redshift = old_div((self.el[2][i] - self.el[1][i]), self.el[1][i])
+                        redshift = (self.el[2][i] - self.el[1][i])/self.el[1][i]
                 print("  Brightest emission line", brightest_line, "found at ", obs_wave, ", redshift = ", redshift)
 
                 el_identified = [[], [], [], []]
@@ -3767,7 +3766,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         self.pixel_size_arcsec = pixel_size_arcsec
         self.kernel_size_arcsec = kernel_size_arcsec
         self.kernel_size_pixels = (
-            old_div(kernel_size_arcsec, pixel_size_arcsec)
+            float(kernel_size_arcsec/pixel_size_arcsec)
         )  # must be a float number!
 
         self.wavelength = RSS.wavelength
@@ -3830,22 +3829,21 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             self.yoffset_centre_arcsec = (
                 self.DEC_centre_deg - RSS.DEC_centre_deg
             ) * 3600.0
-
         if len(size_arcsec) == 2:
-            self.n_cols = np.int(old_div(size_arcsec[0], self.pixel_size_arcsec)) + 2 * np.int(
-                old_div(self.kernel_size_arcsec, self.pixel_size_arcsec)
+            self.n_cols = np.int((size_arcsec[0]/self.pixel_size_arcsec)) + 2 * np.int(
+                (self.kernel_size_arcsec/self.pixel_size_arcsec)
             )
-            self.n_rows = np.int(old_div(size_arcsec[1], self.pixel_size_arcsec)) + 2 * np.int(
-                old_div(self.kernel_size_arcsec, self.pixel_size_arcsec)
+            self.n_rows = np.int((size_arcsec[1]/self.pixel_size_arcsec)) + 2 * np.int(
+                (self.kernel_size_arcsec/self.pixel_size_arcsec)
             )
         else:
             self.n_cols = (
                 2
                 * (
                     np.int(
-                        old_div(np.nanmax(
+                        (np.nanmax(
                             np.abs(RSS.offset_RA_arcsec - self.xoffset_centre_arcsec)
-                        ), self.pixel_size_arcsec)
+                        )/self.pixel_size_arcsec)
                     )
                     + np.int(self.kernel_size_pixels)
                 )
@@ -3855,9 +3853,9 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 2
                 * (
                     np.int(
-                        old_div(np.nanmax(
+                        (np.nanmax(
                             np.abs(RSS.offset_DEC_arcsec - self.yoffset_centre_arcsec)
-                        ), self.pixel_size_arcsec)
+                        )/self.pixel_size_arcsec)
                     )
                     + np.int(self.kernel_size_pixels)
                 )
@@ -3903,18 +3901,17 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                     sys.stdout.write("{:5.2f}%".format(i * 100.0 / RSS.n_spectra))
                     sys.stdout.flush()
                     next_output = i + output_every_few
-                offset_rows = old_div((
+                offset_rows = ((
                     RSS.offset_DEC_arcsec[i] - self.yoffset_centre_arcsec
-                ), pixel_size_arcsec)
-                offset_cols = old_div((
+                )/pixel_size_arcsec)
+                offset_cols = ((
                     -RSS.offset_RA_arcsec[i] + self.xoffset_centre_arcsec
-                ), pixel_size_arcsec)
+                )/pixel_size_arcsec)
                 corrected_intensity = RSS.intensity_corrected[i]
                 self.add_spectrum(
                     corrected_intensity, offset_rows, offset_cols, warnings=warnings
                 )
-
-            self.data = old_div(self._weighted_I, self._weight)
+            self.data = self._weighted_I/self._weight
             self.trace_peak(plot=plot)
 
             # Check flux calibration
@@ -3927,7 +3924,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 for x in range(self.n_rows):
                     for y in range(self.n_cols):
                         self.data[:, x, y] = (
-                            old_div(old_div(old_div(self.data[:, x, y], self.flux_calibration), 1e16), self.RSS.exptime)
+                            (((self.data[:, x, y]/self.flux_calibration)/1e16)/self.RSS.exptime)
                         )
             #                        plt.plot(self.wavelength,self.data[:,x,y]) #
             # ylabel="Flux [ erg cm$^{-2}$ s$^{-1}$ A$^{-1}$]"
@@ -3962,8 +3959,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         # First we check if it is needed (unless forced)...
 
         if (
-            self.ADR_x_max < old_div(self.pixel_size_arcsec, 2)
-            and self.ADR_y_max < old_div(self.pixel_size_arcsec, 2)
+            self.ADR_x_max < self.pixel_size_arcsec/2
+            and self.ADR_y_max < self.pixel_size_arcsec/2
         ):
             print("\n> Atmospheric Differential Refraction (ADR) correction is NOT needed.")
             print("  The computed max ADR values ({:.2f},{:.2f}) are smaller than half the pixel size of {:.2f} arcsec".format(
@@ -4000,16 +3997,16 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 tmp_shift = shift(
                     tmp_nonan,
                     [
-                        old_div(-2 * self.ADR_y[l], self.pixel_size_arcsec),
-                        old_div(-2 * self.ADR_x[l], self.pixel_size_arcsec),
+                        (-2 * self.ADR_y[l]/self.pixel_size_arcsec),
+                        (-2 * self.ADR_x[l]/self.pixel_size_arcsec),
                     ],
                     cval=np.nan,
                 )
                 mask_shift = shift(
                     mask,
                     [
-                        old_div(-2 * self.ADR_y[l], self.pixel_size_arcsec),
-                        old_div(-2 * self.ADR_x[l], self.pixel_size_arcsec),
+                        (-2 * self.ADR_y[l]/self.pixel_size_arcsec),
+                        (-2 * self.ADR_x[l]/self.pixel_size_arcsec),
                     ],
                     cval=np.nan,
                 )
@@ -4061,8 +4058,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         self.max_y, self.max_x = np.unravel_index(
             self.integrated_map.argmax(), self.integrated_map.shape
         )
-        self.spaxel_RA0 = old_div(self.n_cols, 2) + 1
-        self.spaxel_DEC0 = old_div(self.n_rows, 2) + 1
+        self.spaxel_RA0 = np.int(self.n_cols/2) + 1   # Using np.int for readability
+        self.spaxel_DEC0 = np.int(self.n_rows/2) + 1  # Using np.int for readability
         self.offset_from_center_x_arcsec_integrated = (
             self.max_x - self.spaxel_RA0 + 1
         ) * self.pixel_size_arcsec  # Offset from center using INTEGRATED map
@@ -4118,23 +4115,22 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         x_max = int(kernel_centre_x + self.kernel_size_pixels) + 1
         n_points_x = x_max - x_min
         x = (
-            old_div(np.linspace(x_min - kernel_centre_x, x_max - kernel_centre_x, n_points_x), self.kernel_size_pixels)
+            (np.linspace(x_min - kernel_centre_x, x_max - kernel_centre_x, n_points_x)/self.kernel_size_pixels)
         )
         x[0] = -1.0
         x[-1] = 1.0
-        weight_x = np.diff(old_div((3.0 * x - x ** 3 + 2.0), 4))
+        weight_x = np.diff(((3.0 * x - x ** 3 + 2.0)/4))
 
         kernel_centre_y = 0.5 * self.n_rows + offset_rows
         y_min = int(kernel_centre_y - self.kernel_size_pixels)
         y_max = int(kernel_centre_y + self.kernel_size_pixels) + 1
         n_points_y = y_max - y_min
         y = (
-            old_div(np.linspace(y_min - kernel_centre_y, y_max - kernel_centre_y, n_points_y), self.kernel_size_pixels)
+            (np.linspace(y_min - kernel_centre_y, y_max - kernel_centre_y, n_points_y)/self.kernel_size_pixels)
         )
         y[0] = -1.0
         y[-1] = 1.0
-        weight_y = np.diff(old_div((3.0 * y - y ** 3 + 2.0), 4))
-
+        weight_y = np.diff(((3.0 * y - y ** 3 + 2.0)/4))
         if x_min < 0 or x_max >= self.n_cols or y_min < 0 or y_max >= self.n_rows:
             if warnings:
                 print("**** WARNING **** : Spectra outside field of view:", x_min, kernel_centre_x, x_max)
@@ -4207,7 +4203,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 print("  Adding spaxel ", i + 2, " = [", x[i + 1], ",", y[i + 1], "]")
                 ylabel = "Flux [relative units]"
             if fcal:
-                spectrum = old_div(old_div(spectrum, self.flux_calibration), 1e16)
+                spectrum = (spectrum/self.flux_calibration)/1e16
                 ylabel = "Flux [ erg cm$^{-2}$ s$^{-1}$ A$^{-1}$]"
 
         # Set limits
@@ -4645,8 +4641,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         xw = x[np.newaxis, np.newaxis, :] * weight
         yw = y[np.newaxis, :, np.newaxis] * weight
         w = np.nansum(weight, axis=(1, 2))
-        self.x_peak = old_div(np.nansum(xw, axis=(1, 2)), w)
-        self.y_peak = old_div(np.nansum(yw, axis=(1, 2)), w)
+        self.x_peak = old_div(np.nansum(xw, axis=(1, 2)), w)  # TODO: function is never called, check once func. understood
+        self.y_peak = old_div(np.nansum(yw, axis=(1, 2)), w)  # TODO: function is never called, check once func. understood
         self.x_peak_median = np.nanmedian(self.x_peak)
         self.y_peak_median = np.nanmedian(self.y_peak)
         self.x_peak_median_index = np.nanargmin(
@@ -4664,7 +4660,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             self.y_peak - self.y_peak[self.y_peak_median_index]
         ) * self.pixel_size_arcsec
         odd_number = (
-            smoothfactor * int(old_div(np.sqrt(self.n_wave), 2)) + 1
+            smoothfactor * int(old_div(np.sqrt(self.n_wave), 2)) + 1  # TODO: function is never called, check once func. understood
         )  # Originarily, smoothfactor = 2
 
         # fit, trimming edges
@@ -4764,8 +4760,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         xw = x[np.newaxis, np.newaxis, :] * weight
         yw = y[np.newaxis, :, np.newaxis] * weight
         w = np.nansum(weight, axis=(1, 2))
-        self.x_peak = old_div(np.nansum(xw, axis=(1, 2)), w)
-        self.y_peak = old_div(np.nansum(yw, axis=(1, 2)), w)
+        self.x_peak = np.nansum(xw, axis=(1, 2))/w
+        self.y_peak = np.nansum(yw, axis=(1, 2))/w
         self.x_peak_median = np.nanmedian(self.x_peak)
         self.y_peak_median = np.nanmedian(self.y_peak)
         self.x_peak_median_index = np.nanargmin(
@@ -4783,7 +4779,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             self.y_peak - self.y_peak[self.y_peak_median_index]
         ) * self.pixel_size_arcsec
         odd_number = (
-            smoothfactor * int(old_div(np.sqrt(self.n_wave), 2)) + 1
+            smoothfactor * int((np.sqrt(self.n_wave)/2)) + 1
         )  # Originarily, smoothfactor = 2
         print("  Using medfilt window = ", odd_number)
         # fit, trimming edges
@@ -4975,11 +4971,11 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         self.seeing = np.sqrt(r2_half_light) * self.pixel_size_arcsec
 
         if plot:
-            r_norm = np.sqrt(old_div(np.array(r2_growth_curve), r2_half_light))
-            F_norm = old_div(np.array(F_growth_curve), F_guess)
+            r_norm = np.sqrt(old_div(np.array(r2_growth_curve), r2_half_light))  # TODO, function is not called. fix once called
+            F_norm = old_div(np.array(F_growth_curve), F_guess)  # TODO, function is not called. fix once called
             print("      Flux guess =", F_guess, np.nansum(
                 intensity
-            ), " ratio = ", old_div(np.nansum(intensity), F_guess))
+            ), " ratio = ", old_div(np.nansum(intensity), F_guess))   # TODO, function is not called. fix once called
             print("      Half-light radius:", self.seeing, " arcsec  = seeing if object is a star ")
             print("      Light within 2, 3, 4, 5 half-light radii:", np.interp(
                 [2, 3, 4, 5], r_norm, F_norm
@@ -5196,7 +5192,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             self.flux_cal_measured_counts = measured_counts
 
         _response_curve_ = (
-            old_div(old_div(measured_counts, flux_cal), exp_time)
+            old_div(old_div(measured_counts, flux_cal), exp_time)  # TODO, function is not called. fix once called
         )  # Added exp_time Jan 2019       counts / (ergs/cm/cm/s/A * 10**16) / s  = counts * ergs*cm*cm*A / 10**16
 
         if np.isnan(_response_curve_[0]) == True:
@@ -5297,7 +5293,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         wl = response_wavelength  # response_wavelength
         x = response_curve
         odd_number = (
-            smoothfactor * int(old_div(np.sqrt(len(wl)), 2)) - 1
+            smoothfactor * int((np.sqrt(len(wl))/2)) - 1
         )  # Originarily, smoothfactor = 2
         print("  Using medfilt window = ", odd_number, " for fitting...")
         # fit, trimming edges
@@ -5353,7 +5349,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             plt.figure(figsize=(10, 8))
             plt.plot(
                 lambda_cal,
-                old_div(measured_counts, exp_time),
+                old_div(measured_counts, exp_time),  # TODO, function is not called. fix once called
                 "g+",
                 ms=10,
                 mew=3,
@@ -5466,13 +5462,13 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
 # -----------------------------------------------------------------------------
 def running_mean(x, N):
     cumsum = np.cumsum(np.insert(x, 0, 0))
-    return old_div((cumsum[N:] - cumsum[:-N]), N)
+    return (cumsum[N:] - cumsum[:-N])/N
 
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def cumulaive_Moffat(r2, L_star, alpha2, beta):
-    return L_star * (1 - np.power(1 + (old_div(r2, alpha2)), -beta))
+    return L_star * (1 - np.power(1 + (r2/alpha2), -beta))
 
 
 # -----------------------------------------------------------------------------
@@ -5497,10 +5493,10 @@ def fit_Moffat(
         print("Best-fit: L_star =", fit[0])
         print("          alpha =", np.sqrt(fit[1]))
         print("          beta =", fit[2])
-        r_norm = np.sqrt(old_div(np.array(r2_growth_curve), r2_half_light))
+        r_norm = np.sqrt(np.array(r2_growth_curve)/r2_half_light)
         plt.plot(
             r_norm,
-            old_div(cumulaive_Moffat(np.array(r2_growth_curve), fit[0], fit[1], fit[2]), fit[0]),
+            cumulaive_Moffat(np.array(r2_growth_curve), fit[0], fit[1], fit[2])/fit[0],
             ":",
         )
 
@@ -5511,7 +5507,7 @@ def fit_Moffat(
 # -----------------------------------------------------------------------------
 def KOALA_offsets(s, pa):
     print("\n> Offsets towards North and East between pointings," "according to KOALA manual, for pa =", pa, "degrees")
-    pa *= old_div(np.pi, 180)
+    pa *= np.pi/180
     print("  a -> b :", s * np.sin(pa), -s * np.cos(pa))
     print("  a -> c :", -s * np.sin(60 - pa), -s * np.cos(60 - pa))
     print("  b -> d :", -np.sqrt(3) * s * np.cos(pa), -np.sqrt(3) * s * np.sin(pa))
@@ -5560,7 +5556,7 @@ def offset_between_cubes(cube1, cube2, plot=True):
     if plot:
         x -= delta_RA_pix
         y -= delta_DEC_pix
-        fig = plot_offset_between_cubes(cube1, delta_RA_pix, delta_DEC_pix, wl, medfilt_window=151)
+        fig = plot_offset_between_cubes(cube1, delta_RA_pix, delta_DEC_pix, wl, medfilt_window=151)  # TODO: wl is unresolved, additionally plot_offset... does not require wl as a input.
 
     return delta_RA_arcsec, delta_DEC_arcsec
 
@@ -5592,6 +5588,7 @@ def compare_cubes(cube1, cube2, line=0):
         plt.title("Integrated Map")
     # plt.show()
     # plt.close()
+
 
 def obtain_flux_calibration(calibration_star_cubes):
     #    print "\n> Obtaining flux calibration...\n"
@@ -6345,11 +6342,11 @@ class CUBE(RSS, Interpolated_cube):
         self.RA_centre_deg = RSS_fits_file[0].header["RAcen"]
         self.DEC_centre_deg = RSS_fits_file[0].header["DECcen"]
         self.PA = RSS_fits_file[0].header["PA"]
-        self.wavelength = RSS_fits_file[1].data
+        self.wavelength = RSS_fits_file[1].data   # TODO: why is this 1? shouldn't it be [0], maybe cause we are doing the biggest variance?
         self.flux_calibration = RSS_fits_file[2].data
         self.n_wave = len(self.wavelength)
         self.data = RSS_fits_file[0].data
-        self.wave_resolution = old_div((self.wavelength[-1] - self.wavelength[0]), self.n_wave)
+        self.wave_resolution = (self.wavelength[-1] - self.wavelength[0])/self.n_wave
 
         self.n_cols = RSS_fits_file[0].header["Ncols"]
         self.n_rows = RSS_fits_file[0].header["Nrows"]
@@ -6629,7 +6626,7 @@ class CUBE(RSS, Interpolated_cube):
             spectrum = self.data[:, x, y]
             ylabel = "Flux [relative units]"
         else:
-            spectrum = old_div(old_div(self.data[:, x, y], self.flux_calibration), 1e16)
+            spectrum = (self.data[:, x, y]/self.flux_calibration)/1e16
             # ylabel="Flux [ 10$^{-16}$ * erg cm$^{-2}$ s$^{-1}$ A$^{-1}$]"
             ylabel = "Flux [ erg cm$^{-2}$ s$^{-1}$ A$^{-1}$]"
         # Remove NaN values from spectrum and replace them with zero.
@@ -6699,7 +6696,7 @@ class CUBE(RSS, Interpolated_cube):
         if fcal == False:
             spectrum = self.data[:, x, y]
         else:
-            spectrum = old_div(old_div(self.data[:, x, y], self.flux_calibration), 1e16)
+            spectrum = (self.data[:, x, y]/self.flux_calibration)/1e16
             spectrum = np.nan_to_num(spectrum)
         subSpectrum = self.subtractContinuum(spectrum)
         aValues = []
@@ -6716,7 +6713,7 @@ class CUBE(RSS, Interpolated_cube):
             tempIndex = tempIndex + 1
         bMax = np.nanmax(bValues)
 
-        return old_div(aMax, bMax)
+        return aMax/bMax
 
     def createRatioMap(self, aStart, aEnd, bStart, bEnd, fcal=False):
         xLength = len(self.data[0, :, 0])
@@ -6732,7 +6729,7 @@ class CUBE(RSS, Interpolated_cube):
                 if fcal == False:
                     spectrum = self.data[:, x, y]
                 else:
-                    spectrum = old_div(old_div(self.data[:, x, y], self.flux_calibration), 1e16)
+                    spectrum = (self.data[:, x, y]/self.flux_calibration)/1e16
                 spectrum = np.nan_to_num(spectrum)
                 subSpectrum = self.subtractContinuum(spectrum)
                 subAvg = np.average(subSpectrum)
@@ -6752,7 +6749,7 @@ class CUBE(RSS, Interpolated_cube):
                 bMax = np.nanmax(bValues)
 
                 if aMax > subAvg and bMax > subAvg:
-                    ratio = old_div(aMax, bMax)
+                    ratio = aMax/bMax
                 else:
                     ratio = 0
                 ratioMap[x][y] = ratio
@@ -6766,7 +6763,7 @@ class CUBE(RSS, Interpolated_cube):
 
 def gauss(x, x0, y0, sigma):
     p = [x0, y0, sigma]
-    return p[1] * np.exp(-0.5 * (old_div((x - p[0]), p[2])) ** 2)
+    return p[1] * np.exp(-0.5 * ((x - p[0])/p[2]) ** 2)
 
 
 def gauss_fix_x0(x, x0, y0, sigma):
@@ -6780,7 +6777,7 @@ def gauss_fix_x0(x, x0, y0, sigma):
         sigma (float): Gaussian width
     """
     p = [y0, sigma]
-    return p[0] * np.exp(-0.5 * (old_div((x - x0), p[1])) ** 2)
+    return p[0] * np.exp(-0.5 * ((x - x0)/p[1]) ** 2)
 
 
 def gauss_flux(y0, sigma):  # THIS DOES NOT WORK...
@@ -6823,12 +6820,12 @@ def substract_given_gaussian(
 
     if peak == 0 and flux != 0 and sigma != 0:
         # flux = peak * sigma * np.sqrt(2*np.pi)
-        peak = old_div(flux, (sigma * np.sqrt(2 * np.pi)))
+        peak = flux/(sigma * np.sqrt(2 * np.pi))
         do_it = True
 
     if sigma == 0 and flux != 0 and peak != 0:
         # flux = peak * sigma * np.sqrt(2*np.pi)
-        sigma = old_div(flux, (peak * np.sqrt(2 * np.pi)))
+        sigma = flux/(peak * np.sqrt(2 * np.pi))
         do_it = True
 
     if flux == 0 and sigma != 0 and peak != 0:
@@ -7191,18 +7188,18 @@ def fluxes(
         median_w_cont_high = np.nanmedian(w_cont_high)
         median_f_cont_high = np.nanmedian(f_cont_high)
 
-        b = old_div((median_f_cont_low - median_f_cont_high), (
+        b = (median_f_cont_low - median_f_cont_high)/(
             median_w_cont_low - median_w_cont_high
-        ))
+        )
         a = median_f_cont_low - b * median_w_cont_low
 
         continuum = a + b * np.array(w_spec)
         c_cont = b * np.array(w_cont) + a
 
     # rms continuum
-    rms_cont = old_div(np.nansum(
+    rms_cont = np.nansum(
         [np.abs(f_cont[i] - c_cont[i]) for i in range(len(w_cont))]
-    ), len(c_cont))
+    )/len(c_cont)
 
     # Search for index here w_spec(index) closest to line
     min_w = np.abs(np.array(w_spec) - line)
@@ -7235,13 +7232,13 @@ def fluxes(
     ws = []
     for ii in range(len(w_fit) - 1, 1, -1):
         if (
-            old_div(f_fit[ii], c_fit[ii]) < 1.05
-            and old_div(f_fit[ii - 1], c_fit[ii - 1]) < 1.05
+            (f_fit[ii]/c_fit[ii]) < 1.05
+            and (f_fit[ii - 1]/c_fit[ii - 1]) < 1.05
             and low_limit == 0
         ):
             low_limit = w_fit[ii]
         #        if f_fit[ii]/c_fit[ii] < 1.05 and low_limit == 0: low_limit = w_fit[ii]
-        fs.append(old_div(f_fit[ii], c_fit[ii]))
+        fs.append(f_fit[ii]/c_fit[ii])
         ws.append(w_fit[ii])
     if low_limit == 0:
         sorted_by_flux = np.argsort(fs)
@@ -7270,13 +7267,13 @@ def fluxes(
     ws = []
     for ii in range(len(w_fit) - 1):
         if (
-            old_div(f_fit[ii], c_fit[ii]) < 1.05
-            and old_div(f_fit[ii + 1], c_fit[ii + 1]) < 1.05
+            (f_fit[ii]/c_fit[ii]) < 1.05
+            and (f_fit[ii + 1]/c_fit[ii + 1]) < 1.05
             and high_limit == 0
         ):
             high_limit = w_fit[ii]
         #        if f_fit[ii]/c_fit[ii] < 1.05 and high_limit == 0: high_limit = w_fit[ii]
-        fs.append(old_div(f_fit[ii], c_fit[ii]))
+        fs.append(f_fit[ii], c_fit[ii])
         ws.append(w_fit[ii])
     if high_limit == 0:
         sorted_by_flux = np.argsort(fs)
@@ -7345,7 +7342,7 @@ def fluxes(
         residuals = f_spec - gaussian_fit - continuum
         rms_fit = np.nansum(
             [
-                (old_div((residuals[i] ** 2), (len(residuals) - 2))) ** 0.5
+                ((residuals[i] ** 2)/(len(residuals) - 2)) ** 0.5
                 for i in range(len(w_spec))
                 if (w_spec[i] >= low_limit and w_spec[i] <= high_limit)
             ]
@@ -7355,15 +7352,15 @@ def fluxes(
         gaussian_flux = gauss_flux(fit[1], fit[2])
         error1 = np.abs(gauss_flux(fit[1] + fit_error[1], fit[2]) - gaussian_flux)
         error2 = np.abs(gauss_flux(fit[1], fit[2] + fit_error[2]) - gaussian_flux)
-        gaussian_flux_error = old_div(1, (old_div(1, error1 ** 2) + old_div(1, error2 ** 2)) ** 0.5)
+        gaussian_flux_error = (1/((1/error1 ** 2) + (1/error2 ** 2)) ** 0.5)
 
         fwhm = fit[2] * 2.355
         fwhm_error = fit_error[2] * 2.355
-        fwhm_vel = old_div(fwhm, fit[0]) * C
-        fwhm_vel_error = old_div(fwhm_error, fit[0]) * C
+        fwhm_vel = (fwhm/fit[0]) * C
+        fwhm_vel_error = (fwhm_error/fit[0]) * C
 
-        gaussian_ew = old_div(gaussian_flux, np.nanmedian(f_cont))
-        gaussian_ew_error = old_div(gaussian_ew * gaussian_flux_error, gaussian_flux)
+        gaussian_ew = gaussian_flux/np.nanmedian(f_cont)
+        gaussian_ew_error = gaussian_ew * gaussian_flux_error/gaussian_flux
 
         # Integrated flux
         # IRAF: flux = sum ((I(i)-C(i)) * (w(i2) - w(i1)) / (i2 - i2)
@@ -7375,16 +7372,16 @@ def fluxes(
             ]
         )
         flux_error = rms_cont * (high_limit - low_limit)
-        wave_resolution = old_div((wavelength[-1] - wavelength[0]), len(wavelength))
+        wave_resolution = (wavelength[-1] - wavelength[0])/len(wavelength)
         ew = wave_resolution * np.nansum(
             [
-                (1 - old_div(f_spec[i], continuum[i]))
+                (1 - (f_spec[i]/continuum[i]))
                 for i in range(len(w_spec))
                 if (w_spec[i] >= low_limit and w_spec[i] <= high_limit)
             ]
         )
-        ew_error = np.abs(old_div(ew * flux_error, flux))
-        gauss_to_integrated = old_div(gaussian_flux, flux) * 100.0
+        ew_error = np.abs(ew * flux_error/flux)
+        gauss_to_integrated = (gaussian_flux/flux) * 100.0
 
         # Plotting
         if plot:
@@ -7444,8 +7441,8 @@ def fluxes(
                 fit_error[0],
             ))
             print("                         y0 = ( %.3f +- %.3f )  1E-16 erg/cm2/s/A" % (
-                old_div(fit[1], 1e-16),
-                old_div(fit_error[1], 1e-16),
+                (fit[1]/1e-16),
+                (fit_error[1]/1e-16),
             ))
             print("                      sigma = ( %.3f +- %.3f )  A" % (
                 fit[2],
@@ -7453,9 +7450,9 @@ def fluxes(
             ))
             print("                    rms fit = %.3e erg/cm2/s/A" % (rms_fit))
             print("Gaussian Flux = ( %.2f +- %.2f ) 1E-16 erg/s/cm2         (error = %.1f per cent)" % (
-                old_div(gaussian_flux, 1e-16),
-                old_div(gaussian_flux_error, 1e-16),
-                old_div(gaussian_flux_error, gaussian_flux) * 100,
+                (gaussian_flux/1e-16),
+                (gaussian_flux_error/1e-16),
+                (gaussian_flux_error/gaussian_flux) * 100,
             ))
             print("FWHM          = ( %.3f +- %.3f ) A    =   ( %.1f +- %.1f ) km/s " % (
                 fwhm,
@@ -7468,9 +7465,9 @@ def fluxes(
                 gaussian_ew_error,
             ))
             print("\nIntegrated flux  = ( %.2f +- %.2f ) 1E-16 erg/s/cm2      (error = %.1f per cent) " % (
-                old_div(flux, 1e-16),
-                old_div(flux_error, 1e-16),
-                old_div(flux_error, flux) * 100,
+                (flux/1e-16),
+                (flux_error/1e-16),
+                (flux_error/flux) * 100,
             ))
             print("Eq. Width        = ( %.1f +- %.1f ) A" % (ew, ew_error))
             print("Gauss/Integrated = %.2f per cent " % gauss_to_integrated)
@@ -7593,8 +7590,8 @@ def fluxes(
 def dgauss(x, x0, y0, sigma0, x1, y1, sigma1):
     p = [x0, y0, sigma0, x1, y1, sigma1]
     #         0   1    2      3    4  5
-    return p[1] * np.exp(-0.5 * (old_div((x - p[0]), p[2])) ** 2) + p[4] * np.exp(
-        -0.5 * (old_div((x - p[3]), p[5])) ** 2
+    return p[1] * np.exp(-0.5 * ((x - p[0])/p[2]) ** 2) + p[4] * np.exp(
+        -0.5 * ((x - p[3])/p[5]) ** 2
     )
 
 
@@ -7775,7 +7772,7 @@ def dfluxes(
         median_w_cont_high = np.nanmedian(w_cont_high)
         median_f_cont_high = np.nanmedian(f_cont_high)
 
-        b = old_div((median_f_cont_low - median_f_cont_high), (
+        b = ((median_f_cont_low - median_f_cont_high)/(
             median_w_cont_low - median_w_cont_high
         ))
         a = median_f_cont_low - b * median_w_cont_low
@@ -7784,9 +7781,9 @@ def dfluxes(
         c_cont = b * np.array(w_cont) + a
 
     # rms continuum
-    rms_cont = old_div(np.nansum(
+    rms_cont = (np.nansum(
         [np.abs(f_cont[i] - c_cont[i]) for i in range(len(w_cont))]
-    ), len(c_cont))
+    )/len(c_cont))
 
     # Search for index here w_spec(index) closest to line
     min_w = np.abs(np.array(w_spec) - line1)
@@ -7826,13 +7823,13 @@ def dfluxes(
     ws = []
     for ii in range(len(w_fit) - 1, 1, -1):
         if (
-            old_div(f_fit[ii], c_fit[ii]) < 1.05
-            and old_div(f_fit[ii - 1], c_fit[ii - 1]) < 1.05
+            (f_fit[ii]/c_fit[ii]) < 1.05
+            and (f_fit[ii - 1]/c_fit[ii - 1]) < 1.05
             and low_limit == 0
         ):
             low_limit = w_fit[ii]
         #        if f_fit[ii]/c_fit[ii] < 1.05 and low_limit == 0: low_limit = w_fit[ii]
-        fs.append(old_div(f_fit[ii], c_fit[ii]))
+        fs.append((f_fit[ii]/c_fit[ii]))
         ws.append(w_fit[ii])
     if low_limit == 0:
         sorted_by_flux = np.argsort(fs)
@@ -7861,13 +7858,13 @@ def dfluxes(
     ws = []
     for ii in range(len(w_fit) - 1):
         if (
-            old_div(f_fit[ii], c_fit[ii]) < 1.05
-            and old_div(f_fit[ii + 1], c_fit[ii + 1]) < 1.05
+            (f_fit[ii]/c_fit[ii]) < 1.05
+            and (f_fit[ii + 1]/c_fit[ii + 1]) < 1.05
             and high_limit == 0
         ):
             high_limit = w_fit[ii]
         #        if f_fit[ii]/c_fit[ii] < 1.05 and high_limit == 0: high_limit = w_fit[ii]
-        fs.append(old_div(f_fit[ii], c_fit[ii]))
+        fs.append((f_fit[ii]/c_fit[ii]))
         ws.append(w_fit[ii])
     if high_limit == 0:
         sorted_by_flux = np.argsort(fs)
@@ -7955,7 +7952,7 @@ def dfluxes(
         residuals = f_spec - gaussian_fit - continuum
         rms_fit = np.nansum(
             [
-                (old_div((residuals[i] ** 2), (len(residuals) - 2))) ** 0.5
+                (((residuals[i] ** 2)/(len(residuals) - 2))) ** 0.5
                 for i in range(len(w_spec))
                 if (w_spec[i] >= low_limit and w_spec[i] <= high_limit)
             ]
@@ -7965,15 +7962,15 @@ def dfluxes(
         gaussian_flux = gauss_flux(fit[1], fit[2])
         error1 = np.abs(gauss_flux(fit[1] + fit_error[1], fit[2]) - gaussian_flux)
         error2 = np.abs(gauss_flux(fit[1], fit[2] + fit_error[2]) - gaussian_flux)
-        gaussian_flux_error = old_div(1, (old_div(1, error1 ** 2) + old_div(1, error2 ** 2)) ** 0.5)
+        gaussian_flux_error = (1/((1/error1 ** 2) + (1/error2 ** 2)) ** 0.5)
 
         fwhm = fit[2] * 2.355
         fwhm_error = fit_error[2] * 2.355
-        fwhm_vel = old_div(fwhm, fit[0]) * C
-        fwhm_vel_error = old_div(fwhm_error, fit[0]) * C
+        fwhm_vel = (fwhm/fit[0]) * C
+        fwhm_vel_error = (fwhm_error/fit[0]) * C
 
-        gaussian_ew = old_div(gaussian_flux, np.nanmedian(f_cont))
-        gaussian_ew_error = old_div(gaussian_ew * gaussian_flux_error, gaussian_flux)
+        gaussian_ew = (gaussian_flux/np.nanmedian(f_cont))
+        gaussian_ew_error = (gaussian_ew * gaussian_flux_error/gaussian_flux)
 
         # Integrated flux
         # IRAF: flux = sum ((I(i)-C(i)) * (w(i2) - w(i1)) / (i2 - i2)
@@ -7985,16 +7982,16 @@ def dfluxes(
             ]
         )
         flux_error = rms_cont * (high_limit - low_limit)
-        wave_resolution = old_div((wavelength[-1] - wavelength[0]), len(wavelength))
+        wave_resolution = ((wavelength[-1] - wavelength[0])/len(wavelength))
         ew = wave_resolution * np.nansum(
             [
-                (1 - old_div(f_spec[i], continuum[i]))
+                (1 - (f_spec[i]/continuum[i]))
                 for i in range(len(w_spec))
                 if (w_spec[i] >= low_limit and w_spec[i] <= high_limit)
             ]
         )
-        ew_error = np.abs(old_div(ew * flux_error, flux))
-        gauss_to_integrated = old_div(gaussian_flux, flux) * 100.0
+        ew_error = np.abs((ew * flux_error/flux))
+        gauss_to_integrated = (gaussian_flux/flux) * 100.0
 
         # Plotting
         if plot:
@@ -8006,7 +8003,7 @@ def dfluxes(
                 plt.ylabel("Flux [ erg cm$^{-2}$ s$^{-1}$ A$^{-1}$]")
             else:
                 plt.ylabel("Flux [ counts ]")
-            plt.xlim(old_div((line1 + line2), 2) - 40, old_div((line1 + line2), 2) + 40)
+            plt.xlim(((line1 + line2)/2) - 40, ((line1 + line2)/2) + 40)
             plt.ylim(fmin, fmax)
 
             # Vertical line at guess_centre
@@ -8057,8 +8054,8 @@ def dfluxes(
                 fit_error[0],
             ))
             print("                         y0 = ( %.3f +- %.3f )  1E-16 erg/cm2/s/A" % (
-                old_div(fit[1], 1e-16),
-                old_div(fit_error[1], 1e-16),
+                (fit[1]/1e-16),
+                (fit_error[1]/1e-16),
             ))
             print("                      sigma = ( %.3f +- %.3f )  A" % (
                 fit[2],
@@ -8066,9 +8063,9 @@ def dfluxes(
             ))
             print("                    rms fit = %.3e erg/cm2/s/A" % (rms_fit))
             print("Gaussian Flux = ( %.2f +- %.2f ) 1E-16 erg/s/cm2         (error = %.1f per cent)" % (
-                old_div(gaussian_flux, 1e-16),
-                old_div(gaussian_flux_error, 1e-16),
-                old_div(gaussian_flux_error, gaussian_flux) * 100,
+                (gaussian_flux/1e-16),
+                (gaussian_flux_error/1e-16),
+                (gaussian_flux_error/gaussian_flux) * 100,
             ))
             print("FWHM          = ( %.3f +- %.3f ) A    =   ( %.1f +- %.1f ) km/s " % (
                 fwhm,
@@ -8081,9 +8078,9 @@ def dfluxes(
                 gaussian_ew_error,
             ))
             print("\nIntegrated flux  = ( %.2f +- %.2f ) 1E-16 erg/s/cm2      (error = %.1f per cent) " % (
-                old_div(flux, 1e-16),
-                old_div(flux_error, 1e-16),
-                old_div(flux_error, flux) * 100,
+                (flux/1e-16),
+                (flux_error/1e-16),
+                (flux_error/flux) * 100,
             ))
             print("Eq. Width        = ( %.1f +- %.1f ) A" % (ew, ew_error))
             print("Gauss/Integrated = %.2f per cent " % gauss_to_integrated)
@@ -8302,7 +8299,7 @@ def search_peaks(
 
     # Fit a smooth continuum
     # smooth_points = 20      # Points in the interval
-    step = np.int(old_div(len(wavelength), smooth_points))  # step
+    step = np.int((len(wavelength)/smooth_points))  # step
     w_cont_smooth = np.zeros(smooth_points)
     f_cont_smooth = np.zeros(smooth_points)
 
@@ -8330,7 +8327,7 @@ def search_peaks(
         wavelength, interpolated_continuum_smooth, der=0
     )
 
-    funcion = old_div(flux, interpolated_continuum)
+    funcion = (flux/interpolated_continuum)
 
     # Searching for peaks using cut = 1.2 by default
     peaks = []
@@ -8384,7 +8381,7 @@ def search_peaks(
     # Estimate redshift of the brightest line ( Halpha line by default)
     Ha_index_list = el_name.tolist().index(brightest_line)
     Ha_w_rest = el_center[Ha_index_list]
-    Ha_redshift = old_div((Ha_w_obs - Ha_w_rest), Ha_w_rest)
+    Ha_redshift = ((Ha_w_obs - Ha_w_rest)/Ha_w_rest)
     if verbose:
         print("\n> Detected %i emission lines using %8s at %8.2f A as brightest line!!\n" % (
             len(peaks),
@@ -8404,12 +8401,12 @@ def search_peaks(
     peaks_highhigh = np.zeros(len(peaks))
 
     for i in range(len(peaks)):
-        minimo_w = np.abs(old_div(peaks[i], (1 + Ha_redshift)) - el_center)
+        minimo_w = np.abs((peaks[i]/(1 + Ha_redshift)) - el_center)
         if np.nanmin(minimo_w) < 2.5:
             indice = minimo_w.tolist().index(np.nanmin(minimo_w))
             peaks_name[i] = el_name[indice]
             peaks_rest[i] = el_center[indice]
-            peaks_redshift[i] = old_div((peaks[i] - el_center[indice]), el_center[indice])
+            peaks_redshift[i] = ((peaks[i] - el_center[indice])/el_center[indice])
             peaks_lowlow[i] = el_lowlow[indice]
             peaks_lowhigh[i] = el_lowhigh[indice]
             peaks_highlow[i] = el_highlow[indice]
@@ -8450,8 +8447,8 @@ def search_peaks(
                             cut,
                             peaks,
                             peaks_name,
-                            label)
-
+                            #label)  # TODO: label is unreferenced.
+        )
     continuum_limits = [peaks_lowlow, peaks_lowhigh, peaks_highlow, peaks_highhigh]
 
     if only_id_lines:
@@ -8515,7 +8512,7 @@ def smooth_spectrum(
 
     running_wave = []
     running_step_median = []
-    cuts = np.int(old_div((wave_max - wave_min), step))
+    cuts = np.int(((wave_max - wave_min)/step))
 
     exclude = 0
     corte_index = -1
@@ -8543,8 +8540,8 @@ def smooth_spectrum(
                 running_wave.append(next_wave)
                 # print running_wave
                 region = np.where(
-                    (wlm > running_wave[corte_index] - old_div(step, 2))
-                    & (wlm < running_wave[corte_index] + old_div(step, 2))
+                    (wlm > running_wave[corte_index] - np.int(step/2))
+                    & (wlm < running_wave[corte_index] + np.int(step/2))
                 )
                 running_step_median.append(np.nanmedian(s[region]))
                 if next_wave > exclude_wlm[exclude][1]:
@@ -8779,16 +8776,16 @@ def scale_sky_spectrum(
         object_spectrum_data = np.nanmedian(object_spectrum_data_gauss)
         object_spectrum_data_i = np.nanmedian(object_spectrum_data_integrated)
 
-        if fmin < old_div(object_spectrum_data, sky_spectrum_data[3]) < fmax:
+        if fmin < (object_spectrum_data/sky_spectrum_data[3]) < fmax:
             n_sky_lines_found = n_sky_lines_found + 1
             valid_peaks.append(peaks[i])
-            ratio_list.append(old_div(object_spectrum_data, sky_spectrum_data[3]))
+            ratio_list.append(object_spectrum_data/sky_spectrum_data[3])
             if verbose:
                 print("{:3.0f}   {:5.3f}         {:2.3f}             {:2.3f}".format(
                     n_sky_lines_found,
                     peaks[i],
-                    old_div(object_spectrum_data, sky_spectrum_data[3]),
-                    old_div(object_spectrum_data_i, sky_spectrum_data[7]),
+                    (object_spectrum_data/sky_spectrum_data[3]),
+                    (object_spectrum_data_i/sky_spectrum_data[7]),
                 ))
 
     # print "ratio_list =", ratio_list
@@ -9011,7 +9008,7 @@ def offset_positions(
     else:
         dec2 = dec2d + dec2m / 60.0 + dec2s / 3600.0
 
-    avdec = old_div((dec1 + dec2), 2)
+    avdec = (dec1 + dec2)/2
 
     deltadec = round(3600.0 * (dec2 - dec1), decimals)
     deltara = round(15 * 3600.0 * (ra2 - ra1) * (np.cos(np.radians(avdec))), decimals)
@@ -9158,7 +9155,7 @@ def compare_fix_2dfdr_wavelengths(rss1, rss2):
     )
 
     resolution = rss1.wavelength[1] - rss1.wavelength[0]
-    error = old_div(np.nanmedian(dif), resolution) * 100.0
+    error = (np.nanmedian(dif)/resolution) * 100.0
     print("\n> The median rms is {:8.6f} A,  resolution = {:5.2f} A,  error = {:5.3} %".format(
         np.nanmedian(dif), resolution, error
     ))
