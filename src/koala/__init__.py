@@ -5,7 +5,6 @@
 # Extra work by Ben Lawson (MQ PACE student)
 # Plus Taylah and Matt (sky subtraction)
 from __future__ import absolute_import, division, print_function
-from builtins import str
 from builtins import range
 from past.utils import old_div
 version = "Version 0.72 - 13th February 2020"
@@ -1520,7 +1519,7 @@ class RSS(object):
             )
             plt.plot(self.wavelength, self.extinction_correction, "g")
             plt.minorticks_on()
-            plt.title("Correction for extinction using airmass = " + str(self.airmass))
+            plt.title("Correction for extinction using airmass = {}".format(self.airmass))
             plt.ylabel("Flux correction")
             plt.xlabel("Wavelength [$\AA$]")
             # plt.show()
@@ -2313,7 +2312,7 @@ class RSS(object):
 
         cbar = plt.colorbar()
         plt.clim(np.nanmin(variable[list_spectra]), np.nanmax(variable[list_spectra]))
-        cbar.set_label(str(color_bar_text), rotation=90, labelpad=40)
+        cbar.set_label(color_bar_text, rotation=90, labelpad=40)
         cbar.ax.tick_params()
 
         # plt.show()
@@ -2358,7 +2357,7 @@ class RSS(object):
 
         # plt.colorbar()
         cbar = plt.colorbar()
-        cbar.set_label(str(color_bar_text), rotation=90, labelpad=labelpad)
+        cbar.set_label(color_bar_text, rotation=90, labelpad=labelpad)
         cbar.ax.tick_params()
 
         # plt.show()
@@ -2391,7 +2390,7 @@ class RSS(object):
         plt.title(
             self.object
             + " - Combined spectrum - "
-            + str(high_fibres)
+            + "{}".format(high_fibres)
             + " fibres with highest intensity"
         )
         plt.legend(frameon=False, loc=4, ncol=2)
@@ -3593,7 +3592,7 @@ class KOALA_RSS(RSS):
             plt.title(
                 self.object
                 + " - Combined spectrum - "
-                + str(high_fibres)
+                + "{}".format(high_fibres)
                 + " fibres with highest intensity"
             )
             plt.legend(frameon=False, loc=4, ncol=2)
@@ -3627,7 +3626,7 @@ class KOALA_RSS(RSS):
             plt.title(
                 self.object
                 + " - Combined spectrum - "
-                + str(high_fibres)
+                + "{}".format(high_fibres)
                 + " fibres with lowest intensity"
             )
             plt.legend(frameon=False, loc=4, ncol=2)
@@ -4573,9 +4572,9 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         cbar = fig.colorbar(cax, fraction=0.0457, pad=0.04)
 
         if fcal:
-            barlabel = str("Integrated Flux [erg s$^{-1}$ cm$^{-2}$]")
+            barlabel = "{}".format("Integrated Flux [erg s$^{-1}$ cm$^{-2}$]")
         else:
-            barlabel = str("Integrated Flux [Arbitrary units]")
+            barlabel = "{}".format("Integrated Flux [Arbitrary units]")
         cbar.set_label(barlabel, rotation=270, labelpad=20, fontsize=14)
         #        cbar.ax.set_yticklabels(['< -1', '0', '> 1'])# vertically oriented colorbar
 
@@ -4615,8 +4614,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         )
 
         print("\n> Created map with name ", name, " integrating range [", wavelength1, ",", wavelength2, "]")
-        print("    Data shape" + str(np.shape(self.data)))
-        print("    Int map shape" + str(np.shape(mapa)))
+        print("    Data shape {}".format(np.shape(self.data)))
+        print("    Int map shape  {}".format(np.shape(mapa)))
         return mapa
 
     # -----------------------------------------------------------------------------
@@ -4983,9 +4982,9 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             plt.plot(r_norm, F_norm, "-")
             plt.title(
                 "Growth curve between "
-                + str(min_wave)
+                + "{}".format(min_wave)
                 + " and "
-                + str(max_wave)
+                + "{}".format(max_wave)
                 + " in "
                 + self.object
             )
@@ -5076,7 +5075,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 valid_intensity_smooth,
                 "r-",
                 alpha=0.5,
-                label="Smooth = " + str(smooth),
+                label="Smooth = " + "{}".format(smooth),
             )
             margen = 0.1 * (np.nanmax(intensity) - np.nanmin(intensity))
             plt.ylim(np.nanmin(intensity) - margen, np.nanmax(intensity) + margen)
@@ -5088,7 +5087,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 "Integrated spectrum of "
                 + self.object
                 + " for r_half_light = "
-                + str(r_max)
+                + "{}".format(r_max)
             )
             plt.axvline(x=min_wave, color="k", linestyle="--", alpha=0.5)
             plt.axvline(x=max_wave, color="k", linestyle="--", alpha=0.5)
@@ -6538,13 +6537,13 @@ class CUBE(RSS, Interpolated_cube):
 
         if barlabel == "":
             if fcal:
-                barlabel = str("Integrated Flux [10$^{-16}$ erg s$^{-1}$ cm$^{-2}$]")
+                barlabel = "{}".format("Integrated Flux [10$^{-16}$ erg s$^{-1}$ cm$^{-2}$]")
             else:
-                barlabel = str("Integrated Flux [Arbitrary units]")
+                barlabel = "{}".format("Integrated Flux [Arbitrary units]")
         #        if fcal:
-        #            cbar.set_label(str("Integrated Flux [10$^{-16}$ erg s$^{-1}$ cm$^{-2}$]"), rotation=270, labelpad=40, fontsize=fig_size*1.2)
+        #            cbar.set_label("{}".format("Integrated Flux [10$^{-16}$ erg s$^{-1}$ cm$^{-2}$]"), rotation=270, labelpad=40, fontsize=fig_size*1.2)
         #        else:
-        #            cbar.set_label(str("Integrated Flux [Arbitrary units]"), rotation=270, labelpad=40, fontsize=fig_size*1.2)
+        #            cbar.set_label("{}".format("Integrated Flux [Arbitrary units]"), rotation=270, labelpad=40, fontsize=fig_size*1.2)
         cbar.set_label(barlabel, rotation=270, labelpad=20, fontsize=fig_size * 1.2)
 
         #        cbar.ax.set_yticklabels(['< -1', '0', '> 1'])# vertically oriented colorbar
@@ -6723,7 +6722,7 @@ class CUBE(RSS, Interpolated_cube):
         bLastIndex = np.searchsorted(self.wavelength, bEnd)
         ratioMap = [[i for i in range(yLength)] for j in range(xLength)]
         for y in range(yLength):
-            print("Column " + str(y))
+            print("Column {}".format(y))
             for x in range(xLength):
                 if fcal == False:
                     spectrum = self.data[:, x, y]
@@ -9269,13 +9268,13 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
         sky_rss_list = [[0], [0], [0], [0], [0], [0], [0], [0], [0], [0]]
         pk = (
             "_"
-            + str(int(pixel_size_arcsec))
+            + "{}".format(int(pixel_size_arcsec))
             + "p"
-            + str(int((abs(pixel_size_arcsec) - abs(int(pixel_size_arcsec))) * 10))
+            + "{}".format(int((abs(pixel_size_arcsec) - abs(int(pixel_size_arcsec))) * 10))
             + "_"
-            + str(int(kernel_size_arcsec))
+            + "{}".format(int(kernel_size_arcsec))
             + "k"
-            + str(int((abs(kernel_size_arcsec) - abs(int(kernel_size_arcsec))) * 100))
+            + "{}".format(int((abs(kernel_size_arcsec) - abs(int(kernel_size_arcsec))) * 100))
         )
 
         print("  1. Checking input values: ")
