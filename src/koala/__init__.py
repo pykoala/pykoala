@@ -2312,7 +2312,7 @@ class RSS(object):
 
         cbar = plt.colorbar()
         plt.clim(np.nanmin(variable[list_spectra]), np.nanmax(variable[list_spectra]))
-        cbar.set_label("{}".format(color_bar_text), rotation=90, labelpad=40)
+        cbar.set_label(color_bar_text, rotation=90, labelpad=40)
         cbar.ax.tick_params()
 
         # plt.show()
@@ -2357,7 +2357,7 @@ class RSS(object):
 
         # plt.colorbar()
         cbar = plt.colorbar()
-        cbar.set_label("{}".format(color_bar_text), rotation=90, labelpad=labelpad)
+        cbar.set_label(color_bar_text, rotation=90, labelpad=labelpad)
         cbar.ax.tick_params()
 
         # plt.show()
