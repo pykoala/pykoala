@@ -5,8 +5,6 @@
 # Extra work by Ben Lawson (MQ PACE student)
 # Plus Taylah and Matt (sky subtraction)
 from __future__ import absolute_import, division, print_function
-from builtins import str
-from builtins import range
 from past.utils import old_div
 version = "Version 0.72 - 13th February 2020"
 
@@ -167,7 +165,7 @@ class RSS(object):
         title = " - [6500,6600]", plot = True)
         """
 
-        print("\n  Computing integrated fibre values", text)
+        print("\n  Computing integrated fibre values {}".format(text))
 
         if list_spectra == "all":
             list_spectra = list(range(self.n_spectra))
@@ -291,13 +289,13 @@ class RSS(object):
             for fibre in range(high_fibres):
                 region.append(integrated_intensity_sorted[-1 - fibre])
             if verbose:
-                print("\n> Identifying emission lines using the", high_fibres, "fibres with the highest integrated intensity")
-                print("  which are :", region)
+                print("\n> Identifying emission lines using the {} fibres with the highest integrated intensity".format(high_fibres))
+                print("  which are : {}".format(region))
             combined_high_spectrum = np.nansum(self.intensity_corrected[region], axis=0)
         else:
             combined_high_spectrum = self.intensity_corrected[fibre]
             if verbose:
-                print("\n> Identifying emission lines in fibre", fibre)
+                print("\n> Identifying emission lines in fibre {}".format(fibre))
 
         # Search peaks
         peaks, peaks_name, peaks_rest, continuum_limits = search_peaks(
@@ -372,7 +370,7 @@ class RSS(object):
         if correct_high_cosmics == False:
             print("  Only CCD defects (nan and negative values) are considered.")
         else:
-            print("  Using clip_high = ", clip_high, " for high cosmics")
+            print("  Using clip_high = {} for high cosmics".format(clip_high))
             print("  IMPORTANT: Be sure that any emission or sky line is fainter than clip_high/continuum !! ")
 
         flux_5578 = []  # For correcting sky line 5578 if requested
@@ -463,11 +461,7 @@ class RSS(object):
                     if s[wave] > clip_high * fit_median[wave]:
                         if verbose:
                             print("  "
-                                  "CLIPPING HIGH =", clip_high,
-                                  "in fibre", fibre,
-                                  "w =", wlm[wave],
-                                  "value=", s[wave],
-                                  "v/median=", s[wave]/fit_median[wave])  # " median=",fit_median[wave]
+                                  "CLIPPING HIGH = {} in fibre {} w = {} value= {} v/median= {}".format(clip_high, fibre, wlm[wave], s[wave], s[wave]/fit_median[wave]))  # " median=",fit_median[wave]
                         s[wave] = fit_median[wave]
 
             if fibre == fibre_p:
@@ -489,11 +483,9 @@ class RSS(object):
         sys.stdout.flush()
 
         max_ratio = np.nanmax(max_ratio_list)
-        print("\n  Maximum value found of flux/continuum = ", max_ratio)
+        print("\n  Maximum value found of flux/continuum = {}".format(max_ratio))
         if correct_high_cosmics:
-            print("  Recommended value for clip_high = ", int(
-                max_ratio + 1
-            ), ", here we used ", clip_high)
+            print("  Recommended value for clip_high = {} , here we used {}".format(int(max_ratio + 1), clip_high))
 
         # Plot correction in fibre p_fibre
         if fibre_p > 0:
@@ -555,8 +547,7 @@ class RSS(object):
                     )
                 median_running.append(median_value)
                 if self.integrated_fibre[fibre]/median_running[fibre] > max_value:
-                    print("  Fibre ", fibre, " has a integrated/median ratio of ",
-                        self.integrated_fibre[fibre]/median_running[fibre], "  -> Might be a cosmic left!")
+                    print("  Fibre {} has a integrated/median ratio of {}    -> Might be a cosmic left!".format(fibre, self.integrated_fibre[fibre]/median_running[fibre]))
                     label = np.str(fibre)
                     plt.axvline(x=fibre, color="k", linestyle="--")
                     plt.text(fibre, self.integrated_fibre[fibre] / 2.0, label)
@@ -591,9 +582,9 @@ class RSS(object):
             if plot:
                 fig = plot_skyline_5578(fig_size, flux_5578, flux_5578_medfilt)
 
-            print("  Variations in throughput between", np.nanmin(
-                extra_throughput_correction
-            ), "and", np.nanmax(extra_throughput_correction))
+            print("  Variations in throughput between {} and {} ".format(
+                np.nanmin(extra_throughput_correction, np.nanmax(extra_throughput_correction))
+            ))
             print("  Applying this extra throughtput correction to all fibres...")
 
             for i in range(self.n_spectra):
@@ -669,24 +660,18 @@ class RSS(object):
                                 exclude_ranges_high.append(exclude_ranges_high_[i + 2])
                                 skip_next = 2
                                 if verbose:
-                                    print("Double overlap", exclude_ranges_low[
-                                        -1
-                                    ], exclude_ranges_high[-1])
+                                    print("Double overlap  {}  {}".format(exclude_ranges_low[-1], exclude_ranges_high[-1]))
                             else:
                                 exclude_ranges_low.append(exclude_ranges_low_[i])
                                 exclude_ranges_high.append(exclude_ranges_high_[i + 1])
                                 skip_next = 1
                                 if verbose:
-                                    print("Overlap", exclude_ranges_low[
-                                        -1
-                                    ], exclude_ranges_high[-1])
+                                    print("Overlap  {}  {}".format(exclude_ranges_low[-1], exclude_ranges_high[-1]))
                     else:
                         exclude_ranges_low.append(exclude_ranges_low_[i])
                         exclude_ranges_high.append(exclude_ranges_high_[i])
                         if verbose:
-                            print("Overlap", exclude_ranges_low[
-                                -1
-                            ], exclude_ranges_high[-1])
+                            print("Overlap  {}  {}".format(exclude_ranges_low[-1], exclude_ranges_high[-1]))
                 else:
                     if skip_next == 1:
                         skip_next = 0
@@ -720,14 +705,14 @@ class RSS(object):
         if fibre != 0:
             f_i = fibre
             f_f = fibre + 1
-            print("  Checking fibre ", fibre, " (only this fibre is corrected, use fibre = 0 for all)...")
+            print("  Checking fibre {} (only this fibre is corrected, use fibre = 0 for all)...".format(fibre))
             plot = True
         else:
             f_i = 0
             f_f = self.n_spectra
         for fibre in range(f_i, f_f):  # (self.n_spectra):
             if fibre == say_status:
-                print("  Checking fibre ", fibre, " ...")
+                print("  Checking fibre {}  ...".format(fibre))
                 say_status = say_status + 100
 
             s = self.intensity_corrected[fibre]
@@ -758,11 +743,8 @@ class RSS(object):
                     and wlm[i] <= exclude_ranges_high[rango]
                 ):
                     if verbose == True and imprimir == 1:
-                        print("  Excluding range [", exclude_ranges_low[
-                            rango
-                        ], ",", exclude_ranges_high[
-                            rango
-                        ], "] as it has an emission line")
+                        print("  Excluding range [ {} , {} ] as it has an emission line".format(
+                            exclude_ranges_low[rango], exclude_ranges_high[rango]))
                     if imprimir == 1:
                         imprimir = 0
                     # print "    Checking ", wlm[i]," NOT CORRECTED ",s[i], s[i]-fit_median[i]
@@ -777,21 +759,20 @@ class RSS(object):
                         s[i] = fit_median[i]
                         s[i + 1] = fit_median[i + 1]  # "P-Cygni-like structures
                         if verbose:
-                            print("  Found P-Cygni-like feature in ", wlm[i])
+                            print("  Found P-Cygni-like feature in {}".format(wlm[i]))
                     if disp[i] > dispersion * dclip or disp[i] < -dispersion * dclip:
                         s[i] = fit_median[i]
                         if verbose:
-                            print("  Clipping feature in ", wlm[i])
+                            print("  Clipping feature in {}".format(wlm[i]))
 
                     if wlm[i] > exclude_ranges_high[rango] and imprimir == 0:
                         if verbose:
-                            print("  Checked", wlm[
-                                i
-                            ], "  End range ", rango, exclude_ranges_low[
-                                rango
-                            ], exclude_ranges_high[
-                                rango
-                            ])
+                            print("  Checked {}  End range {} {} {}".format(
+                                wlm[i], rango,
+                                exclude_ranges_low[rango],
+                                exclude_ranges_high[rango]
+                                )
+                            )
                         rango = rango + 1
                         imprimir = 1
                     if rango == len(exclude_ranges_low):
@@ -1055,7 +1036,7 @@ class RSS(object):
         if fibre != 0:
             f_i = fibre
             f_f = fibre + 1
-            print("  Checking fibre ", fibre, " (only this fibre is corrected, use fibre = 0 for all)...")
+            print("  Checking fibre {} (only this fibre is corrected, use fibre = 0 for all)...".format(fibre))
             plot = True
             verbose = True
             warnings = True
@@ -1065,8 +1046,10 @@ class RSS(object):
         for fibre in range(f_i, f_f):  # (self.n_spectra):
             if fibre == say_status:
                 print("  Checking fibre {:4} ...  ({:6.2f} % completed) ...".format(
-                    fibre, fibre * 100.0 / self.n_spectra
-                ))
+                    fibre,
+                    fibre * 100.0 / self.n_spectra
+                    )
+                )
                 say_status = say_status + 20
 
             # Gaussian fits to the sky spectrum
@@ -1104,7 +1087,7 @@ class RSS(object):
                     if sl_fnl[i] == 1:
                         warnings_ = True
                         if verbose:
-                            print("  Line ", sl_center[i], " blended with ", dsky2[di])
+                            print("  Line {} blended with {}".format(sl_center[i], dsky2[di]))
                     resultado = dfluxes(
                         w,
                         sky_sl_gaussian_fitted,
@@ -1154,7 +1137,7 @@ class RSS(object):
                 sl_gaussian_sigma.append(resultado[5] / 2.355)
                 if el_low < sl_center[i] < el_high:
                     if verbose:
-                        print("  SKY line", sl_center[i], "in EMISSION LINE !")
+                        print("  SKY line {} in EMISSION LINE !".format(sl_center[i]))
                     skip_sl_fit.append(True)
                 else:
                     skip_sl_fit.append(False)
@@ -1162,9 +1145,9 @@ class RSS(object):
                 # print "  Fitted wavelength for sky line ",sl_center[i]," : ",resultado[1],"   ",resultado[5]
                 if plot_fit:
                     if verbose:
-                        print("  Fitted wavelength for sky line ", sl_center[
-                            i
-                        ], " : ", sl_gauss_center[i], "  sigma = ", sl_gaussian_sigma[i])
+                        print("  Fitted wavelength for sky line {} : {}   sigma = {}".format(
+                            sl_center[i], sl_gauss_center[i], sl_gaussian_sigma[i])
+                        )
                     wmin = sl_lmin[i]
                     wmax = sl_lmax[i]
 
@@ -1178,7 +1161,7 @@ class RSS(object):
             object_sl_gaussian_center = []
             di = 0
             if verbose:
-                print("\n> Performing Gaussian fitting to sky lines in fibre", fibre, " of object data...")
+                print("\n> Performing Gaussian fitting to sky lines in fibre {} of object data...".format(fibre))
 
             for i in range(number_sl):
                 if sl_fnl[i] == 0:
@@ -1187,9 +1170,8 @@ class RSS(object):
                     plot_fit = True
                 if skip_sl_fit[i]:
                     if verbose:
-                        print(" SKIPPING SKY LINE", sl_center[
-                            i
-                        ], " as located within the range of an emission line!")
+                        print(" SKIPPING SKY LINE  as located within the range of an emission line!".format(
+                            sl_center[i]))
                     object_sl_gaussian_flux.append(
                         float("nan")
                     )  # The value of the SKY SPECTRUM
@@ -1203,9 +1185,7 @@ class RSS(object):
                         if sl_fnl[i] == 1:
                             warnings_ = True
                             if verbose:
-                                print("  Line ", sl_center[i], " blended with ", dsky2[
-                                    di
-                                ])
+                                print("  Line  {} blended with {}".format(sl_center[i], dsky2[di]))
                         resultado = dfluxes(
                             w,
                             object_sl_gaussian_fitted,
@@ -1244,7 +1224,7 @@ class RSS(object):
                             )
                         else:
                             if verbose:
-                                print("  Bad fit for ", sl_center[i], "! ignoring it...")
+                                print("  Bad fit for {}! ignoring it...".format(sl_center[i]))
                             object_sl_gaussian_flux.append(float("nan"))
                             object_sl_gaussian_center.append(float("nan"))
                             object_sl_gaussian_sigma.append(float("nan"))
@@ -1284,7 +1264,7 @@ class RSS(object):
                             )
                         else:
                             if verbose:
-                                print("  Bad fit for ", sl_center[i], "! ignoring it...")
+                                print("  Bad fit for {}! ignoring it...".format(sl_center[i]))
                             object_sl_gaussian_flux.append(float("nan"))
                             object_sl_gaussian_center.append(float("nan"))
                             object_sl_gaussian_sigma.append(float("nan"))
@@ -1308,9 +1288,8 @@ class RSS(object):
                     # Check if center of previous sky line has a small difference in wavelength
                     small_center_correction = np.nanmedian(dif_center_obj_sky[0:i])
                     if verbose:
-                        print("- Small correction of center wavelength of sky line ", sl_center[
-                            i
-                        ], "  :", small_center_correction)
+                        print("- Small correction of center wavelength of sky line {}  :  {}".format(
+                            sl_center[i], small_center_correction))
 
                     object_sl_gaussian_fitted = substract_given_gaussian(
                         w,
@@ -1334,11 +1313,8 @@ class RSS(object):
                     for di in range(len(dsky1) - 1):
                         if sl_center[i] == dsky1[di]:
                             if verbose:
-                                print("  This was a double sky line, also substracting ", dsky2[
-                                    di
-                                ], "  at ", np.array(
-                                    dsky2[di]
-                                ) + small_center_correction)
+                                print("  This was a double sky line, also substracting {} at {}".format(
+                                    dsky2[di], np.array(dsky2[di]) + small_center_correction))
                             object_sl_gaussian_fitted = substract_given_gaussian(
                                 w,
                                 object_sl_gaussian_fitted,
@@ -1424,12 +1400,8 @@ class RSS(object):
                 #                    if skip_sl_fit[i] == False: print "{:2} {:6.1f} {:8.2f} {:8.2f}    {:7.4f}      {:5.2f}      {:6.3f}    {:6.3f}  {:6.3f}" .format(i+1,sl_center[i],sl_gaussian_flux[i],object_sl_gaussian_flux[i],ratio_object_sky_sl_gaussian[i],object_sl_gaussian_center[i]-sl_gauss_center[i],sl_ref_ratio[i],sl_gaussian_sigma[i],object_sl_gaussian_sigma[i])
                 #                    #if skip_sl_fit[i] == False: print  "{:2}   {:9.3f} {:9.3f}   {:9.3f}".format(i+1, object_sl_gaussian_center[i], sl_gauss_center[i], dif_center_obj_sky[i])
                 #
-                print("\n> Median center offset between OBJ and SKY :", offset, " A\n> Median gauss for the OBJECT ", np.nanmedian(
-                    object_sl_gaussian_sigma
-                ), " A")
-                print("> Median flux OBJECT / SKY = ", np.nanmedian(
-                    ratio_object_sky_sl_gaussian
-                ))
+                print("\n> Median center offset between OBJ and SKY : {} A\n> Median gauss for the OBJECT {}  A".format(offset, np.nanmedian(object_sl_gaussian_sigma)))
+                print("> Median flux OBJECT / SKY = {}".format(np.nanmedian(ratio_object_sky_sl_gaussian)))
 
             self.wavelength_offset_per_fibre.append(offset)
 
@@ -1447,7 +1419,7 @@ class RSS(object):
 
             if rebin:
                 if verbose:
-                    print("\n> Rebinning the spectrum of fibre", fibre, "to match sky spectrum...")
+                    print("\n> Rebinning the spectrum of fibre {} to match sky spectrum...".format(fibre))
                 f = object_sl_gaussian_fitted
                 f_new = rebin_spec_shift(w, f, offset)
             else:
@@ -1520,15 +1492,15 @@ class RSS(object):
             )
             plt.plot(self.wavelength, self.extinction_correction, "g")
             plt.minorticks_on()
-            plt.title("Correction for extinction using airmass = " + str(self.airmass))
+            plt.title("Correction for extinction using airmass = {}".format(self.airmass))
             plt.ylabel("Flux correction")
             plt.xlabel("Wavelength [$\AA$]")
             # plt.show()
             # plt.close()
 
         # Correct for extinction at given airmass
-        print("  Airmass = ", self.airmass)
-        print("  Observatory file with extinction curve :", observatory_file)
+        print("  Airmass = {}".format(self.airmass))
+        print("  Observatory file with extinction curve : {}".format(observatory_file))
         for i in range(self.n_spectra):
             self.intensity_corrected[i, :] = (
                 self.intensity_corrected[i, :] * self.extinction_correction
@@ -1569,7 +1541,7 @@ class RSS(object):
             sorted_by_flux = np.argsort(
                 self.integrated_fibre
             )  # (self.integrated_fibre)
-            print("\n> Identifying sky spaxels using the lowest integrated values in the [", sky_wave_min, ",", sky_wave_max, "] range ...")
+            print("\n> Identifying sky spaxels using the lowest integrated values in the [ {} , {}] range ...".format(sky_wave_min, sky_wave_max))
 
             #            if plot:
             # #               print "\n  Plotting fluxes and flux ratio: "
@@ -1586,7 +1558,7 @@ class RSS(object):
 
             # Angel routine: just take n lowest spaxels!
             optimal_n = n_sky
-            print("  We use the lowest", optimal_n, "fibres for getting sky. Their positions are:")
+            print("  We use the lowest {} fibres for getting sky. Their positions are:".format(optimal_n))
             # Compute sky spectrum and plot it
             self.sky_fibres = sorted_by_flux[:optimal_n]
             self.sky_emission = np.nanmedian(
@@ -1596,7 +1568,7 @@ class RSS(object):
 
         else:  # We provide a list with sky positions
             print("  We use the list provided to get the sky spectrum")
-            print("  sky_fibres = ", sky_fibres)
+            print("  sky_fibres = {}".format(sky_fibres))
             self.sky_fibres = np.array(sky_fibres)
             self.sky_emission = np.nanmedian(intensidad[self.sky_fibres], axis=0)
 
@@ -1615,7 +1587,7 @@ class RSS(object):
             plt.axvline(x=self.valid_wave_max, color="k", linestyle="--")
             plt.ylim([np.nanmin(intensidad), np.nanmax(intensidad)])
             plt.minorticks_on()
-            plt.title(self.description + " - Combined Sky Spectrum")
+            plt.title("{} - Combined Sky Spectrum".format(self.description))
             plt.legend(frameon=False)
             # plt.show()
             # plt.close()
@@ -1706,12 +1678,14 @@ class RSS(object):
                 wave_min_scale = 6600.0
                 wave_max_scale = 6800.0
                 print("  For 385R, we use the median value in the [6600, 6800] range.")
+            # print("  For {}, we use the median value in the [{}, {}] range.".format(
+            #     self.grating, wave_min_scale, wave_max_scale))
         else:
             if wave_min_scale == 0:
                 wave_min_scale = self.wavelength[0]
             if wave_max_scale == 0:
                 wave_max_scale = self.wavelength[-1]
-            print("  As given by the user, we use the median value in the [", wave_min_scale, ",", wave_max_scale, "] range.")
+            print("  As given by the user, we use the median value in the [{} , {}] range.".format(wave_min_scale, wave_max_scale))
 
         median_region = np.zeros(self.n_spectra)
         for i in range(self.n_spectra):
@@ -1722,10 +1696,8 @@ class RSS(object):
 
         median_value_skyflat = np.nanmedian(median_region)
         self.relative_throughput = median_region/median_value_skyflat
-        print("  Median value of skyflat in the [", wave_min_scale, ",", wave_max_scale, "] range = ", median_value_skyflat)
-        print("  Individual fibre corrections:  min =", np.nanmin(
-            self.relative_throughput
-        ), " max =", np.nanmax(self.relative_throughput))
+        print("  Median value of skyflat in the [ {} , {}] range = {}".format(wave_min_scale, wave_max_scale, median_value_skyflat))
+        print("  Individual fibre corrections:  min = {}  max = {}".format(np.nanmin(self.relative_throughput), np.nanmax(self.relative_throughput)))
 
         if plot:
             plt.figure(figsize=(10, 4))
@@ -1767,7 +1739,7 @@ class RSS(object):
             # plt.show()
             # plt.close()
 
-        print("\n>  Using median value of skyflat considering a median filter of", kernel_sky_spectrum, "...")  # LUKE
+        print("\n>  Using median value of skyflat considering a median filter of {} ...".format(kernel_sky_spectrum))  # LUKE
         median_sky_spectrum = np.nanmedian(self.intensity, axis=0)
         self.response_sky_spectrum = np.zeros_like(self.intensity)
         rms = np.zeros(self.n_spectra)
@@ -1808,7 +1780,7 @@ class RSS(object):
                     )
                     plt.xlim(self.wavelength[0] - 50, self.wavelength[-1] + 50)
                     plt.ylim(0.95, 1.05)
-                    ptitle = "Fibre " + np.str(i) + " with rms = " + np.str(rms[i])
+                    ptitle = "Fibre {} with rms = ".format(np.str(i), np.str(rms[i]))
                     plt.title(ptitle)
                     plt.xlabel("Wavelength [$\AA$]")
                     plt.legend(frameon=False, loc=3, ncol=1)
@@ -1817,9 +1789,7 @@ class RSS(object):
                     if pf < len(plot_fibres) - 1:
                         pf = pf + 1
 
-        print("  median rms = ", np.nanmedian(rms), "  min rms = ", np.nanmin(
-            rms
-        ), "  max rms = ", np.nanmax(rms))
+        print("  median rms = {} min rms = {}    max rms = {}".format(np.nanmedian(rms), np.nanmin(rms),np.nanmax(rms)))
         #        if plot:
         #            plt.figure(figsize=(10, 4))
         #            for i in range(self.n_spectra):
@@ -1947,15 +1917,13 @@ class RSS(object):
         if plot:
             plt.figure(figsize=(fig_size, fig_size / 2.5))
             if combined_cube:
-                print("  Telluric correction for this star (" + self.combined_cube.object + ") :")
+                print("  Telluric correction for this star ({}) :".format(self.combined_cube.object))
                 plt.plot(wlm, estrella, color="b", alpha=0.3)
                 plt.plot(wlm, estrella * telluric_correction, color="g", alpha=0.5)
                 plt.ylim(np.nanmin(estrella), np.nanmax(estrella))
 
             else:
-                print("  Example of telluric correction using fibres", region[
-                    0
-                ], " and ", region[1], ":")
+                print("  Example of telluric correction using fibres {} and {}  :".format(region[0], region[1]))
 
                 plt.plot(wlm, intensidad[region[0]], color="b", alpha=0.3)
                 plt.plot(
@@ -2452,7 +2420,7 @@ class RSS(object):
             if fibre != 0:
                 f_i = fibre
                 f_f = fibre + 1
-                print("  Checking fibre ", fibre, " (only this fibre is corrected, use fibre = 0 for all)...")
+                print("  Checking fibre {} (only this fibre is corrected, use fibre = 0 for all)...".format(fibre))
                 verbose = True
                 warnings = True
             else:
@@ -2514,9 +2482,7 @@ class RSS(object):
                         or sl_gaussian_sigma[i] > maxima_sigma
                     ):
                         if verbose:
-                            print("  Bad fitting for ", sl_center[
-                                i
-                            ], "... ignoring this fit...")
+                            print("  Bad fitting for {} ... ignoring this fit...".format(sl_center[i]))
                     else:
                         sl_offset_good.append(sl_offset[i])
                         if verbose:
@@ -2545,7 +2511,7 @@ class RSS(object):
             a2x = sol[2]
             xfibre = list(range(0, self.n_spectra))
 
-        print("  a0x =", a0x, "   a1x =", a1x, "     a2x =", a2x)
+        print("  a0x = {}    a1x = {}     a2x = {}".format(a0x, a1x, a2x))
         self.wavelength_parameters = [a0x, a1x, a2x]  # Save solutions
 
         fx = a0x + a1x * np.array(xfibre) + a2x * np.array(xfibre) ** 2
@@ -2760,14 +2726,9 @@ class KOALA_RSS(RSS):
         wavelength = wcsKOALA.dropaxis(1).wcs_pix2world(index_wave, 0)[0]
         intensity = RSS_fits_file[FitsExt.main].data[good_spaxels]
 
-        print("\n  Number of spectra in this RSS =", len(
-            RSS_fits_file[FitsExt.main].data
-        ), ",  number of good spectra =", len(
-            good_spaxels
-        ), " ,  number of bad spectra =", len(
-            bad_spaxels
-        ))
-        print("  Bad fibres =", bad_spaxels)
+        print("\n  Number of spectra in this RSS = {},  number of good spectra = {} ,  number of bad spectra ={}".format(
+            len(RSS_fits_file[FitsExt.main].data), len(good_spaxels), len(bad_spaxels)))
+        print("  Bad fibres = {}".format(bad_spaxels))
 
         # Read errors using RSS_fits_file[1]
         # self.header1 = RSS_fits_file[1].data      # CHECK WHEN DOING ERRORS !!!
@@ -2832,7 +2793,7 @@ class KOALA_RSS(RSS):
         print("\n> Setting the data for this file:")
 
         if variance.shape != intensity.shape:
-            print("\n* ERROR: * the intensity and variance matrices are", intensity.shape, "and", variance.shape, "respectively\n")
+            print("\n* ERROR: * the intensity and variance matrices are {} and {} respectively\n".format(intensity.shape, variance.shape))
             raise ValueError
         n_dim = len(intensity.shape)
         if n_dim == 2:
@@ -2842,7 +2803,7 @@ class KOALA_RSS(RSS):
             self.intensity = intensity.reshape((1, self.n_wave))
             self.variance = variance.reshape((1, self.n_wave))
         else:
-            print("\n* ERROR: * the intensity matrix supplied has", n_dim, "dimensions\n")
+            print("\n* ERROR: * the intensity matrix supplied has {} dimensions\n".format(n_dim))
             raise ValueError
 
         self.n_spectra = self.intensity.shape[0]
@@ -2853,17 +2814,16 @@ class KOALA_RSS(RSS):
             self.wavelength[0], self.wavelength[-1]
         ))
         if self.intensity.shape[1] != self.n_wave:
-            print("\n* ERROR: * spectra have", self.intensity.shape[
-                1
-            ], "wavelengths rather than", self.n_wave)
+            print("\n* ERROR: * spectra have {} wavelengths rather than {}".format(self.intensity.shape[1], self.n_wave))
             raise ValueError
         if (
             len(offset_RA_arcsec) != self.n_spectra
             or len(offset_DEC_arcsec) != self.n_spectra
         ):
-            print("\n* ERROR: * offsets (RA, DEC) = ({},{})".format(
-                len(self.offset_RA_arcsec), len(self.offset_DEC_arcsec)
-            ), "rather than", self.n_spectra)
+            print("\n* ERROR: * offsets (RA, DEC) = ({},{}) rather than {}".format(
+                len(self.offset_RA_arcsec), len(self.offset_DEC_arcsec), self.n_spectra
+                )
+            )
             raise ValueError
         else:
             self.offset_RA_arcsec = offset_RA_arcsec
@@ -2914,7 +2874,7 @@ class KOALA_RSS(RSS):
         else:
             self.valid_wave_min = valid_wave_min
             self.valid_wave_max = valid_wave_max
-            print("  As specified, we use the [", self.valid_wave_min, " , ", self.valid_wave_max, "] range.")
+            print("  As specified, we use the [ {} , {} ] range.".format(self.valid_wave_min, self.valid_wave_max))
 
         # Plot RSS_image
         if plot:
@@ -2952,9 +2912,8 @@ class KOALA_RSS(RSS):
 
             if nskyflat:
                 print("\n  IMPORTANT: We are dividing intensity data by the sky.response_sky_spectrum !!! ")
-                print("  This is kind of a flat, the changes are between ", np.nanmin(
-                    skyflat.response_sky_spectrum
-                ), "and ", np.nanmax(skyflat.response_sky_spectrum))
+                print("  This is kind of a flat, the changes are between {} and {}".format(
+                    np.nanmin(skyflat.response_sky_spectrum), np.nanmax(skyflat.response_sky_spectrum)))
                 print(" ")
                 self.intensity_corrected = (
                     self.intensity_corrected/self.response_sky_spectrum
@@ -2967,9 +2926,7 @@ class KOALA_RSS(RSS):
                 plt.ylim(0, 200 * np.nanmedian(self.intensity_corrected))
                 plt.minorticks_on()
                 plt.xlabel("Wavelength [$\AA$]")
-                plt.title(
-                    "Spectra CONSIDERING throughput correction (median value per fibre)"
-                )
+                plt.title("Spectra CONSIDERING throughput correction (median value per fibre)")
                 # plt.show()
                 # plt.close()
 
@@ -3050,9 +3007,9 @@ class KOALA_RSS(RSS):
                 print("  This process takes ~20 minutes for 385R!\n")
 
                 if scale_sky_1D != 0:
-                    print("  Sky spectrum scaled by ", scale_sky_1D)
+                    print("  Sky spectrum scaled by {}".format(scale_sky_1D))
                 sky = np.array(sky_spectrum) * scale_sky_1D
-                print("  Sky spectrum provided =", sky)
+                print("  Sky spectrum provided = {}".format(sky))
                 self.sky_emission = sky
                 self.fit_and_substract_sky_spectrum(
                     sky,
@@ -3087,7 +3044,7 @@ class KOALA_RSS(RSS):
                         )
                     else:
                         self.sky_emission = sky_spectrum * scale_sky_1D
-                        print("  As requested, we scale the given 1D spectrum by", scale_sky_1D)
+                        print("  As requested, we scale the given 1D spectrum by {}".format(scale_sky_1D))
 
                     if individual_sky_substraction:
                         print("\n  As requested, performing individual sky substraction in each fibre...")
@@ -3215,7 +3172,7 @@ class KOALA_RSS(RSS):
                         highlow_2 = 36
                         highhigh_2 = 52
                     if sky_line_2 != 0:
-                        print("  ... first checking", sky_line, "...")
+                        print("  ... first checking {} ...".format(sky_line))
                     for fibre_sky in range(self.n_spectra):
                         skyline_spec = fluxes(
                             self.wavelength,
@@ -3247,7 +3204,7 @@ class KOALA_RSS(RSS):
                         self.sky_emission[fibre_sky] = skyline_sky[11]
 
                     if sky_line_2 != 0:
-                        print("  ... now checking", sky_line_2, "...")
+                        print("  ... now checking {} ...".format(sky_line_2))
                         for fibre_sky in range(self.n_spectra):
                             skyline_spec = fluxes(
                                 self.wavelength,
@@ -3291,23 +3248,23 @@ class KOALA_RSS(RSS):
                         # Make linear fit
                         scale_sky_rss_1 = np.nanmedian(scale_per_fibre)
                         scale_sky_rss_2 = np.nanmedian(scale_per_fibre_2)
-                        print("  Median scale for line 1 :", scale_sky_rss_1, "range [", np.nanmin(
-                            scale_per_fibre
-                        ), ",", np.nanmax(
-                            scale_per_fibre
-                        ), "]")
-                        print("  Median scale for line 2 :", scale_sky_rss_2, "range [", np.nanmin(
-                            scale_per_fibre_2
-                        ), ",", np.nanmax(
-                            scale_per_fibre_2
-                        ), "]")
+                        print(
+                            "  Median scale for line 1 : {} range [ {}, {} ]]".format(
+                            scale_sky_rss_1, np.nanmin(scale_per_fibre), np.nanmax(scale_per_fibre)
+                            )
+                        )
+                        print(
+                            "  Median scale for line 2 : {} range [ {}, {} ]]".format(
+                            scale_sky_rss_2, np.nanmin(scale_per_fibre_2), np.nanmax(scale_per_fibre_2)
+                            )
+                        )
 
                         b = old_div((scale_sky_rss_1 - scale_sky_rss_2), (
                             sky_line - sky_line_2   # TODO: get data for 2D and test if can remove
                         ))
                         a = scale_sky_rss_1 - b * sky_line
                         # ,a+b*sky_line,a+b*sky_line_2
-                        print("  Appling linear fit with a =", a, "b =", b, "to all fibres in sky image...")
+                        print("  Appling linear fit with a = {} b = {} to all fibres in sky image...".format(a, b))
 
                         for i in range(self.n_wave):
                             self.sky_emission[:, i] = self.sky_emission[:, i] * (
@@ -3323,23 +3280,13 @@ class KOALA_RSS(RSS):
                         plt.axhline(y=scale_sky_rss, color="k", linestyle="--")
                         if sky_line_2 == 0:
                             text = (
-                                "Scale OBJECT / SKY using sky line $\lambda$"
-                                + np.str(sky_line)
-                            )
-                            print("  Scale per fibre in the range [", np.nanmin(
-                                scale_per_fibre
-                            ), ",", np.nanmax(
-                                scale_per_fibre
-                            ), "], median value is", scale_sky_rss)
+                                "Scale OBJECT / SKY using sky line $\lambda$ {}".format(np.str(sky_line)))
+                            print("  Scale per fibre in the range [{} , {} ], median value is {}".format(np.nanmin(scale_per_fibre), np.nanmax(scale_per_fibre), scale_sky_rss))
                             print("  Using median value to scale sky emission provided...")
                         if sky_line_2 != 0:
                             text = (
-                                "Scale OBJECT / SKY using sky lines $\lambda$"
-                                + np.str(sky_line)
-                                + " and $\lambda$"
-                                + np.str(sky_line_2)
-                            )
-                            label2 = "$\lambda$" + np.str(sky_line_2)
+                                "Scale OBJECT / SKY using sky lines $\lambda$ {}  and $\lambda$".format(np.str(sky_line), np.str(sky_line_2)))
+                            label2 = "$\lambda$ {}".format(np.str(sky_line_2))
                             plt.plot(scale_per_fibre_2, alpha=0.5, label=label2)
                             plt.axhline(y=scale_sky_rss_1, color="k", linestyle=":")
                             plt.axhline(y=scale_sky_rss_2, color="k", linestyle=":")
@@ -3355,7 +3302,7 @@ class KOALA_RSS(RSS):
 
             # (3) No sky spectrum or image is provided, obtain the sky using the n_sky lowest fibres
             if sky_method == "self":
-                print("\n  Using", n_sky, "lowest intensity fibres to create a sky...")
+                print("\n  Using {} lowest intensity fibres to create a sky...".format(n_sky))
                 self.find_sky_emission(
                     n_sky=n_sky,
                     plot=plot,
@@ -3376,7 +3323,7 @@ class KOALA_RSS(RSS):
 
         # If this RSS is an offset sky, perform a median filter to increase S/N
         if is_sky:
-            print("\n> This RSS file is defined as SKY... applying median filter with window", win_sky, "...")
+            print("\n> This RSS file is defined as SKY... applying median filter with window {} ...".format(win_sky))
             medfilt_sky = median_filter(
                 self.intensity_corrected, self.n_spectra, self.n_wave, win_sky=win_sky
             )
@@ -3413,9 +3360,7 @@ class KOALA_RSS(RSS):
                     integrated_intensity_sorted[-1],
                     integrated_intensity_sorted[0],
                 ]
-                print("  Example of telluric correction using fibres", region[
-                    0
-                ], " and ", region[1], ":")
+                print("  Example of telluric correction using fibres {} and {} :".format(region[0], region[1]))
                 plt.figure(figsize=(fig_size, fig_size / 2.5))
                 plt.plot(
                     self.wavelength,
@@ -3475,7 +3420,7 @@ class KOALA_RSS(RSS):
                 print("\n  Emission lines identified saved in self.el !!")
             else:
                 brightest_line_rest_wave = 6562.82
-                print("\n  As given, line ", brightest_line, " at rest wavelength = ", brightest_line_rest_wave, " is at ", brightest_line_wavelength)
+                print("\n  As given, line {} at rest wavelength = {} is at {}".format(brightest_line, brightest_line_rest_wave, brightest_line_wavelength))
                 self.el = [
                     [brightest_line],
                     [brightest_line_rest_wave],
@@ -3499,7 +3444,7 @@ class KOALA_RSS(RSS):
                     if self.el[0][i] == brightest_line:
                         obs_wave = self.el[2][i]
                         redshift = (self.el[2][i] - self.el[1][i])/self.el[1][i]
-                print("  Brightest emission line", brightest_line, "found at ", obs_wave, ", redshift = ", redshift)
+                print("  Brightest emission line {} foud at {} , redshift = {}".format(brightest_line, obs_wave, redshift))
 
                 el_identified = [[], [], [], []]
                 n_identified = 0
@@ -3508,9 +3453,7 @@ class KOALA_RSS(RSS):
                     for i in range(len(self.el[1])):
                         if line == self.el[1][i]:
                             if verbose:
-                                print("  Emission line ", self.el[0][i], self.el[1][
-                                    i
-                                ], "has been identified")
+                                print("  Emission line {} {} has been identified".format(self.el[0][i], self.el[1][i]))
                             n_identified = n_identified + 1
                             id_check = 1
                             el_identified[0].append(self.el[0][i])  # Name
@@ -3523,17 +3466,13 @@ class KOALA_RSS(RSS):
                         for i in range(len(el_center)):
                             if line == el_center[i]:
                                 el_identified[0].append(el_name[i])
-                                print("  Emission line", el_name[
-                                    i
-                                ], line, "has NOT been identified, adding...")
+                                print("  Emission line {} {} has NOT been identified, adding...".format(el_name[i], line))
                         el_identified[1].append(line)
                         el_identified[2].append(line * (redshift + 1))
                         el_identified[3].append(4 * broad)
 
                 self.el = el_identified
-                print("  Number of emission lines identified = ", n_identified, "of a total of", len(
-                    id_list
-                ), "provided. self.el updated accordingly")
+                print("  Number of emission lines identified = {} of a total of {} provided. self.el updated accordingly".format(n_identified, len(id_list)))
             else:
                 print("\n> List of emission lines provided but no identification was requested")
 
@@ -3571,8 +3510,8 @@ class KOALA_RSS(RSS):
             region = []
             for fibre_ in range(high_fibres):
                 region.append(integrated_intensity_sorted[-1 - fibre_])
-            print("\n> Checking results using", high_fibres, "fibres with the highest integrated intensity")
-            print("  which are :", region)
+            print("\n> Checking results using {} fibres with the highest integrated intensity".format(high_fibres))
+            print("  which are : {}".format(region))
 
             plt.figure(figsize=(fig_size, fig_size / 2.5))
             I = np.nansum(self.intensity[region], axis=0)
@@ -3590,12 +3529,7 @@ class KOALA_RSS(RSS):
             yy2 = np.nanpercentile(Ic, 99)
             rango = yy2 - yy1
             plt.ylim(yy1 - rango * 0.05, yy2)
-            plt.title(
-                self.object
-                + " - Combined spectrum - "
-                + str(high_fibres)
-                + " fibres with highest intensity"
-            )
+            plt.title("{} - Combined spectrum - {} fibres with highest intensity".format(self.object, high_fibres))
             plt.legend(frameon=False, loc=4, ncol=2)
             # plt.show()
             # plt.close()
@@ -3603,8 +3537,8 @@ class KOALA_RSS(RSS):
             region = []
             for fibre_ in range(high_fibres):
                 region.append(integrated_intensity_sorted[fibre_])
-            print("\n> Checking results using", high_fibres, "fibres with the lowest integrated intensity")
-            print("  which are :", region)
+            print("\n> Checking results using {} fibres with the lowest integrated intensity".format(high_fibres))
+            print("  which are : {}".format(region))
 
             plt.figure(figsize=(fig_size, fig_size / 2.5))
             I = np.nansum(self.intensity[region], axis=0)
@@ -3624,12 +3558,7 @@ class KOALA_RSS(RSS):
             plt.axvline(x=self.valid_wave_max, color="k", linestyle="--")
             #            plt.ylim([I_ymin-I_rango/18,I_ymax-I_rango*0.65])
             plt.ylim([I_med - I_rango * 0.65, I_med + I_rango * 0.65])
-            plt.title(
-                self.object
-                + " - Combined spectrum - "
-                + str(high_fibres)
-                + " fibres with lowest intensity"
-            )
+            plt.title("{} - Combined spectrum - {} fibres with lowest intensity".format(self.object, high_fibres))
             plt.legend(frameon=False, loc=4, ncol=2)
             # plt.show()
             # plt.close()
@@ -3642,12 +3571,10 @@ class KOALA_RSS(RSS):
             self.RSS_image()
 
         # Print summary and information from header
-        print("\n> Summary of reading rss file", '"' + filename + '"', ":\n")
-        print("  This is a KOALA '{}' file,".format(
-            AAOmega_Arm
-        ), "using grating '{}' in AAOmega".format(self.grating))
-        print("  Object:", self.object)
-        print("  Field of view:", field, "(spaxel size =", self.spaxel_size, "arcsec)")
+        print("\n> Summary of reading rss file ''{}'' :".format(filename))
+        print("\n  This is a KOALA '{}' file, using grating '{}' in AAOmega".format(AAOmega_Arm, self.grating))
+        print("  Object: {}".format(self.object))
+        print("  Field of view: {} (spaxel size = {} arcsec)".format(field, self.spaxel_size))
         print("  Center position: (RA, DEC) = ({:.3f}, {:.3f}) degrees".format(
             self.RA_centre_deg, self.DEC_centre_deg
         ))
@@ -3683,18 +3610,18 @@ class KOALA_RSS(RSS):
                     print("  Wavelengths NOT corrected for small shifts")
 
             if is_sky:
-                print("  This is a SKY IMAGE, median filter with window", win_sky, "applied !")
+                print("  This is a SKY IMAGE, median filter with window {} applied !".format(win_sky))
             else:
                 if sky_method == "none":
                     print("  Intensities NOT corrected for sky emission")
                 if sky_method == "self":
-                    print("  Intensities corrected for sky emission using", n_sky, "spaxels with lowest values !")
+                    print("  Intensities corrected for sky emission using {} spaxels with lowest values !".format(n_sky))
                 if sky_method == "1D":
                     print("  Intensities corrected for sky emission using (scaled) spectrum provided ! ")
                 if sky_method == "1Dfit":
                     print("  Intensities corrected for sky emission fitting Gaussians to both 1D sky spectrum and each fibre ! ")
                 if sky_method == "2D":
-                    print("  Intensities corrected for sky emission using sky image provided scaled by", scale_sky_rss, "!")
+                    print("  Intensities corrected for sky emission using sky image provided scaled by {} !".format(scale_sky_rss))
             if telluric_correction[0] != 0:
                 print("  Intensities corrected for telluric absorptions !")
             else:
@@ -3716,7 +3643,7 @@ class KOALA_RSS(RSS):
             if clean_sky_residuals == True and fibre == 0:
                 print("  Intensities cleaned for sky residuals !")
             if clean_sky_residuals == True and fibre != 0:
-                print("  Only fibre ", fibre, " has been corrected for sky residuals")
+                print("  Only fibre {} has been corrected for sky residuals".format(fibre))
             if clean_sky_residuals == False:
                 print("  Intensities NOT corrected for sky residuals")
 
@@ -3792,11 +3719,11 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
 
         if zeros:
             print("\n> Creating empty cube using information provided in rss file: ")
-            print(" ", self.description)
+            print(" {}".format(self.description))
         else:
-            print("\n> Creating cube from file rss file: ", self.description)
-        print("  Pixel size  = ", self.pixel_size_arcsec, " arcsec")
-        print("  kernel size = ", self.kernel_size_arcsec, " arcsec")
+            print("\n> Creating cube from file rss file: {}".format(self.description))
+        print("  Pixel size  = {} arcsec".format(self.pixel_size_arcsec))
+        print("  kernel size = {} arcsec".format(self.kernel_size_arcsec))
 
         # centre_deg = [RA,DEC] if we need to give new RA, DEC centre
         if len(centre_deg) == 2:
@@ -4073,12 +4000,9 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         print("\n> Created integrated map between {:5.2f} and {:5.2f}.".format(
             min_wave, max_wave
         ))
-        print("  The peak of the emission in integrated image is in spaxel [", self.max_x, ",", self.max_y, "]")
-        print("  The peak of the emission tracing all wavelengths is in spaxel [", np.round(
-            self.x_peak_median, 2
-        ), ",", np.round(
-            self.y_peak_median, 2
-        ), "]")
+        print("  The peak of the emission in integrated image is in spaxel [ {} , {} ]".format(self.max_x, self.max_y))
+        print("  The peak of the emission tracing all wavelengths is in spaxel [ {} , {} ]".format(
+            np.round(self.x_peak_median, 2), np.round(self.y_peak_median, 2)))
 
         self.offset_from_center_x_arcsec_tracing = (
             self.x_peak_median - self.spaxel_RA0 + 1
@@ -4132,8 +4056,8 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         weight_y = np.diff(((3.0 * y - y ** 3 + 2.0)/4))
         if x_min < 0 or x_max >= self.n_cols or y_min < 0 or y_max >= self.n_rows:
             if warnings:
-                print("**** WARNING **** : Spectra outside field of view:", x_min, kernel_centre_x, x_max)
-                print("                                                 :", y_min, kernel_centre_y, y_max)
+                print("**** WARNING **** : Spectra outside field of view: {} {} {}".format(x_min, kernel_centre_x, x_max))
+                print("                                                 : {} {} {}".format(y_min, kernel_centre_y, y_max))
         else:
             bad_wavelengths = np.argwhere(np.isnan(intensity))
             intensity[bad_wavelengths] = 0.0
@@ -4195,11 +4119,11 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 # ylabel="Flux [ 10$^{-16}$ * erg cm$^{-2}$ s$^{-1}$ A$^{-1}$]"
                 ylabel = "Flux [ 10$^{-16}$ erg cm$^{-2}$ s$^{-1}$ A$^{-1}$]"
         else:
-            print("  Adding spaxel  1  = [", x[0], ",", y[0], "]")
+            print("  Adding spaxel  1  = [ {} , {} ]".format(x[0], y[0]))
             spectrum = self.data[:, x[0], y[0]]
             for i in range(len(x) - 1):
                 spectrum = spectrum + self.data[:, x[i + 1], y[i + 1]]
-                print("  Adding spaxel ", i + 2, " = [", x[i + 1], ",", y[i + 1], "]")
+                print("  Adding spaxel {} = [ {} , {}]".format(i + 2, x[i + 1],[i + 1]))
                 ylabel = "Flux [relative units]"
             if fcal:
                 spectrum = (spectrum/self.flux_calibration)/1e16
@@ -4507,7 +4431,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         # plt.gca().invert_xaxis()   #MAMA
 
         if spaxel != 0:
-            print("  The center of the cube is in spaxel [", self.spaxel_RA0, ",", self.spaxel_DEC0, "]")
+            print("  The center of the cube is in spaxel [ {} , {} ]".format(self.spaxel_RA0, self.spaxel_DEC0))
             plt.plot([0], [0], "+", ms=13, color="black", mew=4)
             plt.plot([0], [0], "+", ms=10, color="white", mew=2)
 
@@ -4517,7 +4441,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             offset_from_center_y_arcsec = (
                 spaxel[1] - self.spaxel_DEC0 + 1.5
             ) * self.pixel_size_arcsec
-            print("  - Green circle:  ", spaxel, ",        Offset from center [arcsec] :   ", offset_from_center_x_arcsec, ",", offset_from_center_y_arcsec)
+            print("  - Green circle:  {},        Offset from center [arcsec] :   {} {}".format(spaxel, offset_from_center_x_arcsec, offset_from_center_y_arcsec))
             plt.plot(
                 [offset_from_center_x_arcsec],
                 [offset_from_center_y_arcsec],
@@ -4533,13 +4457,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             offset_from_center_y_arcsec = (
                 spaxel2[1] - self.spaxel_DEC0 + 1.5
             ) * self.pixel_size_arcsec
-            print("  - Blue  square:  ", np.round(
-                spaxel2, 2
-            ), ", Offset from center [arcsec] : ", np.round(
-                offset_from_center_x_arcsec, 3
-            ), ",", np.round(
-                offset_from_center_y_arcsec, 3
-            ))
+            print("  - Blue  square:  {} , Offset from center [arcsec] : {} , {}".format(np.round(spaxel2, 2), np.round(offset_from_center_x_arcsec, 3), np.round(offset_from_center_y_arcsec, 3)))
             plt.plot(
                 [offset_from_center_x_arcsec],
                 [offset_from_center_y_arcsec],
@@ -4555,13 +4473,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             offset_from_center_y_arcsec = (
                 spaxel3[1] - self.spaxel_DEC0 + 1.5
             ) * self.pixel_size_arcsec
-            print("  - Red triangle:  ", np.round(
-                spaxel3, 2
-            ), ", Offset from center [arcsec] : ", np.round(
-                offset_from_center_x_arcsec, 3
-            ), ",", np.round(
-                offset_from_center_y_arcsec, 3
-            ))
+            print("  - Red triangle:  {} , Offset from center [arcsec] : {} , {}".format(np.round(spaxel3, 2), np.round(offset_from_center_x_arcsec, 3), np.round(offset_from_center_y_arcsec, 3)))
             plt.plot(
                 [offset_from_center_x_arcsec],
                 [offset_from_center_y_arcsec],
@@ -4614,9 +4526,9 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             axis=0,
         )
 
-        print("\n> Created map with name ", name, " integrating range [", wavelength1, ",", wavelength2, "]")
-        print("    Data shape" + str(np.shape(self.data)))
-        print("    Int map shape" + str(np.shape(mapa)))
+        print("\n> Created map with name {} integrating range [ {} , {} ]".format(name, wavelength1, wavelength2))
+        print("    Data shape {}".format(np.shape(self.data)))
+        print("    Int map shape {}".format(np.shape(mapa)))
         return mapa
 
     # -----------------------------------------------------------------------------
@@ -4780,7 +4692,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         odd_number = (
             smoothfactor * int((np.sqrt(self.n_wave)/2)) + 1
         )  # Originarily, smoothfactor = 2
-        print("  Using medfilt window = ", odd_number)
+        print("  Using medfilt window = {}".format(odd_number))
         # fit, trimming edges
         index = np.arange(len(x))
         valid_ind = np.where(
@@ -4819,7 +4731,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 resid = wx - fxm
                 # print "  Iteration {:2} results in RA: sigma_residual = {:.6f}, fit_len = {:5}  fit_len ={:5}".format(niter,sigma_resid,fit_len_init,fit_len)
             except Exception:
-                print("  Skipping iteration ", niter)
+                print("  Skipping iteration {}".format(niter))
             if (niter >= maxit) or (fit_len_init == fit_len):
                 if niter >= maxit:
                     print("  x: Max iterations, {:2}, reached!")
@@ -4861,7 +4773,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 resid = wy - fym
                 # print "  Iteration {:2} results in DEC: sigma_residual = {:.6f}, fit_len = {:5}  fit_len ={:5}".format(niter,sigma_resid,fit_len_init,fit_len)
             except Exception:
-                print("  Skipping iteration ", niter)
+                print("  Skipping iteration {}".format(niter))
             if (niter >= maxit) or (fit_len_init == fit_len):
                 if niter >= maxit:
                     print("  y: Max iterations, {:2}, reached!")
@@ -4939,7 +4851,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             max_wave = self.valid_wave_max
 
         if verbose:
-            print("  - Calculating growth curve between ", min_wave, max_wave, " :")
+            print("  - Calculating growth curve between {} {} :".format(min_wave, max_wave))
 
         index_min = np.searchsorted(self.wavelength, min_wave)
         index_max = np.searchsorted(self.wavelength, max_wave)
@@ -4972,23 +4884,13 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         if plot:
             r_norm = np.sqrt(old_div(np.array(r2_growth_curve), r2_half_light))  # TODO, function is not called. fix once called
             F_norm = old_div(np.array(F_growth_curve), F_guess)  # TODO, function is not called. fix once called
-            print("      Flux guess =", F_guess, np.nansum(
-                intensity
-            ), " ratio = ", old_div(np.nansum(intensity), F_guess))   # TODO, function is not called. fix once called
-            print("      Half-light radius:", self.seeing, " arcsec  = seeing if object is a star ")
-            print("      Light within 2, 3, 4, 5 half-light radii:", np.interp(
-                [2, 3, 4, 5], r_norm, F_norm
-            ))
+            print("      Flux guess = {} {}  ratio = {} {}".format(F_guess, np.nansum(intensity), old_div(np.nansum(intensity), F_guess)))   # TODO, function is not called. fix once called
+            print("      Half-light radius: {} arcsec  = seeing if object is a star ".format(self.seeing))
+            print("      Light within 2, 3, 4, 5 half-light radii: {}".format(np.interp([2, 3, 4, 5], r_norm, F_norm)))
             plt.figure(figsize=(10, 8))
             plt.plot(r_norm, F_norm, "-")
             plt.title(
-                "Growth curve between "
-                + str(min_wave)
-                + " and "
-                + str(max_wave)
-                + " in "
-                + self.object
-            )
+                "Growth curve between {} and {} in {}".format(min_wave, max_wave, self.object))
             plt.xlabel("Radius [arcsec]")
             plt.ylabel("Flux")
             plt.axvline(x=self.seeing, color="g", alpha=0.7)
@@ -5084,12 +4986,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
 
             plt.ylabel("Flux")
             plt.xlabel("Wavelength [$\AA$]")
-            plt.title(
-                "Integrated spectrum of "
-                + self.object
-                + " for r_half_light = "
-                + str(r_max)
-            )
+            plt.title("Integrated spectrum of {} for r_half_light = {}".format(self.object, r_max))
             plt.axvline(x=min_wave, color="k", linestyle="--", alpha=0.5)
             plt.axvline(x=max_wave, color="k", linestyle="--", alpha=0.5)
             plt.minorticks_on()
@@ -5146,7 +5043,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         if max_wave == 0:
             max_wave = self.valid_wave_max
 
-        print("\n> Computing response curve for", self.object, "using step=", step, " in range [", min_wave, ",", max_wave, "] ...")
+        print("\n> Computing response curve for {} using step= {},  in range [ {} , {} ]".format(self.object, step, min_wave, max_wave))
 
         #        flux_cal_read in units of ergs/cm/cm/s/A * 10**16
         #        lambda_cal_read, flux_cal_read, delta_lambda_read = np.loadtxt(filename, usecols=(0,1,3), unpack=True)
@@ -5172,7 +5069,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             and self.flux_cal_min_wave == min_wave
             and self.flux_cal_max_wave == max_wave
         ):
-            print("  This has been computed before for step=", step, " in range [", min_wave, ",", max_wave, "], using values computed before...")
+            print("  This has been computed before for step= {} in range [ {} , {} ], using values computed before...".format(step, min_wave, max_wave))
             measured_counts = self.flux_cal_measured_counts
         else:
             measured_counts = np.array(
@@ -5211,7 +5108,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
 
         if ha_width > 0:
             skipping = 0
-            print("  Skipping H-alpha absorption with width =", ha_width, "A ...")
+            print("  Skipping H-alpha absorption with width ={} A ...".format(ha_width))
             for i in range(len(lambda_cal)):
                 if (
                     lambda_cal[i] > 6563 - ha_width / 2.0
@@ -5222,13 +5119,13 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 else:
                     response_wavelength.append(lambda_cal[i])
                     response_curve.append(_response_curve_[i])
-            print("  ... Skipping a total of ", skipping, "wavelength points")
+            print("  ... Skipping a total of {} wavelength points".format(skipping))
         else:
             response_wavelength = lambda_cal
             response_curve = _response_curve_
 
         if fit_degree == 0:
-            print("  Using interpolated data with smooth = ", smooth, " for computing the response curve... ")
+            print("  Using interpolated data with smooth = {} for computing the response curve... ".format(smooth))
 
             median_kernel = 151
             response_curve_medfilt = sig.medfilt(response_curve, np.int(median_kernel))
@@ -5244,7 +5141,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 if fit_degree != 7:
                     if fit_degree != 5:
                         if fit_degree != 3:
-                            print("  We can't use a polynomium of grade ", fit_degree, " here, using fit_degree = 3 instead")
+                            print("  We can't use a polynomium of grade  here, using fit_degree = 3 instead".format(fit_degree))
                             fit_degree = 3
             if fit_degree == 3:
                 a3x, a2x, a1x, a0x = np.polyfit(response_wavelength, response_curve, 3)
@@ -5294,7 +5191,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         odd_number = (
             smoothfactor * int((np.sqrt(len(wl))/2)) - 1
         )  # Originarily, smoothfactor = 2
-        print("  Using medfilt window = ", odd_number, " for fitting...")
+        print("  Using medfilt window = {} for fitting...".format(odd_number))
         # fit, trimming edges
         # index=np.arange(len(x))
         # edgelow=0
@@ -5333,7 +5230,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 resid = wx - fxm
                 # print "  Iteration {:2} results in RA: sigma_residual = {:.6f}, fit_len = {:5}  fit_len ={:5}".format(niter,sigma_resid,fit_len_init,fit_len)
             except Exception:
-                print("  Skipping iteration ", niter)
+                print("  Skipping iteration {}".format(niter))
             if (niter >= maxit) or (fit_len_init == fit_len):
                 if niter >= maxit:
                     print("  Max iterations, {:2}, reached!")
@@ -5364,9 +5261,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             plt.xlim(np.min(self.wavelength), np.max(self.wavelength))
             plt.ylabel("Flux")
             plt.xlabel("Wavelength [$\AA$]")
-            plt.title(
-                "Response curve for absolute flux calibration using " + self.object
-            )
+            plt.title("Response curve for absolute flux calibration using {}".format(self.object))
             plt.legend(frameon=False, loc=1)
             plt.grid(which="both")
             plt.axvline(x=min_wave, color="k", linestyle="--", alpha=0.5)
@@ -5377,9 +5272,9 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
 
             plt.figure(figsize=(10, 8))
             if fit_degree > 0:
-                text = "Fit using polynomium of degree " + np.str(fit_degree)
+                text = "Fit using polynomium of degree {}".format(np.str(fit_degree))
             else:
-                text = "Using interpolated data with smooth = " + np.str(smooth)
+                text = "Using interpolated data with smooth = {}".format(np.str(smooth))
             plt.plot(
                 self.response_wavelength,
                 self.response_curve,
@@ -5404,9 +5299,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             plt.xlim(np.min(self.wavelength), np.max(self.wavelength))
             plt.ylabel("Flux")
             plt.xlabel("Wavelength [$\AA$]")
-            plt.title(
-                "Response curve for absolute flux calibration using " + self.object
-            )
+            plt.title("Response curve for absolute flux calibration using {}".format(self.object))
             plt.minorticks_on()
             plt.grid(which="both")
             plt.axvline(x=min_wave, color="k", linestyle="--", alpha=0.5)
@@ -5489,9 +5382,9 @@ def fit_Moffat(
         p0=(F_guess, r2_half_light, 1),
     )
     if plot:
-        print("Best-fit: L_star =", fit[0])
-        print("          alpha =", np.sqrt(fit[1]))
-        print("          beta =", fit[2])
+        print("Best-fit: L_star = {}".format(fit[0]))
+        print("          alpha = {}".format(np.sqrt(fit[1])))
+        print("          beta = {}".format(fit[2]))
         r_norm = np.sqrt(np.array(r2_growth_curve)/r2_half_light)
         plt.plot(
             r_norm,
@@ -5507,9 +5400,9 @@ def fit_Moffat(
 def KOALA_offsets(s, pa):
     print("\n> Offsets towards North and East between pointings," "according to KOALA manual, for pa =", pa, "degrees")
     pa *= np.pi/180
-    print("  a -> b :", s * np.sin(pa), -s * np.cos(pa))
-    print("  a -> c :", -s * np.sin(60 - pa), -s * np.cos(60 - pa))
-    print("  b -> d :", -np.sqrt(3) * s * np.cos(pa), -np.sqrt(3) * s * np.sin(pa))
+    print("  a -> b : {} {}".format(s * np.sin(pa), -s * np.cos(pa)))
+    print("  a -> c : {} {}".format(-s * np.sin(60 - pa), -s * np.cos(60 - pa)))
+    print("  b -> d : {} {}".format(-np.sqrt(3) * s * np.cos(pa), -np.sqrt(3) * s * np.sin(pa)))
 
 
 # -----------------------------------------------------------------------------
@@ -5606,7 +5499,7 @@ def obtain_flux_calibration(calibration_star_cubes):
     )
     #    flux_correction = flux_calibration
 
-    print("\n> Flux calibration for all wavelengths = ", flux_calibration)
+    print("\n> Flux calibration for all wavelengths = {}".format(flux_calibration))
     print("\n  Flux calibration obtained!")
     return flux_calibration
 
@@ -5735,21 +5628,19 @@ def align_3_cubes(
     DEC_centre_deg = rss1.ALIGNED_DEC_centre_deg
 
     print("\n  Offsets (in arcsec):")
-    print("  Offsets in x : ", x12, x23, "      Total offset in x = ", x12 + x23 + x31)
-    print("  Offsets in y : ", y12, y23, "      Total offset in y = ", y12 + y23 + y31)
+    print("  Offsets in x : {} {}       Total offset in x = {}".format(x12, x23, x12 + x23 + x31))
+    print("  Offsets in y : {} {}       Total offset in y = {}".format(y12, y23, y12 + y23 + y31))
 
     print("\n>        New_RA_centre_deg       New_DEC_centre_deg       Diff respect Cube 1 (arcsec)")
-    print("  Cube 1 : ", rss1.ALIGNED_RA_centre_deg, "     ", rss1.ALIGNED_DEC_centre_deg, "           0 0")
-    print("  Cube 2 : ", rss2.ALIGNED_RA_centre_deg, "     ", rss2.ALIGNED_DEC_centre_deg, "          ", (
-        rss2.ALIGNED_RA_centre_deg - rss1.ALIGNED_RA_centre_deg
-    ) * 3600.0, (
-        rss2.ALIGNED_DEC_centre_deg - rss1.ALIGNED_DEC_centre_deg
-    ) * 3600.0)
-    print("  Cube 3 : ", rss3.ALIGNED_RA_centre_deg, "     ", rss3.ALIGNED_DEC_centre_deg, "          ", (
-        rss3.ALIGNED_RA_centre_deg - rss1.ALIGNED_RA_centre_deg
-    ) * 3600.0, (
-        rss3.ALIGNED_DEC_centre_deg - rss1.ALIGNED_DEC_centre_deg
-    ) * 3600.0)
+    print("  Cube 1 : {}       {}            0 0".format(rss1.ALIGNED_RA_centre_deg, rss1.ALIGNED_DEC_centre_deg))
+    print("  Cube 2 : {}       {}            {} {}".format(
+        rss2.ALIGNED_RA_centre_deg, rss2.ALIGNED_DEC_centre_deg,
+        (rss2.ALIGNED_RA_centre_deg - rss1.ALIGNED_RA_centre_deg) * 3600.0,
+        (rss2.ALIGNED_DEC_centre_deg - rss1.ALIGNED_DEC_centre_deg) * 3600.0))
+    print("  Cube 3 : {}       {}            {} {}".format(
+        rss3.ALIGNED_RA_centre_deg, rss3.ALIGNED_DEC_centre_deg,
+        (rss3.ALIGNED_RA_centre_deg - rss1.ALIGNED_RA_centre_deg) * 3600.0,
+        (rss3.ALIGNED_DEC_centre_deg - rss1.ALIGNED_DEC_centre_deg) * 3600.0))
 
     offsets_files = [
         [x12, y12],
@@ -6251,7 +6142,7 @@ def align_n_cubes(
         cube_aligned_list.append(escribe)
 
     for i in range(n_rss):
-        print("\n> Creating aligned cube ", i + 1, " of a total of ", n_rss, "...")
+        print("\n> Creating aligned cube {} of a total of {} ...".format(i + 1, n_rss))
         cube_aligned_list[i] = Interpolated_cube(
             rss_list[i],
             pixel_size_arcsec,
@@ -6329,7 +6220,7 @@ class CUBE(RSS, Interpolated_cube):
         # Create RSS object
         super(CUBE, self).__init__()
 
-        print("\n> Reading combined datacube", '"' + filename + '"', "...")
+        print("\n> Reading combined datacube  ''{}''".format(filename))
         RSS_fits_file = fits.open(filename)  # Open file
 
         # General info:
@@ -6355,20 +6246,20 @@ class CUBE(RSS, Interpolated_cube):
         self.number_of_combined_files = RSS_fits_file[0].header["COFILES"]
         self.offsets_files = RSS_fits_file[0].header["OFFSETS"]
 
-        print("\n  Object         = ", self.object)
-        print("  Description    = ", self.description)
-        print("  Centre:  RA    = ", self.RA_centre_deg, "Deg")
-        print("          DEC    =", self.DEC_centre_deg, "Deg")
-        print("  PA             = ", self.PA, "Deg")
-        print("  Size [pix]     = ", self.n_rows, " x ", self.n_cols)
-        print("  Size [arcsec]  = ", self.n_rows * self.pixel_size_arcsec, " x ", self.n_cols * self.pixel_size_arcsec)
-        print("  Pix size       = ", self.pixel_size_arcsec, " arcsec")
-        print("  Files combined = ", self.number_of_combined_files)
-        print("  Offsets used   = ", self.offsets_files)
+        print("\n  Object         = {}".format(self.object))
+        print("  Description    = {}".format(self.description))
+        print("  Centre:  RA    = {} Deg".format(self.RA_centre_deg))
+        print("          DEC    = {} Deg".format(self.DEC_centre_deg))
+        print("  PA             = {} Deg".format(self.PA))
+        print("  Size [pix]     = {}   x  {}".format(self.n_rows, self.n_cols))
+        print("  Size [arcsec]  = {}   x  {}".format(self.n_rows * self.pixel_size_arcsec, self.n_cols * self.pixel_size_arcsec))
+        print("  Pix size       = {}  arcsec".format(self.pixel_size_arcsec))
+        print("  Files combined = {}".format(self.number_of_combined_files))
+        print("  Offsets used   = {}".format(self.offsets_files))
 
-        print("  Wave Range     = [", self.wavelength[0], ",", self.wavelength[-1], "]")
-        print("  Wave Resol.    = ", self.wave_resolution, " A/pix")
-        print("  Flux Cal.      = ", self.flux_calibrated)
+        print("  Wave Range     = [ {} , {} ]".format(self.wavelength[0], self.wavelength[-1]))
+        print("  Wave Resol.    = {}  A/pix".format(self.wave_resolution))
+        print("  Flux Cal.      = {}".format(self.flux_calibrated))
 
         print("\n> Use these parameters for acceding the data :\n")
         print("  cube.wavelength       : Array with wavelengths")
@@ -6723,7 +6614,7 @@ class CUBE(RSS, Interpolated_cube):
         bLastIndex = np.searchsorted(self.wavelength, bEnd)
         ratioMap = [[i for i in range(yLength)] for j in range(xLength)]
         for y in range(yLength):
-            print("Column " + str(y))
+            print("Column {}".format(y))
             for x in range(xLength):
                 if fcal == False:
                     spectrum = self.data[:, x, y]
@@ -6904,9 +6795,9 @@ def substract_given_gaussian(
                 )
                 flux = peak * sigma * np.sqrt(2 * np.pi)
                 if verbose:
-                    print("  Using peak as f[", centre, "] = ", peak, " and sigma = ", sigma, "    flux = ", flux)
+                    print("  Using peak as f[ {} ] = {}  and sigma = {}     flux = {}".format(centre, peak, sigma, flux))
             except Exception:
-                print("  Error trying to get the peak as requested wavelength is ", centre, "! Ignoring this fit!")
+                print("  Error trying to get the peak as requested wavelength is {} ! Ignoring this fit!".format(centre))
                 peak = 0.0
                 flux = -0.0001
 
@@ -7300,9 +7191,8 @@ def fluxes(
         if fit[0] < guess_centre - broad or fit[0] > guess_centre + broad:
             #            if verbose: print "  Fitted center wavelength", fit[0],"is NOT in the range [",low_limit,",",high_limit,"]"
             if verbose:
-                print("  Fitted center wavelength", fit[
-                    0
-                ], "is NOT in the expected range [", guess_centre - broad, ",", guess_centre + broad, "]")
+                print("  Fitted center wavelength {} is NOT in the expected range [ {} , {} ]".format(
+                    fit[0],guess_centre - broad, guess_centre + broad))
 
             #            print "Re-do fitting fixing center wavelength"
             #            p01 = [guess_peak, broad]
@@ -7323,9 +7213,8 @@ def fluxes(
             fit_error[2] = 0.000001
         else:
             if verbose:
-                print("  Fitted center wavelength", fit[
-                    0
-                ], "is NOT in the expected range [", guess_centre - broad, ",", guess_centre + broad, "]")
+                print("  Fitted center wavelength {} is NOT in the expected range [ {} , {} ]".format(
+                    fit[0],guess_centre - broad,guess_centre + broad))
 
         # TILL HERE
 
@@ -7426,50 +7315,50 @@ def fluxes(
             # Plot residuals
             plt.plot(w_spec, residuals, "k")
             plt.title(
-                "Fit: x0=%.2f y0=%.2e sigma=%.2f  flux=%.2e  rms=%.3e"
-                % (fit[0], fit[1], fit[2], gaussian_flux, rms_fit)
+                "Fit: x0={:.2f} y0={:.2e} sigma={:.2f}  flux={:.2e}  rms={:.3e}".format(
+                    fit[0], fit[1], fit[2], gaussian_flux, rms_fit)
             )
             #plt.show()
 
         # Printing results
         if verbose:
             print("\n> Gauss and continuum fitting + integrated flux calculations:\n")
-            print("rms continuum = %.3e erg/cm/s/A " % (rms_cont))
-            print("Gaussian Fit parameters: x0 = ( %.2f +- %.2f )  A " % (
+            print("rms continuum = {:.3e} erg/cm/s/A ".format(rms_cont))
+            print("Gaussian Fit parameters: x0 = ( {:.2f} +- {:.2f} )  A ".format(
                 fit[0],
                 fit_error[0],
             ))
-            print("                         y0 = ( %.3f +- %.3f )  1E-16 erg/cm2/s/A" % (
+            print("                         y0 = ( {:.3f} +- {:.3f} )  1E-16 erg/cm2/s/A".format(
                 (fit[1]/1e-16),
                 (fit_error[1]/1e-16),
             ))
-            print("                      sigma = ( %.3f +- %.3f )  A" % (
+            print("                      sigma = ( {:.3f} +- {:.3f} )  A".format(
                 fit[2],
                 fit_error[2],
             ))
-            print("                    rms fit = %.3e erg/cm2/s/A" % (rms_fit))
-            print("Gaussian Flux = ( %.2f +- %.2f ) 1E-16 erg/s/cm2         (error = %.1f per cent)" % (
+            print("                    rms fit = {:.3e} erg/cm2/s/A".format(rms_fit))
+            print("Gaussian Flux = ( {:.2f} +- {:.2f} ) 1E-16 erg/s/cm2         (error = {:.1f} per cent)".format(
                 (gaussian_flux/1e-16),
                 (gaussian_flux_error/1e-16),
                 (gaussian_flux_error/gaussian_flux) * 100,
             ))
-            print("FWHM          = ( %.3f +- %.3f ) A    =   ( %.1f +- %.1f ) km/s " % (
+            print("FWHM          = ( {:.3f} +- {:.3f} ) A    =   ( {:.1f} +- {:.1f} ) km/s ".format(
                 fwhm,
                 fwhm_error,
                 fwhm_vel,
                 fwhm_vel_error,
             ))
-            print("Eq. Width     = ( %.1f +- %.1f ) A" % (
+            print("Eq. Width     = ( {:.1f} +- {:.1f} ) A".format(
                 -gaussian_ew,
                 gaussian_ew_error,
             ))
-            print("\nIntegrated flux  = ( %.2f +- %.2f ) 1E-16 erg/s/cm2      (error = %.1f per cent) " % (
+            print("\nIntegrated flux  = ( {:.2f} +- {:.2f} ) 1E-16 erg/s/cm2      (error = {:.1f} per cent) ".format(
                 (flux/1e-16),
                 (flux_error/1e-16),
                 (flux_error/flux) * 100,
             ))
-            print("Eq. Width        = ( %.1f +- %.1f ) A" % (ew, ew_error))
-            print("Gauss/Integrated = %.2f per cent " % gauss_to_integrated)
+            print("Eq. Width        = ( {:.1f} +- {:.1f} ) A".format(ew, ew_error))
+            print("Gauss/Integrated = {:.2f per cent} ".format(gauss_to_integrated))
 
         # New 22 Jan 2019: sustract Gaussian fit
 
@@ -7898,21 +7787,17 @@ def dfluxes(
         ):
             if warnings:
                 if fit[0] < guess_centre1 - broad1 or fit[0] > guess_centre1 + broad1:
-                    print("  Fitted center wavelength", fit[
-                        0
-                    ], "is NOT in the expected range [", guess_centre1 - broad1, ",", guess_centre1 + broad1, "]")
+                    print("  Fitted center wavelength {} is NOT in the expected range [ {} , {} ]".format(
+                        fit[0], guess_centre1 - broad1, guess_centre1 + broad1))
                 else:
-                    print("  Fitted center wavelength", fit[
-                        0
-                    ], "is in the expected range [", guess_centre1 - broad1, ",", guess_centre1 + broad1, "]")
+                    print("  Fitted center wavelength {} is in the expected range [ {} , {} ]".format(
+                        fit[0], guess_centre1 - broad1, guess_centre1 + broad1))
                 if fit[3] < guess_centre2 - broad2 or fit[3] > guess_centre2 + broad2:
-                    print("  Fitted center wavelength", fit[
-                        3
-                    ], "is NOT in the expected range [", guess_centre2 - broad2, ",", guess_centre2 + broad2, "]")
+                    print("  Fitted center wavelength {} is NOT in the expected range [ {} , {} ]".format(
+                        fit[3], guess_centre2 - broad2, guess_centre2 + broad2))
                 else:
-                    print("  Fitted center wavelength", fit[
-                        3
-                    ], "is in the expected range [", guess_centre2 - broad2, ",", guess_centre2 + broad2, "]")
+                    print("  Fitted center wavelength {} is in the expected range [ {} , {} ]".format(
+                    fit[3], guess_centre2 - broad2, guess_centre2 + broad2))
                 print("  Fit failed!")
 
             fit[0] = guess_centre1
@@ -7929,22 +7814,18 @@ def dfluxes(
             fit_error[5] = 0.000001
         else:
             if warnings:
-                print("  Fitted center wavelength", fit[
-                    0
-                ], "is in the expected range [", guess_centre1 - broad1, ",", guess_centre1 + broad1, "]")
+                print("  Fitted center wavelength {} is in the expected range [ {} , {} ]".format(
+                    fit[0], guess_centre1 - broad1, guess_centre1 + broad1))
             if warnings:
-                print("  Fitted center wavelength", fit[
-                    3
-                ], "is in the expected range [", guess_centre2 - broad2, ",", guess_centre2 + broad2, "]")
+                print("  Fitted center wavelength {} is in the expected range [ {} , {} ]".format(
+                    fit[3], guess_centre2 - broad2, guess_centre2 + broad2))
 
         gaussian_fit = dgauss(w_spec, fit[0], fit[1], fit[2], fit[3], fit[4], fit[5])
 
         if warnings:
-            print("  Fit parameters =  ", fit[0], fit[1], fit[2], fit[3], fit[4], fit[5])
+            print("  Fit parameters =  {} {} {} {} {} {}".format(fit[0], fit[1], fit[2], fit[3], fit[4], fit[5]))
         if fit[2] == broad1 and warnings == True:
-            print("  WARNING: Fit in", fit[
-                0
-            ], "failed! Using given centre wavelength (cw), peak at (cv) & sigma = broad/2.355 given.")  # CHECK THIS
+            print("  WARNING: Fit in failed! Using given centre wavelength (cw), peak at (cv) & sigma = broad/2.355 given.".format(fit[0]))  # CHECK THIS
         # gaussian_fit =  gauss(w_spec, fit[0], fit[1], fit[2])
 
         # Estimate rms of the Gaussian fit in range [low_limit, high_limit]
@@ -8047,42 +7928,42 @@ def dfluxes(
         # Printing results
         if verbose:
             print("\n> Gauss and continuum fitting + integrated flux calculations:\n")
-            print("rms continuum = %.3e erg/cm/s/A " % (rms_cont))
-            print("Gaussian Fit parameters: x0 = ( %.2f +- %.2f )  A " % (
+            print("rms continuum = {:.3e} erg/cm/s/A ".format(rms_cont))
+            print("Gaussian Fit parameters: x0 = ( {:.2f} +- {:.2f} )  A ".format(
                 fit[0],
                 fit_error[0],
             ))
-            print("                         y0 = ( %.3f +- %.3f )  1E-16 erg/cm2/s/A" % (
+            print("                         y0 = ( {:.3f} +- {:.3f} )  1E-16 erg/cm2/s/A".format(
                 (fit[1]/1e-16),
                 (fit_error[1]/1e-16),
             ))
-            print("                      sigma = ( %.3f +- %.3f )  A" % (
+            print("                      sigma = ( {:.3f} +- {:.3f} )  A".format(
                 fit[2],
                 fit_error[2],
             ))
-            print("                    rms fit = %.3e erg/cm2/s/A" % (rms_fit))
-            print("Gaussian Flux = ( %.2f +- %.2f ) 1E-16 erg/s/cm2         (error = %.1f per cent)" % (
+            print("                    rms fit = {:.3e} erg/cm2/s/A".format(rms_fit))
+            print("Gaussian Flux = ( {:.2f} +- {:.2f} ) 1E-16 erg/s/cm2         (error = {:.1f} per cent)".format(
                 (gaussian_flux/1e-16),
                 (gaussian_flux_error/1e-16),
                 (gaussian_flux_error/gaussian_flux) * 100,
             ))
-            print("FWHM          = ( %.3f +- %.3f ) A    =   ( %.1f +- %.1f ) km/s " % (
+            print("FWHM          = ( {:.3f} +- {:.3f} ) A    =   ( {:.1f} +- {:.1f} ) km/s ".format(
                 fwhm,
                 fwhm_error,
                 fwhm_vel,
                 fwhm_vel_error,
             ))
-            print("Eq. Width     = ( %.1f +- %.1f ) A" % (
+            print("Eq. Width     = ( {:.1f} +- {:.1f} ) A".format(
                 -gaussian_ew,
                 gaussian_ew_error,
             ))
-            print("\nIntegrated flux  = ( %.2f +- %.2f ) 1E-16 erg/s/cm2      (error = %.1f per cent) " % (
+            print("\nIntegrated flux  = ( {:.2f} +- {:.2f} ) 1E-16 erg/s/cm2      (error = {:.1f} per cent) ".format(
                 (flux/1e-16),
                 (flux_error/1e-16),
                 (flux_error/flux) * 100,
             ))
-            print("Eq. Width        = ( %.1f +- %.1f ) A" % (ew, ew_error))
-            print("Gauss/Integrated = %.2f per cent " % gauss_to_integrated)
+            print("Eq. Width        = ( {:.1f} +- {:.1f} ) A".format(ew, ew_error))
+            print("Gauss/Integrated = {:.2f} per cent ".format(gauss_to_integrated))
 
         # New 22 Jan 2019: sustract Gaussian fit
 
@@ -8382,7 +8263,7 @@ def search_peaks(
     Ha_w_rest = el_center[Ha_index_list]
     Ha_redshift = ((Ha_w_obs - Ha_w_rest)/Ha_w_rest)
     if verbose:
-        print("\n> Detected %i emission lines using %8s at %8.2f A as brightest line!!\n" % (
+        print("\n> Detected {:i} emission lines using {:8s} at {:8.2f} A as brightest line!!\n".format(
             len(peaks),
             brightest_line,
             Ha_w_rest,
@@ -8411,7 +8292,7 @@ def search_peaks(
             peaks_highlow[i] = el_highlow[indice]
             peaks_highhigh[i] = el_highhigh[indice]
             if verbose:
-                print("%9s %8.2f found in %8.2f at z=%.6f   |z-zref| = %.6f" % (
+                print("{:9s} {:8.2f} found in {:8.2f} at z={:.6f}   |z-zref| = {:.6f}".format(
                     peaks_name[i],
                     peaks_rest[i],
                     peaks[i],
@@ -8425,7 +8306,7 @@ def search_peaks(
     for i in range(len(peaks_redshift)):
         if np.abs(peaks_redshift[i] - Ha_redshift) > check_redshift:
             if verbose:
-                print("  WARNING!!! Line %8s in w = %.2f has redshift z=%.6f, different than zref=%.6f" % (
+                print("  WARNING!!! Line {:8s} in w = {:.2f} has redshift z={:.6f}, different than zref={:.6f}".format(
                     peaks_name[i],
                     peaks[i],
                     peaks_redshift[i],
@@ -8524,15 +8405,8 @@ def smooth_spectrum(
                 and next_wave < exclude_wlm[exclude][1]
             ):
                 if verbose:
-                    print("  Skipping ", next_wave, " as it is in the exclusion range [", exclude_wlm[
-                        exclude
-                    ][
-                        0
-                    ], ",", exclude_wlm[
-                        exclude
-                    ][
-                        1
-                    ], "]")
+                    print("  Skipping {} as it is in the exclusion range [ {} , {} ]".format(
+                        next_wave, exclude_wlm[exclude][0], exclude_wlm[exclude][1]))
 
             else:
                 corte_index = corte_index + 1
@@ -8546,7 +8420,7 @@ def smooth_spectrum(
                 if next_wave > exclude_wlm[exclude][1]:
                     exclude = exclude + 1
                     if verbose:
-                        print("--- End exclusion range ", exclude)
+                        print("--- End exclusion range {}".format(exclude))
                     if exclude == len(exclude_wlm):
                         exclude = len(exclude_wlm) - 1
 
@@ -8562,7 +8436,7 @@ def smooth_spectrum(
     for i in range(len(running_wave)):
         if np.isnan(running_step_median[i]):
             if verbose:
-                print("  There is a nan in ", running_wave[i])
+                print("  There is a nan in {}".format(running_wave[i]))
         else:
             _running_wave_.append(running_wave[i])
             _running_step_median_.append(running_step_median[i])
@@ -8603,9 +8477,8 @@ def smooth_spectrum(
             wave_max,
             exclude_wlm)
 
-        print("  Weights for getting smooth spectrum:  fit_median =", weight_fit_median, "    fit_median_interpolated =", (
-            1 - weight_fit_median
-        ))
+        print("  Weights for getting smooth spectrum:  fit_median = {}    fit_median_interpolated = {}".format(
+            weight_fit_median, 1 - weight_fit_median))
 
     return (
         weight_fit_median * fit_median
@@ -8641,9 +8514,9 @@ def obtain_sky_spectrum(
         region.append(integrated_intensity_sorted[fibre])
     sky_spectrum = np.nanmedian(sky.intensity_corrected[region], axis=0)
 
-    print("  We use the ", low_fibres, " fibres with the lowest integrated intensity to derive the sky spectrum")
+    print("  We use the {} fibres with the lowest integrated intensity to derive the sky spectrum".format(low_fibres))
     if verbose:
-        print("  The list is = ", region)
+        print("  The list is = {}".format(region))
 
     if plot:
         plt.figure(figsize=(fig_size, fig_size / 2.5))
@@ -8719,9 +8592,9 @@ def scale_sky_spectrum(
         valid_wave_max = wlm[-1]
 
     if verbose:
-        print("\n> Identifying sky lines using cut_sky =", cut_sky, ", allowed SKY/OBJ values = [", fmin, ",", fmax, "]")
+        print("\n> Identifying sky lines using cut_sky = {} , allowed SKY/OBJ values = [ {} , {} ]".format(cut_sky, fmin, fmax))
     if verbose:
-        print("  Using fibres = ", fibre_list)
+        print("  Using fibres = {}".format(fibre_list))
 
     peaks, peaks_name, peaks_rest, continuum_limits = search_peaks(
         wlm,
@@ -8809,7 +8682,7 @@ def scale_sky_spectrum(
         # plt.close()
 
         if verbose:
-            print("  Using this fit to scale sky spectrum to object, the median value is ", fit_line, "...")
+            print("  Using this fit to scale sky spectrum to object, the median value is {}  ...".format(fit_line))
 
     sky_corrected = sky_spectrum * fit_line
 
@@ -8837,7 +8710,7 @@ def sky_spectrum_from_fibres(
 ):
 
     if verbose:
-        print("\n> Obtaining 1D sky spectrum using rss file and fibre list = ", list_spectra, " ...")
+        print("\n> Obtaining 1D sky spectrum using rss file and fibre list = {} ...".format(list_spectra))
 
     rss.intensity_corrected = median_filter(
         rss.intensity_corrected, rss.n_spectra, rss.n_wave, win_sky=win_sky
@@ -8880,12 +8753,12 @@ def sky_spectrum_from_fibres_using_file(
         sky_method = "self"
         is_sky = False
         if verbose:
-            print("\n> Obtaining 1D sky spectrum using ", n_sky, " lowest fibres in this rss ...")
+            print("\n> Obtaining 1D sky spectrum using {}  lowest fibres in this rss ...".format(n_sky))
     else:
         sky_method = "none"
         is_sky = True
         if verbose:
-            print("\n> Obtaining 1D sky spectrum using fibre list = ", fibre_list, " ...")
+            print("\n> Obtaining 1D sky spectrum using fibre list = {} ...".format(fibre_list))
 
     _test_rss_ = KOALA_RSS(
         rss_file,
@@ -8904,7 +8777,7 @@ def sky_spectrum_from_fibres_using_file(
     )
 
     if n_sky != 0:
-        print("\n> Sky fibres used: ", _test_rss_.sky_fibres)
+        print("\n> Sky fibres used: {}".format(_test_rss_.sky_fibres))
         sky = _test_rss_.sky_emission
     else:
         sky = _test_rss_.plot_combined_spectrum(list_spectra=fibre_list, median=True)
@@ -8913,7 +8786,7 @@ def sky_spectrum_from_fibres_using_file(
         plt.figure(figsize=(14, 4))
         if n_sky != 0:
             plt.plot(_test_rss_.wavelength, sky, "b", linewidth=2, alpha=0.5)
-            ptitle = "Sky spectrum combining using " + np.str(n_sky) + " lowest fibres"
+            ptitle = "Sky spectrum combining using {} lowest fibres".format(n_sky)
 
         else:
             for i in range(len(fibre_list)):
@@ -8950,8 +8823,8 @@ def ds9_offsets(x1, y1, x2, y2, pixel_size_arc=0.6):
     delta_x = x2 - x1
     delta_y = y2 - y1
 
-    print("\n> Offsets in pixels : ", delta_x, delta_y)
-    print("  Offsets in arcsec : ", pixel_size_arc * delta_x, pixel_size_arc * delta_y)
+    print("\n> Offsets in pixels : {} {}".format(delta_x, delta_y))
+    print("  Offsets in arcsec : {} {}".format(pixel_size_arc * delta_x, pixel_size_arc * delta_y))
     offset_RA = np.abs(pixel_size_arc * delta_x)
     if delta_x < 0:
         direction_RA = "W"
@@ -9038,8 +8911,8 @@ def offset_positions(
         ra2h, ra2m, ra2s, dec2d, dec2m, dec2s
     ))
 
-    print("\n> Offset 1 -> 2 : ", tdeltara, t_sign_deltara, "     ", tdeltadec, t_sign_deltadec)
-    print("  Offset 2 -> 1 : ", tdeltara, t_sign_deltara_invert, "     ", tdeltadec, t_sign_deltadec_invert)
+    print("\n> Offset 1 -> 2 : {} {}       {} {}".format(tdeltara, t_sign_deltara, tdeltadec, t_sign_deltadec))
+    print("  Offset 2 -> 1 : {} {}       {} {}".format(tdeltara, t_sign_deltara_invert, tdeltadec, t_sign_deltadec_invert))
 
 
 
@@ -9267,15 +9140,10 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
 
         n_files = len(rss_list)
         sky_rss_list = [[0], [0], [0], [0], [0], [0], [0], [0], [0], [0]]
-        pk = (
-            "_"
-            + str(int(pixel_size_arcsec))
-            + "p"
-            + str(int((abs(pixel_size_arcsec) - abs(int(pixel_size_arcsec))) * 10))
-            + "_"
-            + str(int(kernel_size_arcsec))
-            + "k"
-            + str(int((abs(kernel_size_arcsec) - abs(int(kernel_size_arcsec))) * 100))
+        pk = ("_{}p{}_{}k{}".format(
+            int(pixel_size_arcsec), int((abs(pixel_size_arcsec) - abs(int(pixel_size_arcsec))) * 10),
+            int(kernel_size_arcsec), int((abs(kernel_size_arcsec) - abs(int(kernel_size_arcsec))) * 100)
+        )
         )
 
         print("  1. Checking input values: ")
@@ -10546,9 +10414,8 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                     self.combined_cube.total_exptime + self.rss10.exptime
                 )
 
-            print("\n  Total exposition time = ", self.combined_cube.total_exptime, "seconds adding the ", len(
-                rss_list
-            ), " files")
+            print("\n  Total exposition time = {} seconds adding the {} files".format(
+                self.combined_cube.total_exptime, len(rss_list)))
 
         # Save it to a fits file
 
@@ -10556,16 +10423,9 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
             print("\n  Saving aligned cubes to fits files ...")
             for i in range(n_files):
                 if i < 9:
-                    replace_text = (
-                        "_"
-                        + obj_name
-                        + "_aligned_cube_0"
-                        + np.str(i + 1)
-                        + pk
-                        + ".fits"
-                    )
+                    replace_text = "_{}_aligned_cube_0{}{}.fits".format(obj_name, np.str(i + 1), pk)
                 else:
-                    replace_text = "_aligned_cube_" + np.str(i + 1) + pk + ".fits"
+                    replace_text = "_aligned_cube_{}{}.fits".format(np.str(i + 1), pk)
 
                 aligned_cube_name = rss_list[i].replace(".fits", replace_text)
 
@@ -10598,16 +10458,10 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
             check_if_path = fits_file.replace("path:", "")
 
             if len(fits_file) != len(check_if_path):
-                fits_file = (
-                    check_if_path
-                    + obj_name
-                    + "_"
-                    + self.combined_cube.grating
-                    + pk
-                    + "_combining_"
-                    + np.str(n_files)
-                    + "_cubes.fits"
+                fits_file = ("{}{}_{}{}_combining_{}_cubes.fits".format(
+                    check_if_path, obj_name, self.combined_cube.grating, pk, n_files)
                 )
+
 
             save_fits_file(self.combined_cube, fits_file, ADR=ADR)
 
