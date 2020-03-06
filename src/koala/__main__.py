@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from builtins import str
 import os.path as pth
 from timeit import default_timer as timer
 from koala import *
@@ -56,13 +55,13 @@ if __name__ == "__main__":
 
     pk = (
         "_"
-        + str(int(PIXEL_SIZE))
+        + "{}".format(int(PIXEL_SIZE))
         + "p"
-        + str(int((abs(PIXEL_SIZE) - abs(int(PIXEL_SIZE))) * 10))
+        + "{}".format(int((abs(PIXEL_SIZE) - abs(int(PIXEL_SIZE))) * 10))
         + "_"
-        + str(int(KERNEL_SIZE))
+        + "{}".format(int(KERNEL_SIZE))
         + "k"
-        + str(int((abs(KERNEL_SIZE) - abs(int(KERNEL_SIZE))) * 100))
+        + "{}".format(int((abs(KERNEL_SIZE) - abs(int(KERNEL_SIZE))) * 100))
     )
 
     # ---------------------------------------------------------------------------
