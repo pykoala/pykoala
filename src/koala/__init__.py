@@ -1170,7 +1170,7 @@ class RSS(object):
                     plot_fit = True
                 if skip_sl_fit[i]:
                     if verbose:
-                        print(" SKIPPING SKY LINE  as located within the range of an emission line!".format(
+                        print(" SKIPPING SKY LINE {} as located within the range of an emission line!".format(
                             sl_center[i]))
                     object_sl_gaussian_flux.append(
                         float("nan")
@@ -1780,7 +1780,7 @@ class RSS(object):
                     )
                     plt.xlim(self.wavelength[0] - 50, self.wavelength[-1] + 50)
                     plt.ylim(0.95, 1.05)
-                    ptitle = "Fibre {} with rms = ".format(np.str(i), np.str(rms[i]))
+                    ptitle = "Fibre {} with rms = {}".format(np.str(i), np.str(rms[i]))
                     plt.title(ptitle)
                     plt.xlabel("Wavelength [$\AA$]")
                     plt.legend(frameon=False, loc=3, ncol=1)
@@ -7825,7 +7825,7 @@ def dfluxes(
         if warnings:
             print("  Fit parameters =  {} {} {} {} {} {}".format(fit[0], fit[1], fit[2], fit[3], fit[4], fit[5]))
         if fit[2] == broad1 and warnings == True:
-            print("  WARNING: Fit in failed! Using given centre wavelength (cw), peak at (cv) & sigma = broad/2.355 given.".format(fit[0]))  # CHECK THIS
+            print("  WARNING: Fit in {} failed! Using given centre wavelength (cw), peak at (cv) & sigma = broad/2.355 given.".format(fit[0]))  # CHECK THIS
         # gaussian_fit =  gauss(w_spec, fit[0], fit[1], fit[2])
 
         # Estimate rms of the Gaussian fit in range [low_limit, high_limit]
@@ -8263,7 +8263,7 @@ def search_peaks(
     Ha_w_rest = el_center[Ha_index_list]
     Ha_redshift = ((Ha_w_obs - Ha_w_rest)/Ha_w_rest)
     if verbose:
-        print("\n> Detected {:i} emission lines using {:8s} at {:8.2f} A as brightest line!!\n".format(
+        print("\n> Detected {:d} emission lines using {:8s} at {:8.2f} A as brightest line!!\n".format(
             len(peaks),
             brightest_line,
             Ha_w_rest,
