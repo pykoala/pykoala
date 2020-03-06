@@ -583,7 +583,7 @@ class RSS(object):
                 fig = plot_skyline_5578(fig_size, flux_5578, flux_5578_medfilt)
 
             print("  Variations in throughput between {} and {} ".format(
-                np.nanmin(extra_throughput_correction, np.nanmax(extra_throughput_correction))
+                np.nanmin(extra_throughput_correction), np.nanmax(extra_throughput_correction)
             ))
             print("  Applying this extra throughtput correction to all fibres...")
 
@@ -4886,7 +4886,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         if plot:
             r_norm = np.sqrt(old_div(np.array(r2_growth_curve), r2_half_light))  # TODO, function is not called. fix once called
             F_norm = old_div(np.array(F_growth_curve), F_guess)  # TODO, function is not called. fix once called
-            print("      Flux guess = {} {}  ratio = {} {}".format(F_guess, np.nansum(intensity), old_div(np.nansum(intensity), F_guess)))   # TODO, function is not called. fix once called
+            print("      Flux guess = {} {}  ratio = {} {}".format(F_guess, np.nansum(intensity), old_div(np.nansum(intensity)), F_guess))   # TODO, function is not called. fix once called
             print("      Half-light radius: {} arcsec  = seeing if object is a star ".format(self.seeing))
             print("      Light within 2, 3, 4, 5 half-light radii: {}".format(np.interp([2, 3, 4, 5], r_norm, F_norm)))
             plt.figure(figsize=(10, 8))
@@ -5401,7 +5401,7 @@ def fit_Moffat(
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def KOALA_offsets(s, pa):
-    print("\n> Offsets towards North and East between pointings," "according to KOALA manual, for pa =", pa, "degrees")
+    print("\n> Offsets towards North and East between pointings," "according to KOALA manual, for pa = {} degrees".format(pa))
     pa *= np.pi/180
     print("  a -> b : {} {}".format(s * np.sin(pa), -s * np.cos(pa)))
     print("  a -> c : {} {}".format(-s * np.sin(60 - pa), -s * np.cos(60 - pa)))
@@ -5520,7 +5520,7 @@ def obtain_telluric_correction(wlm, telluric_correction_list, plot=True):
     """
     telluric_correction = np.nanmedian(telluric_correction_list, axis=0)
     if plot:
-        fig = plot_telluric_correction(wlm, telluric_correction_list, telluric_correction, figsize=12)
+        fig = plot_telluric_correction(wlm, telluric_correction_list, telluric_correction, fig_size=12)
 
     print("\n\t>Telluric correction = {}".format(telluric_correction))
     print("\n\tTelluric correction obtained!")
