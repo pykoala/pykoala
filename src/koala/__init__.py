@@ -575,7 +575,7 @@ class RSS(object):
             print("  Skyline 5578 has been removed. Checking throughput correction...")
             flux_5578_medfilt = sig.medfilt(flux_5578, np.int(5))
             median_flux_5578_medfilt = np.nanmedian(flux_5578_medfilt)
-            extra_throughput_correction = old_div(flux_5578_medfilt, median_flux_5578_medfilt)  # TODO: check \\, need blue data and routine in main
+            extra_throughput_correction = flux_5578_medfilt/median_flux_5578_medfilt
             # plt.plot(extra_throughput_correction)
             # plt.show()
             # plt.close()
