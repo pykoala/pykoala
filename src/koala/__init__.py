@@ -1780,7 +1780,7 @@ class RSS(object):
                     )
                     plt.xlim(self.wavelength[0] - 50, self.wavelength[-1] + 50)
                     plt.ylim(0.95, 1.05)
-                    ptitle = "Fibre {} with rms = {}".format(np.str(i), np.str(rms[i]))
+                    ptitle = "Fibre {} with rms = {}".format(i, rms[i])
                     plt.title(ptitle)
                     plt.xlabel("Wavelength [$\AA$]")
                     plt.legend(frameon=False, loc=3, ncol=1)
@@ -3280,13 +3280,13 @@ class KOALA_RSS(RSS):
                         plt.axhline(y=scale_sky_rss, color="k", linestyle="--")
                         if sky_line_2 == 0:
                             text = (
-                                "Scale OBJECT / SKY using sky line $\lambda$ {}".format(np.str(sky_line)))
+                                "Scale OBJECT / SKY using sky line $\lambda$ {}".format(sky_line))
                             print("  Scale per fibre in the range [{} , {} ], median value is {}".format(np.nanmin(scale_per_fibre), np.nanmax(scale_per_fibre), scale_sky_rss))
                             print("  Using median value to scale sky emission provided...")
                         if sky_line_2 != 0:
                             text = (
-                                "Scale OBJECT / SKY using sky lines $\lambda$ {}  and $\lambda$".format(np.str(sky_line), np.str(sky_line_2)))
-                            label2 = "$\lambda$ {}".format(np.str(sky_line_2))
+                                "Scale OBJECT / SKY using sky lines $\lambda$ {}  and $\lambda$".format(sky_line, sky_line_2))
+                            label2 = "$\lambda$ {}".format(sky_line_2)
                             plt.plot(scale_per_fibre_2, alpha=0.5, label=label2)
                             plt.axhline(y=scale_sky_rss_1, color="k", linestyle=":")
                             plt.axhline(y=scale_sky_rss_2, color="k", linestyle=":")
@@ -5275,9 +5275,9 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
 
             plt.figure(figsize=(10, 8))
             if fit_degree > 0:
-                text = "Fit using polynomium of degree {}".format(np.str(fit_degree))
+                text = "Fit using polynomium of degree {}".format(fit_degree)
             else:
-                text = "Using interpolated data with smooth = {}".format(np.str(smooth))
+                text = "Using interpolated data with smooth = {}".format(smooth)
             plt.plot(
                 self.response_wavelength,
                 self.response_curve,
@@ -10426,9 +10426,9 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
             print("\n  Saving aligned cubes to fits files ...")
             for i in range(n_files):
                 if i < 9:
-                    replace_text = "_{}_aligned_cube_0{}{}.fits".format(obj_name, np.str(i + 1), pk)
+                    replace_text = "_{}_aligned_cube_0{}{}.fits".format(obj_name, i + 1, pk)
                 else:
-                    replace_text = "_aligned_cube_{}{}.fits".format(np.str(i + 1), pk)
+                    replace_text = "_aligned_cube_{}{}.fits".format(i + 1, pk)
 
                 aligned_cube_name = rss_list[i].replace(".fits", replace_text)
 
