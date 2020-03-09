@@ -8475,7 +8475,6 @@ def smooth_spectrum(
             fit_median,
             fit_median_interpolated,
             weight_fit_median,
-            fit_median_interpolated,
             wave_min,
             wave_max,
             exclude_wlm)
