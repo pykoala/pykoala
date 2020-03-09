@@ -4884,9 +4884,9 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         self.seeing = np.sqrt(r2_half_light) * self.pixel_size_arcsec
 
         if plot:
-            r_norm = np.sqrt(old_div(np.array(r2_growth_curve), r2_half_light))  # TODO, function is not called. fix once called
-            F_norm = old_div(np.array(F_growth_curve), F_guess)  # TODO, function is not called. fix once called
-            print("      Flux guess = {} {}  ratio = {} {}".format(F_guess, np.nansum(intensity), old_div(np.nansum(intensity)), F_guess))   # TODO, function is not called. fix once called
+            r_norm = np.sqrt(np.array(r2_growth_curve)/r2_half_light)
+            F_norm = np.array(F_growth_curve)/F_guess
+            print("      Flux guess = {} {}  ratio = {}".format(F_guess, np.nansum(intensity), np.nansum(intensity)/F_guess))
             print("      Half-light radius: {} arcsec  = seeing if object is a star ".format(self.seeing))
             print("      Light within 2, 3, 4, 5 half-light radii: {}".format(np.interp([2, 3, 4, 5], r_norm, F_norm)))
             plt.figure(figsize=(10, 8))
