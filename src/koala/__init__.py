@@ -7166,7 +7166,7 @@ def fluxes(
         ):
             high_limit = w_fit[ii]
         #        if f_fit[ii]/c_fit[ii] < 1.05 and high_limit == 0: high_limit = w_fit[ii]
-        fs.append(f_fit[ii], c_fit[ii])
+        fs.append(f_fit[ii]/c_fit[ii])
         ws.append(w_fit[ii])
     if high_limit == 0:
         sorted_by_flux = np.argsort(fs)
