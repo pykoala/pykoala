@@ -14,17 +14,18 @@ import versioneer
 
 
 setuptools.setup(
-    name = "aat-koala",
+    name = "pykoala-ifs",
     version = versioneer.get_version(),
     packages = setuptools.find_packages('src'),
     package_dir = {'': 'src'},
     install_requires = [
-        "astropy==2.0.16",
-        "pysynphot",
-        "matplotlib==2.2.3",
-        "numpy==1.16.6",
-        "scipy==1.2.3",
+        "astropy>=2.0.16",
+        "matplotlib>=2.2.3",
+        "numpy>=1.16.6",
+        "scipy>=1.2.3",
+        "synphot",
         'future',
+        'enum34;python_version<"3.4"',
     ],
     #python_requires = '>=3.5',
     author = u"Ángel López-Sánchez",

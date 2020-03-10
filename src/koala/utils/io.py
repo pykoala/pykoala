@@ -1,22 +1,32 @@
-from __future__ import division
+# -*- coding: utf-8 -*-
+from __future__ import absolute_import, division, print_function
+
 from builtins import str
-from builtins import range
 from past.utils import old_div
 
+import datetime
+
+from astropy.io import fits
+import numpy as np
+
+from .._version import get_versions
+
+version = get_versions()["version"]
+del get_versions
 
 
-def read_table(fichero, formato):
+def read_table(file, format):
     """
-    Read data from and txt file (sorted by columns), the type of data
-    (string, integer or float) MUST be given in "formato".
-    This routine will ONLY read the columns for which "formato" is defined.
-    E.g. for a txt file with 7 data columns, using formato=["f", "f", "s"] will only read the 3 first columns.
+    Read data from a txt file (sorted by columns), the type of data
+    (string, integer or float) MUST be given in "format".
+    This routine will ONLY read the columns for which "format" is defined.
+    E.g. for a txt file with 7 data columns, using format=["f", "f", "s"] will only read the 3 first columns.
 
     Parameters
     ----------
-    fichero:
+    file:
         txt file to be read
-    formato:
+    format:
         List with the format of each column of the data, using:\n
         "i" for a integer\n
         "f" for a float\n
@@ -24,25 +34,25 @@ def read_table(fichero, formato):
 
     Example
     -------
-    >>> el_center,el_fnl,el_name = read_table("lineas_c89_python.dat", ["f", "f", "s"] )
+    >>> the_center,the_fnl,the_name = read_table("lineas_c89_python.dat", ["f", "f", "s"] )
     """
 
-    datos_len = len(formato)
-    datos = [[] for x in range(datos_len)]
-    for i in range(0, datos_len):
-        if formato[i] == "i":
-            datos[i] = np.loadtxt(
-                fichero, skiprows=0, unpack=True, usecols=[i], dtype=int
+    data_len = len(format)
+    data = [[] for x in range(data_len)]
+    for i in range(0, data_len):
+        if format[i] == "i":
+            data[i] = np.loadtxt(
+                file, skiprows=0, unpack=True, usecols=[i], dtype=int
             )
-        if formato[i] == "s":
-            datos[i] = np.loadtxt(
-                fichero, skiprows=0, unpack=True, usecols=[i], dtype=str
+        if format[i] == "s":
+            data[i] = np.loadtxt(
+                file, skiprows=0, unpack=True, usecols=[i], dtype=str
             )
-        if formato[i] == "f":
-            datos[i] = np.loadtxt(
-                fichero, skiprows=0, unpack=True, usecols=[i], dtype=float
+        if format[i] == "f":
+            data[i] = np.loadtxt(
+                file, skiprows=0, unpack=True, usecols=[i], dtype=float
             )
-    return datos
+    return data
 
 
 # -----------------------------------------------------------------------------
@@ -181,9 +191,6 @@ def spectrum_to_fits_file(
         ), (len(wavelength) - 1)))
 
 
-
-
-
 def save_bluered_fits_file(
     blue_cube,
     red_cube,
@@ -296,12 +303,13 @@ def save_bluered_fits_file(
     print("\n> Combined datacube saved to file ", fits_file)
 
 
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
+
 def save_fits_file(combined_cube, fits_file, description="", ADR=False):  # fcal=[0],
     """
     Routine to save a fits file
@@ -462,6 +470,8 @@ def save_fits_file(combined_cube, fits_file, description="", ADR=False):  # fcal
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
+
+
 def save_rss_fits(
     rss, data=[[0], [0]], fits_file="RSS_rss.fits", description=""
 ):  # fcal=[0],     # TASK_save_rss_fits
@@ -604,10 +614,8 @@ def save_rss_fits(
     cols = fits.ColDefs([col1, col2, col3, col4, col5, col6, col7, col8])
     header2_hdu = fits.BinTableHDU.from_columns(cols)
 
-    header2_hdu.header["CENRA"] = old_div(rss.RA_centre_deg, (
-        old_div(180, np.pi)
-    ))  # Must be in radians
-    header2_hdu.header["CENDEC"] = old_div(rss.DEC_centre_deg, (old_div(180, np.pi)))
+    header2_hdu.header["CENRA"] = rss.RA_centre_deg / 180 / np.pi # Must be in radians
+    header2_hdu.header["CENDEC"] = rss.DEC_centre_deg / 180 / np.pi
 
     hdu_list = fits.HDUList(
         [fits_image_hdu, error_hdu, header2_hdu]
@@ -615,6 +623,3 @@ def save_rss_fits(
 
     hdu_list.writeto(fits_file, overwrite=True)
     print("  RSS data saved to file ", fits_file)
-
-
-

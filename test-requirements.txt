@@ -1,0 +1,8 @@
+pytest==5.3.5;python_version>'3.0'
+pytest-cov==2.8.1
+#pytest-datadir
+#pytest-mpl
+#pytest-regtest
+#pytest-xdist
+sybil==1.2.2
+pytest==4.6.9;python_version=='2.7' # pyup: <5.0

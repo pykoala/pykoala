@@ -1,7 +1,7 @@
 status = [
   "continuous-integration/travis-ci/push",
 #  "continuous-integration/appveyor/branch",
-#  "codecov/patch",
-#  "codecov/project",
+  "codecov/patch",
+  "codecov/project",
 ]
 

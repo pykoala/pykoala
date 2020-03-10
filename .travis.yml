@@ -13,41 +13,36 @@ cache:
 
 matrix:
   include:
-      #- python: 2.7
-      #  env:
-      #  - TOXENV=py27
-        #- python: 3.5
-        #  env:
-        #  - TOXENV=py35
-        #- python: 3.6
-        #  env:
-        #  - TOXENV=py36
-        #- python: 3.7
-        #  env:
-        #  - TOXENV=py37
-        #- python: 3.8
-        #  env:
-        #  - TOXENV=py38
-        #- python: 3.7
-        #  env:
-        #  - TOXENV=flake8
-        #- python: 3.7
-        #  env:
-        #  - TOXENV=pylint
-    #- python: 3.7
     - python: 2.7
       env:
-      - TOXENV=docs
-        #- python: 3.7
-        #  env:
-        #  - TOXENV=doctest
-    #- python: 3.7
-    - python: 2.7
+      - TOXENV=py27 MPLBACKEND=agg
+    - python: 3.6
       env:
-      - TOXENV=check-manifest
-        #- python: 3.7
-        #  env:
-        #  - TOXENV=checkreadme
+      - TOXENV=py36 MPLBACKEND=agg
+    - python: 3.7
+      env:
+      - TOXENV=py37 MPLBACKEND=agg
+   #- python: 3.8
+   #  env:
+   #  - TOXENV=py38 MPLBACKEND=agg
+   #- python: 3.7
+   #  env:
+   #  - TOXENV=flake8 MPLBACKEND=agg
+   #- python: 3.7
+   #  env:
+   #  - TOXENV=pylint MPLBACKEND=agg
+    - python: 3.7
+      env:
+      - TOXENV=docs MPLBACKEND=agg
+   #- python: 3.7
+   #  env:
+   #  - TOXENV=doctest
+    - python: 3.7
+      env:
+      - TOXENV=check-manifest MPLBACKEND=agg
+   #- python: 3.7
+   #  env:
+   #  - TOXENV=checkreadme MPLBACKEND=agg
 
 before_install:
   - pip install codecov # for coverage
