@@ -5837,44 +5837,6 @@ class CUBE(RSS, Interpolated_cube):
         return ratioMap
 
 
-
-# -----------------------------------------------------------------------------
-# GENERAL TASKS
-# -----------------------------------------------------------------------------
-def running_mean(x, N):
-    cumsum = np.cumsum(np.insert(x, 0, 0))
-    return (cumsum[N:] - cumsum[:-N])/N
-
-
-def coord_range(rss_list):
-    RA = [rss.RA_centre_deg + rss.offset_RA_arcsec / 3600.0 for rss in rss_list]
-    RA_min = np.nanmin(RA)
-    RA_max = np.nanmax(RA)
-    DEC = [rss.DEC_centre_deg + rss.offset_DEC_arcsec / 3600.0 for rss in rss_list]
-    DEC_min = np.nanmin(DEC)
-    DEC_max = np.nanmax(DEC)
-    return RA_min, RA_max, DEC_min, DEC_max
-
-
-# Definition introduced by Matt
-def MAD(x):
-    """
-    Derive the Median Absolute Deviation of an array
-    Args:
-        x (array): Array of numbers to find the median of
-
-    Returns:
-        float:
-    """
-    MAD = np.nanmedian(np.abs(x - np.nanmedian(x)))
-    return MAD / 0.6745
-
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-
-
 # -----------------------------------------------------------------------------
 #    MACRO FOR EVERYTHING 19 Sep 2019, including alignment 2-10 cubes
 # -----------------------------------------------------------------------------
@@ -7308,3 +7270,36 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
             save_fits_file(self.combined_cube, fits_file, ADR=ADR)
 
         print("\n================== REDUCING KOALA DATA COMPLETED ====================\n\n")
+
+
+
+# -----------------------------------------------------------------------------
+# GENERAL TASKS
+# -----------------------------------------------------------------------------
+def running_mean(x, N):
+    cumsum = np.cumsum(np.insert(x, 0, 0))
+    return (cumsum[N:] - cumsum[:-N])/N
+
+
+def coord_range(rss_list):
+    RA = [rss.RA_centre_deg + rss.offset_RA_arcsec / 3600.0 for rss in rss_list]
+    RA_min = np.nanmin(RA)
+    RA_max = np.nanmax(RA)
+    DEC = [rss.DEC_centre_deg + rss.offset_DEC_arcsec / 3600.0 for rss in rss_list]
+    DEC_min = np.nanmin(DEC)
+    DEC_max = np.nanmax(DEC)
+    return RA_min, RA_max, DEC_min, DEC_max
+
+
+# Definition introduced by Matt
+def MAD(x):
+    """
+    Derive the Median Absolute Deviation of an array
+    Args:
+        x (array): Array of numbers to find the median of
+
+    Returns:
+        float:
+    """
+    MAD = np.nanmedian(np.abs(x - np.nanmedian(x)))
+    return MAD / 0.6745
