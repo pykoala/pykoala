@@ -6,10 +6,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 
-from koala import *  # TODO: currently importing * as a workaround for circular imports.
+import koala  # TODO: currently importing * as a workaround for circular imports.
 # This file requires a class, Interpolated_Cube from koala, however from koala import Inter... will result in circular
 # import as __init__ imports specific functions from this file.
-from .plots import plot_offset_between_cubes
 
 
 def offset_between_cubes(cube1, cube2, plot=True):
