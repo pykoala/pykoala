@@ -13,6 +13,8 @@ from .utils.utils import FitsExt, FitsFibresIFUIndex
 from .utils.cube_alignment import offset_between_cubes, compare_cubes, align_n_cubes
 from .utils.flux import search_peaks, fluxes, dfluxes, substract_given_gaussian
 from .utils.sky_spectrum import scale_sky_spectrum, median_filter
+from .utils.moffat import fit_Moffat
+from .utils.spectrum_tools import rebin_spec_shift
 
 import copy
 import os.path as pth
@@ -27,12 +29,8 @@ import matplotlib.colors as colors
 
 import numpy as np
 
-from synphot import observation
-from synphot import spectrum
-
 from scipy import interpolate
 from scipy.ndimage.interpolation import shift
-from scipy.optimize import curve_fit
 import scipy.signal as sig
 
 # -----------------------------------------------------------------------------
@@ -5850,54 +5848,11 @@ def running_mean(x, N):
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def cumulaive_Moffat(r2, L_star, alpha2, beta):
-    return L_star * (1 - np.power(1 + (r2/alpha2), -beta))
 
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def fit_Moffat(
-    r2_growth_curve, F_growth_curve, F_guess, r2_half_light, r_max, plot=False
-):
-    """
-    Fits a Moffat profile to a flux growth curve
-    as a function of radius squared,
-    cutting at to r_max (in units of the half-light radius),
-    provided an initial guess of the total flux and half-light radius squared.
-    """
-    index_cut = np.searchsorted(r2_growth_curve, r2_half_light * r_max ** 2)
-    fit, cov = curve_fit(
-        cumulaive_Moffat,
-        r2_growth_curve[:index_cut],
-        F_growth_curve[:index_cut],
-        p0=(F_guess, r2_half_light, 1),
-    )
-    if plot:
-        print("Best-fit: L_star = {}".format(fit[0]))
-        print("          alpha = {}".format(np.sqrt(fit[1])))
-        print("          beta = {}".format(fit[2]))
-        r_norm = np.sqrt(np.array(r2_growth_curve)/r2_half_light)
-        plt.plot(
-            r_norm,
-            cumulaive_Moffat(np.array(r2_growth_curve), fit[0], fit[1], fit[2])/fit[0],
-            ":",
-        )
 
-    return fit
-
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-def KOALA_offsets(s, pa):
-    print("\n> Offsets towards North and East between pointings," "according to KOALA manual, for pa = {} degrees".format(pa))
-    pa *= np.pi/180
-    print("  a -> b : {} {}".format(s * np.sin(pa), -s * np.cos(pa)))
-    print("  a -> c : {} {}".format(-s * np.sin(60 - pa), -s * np.cos(60 - pa)))
-    print("  b -> d : {} {}".format(-np.sqrt(3) * s * np.cos(pa), -np.sqrt(3) * s * np.sin(pa)))
-
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -6058,121 +6013,6 @@ def smooth_spectrum(
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def ds9_offsets(x1, y1, x2, y2, pixel_size_arc=0.6):
-    """
-    Print information about offsets in pixels between (x1, y1) and (x2, y2). This assumes that (x1, y1) and (x2, y2) are close on the sky and small amngle approximations are valid!
-
-    Args:
-        x1 (float): x position 1 (in pixels)
-        y1 (float): y position 1 (in pixels
-        x2 (float): x position 2 (in pixels)
-        y2 (float): y position 2 (in pixels)
-        pixel_size_arc (float, default=0.6): The pixel size in arcseconds
-
-    Returns:
-        None
-    """
-
-    delta_x = x2 - x1
-    delta_y = y2 - y1
-
-    print("\n> Offsets in pixels : {} {}".format(delta_x, delta_y))
-    print("  Offsets in arcsec : {} {}".format(pixel_size_arc * delta_x, pixel_size_arc * delta_y))
-    offset_RA = np.abs(pixel_size_arc * delta_x)
-    if delta_x < 0:
-        direction_RA = "W"
-    else:
-        direction_RA = "E"
-    offset_DEC = np.abs(pixel_size_arc * delta_y)
-    if delta_y < 0:
-        direction_DEC = "N"
-    else:
-        direction_DEC = "S"
-    print("  Assuming N up and E left, the telescope did an offset of ----> {:5.2f} {:1} {:5.2f} {:1}".format(
-        offset_RA, direction_RA, offset_DEC, direction_DEC
-    ))
-
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-
-
-def offset_positions(
-    ra1h,
-    ra1m,
-    ra1s,
-    dec1d,
-    dec1m,
-    dec1s,
-    ra2h,
-    ra2m,
-    ra2s,
-    dec2d,
-    dec2m,
-    dec2s,
-    decimals=2,
-):
-    """
-    Work out offsets between two sky positions and print them to the screen. This could probably be replaced with some astropy functions.
-    TODO: Include arguments
-
-    Returns:
-        None
-    """
-
-    ra1 = ra1h + ra1m / 60.0 + ra1s / 3600.0
-    ra2 = ra2h + ra2m / 60.0 + ra2s / 3600.0
-
-    if dec1d < 0:
-        dec1 = dec1d - dec1m / 60.0 - dec1s / 3600.0
-    else:
-        dec1 = dec1d + dec1m / 60.0 + dec1s / 3600.0
-    if dec2d < 0:
-        dec2 = dec2d - dec2m / 60.0 - dec2s / 3600.0
-    else:
-        dec2 = dec2d + dec2m / 60.0 + dec2s / 3600.0
-
-    avdec = (dec1 + dec2)/2
-
-    deltadec = round(3600.0 * (dec2 - dec1), decimals)
-    deltara = round(15 * 3600.0 * (ra2 - ra1) * (np.cos(np.radians(avdec))), decimals)
-
-    tdeltadec = np.fabs(deltadec)
-    tdeltara = np.fabs(deltara)
-
-    if deltadec < 0:
-        t_sign_deltadec = "South"
-        t_sign_deltadec_invert = "North"
-
-    else:
-        t_sign_deltadec = "North"
-        t_sign_deltadec_invert = "South"
-
-    if deltara < 0:
-        t_sign_deltara = "West"
-        t_sign_deltara_invert = "East"
-
-    else:
-        t_sign_deltara = "East"
-        t_sign_deltara_invert = "West"
-
-    print("\n> POS1: RA = {:3}h {:2}min {:2.4f}sec, DEC = {:3}d {:2}m {:2.4f}s".format(
-        ra1h, ra1m, ra1s, dec1d, dec1m, dec1s
-    ))
-    print("  POS2: RA = {:3}h {:2}min {:2.4f}sec, DEC = {:3}d {:2}m {:2.4f}s".format(
-        ra2h, ra2m, ra2s, dec2d, dec2m, dec2s
-    ))
-
-    print("\n> Offset 1 -> 2 : {} {}       {} {}".format(tdeltara, t_sign_deltara, tdeltadec, t_sign_deltadec))
-    print("  Offset 2 -> 1 : {} {}       {} {}".format(tdeltara, t_sign_deltara_invert, tdeltadec, t_sign_deltadec_invert))
-
-
-
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
 # Definition introduced by Matt
 def MAD(x):
     """
@@ -6190,101 +6030,15 @@ def MAD(x):
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def rebin_spec(wave, specin, wavnew):
-    """
-    Rebin a spectrum with a new wavelength array
 
-    Args:
-        wave (array): wavelength arrau
-        specin (array): Input spectrum to be shifted
-        shift (float): Shift. Same units as wave?
-
-    Returns:
-        New spectrum at shifted wavelength values
-    """
-    spec = spectrum.ArraySourceSpectrum(wave=wave, flux=specin)
-    f = np.ones(len(wave))
-    filt = spectrum.ArraySpectralElement(wave, f, waveunits="angstrom")
-    obs = observation.Observation(spec, filt, binset=wavnew, force="taper")
-    return obs.binflux
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def rebin_spec_shift(wave, specin, shift):
-    """
-    Rebin a spectrum and shift in wavelength. Makes a new wavelength array and then passes this to rebin_spec
-
-    Args:
-        wave (array): wavelength arrau
-        specin (array): Input spectrum to be shifted
-        shift (float): Shift. Same units as wave?
-
-    Returns:
-        New spectrum at shifted wavelength values
-
-    """
-    wavnew = wave + shift
-    obs = rebin_spec(wave, specin, wavnew)
-    # Updating from pull request #16. rebin_spec returns a .binflux object. This function tried to create a
-    # binflux.binflux object.
-    return obs
-
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-def compare_fix_2dfdr_wavelengths(rss1, rss2):
-    """
-    Compare small fixes we've made to the 2dFdr wavelengths between two RSS files.
-
-    Args:
-        rss1 (RSS instance): An instance of the RSS class
-        rss2 (RSS instance): An instance of the RSS class
-
-    Returns:
-        None
-    """
-
-    print("\n> Comparing small fixing of the 2dFdr wavelengths between two rss...")
-
-    xfibre = list(range(0, rss1.n_spectra))
-    rss1.wavelength_parameters[0]
-
-    a0x, a1x, a2x = (
-        rss1.wavelength_parameters[0],
-        rss1.wavelength_parameters[1],
-        rss1.wavelength_parameters[2],
-    )
-    aa0x, aa1x, aa2x = (
-        rss2.wavelength_parameters[0],
-        rss2.wavelength_parameters[1],
-        rss2.wavelength_parameters[2],
-    )
-
-    fx = a0x + a1x * np.array(xfibre) + a2x * np.array(xfibre) ** 2
-    fx2 = aa0x + aa1x * np.array(xfibre) + aa2x * np.array(xfibre) ** 2
-    dif = fx - fx2
-
-    plt.figure(figsize=(10, 4))
-    plt.plot(xfibre, dif)
-    plot_plot(
-        xfibre,
-        dif,
-        ptitle="Fit 1 - Fit 2",
-        xmin=-20,
-        xmax=1000,
-        xlabel="Fibre",
-        ylabel="Dif",
-    )
-
-    resolution = rss1.wavelength[1] - rss1.wavelength[0]
-    error = (np.nanmedian(dif)/resolution) * 100.0
-    print("\n> The median rms is {:8.6f} A,  resolution = {:5.2f} A,  error = {:5.3} %".format(
-        np.nanmedian(dif), resolution, error
-    ))
-
 
 # -----------------------------------------------------------------------------
 #    MACRO FOR EVERYTHING 19 Sep 2019, including alignment 2-10 cubes
