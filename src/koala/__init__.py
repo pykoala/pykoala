@@ -359,8 +359,39 @@ class RSS(object):
         fig_size=12,
     ):
         """
-        Correct for Cosmic Rays and defects on the CCD
-        """
+    	Task for correcting high cosmics and CCD defects using median values of nearby pixels.
+        2dFdr corrects for (the majority) of the cosmic rays, usually correct_high_cosmics = False.
+        ANGEL COMMENT: Check, probably can be improved using MATT median running + plotting outside
+
+        Parameters
+        ----------
+        rect_high_cosmics: boolean (default = False)
+    		Correct ONLY CCD defects
+        re_p: integer (default = 0)
+    		Plots the corrections in fibre fibre_p
+        ove_5578: boolean (default = False)
+    		Removes skyline 5578 (blue spectrum) using Gaussian fit
+            ND CHECK: This also MODIFIES the throughput correction correcting for flux_5578_medfilt /median_flux_5578_medfilt
+        step: integer (default = 50)
+    	    Number of points for calculating median value
+        clip_high : float (default = 100)
+    		Minimum value of flux/median in a pixel to be consider as a cosmic
+		    if s[wave] > clip_high*fit_median[wave] -> IT IS A COSMIC
+        verbose: boolean (default = False)
+            Write results 
+        warnings: boolean (default = False)
+            Write warnings
+        plot: boolean (default = False)
+            Plot results
+        plot_suspicious_fibres: boolean (default = False)
+    	    Plots fibre(s) that could have a cosmic left (but it could be OK)
+            IF self.integrated_fibre[fibre]/median_running[fibre] > max_value  -> SUSPICIOUS FIBRE
+
+        Example
+        ----------
+    	self.correct_high_cosmics_and_defects(correct_high_cosmics=False, step=40, remove_5578 = True,
+                                              clip_high=120, plot_suspicious_fibres=True, warnings=True, 									      verbose=False, plot=True)
+	    """
         print("\n> Correcting for high cosmics and CCD defects...")
 
         wave_min = self.valid_wave_min  # CHECK ALL OF THIS...
