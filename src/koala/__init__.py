@@ -359,7 +359,7 @@ class RSS(object):
         fig_size=12,
     ):
         """
-    	  Task for correcting high cosmics and CCD defects using median values of nearby pixels.
+    	Task for correcting high cosmics and CCD defects using median values of nearby pixels.
         2dFdr corrects for (the majority) of the cosmic rays, usually correct_high_cosmics = False.
         ANGEL COMMENT: Check, probably can be improved using MATT median running + plotting outside
 
@@ -377,12 +377,10 @@ class RSS(object):
         clip_high : float (default = 100)
     		Minimum value of flux/median in a pixel to be consider as a cosmic
 		    if s[wave] > clip_high*fit_median[wave] -> IT IS A COSMIC
-
         verbose: boolean (default = False)
             Write results 
         warnings: boolean (default = False)
-            Write warnings 
-
+            Write warnings
         plot: boolean (default = False)
             Plot results
         plot_suspicious_fibres: boolean (default = False)
@@ -391,11 +389,9 @@ class RSS(object):
 
         Example
         ----------
-
-    	  self.correct_high_cosmics_and_defects(correct_high_cosmics=False, step=40, remove_5578 = True,
+    	self.correct_high_cosmics_and_defects(correct_high_cosmics=False, step=40, remove_5578 = True,
                                               clip_high=120, plot_suspicious_fibres=True, warnings=True, 									      verbose=False, plot=True)
-	
-    	  """
+	    """
         print("\n> Correcting for high cosmics and CCD defects...")
 
         wave_min = self.valid_wave_min  # CHECK ALL OF THIS...
