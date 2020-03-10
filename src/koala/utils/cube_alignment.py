@@ -6,9 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 
-import koala  # TODO: currently importing * as a workaround for circular imports.
-# This file requires a class, Interpolated_Cube from koala, however from koala import Inter... will result in circular
-# import as __init__ imports specific functions from this file.
+from .plots import plot_offset_between_cubes
 
 
 def offset_between_cubes(cube1, cube2, plot=True):
@@ -84,452 +82,452 @@ def compare_cubes(cube1, cube2, line=0):
     # plt.close()
 
 
-def align_3_cubes(
-        cube1,
-        cube2,
-        cube3,
-        rss1,
-        rss2,
-        rss3,
-        pixel_size_arcsec=0.3,
-        kernel_size_arcsec=1.5,
-        offsets=[1000],
-        plot=False,
-        ADR=False,
-        warnings=False,
-):
-    """
-    (OLD) Routine to align 3 cubes.
-
-    THIS SHOULD NOT BE USED! Use "align_n_cubes" instead !!
-
-
-    Parameters
-    ----------
-    Cubes:
-        Cubes
-    pointings_RSS :
-        list with RSS files
-    pixel_size_arcsec:
-        float, default = 0.3
-    kernel_size_arcsec:
-        float, default = 1.5
-
-    """
-    print("\n> Starting alignment procedure...")
-
-    # pointings_RSS=[rss1, rss2, rss3, rss4]
-    # RA_min, RA_max, DEC_min, DEC_max = coord_range(pointings_RSS)
-
-    if offsets[0] == 1000:
-        #        print "  Using peak in integrated image to align cubes:"
-        #        x12 = cube1.offset_from_center_x_arcsec_integrated - cube2.offset_from_center_x_arcsec_integrated
-        #        y12 = cube1.offset_from_center_y_arcsec_integrated - cube2.offset_from_center_y_arcsec_integrated
-        #        x23 = cube2.offset_from_center_x_arcsec_integrated - cube3.offset_from_center_x_arcsec_integrated
-        #        y23 = cube2.offset_from_center_y_arcsec_integrated - cube3.offset_from_center_y_arcsec_integrated
-        print("  Using peak of the emission tracing all wavelengths to align cubes:")
-        x12 = (
-                cube2.offset_from_center_x_arcsec_tracing
-                - cube1.offset_from_center_x_arcsec_tracing
-        )
-        y12 = (
-                cube2.offset_from_center_y_arcsec_tracing
-                - cube1.offset_from_center_y_arcsec_tracing
-        )
-        x23 = (
-                cube3.offset_from_center_x_arcsec_tracing
-                - cube2.offset_from_center_x_arcsec_tracing
-        )
-        y23 = (
-                cube3.offset_from_center_y_arcsec_tracing
-                - cube2.offset_from_center_y_arcsec_tracing
-        )
-        x31 = (
-                cube1.offset_from_center_x_arcsec_tracing
-                - cube3.offset_from_center_x_arcsec_tracing
-        )
-        y31 = (
-                cube1.offset_from_center_y_arcsec_tracing
-                - cube3.offset_from_center_y_arcsec_tracing
-        )
-
-    else:
-        print("  Using offsets given by the user:")
-        x12 = offsets[0]
-        y12 = offsets[1]
-        x23 = offsets[2]
-        y23 = offsets[3]
-        x31 = -(offsets[0] + offsets[2])
-        y31 = -(offsets[1] + offsets[3])
-
-    rss1.ALIGNED_RA_centre_deg = cube1.RA_centre_deg
-    rss1.ALIGNED_DEC_centre_deg = cube1.DEC_centre_deg
-    rss2.ALIGNED_RA_centre_deg = cube1.RA_centre_deg - x12 / 3600.0
-    rss2.ALIGNED_DEC_centre_deg = cube1.DEC_centre_deg - y12 / 3600.0
-    rss3.ALIGNED_RA_centre_deg = cube1.RA_centre_deg + x31 / 3600.0
-    rss3.ALIGNED_DEC_centre_deg = cube1.DEC_centre_deg + y31 / 3600.0
-
-    RA_centre_deg = rss1.ALIGNED_RA_centre_deg
-    DEC_centre_deg = rss1.ALIGNED_DEC_centre_deg
-
-    print("\n  Offsets (in arcsec):")
-    print("  Offsets in x : {} {}       Total offset in x = {}".format(x12, x23, x12 + x23 + x31))
-    print("  Offsets in y : {} {}       Total offset in y = {}".format(y12, y23, y12 + y23 + y31))
-
-    print("\n>        New_RA_centre_deg       New_DEC_centre_deg       Diff respect Cube 1 (arcsec)")
-    print("  Cube 1 : {}       {}            0 0".format(rss1.ALIGNED_RA_centre_deg, rss1.ALIGNED_DEC_centre_deg))
-    print("  Cube 2 : {}       {}            {} {}".format(
-        rss2.ALIGNED_RA_centre_deg, rss2.ALIGNED_DEC_centre_deg,
-        (rss2.ALIGNED_RA_centre_deg - rss1.ALIGNED_RA_centre_deg) * 3600.0,
-        (rss2.ALIGNED_DEC_centre_deg - rss1.ALIGNED_DEC_centre_deg) * 3600.0))
-    print("  Cube 3 : {}       {}            {} {}".format(
-        rss3.ALIGNED_RA_centre_deg, rss3.ALIGNED_DEC_centre_deg,
-        (rss3.ALIGNED_RA_centre_deg - rss1.ALIGNED_RA_centre_deg) * 3600.0,
-        (rss3.ALIGNED_DEC_centre_deg - rss1.ALIGNED_DEC_centre_deg) * 3600.0))
-
-    offsets_files = [
-        [x12, y12],
-        [x23, y23],
-    ]  # For keeping in the files with self.offsets_files
-    #    RA_size_arcsec = rss1.RA_segment + np.abs(x12)+np.abs(x23) + 2*kernel_size_arcsec
-    #    DEC_size_arcsec =rss1.DEC_segment +np.abs(y12)+np.abs(y23)  +2*kernel_size_arcsec
-
-    RA_size_arcsec = rss1.RA_segment + x12 + x23 + 2 * kernel_size_arcsec
-    DEC_size_arcsec = rss1.DEC_segment + y12 + y23 + 2 * kernel_size_arcsec
-
-    #    print "  RA_centre_deg , DEC_centre_deg   = ", RA_centre_deg, DEC_centre_deg
-    print("  RA_size x DEC_size  = {:.2f} arcsec x {:.2f} arcsec".format(
-        RA_size_arcsec, DEC_size_arcsec
-    ))
-
-    #    probando=raw_input("Continue?")
-
-    cube1_aligned = Interpolated_cube(
-        rss1,
-        pixel_size_arcsec,
-        kernel_size_arcsec,
-        centre_deg=[RA_centre_deg, DEC_centre_deg],
-        size_arcsec=[RA_size_arcsec, DEC_size_arcsec],
-        aligned_coor=True,
-        flux_calibration=cube1.flux_calibration,
-        offsets_files=offsets_files,
-        offsets_files_position=1,
-        plot=plot,
-        ADR=ADR,
-        warnings=warnings,
-    )
-    cube2_aligned = Interpolated_cube(
-        rss2,
-        pixel_size_arcsec,
-        kernel_size_arcsec,
-        centre_deg=[RA_centre_deg, DEC_centre_deg],
-        size_arcsec=[RA_size_arcsec, DEC_size_arcsec],
-        aligned_coor=True,
-        flux_calibration=cube2.flux_calibration,
-        offsets_files=offsets_files,
-        offsets_files_position=2,
-        plot=plot,
-        ADR=ADR,
-        warnings=warnings,
-    )
-    cube3_aligned = Interpolated_cube(
-        rss3,
-        pixel_size_arcsec,
-        kernel_size_arcsec,
-        centre_deg=[RA_centre_deg, DEC_centre_deg],
-        size_arcsec=[RA_size_arcsec, DEC_size_arcsec],
-        aligned_coor=True,
-        flux_calibration=cube3.flux_calibration,
-        offsets_files=offsets_files,
-        offsets_files_position=3,
-        plot=plot,
-        ADR=ADR,
-        warnings=warnings,
-    )
-
-    print("\n> Checking offsets of ALIGNED cubes (in arcsec):")
-
-    x12 = (
-            cube1_aligned.offset_from_center_x_arcsec_tracing
-            - cube2_aligned.offset_from_center_x_arcsec_tracing
-    )
-    y12 = (
-            cube1_aligned.offset_from_center_y_arcsec_tracing
-            - cube2_aligned.offset_from_center_y_arcsec_tracing
-    )
-    x23 = (
-            cube2_aligned.offset_from_center_x_arcsec_tracing
-            - cube3_aligned.offset_from_center_x_arcsec_tracing
-    )
-    y23 = (
-            cube2_aligned.offset_from_center_y_arcsec_tracing
-            - cube3_aligned.offset_from_center_y_arcsec_tracing
-    )
-    x31 = (
-            cube3_aligned.offset_from_center_x_arcsec_tracing
-            - cube1_aligned.offset_from_center_x_arcsec_tracing
-    )
-    y31 = (
-            cube3_aligned.offset_from_center_y_arcsec_tracing
-            - cube1_aligned.offset_from_center_y_arcsec_tracing
-    )
-
-    print("  Offsets in x : {:.3f}   {:.3f}   {:.3f}       Total offset in x = {:.3f}".format(
-        x12, x23, x31, x12 + x23 + x31
-    ))
-    print("  Offsets in y : {:.3f}   {:.3f}   {:.3f}       Total offset in y = {:.3f}".format(
-        y12, y23, y31, y12 + y23 + y31
-    ))
-
-    print("\n> Updated values for Alignment DONE")
-    return cube1_aligned, cube2_aligned, cube3_aligned
-
-
-def align_4_cubes(
-        cube1,
-        cube2,
-        cube3,
-        cube4,
-        rss1,
-        rss2,
-        rss3,
-        rss4,
-        pixel_size_arcsec=0.3,
-        kernel_size_arcsec=1.5,
-        offsets=[1000],
-        plot=False,
-        ADR=False,
-        warnings=False,
-):
-    """
-    (OLD) Routine to align 4 cubes
-
-    THIS SHOULD NOT BE USED! Use "align_n_cubes" instead !!
-
-    Parameters
-    ----------
-    Cubes:
-        Cubes
-    pointings_RSS :
-        list with RSS files
-    pixel_size_arcsec:
-        float, default = 0.3
-    kernel_size_arcsec:
-        float, default = 1.5
-
-    """
-    print("\n> Starting alignment procedure...")
-
-    # pointings_RSS=[rss1, rss2, rss3, rss4]
-    # RA_min, RA_max, DEC_min, DEC_max = coord_range(pointings_RSS)
-
-    if offsets[0] == 1000:
-        #        print "  Using peak in integrated image to align cubes:"
-        #        x12 = cube1.offset_from_center_x_arcsec_integrated - cube2.offset_from_center_x_arcsec_integrated
-        #        y12 = cube1.offset_from_center_y_arcsec_integrated - cube2.offset_from_center_y_arcsec_integrated
-        #        x23 = cube2.offset_from_center_x_arcsec_integrated - cube3.offset_from_center_x_arcsec_integrated
-        #        y23 = cube2.offset_from_center_y_arcsec_integrated - cube3.offset_from_center_y_arcsec_integrated
-        #        x34 = cube3.offset_from_center_x_arcsec_integrated - cube4.offset_from_center_x_arcsec_integrated
-        #        y34 = cube3.offset_from_center_y_arcsec_integrated - cube4.offset_from_center_y_arcsec_integrated
-        #        x41 = cube4.offset_from_center_x_arcsec_integrated - cube1.offset_from_center_x_arcsec_integrated
-        #        y41 = cube4.offset_from_center_y_arcsec_integrated - cube1.offset_from_center_y_arcsec_integrated
-        print("  Using peak of the emission tracing all wavelengths to align cubes:")
-        x12 = (
-                cube2.offset_from_center_x_arcsec_tracing
-                - cube1.offset_from_center_x_arcsec_tracing
-        )
-        y12 = (
-                cube2.offset_from_center_y_arcsec_tracing
-                - cube1.offset_from_center_y_arcsec_tracing
-        )
-        x23 = (
-                cube3.offset_from_center_x_arcsec_tracing
-                - cube2.offset_from_center_x_arcsec_tracing
-        )
-        y23 = (
-                cube3.offset_from_center_y_arcsec_tracing
-                - cube2.offset_from_center_y_arcsec_tracing
-        )
-        x34 = (
-                cube4.offset_from_center_x_arcsec_tracing
-                - cube3.offset_from_center_x_arcsec_tracing
-        )
-        y34 = (
-                cube4.offset_from_center_y_arcsec_tracing
-                - cube3.offset_from_center_y_arcsec_tracing
-        )
-        x41 = (
-                cube1.offset_from_center_x_arcsec_tracing
-                - cube4.offset_from_center_x_arcsec_tracing
-        )
-        y41 = (
-                cube1.offset_from_center_y_arcsec_tracing
-                - cube4.offset_from_center_y_arcsec_tracing
-        )
-
-    else:
-        print("  Using offsets given by the user:")
-        x12 = offsets[0]
-        y12 = offsets[1]
-        x23 = offsets[2]
-        y23 = offsets[3]
-        x34 = offsets[4]
-        y34 = offsets[5]
-        x41 = -(offsets[0] + offsets[2] + offsets[4])
-        y41 = -(offsets[1] + offsets[3] + offsets[5])
-
-    rss1.ALIGNED_RA_centre_deg = cube1.RA_centre_deg
-    rss1.ALIGNED_DEC_centre_deg = cube1.DEC_centre_deg
-    rss2.ALIGNED_RA_centre_deg = cube1.RA_centre_deg - x12 / 3600.0
-    rss2.ALIGNED_DEC_centre_deg = cube1.DEC_centre_deg - y12 / 3600.0
-    rss3.ALIGNED_RA_centre_deg = cube1.RA_centre_deg - (x12 + x23) / 3600.0
-    rss3.ALIGNED_DEC_centre_deg = cube1.DEC_centre_deg - (y12 + y23) / 3600.0
-    rss4.ALIGNED_RA_centre_deg = cube1.RA_centre_deg + x41 / 3600.0
-    rss4.ALIGNED_DEC_centre_deg = cube1.DEC_centre_deg + y41 / 3600.0
-
-    RA_centre_deg = rss1.ALIGNED_RA_centre_deg
-    DEC_centre_deg = rss1.ALIGNED_DEC_centre_deg
-
-    print("\n  Offsets (in arcsec):")
-    print("  Offsets in x : ", x12, x23, x34, "      Total offset in x = ", x12 + x23 + x34 + x41)
-    print("  Offsets in y : ", y12, y23, y34, "      Total offset in y = ", y12 + y23 + y34 + y41)
-
-    print("\n>        New_RA_centre_deg       New_DEC_centre_deg       Diff respect Cube 1 (arcsec)")
-    print("  Cube 1 : ", rss1.ALIGNED_RA_centre_deg, "     ", rss1.ALIGNED_DEC_centre_deg, "      0,0")
-    print("  Cube 2 : ", rss2.ALIGNED_RA_centre_deg, "     ", rss2.ALIGNED_DEC_centre_deg, "    ", (
-            rss2.ALIGNED_RA_centre_deg - rss1.ALIGNED_RA_centre_deg
-    ) * 3600.0, (
-                  rss2.ALIGNED_DEC_centre_deg - rss1.ALIGNED_DEC_centre_deg
-          ) * 3600.0)
-    print("  Cube 3 : ", rss3.ALIGNED_RA_centre_deg, "     ", rss3.ALIGNED_DEC_centre_deg, "    ", (
-            rss3.ALIGNED_RA_centre_deg - rss1.ALIGNED_RA_centre_deg
-    ) * 3600.0, (
-                  rss3.ALIGNED_DEC_centre_deg - rss1.ALIGNED_DEC_centre_deg
-          ) * 3600.0)
-    print("  Cube 4 : ", rss4.ALIGNED_RA_centre_deg, "     ", rss4.ALIGNED_DEC_centre_deg, "    ", (
-            rss4.ALIGNED_RA_centre_deg - rss1.ALIGNED_RA_centre_deg
-    ) * 3600.0, (
-                  rss4.ALIGNED_DEC_centre_deg - rss1.ALIGNED_DEC_centre_deg
-          ) * 3600.0)
-
-    offsets_files = [
-        [x12, y12],
-        [x23, y23],
-        [x34, y34],
-    ]  # For keeping in the files with self.offsets_files
-    #    RA_size_arcsec = 1.1*(RA_max - RA_min)*3600.
-    #    DEC_size_arcsec = 1.1*(DEC_max - DEC_min)*3600.
-    RA_size_arcsec = rss1.RA_segment + x12 + x23 + x34 + 2 * kernel_size_arcsec
-    DEC_size_arcsec = rss1.DEC_segment + y12 + y23 + y34 + 2 * kernel_size_arcsec
-
-    #    print "  RA_centre_deg , DEC_centre_deg   = ", RA_centre_deg, DEC_centre_deg
-    print("  RA_size x DEC_size  = {:.2f} arcsec x {:.2f} arcsec".format(
-        RA_size_arcsec, DEC_size_arcsec
-    ))
-
-    #    probando=raw_input("Continue?")
-
-    cube1_aligned = Interpolated_cube(
-        rss1,
-        pixel_size_arcsec,
-        kernel_size_arcsec,
-        centre_deg=[RA_centre_deg, DEC_centre_deg],
-        size_arcsec=[RA_size_arcsec, DEC_size_arcsec],
-        aligned_coor=True,
-        flux_calibration=cube1.flux_calibration,
-        offsets_files=offsets_files,
-        offsets_files_position=1,
-        plot=plot,
-        ADR=ADR,
-        warnings=warnings,
-    )
-    cube2_aligned = Interpolated_cube(
-        rss2,
-        pixel_size_arcsec,
-        kernel_size_arcsec,
-        centre_deg=[RA_centre_deg, DEC_centre_deg],
-        size_arcsec=[RA_size_arcsec, DEC_size_arcsec],
-        aligned_coor=True,
-        flux_calibration=cube2.flux_calibration,
-        offsets_files=offsets_files,
-        offsets_files_position=2,
-        plot=plot,
-        ADR=ADR,
-        warnings=warnings,
-    )
-    cube3_aligned = Interpolated_cube(
-        rss3,
-        pixel_size_arcsec,
-        kernel_size_arcsec,
-        centre_deg=[RA_centre_deg, DEC_centre_deg],
-        size_arcsec=[RA_size_arcsec, DEC_size_arcsec],
-        aligned_coor=True,
-        flux_calibration=cube3.flux_calibration,
-        offsets_files=offsets_files,
-        offsets_files_position=3,
-        plot=plot,
-        ADR=ADR,
-        warnings=warnings,
-    )
-    cube4_aligned = Interpolated_cube(
-        rss4,
-        pixel_size_arcsec,
-        kernel_size_arcsec,
-        centre_deg=[RA_centre_deg, DEC_centre_deg],
-        size_arcsec=[RA_size_arcsec, DEC_size_arcsec],
-        aligned_coor=True,
-        flux_calibration=cube3.flux_calibration,
-        offsets_files=offsets_files,
-        offsets_files_position=4,
-        plot=plot,
-        ADR=ADR,
-        warnings=warnings,
-    )
-
-    print("\n> Checking offsets of ALIGNED cubes (in arcsec):")
-
-    x12 = (
-            cube1_aligned.offset_from_center_x_arcsec_tracing
-            - cube2_aligned.offset_from_center_x_arcsec_tracing
-    )
-    y12 = (
-            cube1_aligned.offset_from_center_y_arcsec_tracing
-            - cube2_aligned.offset_from_center_y_arcsec_tracing
-    )
-    x23 = (
-            cube2_aligned.offset_from_center_x_arcsec_tracing
-            - cube3_aligned.offset_from_center_x_arcsec_tracing
-    )
-    y23 = (
-            cube2_aligned.offset_from_center_y_arcsec_tracing
-            - cube3_aligned.offset_from_center_y_arcsec_tracing
-    )
-    x34 = (
-            cube3_aligned.offset_from_center_x_arcsec_tracing
-            - cube4_aligned.offset_from_center_x_arcsec_tracing
-    )
-    y34 = (
-            cube3_aligned.offset_from_center_y_arcsec_tracing
-            - cube4_aligned.offset_from_center_y_arcsec_tracing
-    )
-    x41 = (
-            cube4_aligned.offset_from_center_x_arcsec_tracing
-            - cube1_aligned.offset_from_center_x_arcsec_tracing
-    )
-    y41 = (
-            cube4_aligned.offset_from_center_y_arcsec_tracing
-            - cube1_aligned.offset_from_center_y_arcsec_tracing
-    )
-
-    print("  Offsets in x : {:.3f}   {:.3f}   {:.3f}   {:.3f}    Total offset in x = {:.3f}".format(
-        x12, x23, x34, x41, x12 + x23 + x34 + x41
-    ))
-    print("  Offsets in y : {:.3f}   {:.3f}   {:.3f}   {:.3f}    Total offset in y = {:.3f}".format(
-        y12, y23, y34, y41, y12 + y23 + y34 + y41
-    ))
-
-    print("\n> Updated values for Alignment DONE")
-    return cube1_aligned, cube2_aligned, cube3_aligned, cube4_aligned
+# def align_3_cubes(
+#         cube1,
+#         cube2,
+#         cube3,
+#         rss1,
+#         rss2,
+#         rss3,
+#         pixel_size_arcsec=0.3,
+#         kernel_size_arcsec=1.5,
+#         offsets=[1000],
+#         plot=False,
+#         ADR=False,
+#         warnings=False,
+# ):
+#     """
+#     (OLD) Routine to align 3 cubes.
+#
+#     THIS SHOULD NOT BE USED! Use "align_n_cubes" instead !!
+#
+#
+#     Parameters
+#     ----------
+#     Cubes:
+#         Cubes
+#     pointings_RSS :
+#         list with RSS files
+#     pixel_size_arcsec:
+#         float, default = 0.3
+#     kernel_size_arcsec:
+#         float, default = 1.5
+#
+#     """
+#     print("\n> Starting alignment procedure...")
+#
+#     # pointings_RSS=[rss1, rss2, rss3, rss4]
+#     # RA_min, RA_max, DEC_min, DEC_max = coord_range(pointings_RSS)
+#
+#     if offsets[0] == 1000:
+#         #        print "  Using peak in integrated image to align cubes:"
+#         #        x12 = cube1.offset_from_center_x_arcsec_integrated - cube2.offset_from_center_x_arcsec_integrated
+#         #        y12 = cube1.offset_from_center_y_arcsec_integrated - cube2.offset_from_center_y_arcsec_integrated
+#         #        x23 = cube2.offset_from_center_x_arcsec_integrated - cube3.offset_from_center_x_arcsec_integrated
+#         #        y23 = cube2.offset_from_center_y_arcsec_integrated - cube3.offset_from_center_y_arcsec_integrated
+#         print("  Using peak of the emission tracing all wavelengths to align cubes:")
+#         x12 = (
+#                 cube2.offset_from_center_x_arcsec_tracing
+#                 - cube1.offset_from_center_x_arcsec_tracing
+#         )
+#         y12 = (
+#                 cube2.offset_from_center_y_arcsec_tracing
+#                 - cube1.offset_from_center_y_arcsec_tracing
+#         )
+#         x23 = (
+#                 cube3.offset_from_center_x_arcsec_tracing
+#                 - cube2.offset_from_center_x_arcsec_tracing
+#         )
+#         y23 = (
+#                 cube3.offset_from_center_y_arcsec_tracing
+#                 - cube2.offset_from_center_y_arcsec_tracing
+#         )
+#         x31 = (
+#                 cube1.offset_from_center_x_arcsec_tracing
+#                 - cube3.offset_from_center_x_arcsec_tracing
+#         )
+#         y31 = (
+#                 cube1.offset_from_center_y_arcsec_tracing
+#                 - cube3.offset_from_center_y_arcsec_tracing
+#         )
+#
+#     else:
+#         print("  Using offsets given by the user:")
+#         x12 = offsets[0]
+#         y12 = offsets[1]
+#         x23 = offsets[2]
+#         y23 = offsets[3]
+#         x31 = -(offsets[0] + offsets[2])
+#         y31 = -(offsets[1] + offsets[3])
+#
+#     rss1.ALIGNED_RA_centre_deg = cube1.RA_centre_deg
+#     rss1.ALIGNED_DEC_centre_deg = cube1.DEC_centre_deg
+#     rss2.ALIGNED_RA_centre_deg = cube1.RA_centre_deg - x12 / 3600.0
+#     rss2.ALIGNED_DEC_centre_deg = cube1.DEC_centre_deg - y12 / 3600.0
+#     rss3.ALIGNED_RA_centre_deg = cube1.RA_centre_deg + x31 / 3600.0
+#     rss3.ALIGNED_DEC_centre_deg = cube1.DEC_centre_deg + y31 / 3600.0
+#
+#     RA_centre_deg = rss1.ALIGNED_RA_centre_deg
+#     DEC_centre_deg = rss1.ALIGNED_DEC_centre_deg
+#
+#     print("\n  Offsets (in arcsec):")
+#     print("  Offsets in x : {} {}       Total offset in x = {}".format(x12, x23, x12 + x23 + x31))
+#     print("  Offsets in y : {} {}       Total offset in y = {}".format(y12, y23, y12 + y23 + y31))
+#
+#     print("\n>        New_RA_centre_deg       New_DEC_centre_deg       Diff respect Cube 1 (arcsec)")
+#     print("  Cube 1 : {}       {}            0 0".format(rss1.ALIGNED_RA_centre_deg, rss1.ALIGNED_DEC_centre_deg))
+#     print("  Cube 2 : {}       {}            {} {}".format(
+#         rss2.ALIGNED_RA_centre_deg, rss2.ALIGNED_DEC_centre_deg,
+#         (rss2.ALIGNED_RA_centre_deg - rss1.ALIGNED_RA_centre_deg) * 3600.0,
+#         (rss2.ALIGNED_DEC_centre_deg - rss1.ALIGNED_DEC_centre_deg) * 3600.0))
+#     print("  Cube 3 : {}       {}            {} {}".format(
+#         rss3.ALIGNED_RA_centre_deg, rss3.ALIGNED_DEC_centre_deg,
+#         (rss3.ALIGNED_RA_centre_deg - rss1.ALIGNED_RA_centre_deg) * 3600.0,
+#         (rss3.ALIGNED_DEC_centre_deg - rss1.ALIGNED_DEC_centre_deg) * 3600.0))
+#
+#     offsets_files = [
+#         [x12, y12],
+#         [x23, y23],
+#     ]  # For keeping in the files with self.offsets_files
+#     #    RA_size_arcsec = rss1.RA_segment + np.abs(x12)+np.abs(x23) + 2*kernel_size_arcsec
+#     #    DEC_size_arcsec =rss1.DEC_segment +np.abs(y12)+np.abs(y23)  +2*kernel_size_arcsec
+#
+#     RA_size_arcsec = rss1.RA_segment + x12 + x23 + 2 * kernel_size_arcsec
+#     DEC_size_arcsec = rss1.DEC_segment + y12 + y23 + 2 * kernel_size_arcsec
+#
+#     #    print "  RA_centre_deg , DEC_centre_deg   = ", RA_centre_deg, DEC_centre_deg
+#     print("  RA_size x DEC_size  = {:.2f} arcsec x {:.2f} arcsec".format(
+#         RA_size_arcsec, DEC_size_arcsec
+#     ))
+#
+#     #    probando=raw_input("Continue?")
+#
+#     cube1_aligned = Interpolated_cube(
+#         rss1,
+#         pixel_size_arcsec,
+#         kernel_size_arcsec,
+#         centre_deg=[RA_centre_deg, DEC_centre_deg],
+#         size_arcsec=[RA_size_arcsec, DEC_size_arcsec],
+#         aligned_coor=True,
+#         flux_calibration=cube1.flux_calibration,
+#         offsets_files=offsets_files,
+#         offsets_files_position=1,
+#         plot=plot,
+#         ADR=ADR,
+#         warnings=warnings,
+#     )
+#     cube2_aligned = Interpolated_cube(
+#         rss2,
+#         pixel_size_arcsec,
+#         kernel_size_arcsec,
+#         centre_deg=[RA_centre_deg, DEC_centre_deg],
+#         size_arcsec=[RA_size_arcsec, DEC_size_arcsec],
+#         aligned_coor=True,
+#         flux_calibration=cube2.flux_calibration,
+#         offsets_files=offsets_files,
+#         offsets_files_position=2,
+#         plot=plot,
+#         ADR=ADR,
+#         warnings=warnings,
+#     )
+#     cube3_aligned = Interpolated_cube(
+#         rss3,
+#         pixel_size_arcsec,
+#         kernel_size_arcsec,
+#         centre_deg=[RA_centre_deg, DEC_centre_deg],
+#         size_arcsec=[RA_size_arcsec, DEC_size_arcsec],
+#         aligned_coor=True,
+#         flux_calibration=cube3.flux_calibration,
+#         offsets_files=offsets_files,
+#         offsets_files_position=3,
+#         plot=plot,
+#         ADR=ADR,
+#         warnings=warnings,
+#     )
+#
+#     print("\n> Checking offsets of ALIGNED cubes (in arcsec):")
+#
+#     x12 = (
+#             cube1_aligned.offset_from_center_x_arcsec_tracing
+#             - cube2_aligned.offset_from_center_x_arcsec_tracing
+#     )
+#     y12 = (
+#             cube1_aligned.offset_from_center_y_arcsec_tracing
+#             - cube2_aligned.offset_from_center_y_arcsec_tracing
+#     )
+#     x23 = (
+#             cube2_aligned.offset_from_center_x_arcsec_tracing
+#             - cube3_aligned.offset_from_center_x_arcsec_tracing
+#     )
+#     y23 = (
+#             cube2_aligned.offset_from_center_y_arcsec_tracing
+#             - cube3_aligned.offset_from_center_y_arcsec_tracing
+#     )
+#     x31 = (
+#             cube3_aligned.offset_from_center_x_arcsec_tracing
+#             - cube1_aligned.offset_from_center_x_arcsec_tracing
+#     )
+#     y31 = (
+#             cube3_aligned.offset_from_center_y_arcsec_tracing
+#             - cube1_aligned.offset_from_center_y_arcsec_tracing
+#     )
+#
+#     print("  Offsets in x : {:.3f}   {:.3f}   {:.3f}       Total offset in x = {:.3f}".format(
+#         x12, x23, x31, x12 + x23 + x31
+#     ))
+#     print("  Offsets in y : {:.3f}   {:.3f}   {:.3f}       Total offset in y = {:.3f}".format(
+#         y12, y23, y31, y12 + y23 + y31
+#     ))
+#
+#     print("\n> Updated values for Alignment DONE")
+#     return cube1_aligned, cube2_aligned, cube3_aligned
+#
+#
+# def align_4_cubes(
+#         cube1,
+#         cube2,
+#         cube3,
+#         cube4,
+#         rss1,
+#         rss2,
+#         rss3,
+#         rss4,
+#         pixel_size_arcsec=0.3,
+#         kernel_size_arcsec=1.5,
+#         offsets=[1000],
+#         plot=False,
+#         ADR=False,
+#         warnings=False,
+# ):
+#     """
+#     (OLD) Routine to align 4 cubes
+#
+#     THIS SHOULD NOT BE USED! Use "align_n_cubes" instead !!
+#
+#     Parameters
+#     ----------
+#     Cubes:
+#         Cubes
+#     pointings_RSS :
+#         list with RSS files
+#     pixel_size_arcsec:
+#         float, default = 0.3
+#     kernel_size_arcsec:
+#         float, default = 1.5
+#
+#     """
+#     print("\n> Starting alignment procedure...")
+#
+#     # pointings_RSS=[rss1, rss2, rss3, rss4]
+#     # RA_min, RA_max, DEC_min, DEC_max = coord_range(pointings_RSS)
+#
+#     if offsets[0] == 1000:
+#         #        print "  Using peak in integrated image to align cubes:"
+#         #        x12 = cube1.offset_from_center_x_arcsec_integrated - cube2.offset_from_center_x_arcsec_integrated
+#         #        y12 = cube1.offset_from_center_y_arcsec_integrated - cube2.offset_from_center_y_arcsec_integrated
+#         #        x23 = cube2.offset_from_center_x_arcsec_integrated - cube3.offset_from_center_x_arcsec_integrated
+#         #        y23 = cube2.offset_from_center_y_arcsec_integrated - cube3.offset_from_center_y_arcsec_integrated
+#         #        x34 = cube3.offset_from_center_x_arcsec_integrated - cube4.offset_from_center_x_arcsec_integrated
+#         #        y34 = cube3.offset_from_center_y_arcsec_integrated - cube4.offset_from_center_y_arcsec_integrated
+#         #        x41 = cube4.offset_from_center_x_arcsec_integrated - cube1.offset_from_center_x_arcsec_integrated
+#         #        y41 = cube4.offset_from_center_y_arcsec_integrated - cube1.offset_from_center_y_arcsec_integrated
+#         print("  Using peak of the emission tracing all wavelengths to align cubes:")
+#         x12 = (
+#                 cube2.offset_from_center_x_arcsec_tracing
+#                 - cube1.offset_from_center_x_arcsec_tracing
+#         )
+#         y12 = (
+#                 cube2.offset_from_center_y_arcsec_tracing
+#                 - cube1.offset_from_center_y_arcsec_tracing
+#         )
+#         x23 = (
+#                 cube3.offset_from_center_x_arcsec_tracing
+#                 - cube2.offset_from_center_x_arcsec_tracing
+#         )
+#         y23 = (
+#                 cube3.offset_from_center_y_arcsec_tracing
+#                 - cube2.offset_from_center_y_arcsec_tracing
+#         )
+#         x34 = (
+#                 cube4.offset_from_center_x_arcsec_tracing
+#                 - cube3.offset_from_center_x_arcsec_tracing
+#         )
+#         y34 = (
+#                 cube4.offset_from_center_y_arcsec_tracing
+#                 - cube3.offset_from_center_y_arcsec_tracing
+#         )
+#         x41 = (
+#                 cube1.offset_from_center_x_arcsec_tracing
+#                 - cube4.offset_from_center_x_arcsec_tracing
+#         )
+#         y41 = (
+#                 cube1.offset_from_center_y_arcsec_tracing
+#                 - cube4.offset_from_center_y_arcsec_tracing
+#         )
+#
+#     else:
+#         print("  Using offsets given by the user:")
+#         x12 = offsets[0]
+#         y12 = offsets[1]
+#         x23 = offsets[2]
+#         y23 = offsets[3]
+#         x34 = offsets[4]
+#         y34 = offsets[5]
+#         x41 = -(offsets[0] + offsets[2] + offsets[4])
+#         y41 = -(offsets[1] + offsets[3] + offsets[5])
+#
+#     rss1.ALIGNED_RA_centre_deg = cube1.RA_centre_deg
+#     rss1.ALIGNED_DEC_centre_deg = cube1.DEC_centre_deg
+#     rss2.ALIGNED_RA_centre_deg = cube1.RA_centre_deg - x12 / 3600.0
+#     rss2.ALIGNED_DEC_centre_deg = cube1.DEC_centre_deg - y12 / 3600.0
+#     rss3.ALIGNED_RA_centre_deg = cube1.RA_centre_deg - (x12 + x23) / 3600.0
+#     rss3.ALIGNED_DEC_centre_deg = cube1.DEC_centre_deg - (y12 + y23) / 3600.0
+#     rss4.ALIGNED_RA_centre_deg = cube1.RA_centre_deg + x41 / 3600.0
+#     rss4.ALIGNED_DEC_centre_deg = cube1.DEC_centre_deg + y41 / 3600.0
+#
+#     RA_centre_deg = rss1.ALIGNED_RA_centre_deg
+#     DEC_centre_deg = rss1.ALIGNED_DEC_centre_deg
+#
+#     print("\n  Offsets (in arcsec):")
+#     print("  Offsets in x : ", x12, x23, x34, "      Total offset in x = ", x12 + x23 + x34 + x41)
+#     print("  Offsets in y : ", y12, y23, y34, "      Total offset in y = ", y12 + y23 + y34 + y41)
+#
+#     print("\n>        New_RA_centre_deg       New_DEC_centre_deg       Diff respect Cube 1 (arcsec)")
+#     print("  Cube 1 : ", rss1.ALIGNED_RA_centre_deg, "     ", rss1.ALIGNED_DEC_centre_deg, "      0,0")
+#     print("  Cube 2 : ", rss2.ALIGNED_RA_centre_deg, "     ", rss2.ALIGNED_DEC_centre_deg, "    ", (
+#             rss2.ALIGNED_RA_centre_deg - rss1.ALIGNED_RA_centre_deg
+#     ) * 3600.0, (
+#                   rss2.ALIGNED_DEC_centre_deg - rss1.ALIGNED_DEC_centre_deg
+#           ) * 3600.0)
+#     print("  Cube 3 : ", rss3.ALIGNED_RA_centre_deg, "     ", rss3.ALIGNED_DEC_centre_deg, "    ", (
+#             rss3.ALIGNED_RA_centre_deg - rss1.ALIGNED_RA_centre_deg
+#     ) * 3600.0, (
+#                   rss3.ALIGNED_DEC_centre_deg - rss1.ALIGNED_DEC_centre_deg
+#           ) * 3600.0)
+#     print("  Cube 4 : ", rss4.ALIGNED_RA_centre_deg, "     ", rss4.ALIGNED_DEC_centre_deg, "    ", (
+#             rss4.ALIGNED_RA_centre_deg - rss1.ALIGNED_RA_centre_deg
+#     ) * 3600.0, (
+#                   rss4.ALIGNED_DEC_centre_deg - rss1.ALIGNED_DEC_centre_deg
+#           ) * 3600.0)
+#
+#     offsets_files = [
+#         [x12, y12],
+#         [x23, y23],
+#         [x34, y34],
+#     ]  # For keeping in the files with self.offsets_files
+#     #    RA_size_arcsec = 1.1*(RA_max - RA_min)*3600.
+#     #    DEC_size_arcsec = 1.1*(DEC_max - DEC_min)*3600.
+#     RA_size_arcsec = rss1.RA_segment + x12 + x23 + x34 + 2 * kernel_size_arcsec
+#     DEC_size_arcsec = rss1.DEC_segment + y12 + y23 + y34 + 2 * kernel_size_arcsec
+#
+#     #    print "  RA_centre_deg , DEC_centre_deg   = ", RA_centre_deg, DEC_centre_deg
+#     print("  RA_size x DEC_size  = {:.2f} arcsec x {:.2f} arcsec".format(
+#         RA_size_arcsec, DEC_size_arcsec
+#     ))
+#
+#     #    probando=raw_input("Continue?")
+#
+#     cube1_aligned = Interpolated_cube(
+#         rss1,
+#         pixel_size_arcsec,
+#         kernel_size_arcsec,
+#         centre_deg=[RA_centre_deg, DEC_centre_deg],
+#         size_arcsec=[RA_size_arcsec, DEC_size_arcsec],
+#         aligned_coor=True,
+#         flux_calibration=cube1.flux_calibration,
+#         offsets_files=offsets_files,
+#         offsets_files_position=1,
+#         plot=plot,
+#         ADR=ADR,
+#         warnings=warnings,
+#     )
+#     cube2_aligned = Interpolated_cube(
+#         rss2,
+#         pixel_size_arcsec,
+#         kernel_size_arcsec,
+#         centre_deg=[RA_centre_deg, DEC_centre_deg],
+#         size_arcsec=[RA_size_arcsec, DEC_size_arcsec],
+#         aligned_coor=True,
+#         flux_calibration=cube2.flux_calibration,
+#         offsets_files=offsets_files,
+#         offsets_files_position=2,
+#         plot=plot,
+#         ADR=ADR,
+#         warnings=warnings,
+#     )
+#     cube3_aligned = Interpolated_cube(
+#         rss3,
+#         pixel_size_arcsec,
+#         kernel_size_arcsec,
+#         centre_deg=[RA_centre_deg, DEC_centre_deg],
+#         size_arcsec=[RA_size_arcsec, DEC_size_arcsec],
+#         aligned_coor=True,
+#         flux_calibration=cube3.flux_calibration,
+#         offsets_files=offsets_files,
+#         offsets_files_position=3,
+#         plot=plot,
+#         ADR=ADR,
+#         warnings=warnings,
+#     )
+#     cube4_aligned = Interpolated_cube(
+#         rss4,
+#         pixel_size_arcsec,
+#         kernel_size_arcsec,
+#         centre_deg=[RA_centre_deg, DEC_centre_deg],
+#         size_arcsec=[RA_size_arcsec, DEC_size_arcsec],
+#         aligned_coor=True,
+#         flux_calibration=cube3.flux_calibration,
+#         offsets_files=offsets_files,
+#         offsets_files_position=4,
+#         plot=plot,
+#         ADR=ADR,
+#         warnings=warnings,
+#     )
+#
+#     print("\n> Checking offsets of ALIGNED cubes (in arcsec):")
+#
+#     x12 = (
+#             cube1_aligned.offset_from_center_x_arcsec_tracing
+#             - cube2_aligned.offset_from_center_x_arcsec_tracing
+#     )
+#     y12 = (
+#             cube1_aligned.offset_from_center_y_arcsec_tracing
+#             - cube2_aligned.offset_from_center_y_arcsec_tracing
+#     )
+#     x23 = (
+#             cube2_aligned.offset_from_center_x_arcsec_tracing
+#             - cube3_aligned.offset_from_center_x_arcsec_tracing
+#     )
+#     y23 = (
+#             cube2_aligned.offset_from_center_y_arcsec_tracing
+#             - cube3_aligned.offset_from_center_y_arcsec_tracing
+#     )
+#     x34 = (
+#             cube3_aligned.offset_from_center_x_arcsec_tracing
+#             - cube4_aligned.offset_from_center_x_arcsec_tracing
+#     )
+#     y34 = (
+#             cube3_aligned.offset_from_center_y_arcsec_tracing
+#             - cube4_aligned.offset_from_center_y_arcsec_tracing
+#     )
+#     x41 = (
+#             cube4_aligned.offset_from_center_x_arcsec_tracing
+#             - cube1_aligned.offset_from_center_x_arcsec_tracing
+#     )
+#     y41 = (
+#             cube4_aligned.offset_from_center_y_arcsec_tracing
+#             - cube1_aligned.offset_from_center_y_arcsec_tracing
+#     )
+#
+#     print("  Offsets in x : {:.3f}   {:.3f}   {:.3f}   {:.3f}    Total offset in x = {:.3f}".format(
+#         x12, x23, x34, x41, x12 + x23 + x34 + x41
+#     ))
+#     print("  Offsets in y : {:.3f}   {:.3f}   {:.3f}   {:.3f}    Total offset in y = {:.3f}".format(
+#         y12, y23, y34, y41, y12 + y23 + y34 + y41
+#     ))
+#
+#     print("\n> Updated values for Alignment DONE")
+#     return cube1_aligned, cube2_aligned, cube3_aligned, cube4_aligned
 
 
 def align_n_cubes(
@@ -558,6 +556,10 @@ def align_n_cubes(
         float, default = 1.5
 
     """
+    from src.koala import Interpolated_cube  # TODO: currently importing like this for workaround of circular imports
+    # This file requires a class, Interpolated_Cube from koala, however from koala import Inter... will result in
+    # circular import as __init__ imports specific functions from this file.
+
     print("\n> Starting alignment procedure...")
 
     n_rss = len(rss_list)
