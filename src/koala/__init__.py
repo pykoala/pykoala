@@ -13,6 +13,8 @@ from .utils.utils import FitsExt, FitsFibresIFUIndex
 from .utils.cube_alignment import offset_between_cubes, compare_cubes, align_n_cubes
 from .utils.flux import search_peaks, fluxes, dfluxes, substract_given_gaussian
 from .utils.sky_spectrum import scale_sky_spectrum, median_filter
+from .utils.moffat import fit_Moffat
+from .utils.spectrum_tools import rebin_spec_shift, smooth_spectrum
 
 import copy
 import os.path as pth
@@ -27,12 +29,8 @@ import matplotlib.colors as colors
 
 import numpy as np
 
-from synphot import observation
-from synphot import spectrum
-
 from scipy import interpolate
 from scipy.ndimage.interpolation import shift
-from scipy.optimize import curve_fit
 import scipy.signal as sig
 
 # -----------------------------------------------------------------------------
@@ -5839,453 +5837,6 @@ class CUBE(RSS, Interpolated_cube):
         return ratioMap
 
 
-
-# -----------------------------------------------------------------------------
-# GENERAL TASKS
-# -----------------------------------------------------------------------------
-def running_mean(x, N):
-    cumsum = np.cumsum(np.insert(x, 0, 0))
-    return (cumsum[N:] - cumsum[:-N])/N
-
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-def cumulaive_Moffat(r2, L_star, alpha2, beta):
-    return L_star * (1 - np.power(1 + (r2/alpha2), -beta))
-
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-def fit_Moffat(
-    r2_growth_curve, F_growth_curve, F_guess, r2_half_light, r_max, plot=False
-):
-    """
-    Fits a Moffat profile to a flux growth curve
-    as a function of radius squared,
-    cutting at to r_max (in units of the half-light radius),
-    provided an initial guess of the total flux and half-light radius squared.
-    """
-    index_cut = np.searchsorted(r2_growth_curve, r2_half_light * r_max ** 2)
-    fit, cov = curve_fit(
-        cumulaive_Moffat,
-        r2_growth_curve[:index_cut],
-        F_growth_curve[:index_cut],
-        p0=(F_guess, r2_half_light, 1),
-    )
-    if plot:
-        print("Best-fit: L_star = {}".format(fit[0]))
-        print("          alpha = {}".format(np.sqrt(fit[1])))
-        print("          beta = {}".format(fit[2]))
-        r_norm = np.sqrt(np.array(r2_growth_curve)/r2_half_light)
-        plt.plot(
-            r_norm,
-            cumulaive_Moffat(np.array(r2_growth_curve), fit[0], fit[1], fit[2])/fit[0],
-            ":",
-        )
-
-    return fit
-
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-def KOALA_offsets(s, pa):
-    print("\n> Offsets towards North and East between pointings," "according to KOALA manual, for pa = {} degrees".format(pa))
-    pa *= np.pi/180
-    print("  a -> b : {} {}".format(s * np.sin(pa), -s * np.cos(pa)))
-    print("  a -> c : {} {}".format(-s * np.sin(60 - pa), -s * np.cos(60 - pa)))
-    print("  b -> d : {} {}".format(-np.sqrt(3) * s * np.cos(pa), -np.sqrt(3) * s * np.sin(pa)))
-
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-def obtain_telluric_correction(wlm, telluric_correction_list, plot=True):
-    """
-    Take a list of telluric correction spectra and make a single median telluric spectrum
-
-    Args:
-        wlm (array): A wavelength array. Only used for plotting- should refactor this!
-        telluric_correction_list (list): A list of telluric correction spectra
-        plot (bool, default=True): Whether or not to plot the resulting spectrum.
-    """
-    telluric_correction = np.nanmedian(telluric_correction_list, axis=0)
-    if plot:
-        fig = plot_telluric_correction(wlm, telluric_correction_list, telluric_correction, fig_size=12)
-
-    print("\n\t>Telluric correction = {}".format(telluric_correction))
-    print("\n\tTelluric correction obtained!")
-    return telluric_correction
-
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-def coord_range(rss_list):
-    RA = [rss.RA_centre_deg + rss.offset_RA_arcsec / 3600.0 for rss in rss_list]
-    RA_min = np.nanmin(RA)
-    RA_max = np.nanmax(RA)
-    DEC = [rss.DEC_centre_deg + rss.offset_DEC_arcsec / 3600.0 for rss in rss_list]
-    DEC_min = np.nanmin(DEC)
-    DEC_max = np.nanmax(DEC)
-    return RA_min, RA_max, DEC_min, DEC_max
-
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-
-
-def smooth_spectrum(
-    wlm,
-    s,
-    wave_min=0,
-    wave_max=0,
-    step=50,
-    exclude_wlm=[[0, 0]],
-    weight_fit_median=0.5,
-    plot=False,
-    verbose=False,
-):
-    """
-    Smooth a spectrum
-    TODO: More here
-    """
-
-    if verbose:
-        print("\n> Computing smooth spectrum...")
-
-    if wave_min == 0:
-        wave_min = wlm[0]
-    if wave_max == 0:
-        wave_max = wlm[-1]
-
-    running_wave = []
-    running_step_median = []
-    cuts = np.int(((wave_max - wave_min)/step))
-
-    exclude = 0
-    corte_index = -1
-    for corte in range(cuts + 1):
-        next_wave = wave_min + step * corte
-        if next_wave < wave_max:
-
-            if (
-                next_wave > exclude_wlm[exclude][0]
-                and next_wave < exclude_wlm[exclude][1]
-            ):
-                if verbose:
-                    print("  Skipping {} as it is in the exclusion range [ {} , {} ]".format(
-                        next_wave, exclude_wlm[exclude][0], exclude_wlm[exclude][1]))
-
-            else:
-                corte_index = corte_index + 1
-                running_wave.append(next_wave)
-                # print running_wave
-                region = np.where(
-                    (wlm > running_wave[corte_index] - np.int(step/2))
-                    & (wlm < running_wave[corte_index] + np.int(step/2))
-                )
-                running_step_median.append(np.nanmedian(s[region]))
-                if next_wave > exclude_wlm[exclude][1]:
-                    exclude = exclude + 1
-                    if verbose:
-                        print("--- End exclusion range {}".format(exclude))
-                    if exclude == len(exclude_wlm):
-                        exclude = len(exclude_wlm) - 1
-
-    running_wave.append(wave_max)
-    region = np.where((wlm > wave_max - step) & (wlm < wave_max + 0.1))
-    running_step_median.append(np.nanmedian(s[region]))
-
-    # print running_wave
-    # print running_step_median
-    # Check not nan
-    _running_wave_ = []
-    _running_step_median_ = []
-    for i in range(len(running_wave)):
-        if np.isnan(running_step_median[i]):
-            if verbose:
-                print("  There is a nan in {}".format(running_wave[i]))
-        else:
-            _running_wave_.append(running_wave[i])
-            _running_step_median_.append(running_step_median[i])
-
-    a7x, a6x, a5x, a4x, a3x, a2x, a1x, a0x = np.polyfit(
-        _running_wave_, _running_step_median_, 7
-    )
-    fit_median = (
-        a0x
-        + a1x * wlm
-        + a2x * wlm ** 2
-        + a3x * wlm ** 3
-        + a4x * wlm ** 4
-        + a5x * wlm ** 5
-        + a6x * wlm ** 6
-        + a7x * wlm ** 7
-    )
-
-    interpolated_continuum_smooth = interpolate.splrep(
-        _running_wave_, _running_step_median_, s=0.02
-    )
-    fit_median_interpolated = interpolate.splev(
-        wlm, interpolated_continuum_smooth, der=0
-    )
-
-    if plot:
-
-        fig = plot_weights_for_getting_smooth_spectrum(
-            wlm,
-            s,
-            running_wave,
-            running_step_median,
-            fit_median,
-            fit_median_interpolated,
-            weight_fit_median,
-            wave_min,
-            wave_max,
-            exclude_wlm)
-
-        print("  Weights for getting smooth spectrum:  fit_median = {}    fit_median_interpolated = {}".format(
-            weight_fit_median, 1 - weight_fit_median))
-
-    return (
-        weight_fit_median * fit_median
-        + (1 - weight_fit_median) * fit_median_interpolated
-    )  # (fit_median+fit_median_interpolated)/2      # Decide if fit_median or fit_median_interpolated
-
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-def ds9_offsets(x1, y1, x2, y2, pixel_size_arc=0.6):
-    """
-    Print information about offsets in pixels between (x1, y1) and (x2, y2). This assumes that (x1, y1) and (x2, y2) are close on the sky and small amngle approximations are valid!
-
-    Args:
-        x1 (float): x position 1 (in pixels)
-        y1 (float): y position 1 (in pixels
-        x2 (float): x position 2 (in pixels)
-        y2 (float): y position 2 (in pixels)
-        pixel_size_arc (float, default=0.6): The pixel size in arcseconds
-
-    Returns:
-        None
-    """
-
-    delta_x = x2 - x1
-    delta_y = y2 - y1
-
-    print("\n> Offsets in pixels : {} {}".format(delta_x, delta_y))
-    print("  Offsets in arcsec : {} {}".format(pixel_size_arc * delta_x, pixel_size_arc * delta_y))
-    offset_RA = np.abs(pixel_size_arc * delta_x)
-    if delta_x < 0:
-        direction_RA = "W"
-    else:
-        direction_RA = "E"
-    offset_DEC = np.abs(pixel_size_arc * delta_y)
-    if delta_y < 0:
-        direction_DEC = "N"
-    else:
-        direction_DEC = "S"
-    print("  Assuming N up and E left, the telescope did an offset of ----> {:5.2f} {:1} {:5.2f} {:1}".format(
-        offset_RA, direction_RA, offset_DEC, direction_DEC
-    ))
-
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-
-
-def offset_positions(
-    ra1h,
-    ra1m,
-    ra1s,
-    dec1d,
-    dec1m,
-    dec1s,
-    ra2h,
-    ra2m,
-    ra2s,
-    dec2d,
-    dec2m,
-    dec2s,
-    decimals=2,
-):
-    """
-    Work out offsets between two sky positions and print them to the screen. This could probably be replaced with some astropy functions.
-    TODO: Include arguments
-
-    Returns:
-        None
-    """
-
-    ra1 = ra1h + ra1m / 60.0 + ra1s / 3600.0
-    ra2 = ra2h + ra2m / 60.0 + ra2s / 3600.0
-
-    if dec1d < 0:
-        dec1 = dec1d - dec1m / 60.0 - dec1s / 3600.0
-    else:
-        dec1 = dec1d + dec1m / 60.0 + dec1s / 3600.0
-    if dec2d < 0:
-        dec2 = dec2d - dec2m / 60.0 - dec2s / 3600.0
-    else:
-        dec2 = dec2d + dec2m / 60.0 + dec2s / 3600.0
-
-    avdec = (dec1 + dec2)/2
-
-    deltadec = round(3600.0 * (dec2 - dec1), decimals)
-    deltara = round(15 * 3600.0 * (ra2 - ra1) * (np.cos(np.radians(avdec))), decimals)
-
-    tdeltadec = np.fabs(deltadec)
-    tdeltara = np.fabs(deltara)
-
-    if deltadec < 0:
-        t_sign_deltadec = "South"
-        t_sign_deltadec_invert = "North"
-
-    else:
-        t_sign_deltadec = "North"
-        t_sign_deltadec_invert = "South"
-
-    if deltara < 0:
-        t_sign_deltara = "West"
-        t_sign_deltara_invert = "East"
-
-    else:
-        t_sign_deltara = "East"
-        t_sign_deltara_invert = "West"
-
-    print("\n> POS1: RA = {:3}h {:2}min {:2.4f}sec, DEC = {:3}d {:2}m {:2.4f}s".format(
-        ra1h, ra1m, ra1s, dec1d, dec1m, dec1s
-    ))
-    print("  POS2: RA = {:3}h {:2}min {:2.4f}sec, DEC = {:3}d {:2}m {:2.4f}s".format(
-        ra2h, ra2m, ra2s, dec2d, dec2m, dec2s
-    ))
-
-    print("\n> Offset 1 -> 2 : {} {}       {} {}".format(tdeltara, t_sign_deltara, tdeltadec, t_sign_deltadec))
-    print("  Offset 2 -> 1 : {} {}       {} {}".format(tdeltara, t_sign_deltara_invert, tdeltadec, t_sign_deltadec_invert))
-
-
-
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# Definition introduced by Matt
-def MAD(x):
-    """
-    Derive the Median Absolute Deviation of an array
-    Args:
-        x (array): Array of numbers to find the median of
-
-    Returns:
-        float:
-    """
-    MAD = np.nanmedian(np.abs(x - np.nanmedian(x)))
-    return MAD / 0.6745
-
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-def rebin_spec(wave, specin, wavnew):
-    """
-    Rebin a spectrum with a new wavelength array
-
-    Args:
-        wave (array): wavelength arrau
-        specin (array): Input spectrum to be shifted
-        shift (float): Shift. Same units as wave?
-
-    Returns:
-        New spectrum at shifted wavelength values
-    """
-    spec = spectrum.ArraySourceSpectrum(wave=wave, flux=specin)
-    f = np.ones(len(wave))
-    filt = spectrum.ArraySpectralElement(wave, f, waveunits="angstrom")
-    obs = observation.Observation(spec, filt, binset=wavnew, force="taper")
-    return obs.binflux
-
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-def rebin_spec_shift(wave, specin, shift):
-    """
-    Rebin a spectrum and shift in wavelength. Makes a new wavelength array and then passes this to rebin_spec
-
-    Args:
-        wave (array): wavelength arrau
-        specin (array): Input spectrum to be shifted
-        shift (float): Shift. Same units as wave?
-
-    Returns:
-        New spectrum at shifted wavelength values
-
-    """
-    wavnew = wave + shift
-    obs = rebin_spec(wave, specin, wavnew)
-    # Updating from pull request #16. rebin_spec returns a .binflux object. This function tried to create a
-    # binflux.binflux object.
-    return obs
-
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-def compare_fix_2dfdr_wavelengths(rss1, rss2):
-    """
-    Compare small fixes we've made to the 2dFdr wavelengths between two RSS files.
-
-    Args:
-        rss1 (RSS instance): An instance of the RSS class
-        rss2 (RSS instance): An instance of the RSS class
-
-    Returns:
-        None
-    """
-
-    print("\n> Comparing small fixing of the 2dFdr wavelengths between two rss...")
-
-    xfibre = list(range(0, rss1.n_spectra))
-    rss1.wavelength_parameters[0]
-
-    a0x, a1x, a2x = (
-        rss1.wavelength_parameters[0],
-        rss1.wavelength_parameters[1],
-        rss1.wavelength_parameters[2],
-    )
-    aa0x, aa1x, aa2x = (
-        rss2.wavelength_parameters[0],
-        rss2.wavelength_parameters[1],
-        rss2.wavelength_parameters[2],
-    )
-
-    fx = a0x + a1x * np.array(xfibre) + a2x * np.array(xfibre) ** 2
-    fx2 = aa0x + aa1x * np.array(xfibre) + aa2x * np.array(xfibre) ** 2
-    dif = fx - fx2
-
-    plt.figure(figsize=(10, 4))
-    plt.plot(xfibre, dif)
-    plot_plot(
-        xfibre,
-        dif,
-        ptitle="Fit 1 - Fit 2",
-        xmin=-20,
-        xmax=1000,
-        xlabel="Fibre",
-        ylabel="Dif",
-    )
-
-    resolution = rss1.wavelength[1] - rss1.wavelength[0]
-    error = (np.nanmedian(dif)/resolution) * 100.0
-    print("\n> The median rms is {:8.6f} A,  resolution = {:5.2f} A,  error = {:5.3} %".format(
-        np.nanmedian(dif), resolution, error
-    ))
-
-
 # -----------------------------------------------------------------------------
 #    MACRO FOR EVERYTHING 19 Sep 2019, including alignment 2-10 cubes
 # -----------------------------------------------------------------------------
@@ -7719,3 +7270,36 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
             save_fits_file(self.combined_cube, fits_file, ADR=ADR)
 
         print("\n================== REDUCING KOALA DATA COMPLETED ====================\n\n")
+
+
+
+# -----------------------------------------------------------------------------
+# GENERAL TASKS
+# -----------------------------------------------------------------------------
+def running_mean(x, N):
+    cumsum = np.cumsum(np.insert(x, 0, 0))
+    return (cumsum[N:] - cumsum[:-N])/N
+
+
+def coord_range(rss_list):
+    RA = [rss.RA_centre_deg + rss.offset_RA_arcsec / 3600.0 for rss in rss_list]
+    RA_min = np.nanmin(RA)
+    RA_max = np.nanmax(RA)
+    DEC = [rss.DEC_centre_deg + rss.offset_DEC_arcsec / 3600.0 for rss in rss_list]
+    DEC_min = np.nanmin(DEC)
+    DEC_max = np.nanmax(DEC)
+    return RA_min, RA_max, DEC_min, DEC_max
+
+
+# Definition introduced by Matt
+def MAD(x):
+    """
+    Derive the Median Absolute Deviation of an array
+    Args:
+        x (array): Array of numbers to find the median of
+
+    Returns:
+        float:
+    """
+    MAD = np.nanmedian(np.abs(x - np.nanmedian(x)))
+    return MAD / 0.6745
