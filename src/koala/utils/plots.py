@@ -5,6 +5,7 @@ from past.utils import old_div
 
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy.signal as signal
 
 
 def plot_redshift_peaks(fig_size,
@@ -202,7 +203,7 @@ def plot_offset_between_cubes(cube, x, y, wl, medfilt_window=151, show_plot=Fals
         show_plot (bool, default=False): Show the plot to the screen
     """
 
-    smooth_x = signal.medfilt(x, medfilt_window)  # TODO: is signal an input to this function or an attr of a class.
+    smooth_x = signal.medfilt(x, medfilt_window)
     smooth_y = signal.medfilt(y, medfilt_window)
 
     print(np.nanmean(smooth_x))
