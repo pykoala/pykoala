@@ -556,7 +556,7 @@ def align_n_cubes(
         float, default = 1.5
 
     """
-    from src.koala import Interpolated_cube  # TODO: currently importing like this for workaround of circular imports
+    from koala import Interpolated_cube  # TODO: currently importing like this for workaround of circular imports
     # This file requires a class, Interpolated_Cube from koala, however from koala import Inter... will result in
     # circular import as __init__ imports specific functions from this file.
 
