@@ -8,6 +8,19 @@ from scipy.optimize import curve_fit
 
 
 def cumulaive_Moffat(r2, L_star, alpha2, beta):
+    """
+
+    Parameters
+    ----------
+    r2
+    L_star
+    alpha2
+    beta
+
+    Returns
+    -------
+
+    """
     return L_star * (1 - np.power(1 + (r2/alpha2), -beta))
 
 
@@ -19,6 +32,19 @@ def fit_Moffat(
     as a function of radius squared,
     cutting at to r_max (in units of the half-light radius),
     provided an initial guess of the total flux and half-light radius squared.
+
+    Parameters
+    ----------
+    r2_growth_curve
+    F_growth_curve
+    F_guess
+    r2_half_light
+    r_max
+    plot
+
+    Returns
+    -------
+
     """
     index_cut = np.searchsorted(r2_growth_curve, r2_half_light * r_max ** 2)
     fit, cov = curve_fit(

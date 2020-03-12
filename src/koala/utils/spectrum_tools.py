@@ -130,7 +130,22 @@ def smooth_spectrum(
 ):
     """
     Smooth a spectrum
-    TODO: More here
+
+    Parameters
+    ----------
+    wlm
+    s
+    wave_min
+    wave_max
+    step
+    exclude_wlm
+    weight_fit_median
+    plot
+    verbose
+
+    Returns
+    -------
+
     """
 
     if verbose:

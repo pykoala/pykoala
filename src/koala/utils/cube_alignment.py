@@ -10,6 +10,18 @@ from .plots import plot_offset_between_cubes
 
 
 def offset_between_cubes(cube1, cube2, plot=True):
+    """
+
+    Parameters
+    ----------
+    cube1
+    cube2
+    plot
+
+    Returns
+    -------
+
+    """
     x = (
         cube2.x_peak
         - cube2.n_cols / 2.0

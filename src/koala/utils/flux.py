@@ -14,11 +14,40 @@ from .io import read_table
 
 
 def gauss(x, x0, y0, sigma):
+    """
+
+    Parameters
+    ----------
+    x
+    x0
+    y0
+    sigma
+
+    Returns
+    -------
+
+    """
     p = [x0, y0, sigma]
     return p[1] * np.exp(-0.5 * ((x - p[0])/p[2]) ** 2)
 
 
 def dgauss(x, x0, y0, sigma0, x1, y1, sigma1):
+    """
+
+    Parameters
+    ----------
+    x
+    x0
+    y0
+    sigma0
+    x1
+    y1
+    sigma1
+
+    Returns
+    -------
+
+    """
     p = [x0, y0, sigma0, x1, y1, sigma1]
     #         0   1    2      3    4  5
     return p[1] * np.exp(-0.5 * ((x - p[0])/p[2]) ** 2) + p[4] * np.exp(
@@ -41,10 +70,31 @@ def gauss_fix_x0(x, x0, y0, sigma):
 
 
 def gauss_flux(y0, sigma):  # THIS DOES NOT WORK...
+    """
+
+    Parameters
+    ----------
+    y0
+    sigma
+
+    Returns
+    -------
+
+    """
     return y0 * sigma * np.sqrt(2 * np.pi)
 
 
 def obtain_flux_calibration(calibration_star_cubes):
+    """
+
+    Parameters
+    ----------
+    calibration_star_cubes
+
+    Returns
+    -------
+
+    """
     #    print "\n> Obtaining flux calibration...\n"
     vector_wave = []
     vector_response = []
@@ -1542,6 +1592,32 @@ def substract_given_gaussian(
 ):
     """
     Substract a give Gaussian to a spectrum after fitting the continuum.
+
+    Parameters
+    ----------
+    wavelength
+    spectrum
+    centre
+    peak
+    sigma
+    flux
+    search_peak
+    allow_absorptions
+    lowlow
+    lowhigh
+    highlow
+    highhigh
+    lmin
+    lmax
+    fmin
+    fmax
+    plot
+    fcal
+    verbose
+
+    Returns
+    -------
+
     """
     # plot = True
     # verbose = True

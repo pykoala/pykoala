@@ -642,12 +642,29 @@ class RSS(object):
         fibre=0,
     ):
         """
-        This task HAVE TO BE USED WITH EXTREME CARE 
+        This task HAVE TO BE USED WITH EXTREME CARE
         as it has not been properly tested!!!
         It CAN DELETE REAL (faint) ABSORPTION/EMISSION features in spectra!!!
         Use the "1dfit" option for getting a better sky substraction
         ANGEL is keeping this here just in case it is eventually useful...
+
+        Parameters
+        ----------
+        extra_w
+        step
+        dclip
+        wave_min
+        wave_max
+        verbose
+        plot
+        fig_size
+        fibre
+
+        Returns
+        -------
+
         """
+
         
         # verbose=True
         wlm = self.wavelength
@@ -905,6 +922,30 @@ class RSS(object):
         Needs the observed wavelength (brightest_line_wavelength) of the brightest emission line (brightest_line) .
         w is the wavelength
         spec the 2D spectra
+
+        Parameters
+        ----------
+        sky
+        w
+        spectra
+        rebin
+        brightest_line
+        brightest_line_wavelength
+        maxima_sigma
+        ymin
+        ymax
+        wmin
+        wmax
+        auto_scale_sky
+        warnings
+        verbose
+        plot
+        fig_size
+        fibre
+
+        Returns
+        -------
+
         """
 
         if brightest_line_wavelength == 6563:
@@ -1495,6 +1536,17 @@ class RSS(object):
     def do_extinction_curve(
         self, observatory_file=pth.join(DATA_PATH, "ssoextinct.dat"), plot=True
     ):
+        """
+
+        Parameters
+        ----------
+        observatory_file
+        plot
+
+        Returns
+        -------
+
+        """
 
         print("\n> Computing extinction at given airmass...")
 
@@ -1551,7 +1603,22 @@ class RSS(object):
         sky_wave_max=0,
         norm=colors.LogNorm(),
     ):
+        """
 
+        Parameters
+        ----------
+        intensidad
+        plot
+        n_sky
+        sky_fibres
+        sky_wave_min
+        sky_wave_max
+        norm
+
+        Returns
+        -------
+
+        """
         if sky_wave_min == 0:
             sky_wave_min = self.valid_wave_min
         if sky_wave_max == 0:
@@ -1683,12 +1750,25 @@ class RSS(object):
         wave_max_scale=0,
         plot=True,
     ):
-        # These are for the normalized flat:
-        # fit_skyflat_degree=0, step=50, wave_min_flat=0, wave_max_flat=0):
         """
         Determine the relative transmission of each spectrum
         using a skyflat.
+
+        Parameters
+        ----------
+        ymin
+        ymax
+        kernel_sky_spectrum
+        wave_min_scale
+        wave_max_scale
+        plot
+
+        Returns
+        -------
+
         """
+        # These are for the normalized flat:
+        # fit_skyflat_degree=0, step=50, wave_min_flat=0, wave_max_flat=0):
 
         print("\n> Using this skyflat to find relative throughput (a scale per fibre)...")
 
@@ -2199,6 +2279,18 @@ class RSS(object):
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
     def flux_between(self, lambda_min, lambda_max, list_spectra=[]):
+        """
+
+        Parameters
+        ----------
+        lambda_min
+        lambda_max
+        list_spectra
+
+        Returns
+        -------
+
+        """
         index_min = np.searchsorted(self.wavelength, lambda_min)
         index_max = np.searchsorted(self.wavelength, lambda_max) + 1
         if len(list_spectra) == 0:
@@ -2219,6 +2311,18 @@ class RSS(object):
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
     def median_between(self, lambda_min, lambda_max, list_spectra=[]):
+        """
+
+        Parameters
+        ----------
+        lambda_min
+        lambda_max
+        list_spectra
+
+        Returns
+        -------
+
+        """
         index_min = np.searchsorted(self.wavelength, lambda_min)
         index_max = np.searchsorted(self.wavelength, lambda_max) + 1
         if len(list_spectra) == 0:
@@ -2244,6 +2348,22 @@ class RSS(object):
         right_max,
         list_spectra=[],
     ):
+        """
+
+        Parameters
+        ----------
+        left_min
+        left_max
+        line_min
+        line_max
+        right_min
+        right_max
+        list_spectra
+
+        Returns
+        -------
+
+        """
         # TODO: can remove old_div once this function is understood, currently not called in whole module.
         if len(list_spectra) == 0:
             list_spectra = list(range(self.n_spectra))
@@ -2281,6 +2401,18 @@ class RSS(object):
     ):
         """
         Plot map showing the offsets, coloured by variable.
+
+        Parameters
+        ----------
+        variable
+        norm
+        list_spectra
+        title
+        color_bar_text
+
+        Returns
+        -------
+
         """
         if len(list_spectra) == 0:
             list_spectra = list(range(self.n_spectra))
@@ -2335,6 +2467,22 @@ class RSS(object):
         """
         Plot RSS image coloured by variable.
         cmap = "binary_r" nice greyscale
+
+        Parameters
+        ----------
+        image
+        norm
+        cmap
+        clow
+        chigh
+        labelpad
+        title
+        color_bar_text
+        fig_size
+
+        Returns
+        -------
+
         """
 
         if np.nanmedian(image) == 0:
@@ -2366,6 +2514,17 @@ class RSS(object):
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
     def plot_corrected_vs_uncorrected_spectrum(self, high_fibres=10, fig_size=12):
+        """
+
+        Parameters
+        ----------
+        high_fibres
+        fig_size
+
+        Returns
+        -------
+
+        """
 
         integrated_intensity_sorted = np.argsort(self.integrated_fibre)
         region = []
@@ -2418,7 +2577,26 @@ class RSS(object):
         verbose=True,
         warnings=True,
     ):
+        """
 
+        Parameters
+        ----------
+        sol
+        fibre
+        maxima_sigma
+        maxima_offset
+        xmin
+        xmax
+        ymin
+        ymax
+        plot
+        verbose
+        warnings
+
+        Returns
+        -------
+
+        """
         print("\n> Fixing 2dfdr wavelengths using skylines.")
 
         w = self.wavelength
@@ -2709,7 +2887,67 @@ class KOALA_RSS(RSS):
         norm=colors.LogNorm(),
         fig_size=12,
     ):
+        """
 
+        Parameters
+        ----------
+        filename
+        save_rss_to_fits_file
+        rss_clean
+        apply_throughput
+        skyflat
+        plot_skyflat
+        flat
+        nskyflat
+        correct_ccd_defects
+        correct_high_cosmics
+        clip_high
+        step_ccd
+        remove_5578
+        plot_suspicious_fibres
+        fix_wavelengths
+        sol
+        sky_method
+        n_sky
+        sky_fibres
+        sky_spectrum
+        sky_rss
+        scale_sky_rss
+        scale_sky_1D
+        is_sky
+        win_sky
+        auto_scale_sky
+        correct_negative_sky
+        sky_wave_min
+        sky_wave_max
+        cut_sky
+        fmin
+        fmax
+        individual_sky_substraction
+        fibre_list
+        do_extinction
+        telluric_correction
+        id_el
+        high_fibres
+        brightest_line
+        cut
+        broad
+        plot_id_el
+        id_list
+        brightest_line_wavelength
+        clean_sky_residuals
+        dclip
+        extra_w
+        step_csr
+        fibre
+        valid_wave_min
+        valid_wave_max
+        warnings
+        verbose
+        plot
+        norm
+        fig_size
+        """
         # Just read file if rss_clean = True
         if rss_clean:
             apply_throughput = False
@@ -3720,6 +3958,27 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
     ):  # Angel added aligned_coor 6 Sep, flux_calibration, zeros 27 Oct;
         # added ADR 28 Feb offsets_files, shape for defining shape of cube
         # warnings (when cubing) added 13 Jan 2019
+        """
+
+        Parameters
+        ----------
+        RSS
+        pixel_size_arcsec
+        kernel_size_arcsec
+        centre_deg
+        size_arcsec
+        aligned_coor
+        plot
+        flux_calibration
+        zeros
+        ADR
+        force_ADR
+        offsets_files
+        offsets_files_position
+        shape
+        rss_file
+        warnings
+        """
         self.RSS = RSS
         self.n_wave = RSS.n_wave
         self.pixel_size_arcsec = pixel_size_arcsec
@@ -3912,6 +4171,15 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
     def ADR_correction(self, plot=True, force_ADR=False):
         """
         Correct for Atmospheric Diferential Refraction (ADR)
+
+        Parameters
+        ----------
+        plot
+        force_ADR
+
+        Returns
+        -------
+
         """
         self.data_ADR = copy.deepcopy(self.data)
         do_ADR = True
@@ -3995,6 +4263,17 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
     ):  # CHECK
         """
         Integrated map and plot
+
+        Parameters
+        ----------
+        min_wave
+        max_wave
+        plot
+        fcal
+
+        Returns
+        -------
+
         """
         # Integrated map between good wavelengths
 
@@ -4671,6 +4950,20 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
     def trace_peak(
         self, edgelow=10, edgehigh=10, plot=False, ADR=False, smoothfactor=2
     ):  # TASK_trace_peak
+        """
+
+        Parameters
+        ----------
+        edgelow
+        edgehigh
+        plot
+        ADR
+        smoothfactor
+
+        Returns
+        -------
+
+        """
         print("\n\n> Tracing intensity peak over all wavelengths...")
         x = np.arange(self.n_cols)
         y = np.arange(self.n_rows)
@@ -5359,7 +5652,19 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
     def fit_Moffat_between(self, min_wave=0, max_wave=0, r_max=5, plot=False):
+        """
 
+        Parameters
+        ----------
+        min_wave
+        max_wave
+        r_max
+        plot
+
+        Returns
+        -------
+
+        """
         if min_wave == 0:
             min_wave = self.valid_wave_min
         if max_wave == 0:

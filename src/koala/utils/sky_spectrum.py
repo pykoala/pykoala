@@ -53,6 +53,27 @@ def scale_sky_spectrum(
     verbose=True,
     warnings=True,
 ):
+    """
+
+    Parameters
+    ----------
+    wlm
+    sky_spectrum
+    spectra
+    cut_sky
+    fmax
+    fmin
+    valid_wave_min
+    valid_wave_max
+    fibre_list
+    plot
+    verbose
+    warnings
+
+    Returns
+    -------
+
+    """
 
     # # Read sky lines provided by 2dFdr
     #    sky_line_,flux_sky_line_ = read_table("sky_lines_2dfdr.dat", ["f", "f"] )
@@ -188,6 +209,24 @@ def sky_spectrum_from_fibres(
     verbose=True,
     plot=True,
 ):
+    """
+
+    Parameters
+    ----------
+    rss
+    list_spectra
+    win_sky
+    xmin
+    xmax
+    ymin
+    ymax
+    verbose
+    plot
+
+    Returns
+    -------
+
+    """
 
     if verbose:
         print("\n> Obtaining 1D sky spectrum using rss file and fibre list = {} ...".format(list_spectra))
@@ -221,6 +260,30 @@ def sky_spectrum_from_fibres_using_file(
     verbose=True,
     plot=True,
 ):
+    """
+
+    Parameters
+    ----------
+    rss_file
+    fibre_list
+    win_sky
+    n_sky
+    skyflat
+    apply_throughput
+    correct_ccd_defects
+    fix_wavelengths
+    sol
+    xmin
+    xmax
+    ymin
+    ymax
+    verbose
+    plot
+
+    Returns
+    -------
+
+    """
     from koala import KOALA_RSS  # TODO: currently importing like this for workaround of circular imports
     # Similar to in cube_alignement
     # TODO: this function is never called it seems
