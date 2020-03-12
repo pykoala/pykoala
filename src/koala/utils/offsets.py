@@ -6,6 +6,17 @@ import numpy as np
 
 
 def KOALA_offsets(s, pa):
+    """
+
+    Parameters
+    ----------
+    s
+    pa
+
+    Returns
+    -------
+
+    """
     print("\n> Offsets towards North and East between pointings," "according to KOALA manual, for pa = {} degrees".format(pa))
     pa *= np.pi/180
     print("  a -> b : {} {}".format(s * np.sin(pa), -s * np.cos(pa)))
@@ -67,7 +78,24 @@ def offset_positions(
     Work out offsets between two sky positions and print them to the screen. This could probably be replaced with some astropy functions.
     TODO: Include arguments
 
-    Returns:
+    Parameters
+    ----------
+    ra1h
+    ra1m
+    ra1s
+    dec1d
+    dec1m
+    dec1s
+    ra2h
+    ra2m
+    ra2s
+    dec2d
+    dec2m
+    dec2s
+    decimals
+
+    Returns
+    -------
         None
     """
 
