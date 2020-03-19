@@ -11,6 +11,7 @@ version = "Version 0.72 - 13th February 2020"
 import copy
 import os.path as pth
 import sys
+from warnings import warn
 
 from astropy.convolution import Gaussian2DKernel, interpolate_replace_nans
 from astropy.io import fits
@@ -127,7 +128,6 @@ class RSS(object):
         min_value=0.1,
         plot=False,
         title=" - Integrated values",
-        warnings=True,
         text="...",
         correct_negative_sky=False,
     ):
@@ -150,8 +150,6 @@ class RSS(object):
             Title for the plot
         text: string
             A bit of extra text
-        warnings : Boolean (default = False)
-            Write warnings, e.g. when the integrated flux is negative
         correct_negative_sky : Boolean (default = False)
             Corrects negative values making 0 the integrated flux of the lowest fibre
 
@@ -180,11 +178,12 @@ class RSS(object):
         for i in range(self.n_spectra):
             self.integrated_fibre[i] = np.nansum(self.intensity_corrected[i, region])
             if self.integrated_fibre[i] < 0:
-                if warnings:
-                    print(
-                        "  WARNING: The integrated flux in fibre {:4} is negative, flux/wave = {:10.2f}, (probably sky), CHECK !".format(
-                            i, self.integrated_fibre[i]/waves_in_region
-                        ))
+                warn((
+                    "The integrated flux in fibre {:4} is negative, "
+                    "flux/wave = {:10.2f}, (probably sky), CHECK !"
+                ).format(
+                    i, self.integrated_fibre[i] / waves_in_region
+                ))
                 n_negative_fibres = n_negative_fibres + 1
                 # self.integrated_fibre[i] = min_value
                 negative_fibres.append(i)
@@ -225,12 +224,7 @@ class RSS(object):
                 for i in negative_fibres_sorted:
                     self.integrated_fibre[i] = min_value
 
-            # for i in range(self.n_spectra):
-            #    if self.integrated_fibre[i] < 0:
-            #        if warnings: print "  WARNING: The integrated flux in fibre {:4} STILL is negative, flux/wave = {:10.2f}, (probably sky), CHECK !".format(i,self.integrated_fibre[i]/waves_in_region)
-
         if plot:
-            # print"\n  Plotting map with integrated values:"
             self.RSS_map(
                 self.integrated_fibre,
                 norm=colors.PowerNorm(gamma=1.0 / 4.0),
@@ -348,46 +342,47 @@ class RSS(object):
         fibre_p=0,
         remove_5578=False,  # if fibre_p=fibre plots the corrections in that fibre
         clip_high=100,
-        warnings=False,
         plot=True,
         plot_suspicious_fibres=True,
         verbose=False,
         fig_size=12,
     ):
         """
-    	Task for correcting high cosmics and CCD defects using median values of nearby pixels.
+        Task for correcting high cosmics and CCD defects using median values of nearby pixels.
         2dFdr corrects for (the majority) of the cosmic rays, usually correct_high_cosmics = False.
         ANGEL COMMENT: Check, probably can be improved using MATT median running + plotting outside
 
         Parameters
         ----------
         rect_high_cosmics: boolean (default = False)
-    		Correct ONLY CCD defects
+                Correct ONLY CCD defects
         re_p: integer (default = 0)
-    		Plots the corrections in fibre fibre_p
+                Plots the corrections in fibre fibre_p
         ove_5578: boolean (default = False)
-    		Removes skyline 5578 (blue spectrum) using Gaussian fit
+                Removes skyline 5578 (blue spectrum) using Gaussian fit
             ND CHECK: This also MODIFIES the throughput correction correcting for flux_5578_medfilt /median_flux_5578_medfilt
         step: integer (default = 50)
-    	    Number of points for calculating median value
+            Number of points for calculating median value
         clip_high : float (default = 100)
-    		Minimum value of flux/median in a pixel to be consider as a cosmic
-		    if s[wave] > clip_high*fit_median[wave] -> IT IS A COSMIC
+                Minimum value of flux/median in a pixel to be consider as a cosmic
+                    if s[wave] > clip_high*fit_median[wave] -> IT IS A COSMIC
         verbose: boolean (default = False)
             Write results 
-        warnings: boolean (default = False)
-            Write warnings
         plot: boolean (default = False)
             Plot results
         plot_suspicious_fibres: boolean (default = False)
-    	    Plots fibre(s) that could have a cosmic left (but it could be OK)
+            Plots fibre(s) that could have a cosmic left (but it could be OK)
             IF self.integrated_fibre[fibre]/median_running[fibre] > max_value  -> SUSPICIOUS FIBRE
 
         Example
         ----------
-    	self.correct_high_cosmics_and_defects(correct_high_cosmics=False, step=40, remove_5578 = True,
-                                              clip_high=120, plot_suspicious_fibres=True, warnings=True, 									      verbose=False, plot=True)
-	    """
+        >>> self.correct_high_cosmics_and_defects(
+        ...    correct_high_cosmics=False, step=40, remove_5578=True,
+        ...    clip_high=120, plot_suspicious_fibres=True, verbose=False,
+        ...    plot=True
+        ... )
+
+        """
         print("\n> Correcting for high cosmics and CCD defects...")
 
         wave_min = self.valid_wave_min  # CHECK ALL OF THIS...
@@ -905,7 +900,6 @@ class RSS(object):
         wmin=0,
         wmax=0,
         auto_scale_sky=False,
-        warnings=False,
         verbose=False,
         plot=False,
         fig_size=12,
@@ -932,7 +926,6 @@ class RSS(object):
         wmin
         wmax
         auto_scale_sky
-        warnings
         verbose
         plot
         fig_size
@@ -944,8 +937,11 @@ class RSS(object):
         """
 
         if brightest_line_wavelength == 6563:
-            print("\n\n> WARNING: This is going to FAIL as the wavelength of the brightest emission line has not been included !!!")
-            print("           USING brightest_line_wavelength = 6563 as default ...\n\n")
+            warn(
+                "This is going to FAIL as the wavelength of the brightest "
+                "emission line has not been included! Using "
+                "brightest_line_wavelength = 6563 as default."
+            )
 
         brightest_line_wavelength_rest = 6562.82
         if brightest_line == "O3" or brightest_line == "O3b":
@@ -1096,18 +1092,12 @@ class RSS(object):
         ]  # 8767.2, 0] #
 
         say_status = 0
-        # plot=True
-        #        verbose = True
-        # warnings = True
         self.wavelength_offset_per_fibre = []
         self.sky_auto_scale = []
         if fibre != 0:
             f_i = fibre
             f_f = fibre + 1
             print("  Checking fibre {} (only this fibre is corrected, use fibre = 0 for all)...".format(fibre))
-            plot = True
-            verbose = True
-            warnings = True
         else:
             f_i = 0
             f_f = self.n_spectra
@@ -1151,9 +1141,7 @@ class RSS(object):
                     plot_fit = True
 
                 if sl_center[i] == dsky1[di]:
-                    warnings_ = False
                     if sl_fnl[i] == 1:
-                        warnings_ = True
                         if verbose:
                             print("  Line {} blended with {}".format(sl_center[i], dsky2[di]))
                     resultado = dfluxes(
@@ -1175,7 +1163,6 @@ class RSS(object):
                         verbose=False,
                         plot_sus=False,
                         fcal=False,
-                        warnings=warnings_,
                     )  # Broad is FWHM for Gaussian sigm a= 1,
                     di = di + 1
                 else:
@@ -1197,7 +1184,6 @@ class RSS(object):
                         verbose=False,
                         plot_sus=False,
                         fcal=False,
-                        warnings=warnings,
                     )  # Broad is FWHM for Gaussian sigm a= 1,
                 sl_gaussian_flux.append(resultado[3])
                 sky_sl_gaussian_fitted = resultado[11]
@@ -1249,9 +1235,7 @@ class RSS(object):
                 else:
 
                     if sl_center[i] == dsky1[di]:
-                        warnings_ = False
                         if sl_fnl[i] == 1:
-                            warnings_ = True
                             if verbose:
                                 print("  Line  {} blended with {}".format(sl_center[i], dsky2[di]))
                         resultado = dfluxes(
@@ -1273,7 +1257,6 @@ class RSS(object):
                             verbose=False,
                             plot_sus=False,
                             fcal=False,
-                            warnings=warnings_,
                         )
                         di = di + 1
                         if (
@@ -1317,7 +1300,6 @@ class RSS(object):
                             verbose=False,
                             plot_sus=False,
                             fcal=False,
-                            warnings=warnings,
                         )  # Broad is FWHM for Gaussian sigma= 1,
                         # print sl_center[i],sl_gaussian_sigma[i], resultado[5]/2.355, maxima_sigma
                         if (
@@ -2570,7 +2552,6 @@ class RSS(object):
         ymax=1000,
         plot=True,
         verbose=True,
-        warnings=True,
     ):
         """
 
@@ -2586,7 +2567,6 @@ class RSS(object):
         ymax
         plot
         verbose
-        warnings
 
         Returns
         -------
@@ -2625,12 +2605,9 @@ class RSS(object):
                 f_i = fibre
                 f_f = fibre + 1
                 print("  Checking fibre {} (only this fibre is corrected, use fibre = 0 for all)...".format(fibre))
-                verbose = True
-                warnings = True
             else:
                 f_i = 0
                 f_f = self.n_spectra
-                verbose = False
             for fibre in range(f_i, f_f):  # (self.n_spectra):
 
                 spectrum = self.intensity_corrected[fibre]
@@ -2672,7 +2649,6 @@ class RSS(object):
                         verbose=False,
                         plot_sus=False,
                         fcal=False,
-                        warnings=warnings,
                     )  # Broad is FWHM for Gaussian sigm a= 1,
 
                     sl_gaussian_flux.append(resultado[3])
@@ -2876,7 +2852,6 @@ class KOALA_RSS(RSS):
         fibre=0,
         valid_wave_min=0,
         valid_wave_max=0,
-        warnings=True,
         verbose=False,
         plot=True,
         norm=colors.LogNorm(),
@@ -2937,7 +2912,6 @@ class KOALA_RSS(RSS):
         fibre
         valid_wave_min
         valid_wave_max
-        warnings
         verbose
         plot
         norm
@@ -3052,13 +3026,15 @@ class KOALA_RSS(RSS):
 
         # Check that dimensions match KOALA numbers
         if self.n_wave != 2048 and len(all_spaxels) != 1000:
-            print("\n *** WARNING *** : These numbers are NOT the standard ones for KOALA")
+            warn("These numbers are NOT the standard ones for KOALA")
 
         print("\n> Setting the data for this file:")
 
         if variance.shape != intensity.shape:
-            print("\n* ERROR: * the intensity and variance matrices are {} and {} respectively\n".format(intensity.shape, variance.shape))
-            raise ValueError
+            raise ValueError((
+                "The intensity and variance matrices are {} and {} "
+                "respectively"
+            ).format(intensity.shape, variance.shape))
         n_dim = len(intensity.shape)
         if n_dim == 2:
             self.intensity = intensity
@@ -3067,8 +3043,9 @@ class KOALA_RSS(RSS):
             self.intensity = intensity.reshape((1, self.n_wave))
             self.variance = variance.reshape((1, self.n_wave))
         else:
-            print("\n* ERROR: * the intensity matrix supplied has {} dimensions\n".format(n_dim))
-            raise ValueError
+            raise ValueError(
+                "The intensity matrix supplied has {} dimensions".format(n_dim)
+            )
 
         self.n_spectra = self.intensity.shape[0]
         self.n_wave = len(self.wavelength)
@@ -3078,17 +3055,21 @@ class KOALA_RSS(RSS):
             self.wavelength[0], self.wavelength[-1]
         ))
         if self.intensity.shape[1] != self.n_wave:
-            print("\n* ERROR: * spectra have {} wavelengths rather than {}".format(self.intensity.shape[1], self.n_wave))
-            raise ValueError
+            raise ValueError(
+                "Spectra have {} wavelengths rather than {}".format(
+                    self.intensity.shape[1], self.n_wave
+                )
+            )
         if (
             len(offset_RA_arcsec) != self.n_spectra
             or len(offset_DEC_arcsec) != self.n_spectra
         ):
-            print("\n* ERROR: * offsets (RA, DEC) = ({},{}) rather than {}".format(
-                len(self.offset_RA_arcsec), len(self.offset_DEC_arcsec), self.n_spectra
+            raise ValueError(
+                "Offsets (RA, DEC) = ({},{}) rather than {}".format(
+                    len(self.offset_RA_arcsec), len(self.offset_DEC_arcsec),
+                    self.n_spectra
                 )
             )
-            raise ValueError
         else:
             self.offset_RA_arcsec = offset_RA_arcsec
             self.offset_DEC_arcsec = offset_DEC_arcsec
@@ -3209,7 +3190,6 @@ class KOALA_RSS(RSS):
             plot=plot,
             title=title_for_integrated_fibre,
             text=text_for_integrated_fibre,
-            warnings=warnings,
             correct_negative_sky=correct_negative_sky,
             valid_wave_min=valid_wave_min,
             valid_wave_max=valid_wave_max,
@@ -3234,7 +3214,6 @@ class KOALA_RSS(RSS):
                 remove_5578=remove_5578,
                 clip_high=clip_high,
                 plot_suspicious_fibres=plot_suspicious_fibres,
-                warnings=warnings,
                 verbose=verbose,
                 plot=plot,
             )
@@ -3285,7 +3264,6 @@ class KOALA_RSS(RSS):
                     wmin=0,
                     wmax=0,
                     auto_scale_sky=auto_scale_sky,
-                    warnings=False,
                     verbose=False,
                     plot=False,
                     fig_size=12,
@@ -3371,7 +3349,6 @@ class KOALA_RSS(RSS):
                                 fibre_list=[i],
                                 verbose=False,
                                 plot=False,
-                                warnings=False,
                             )
 
                             self.intensity_corrected[i, :] = (
@@ -3576,7 +3553,7 @@ class KOALA_RSS(RSS):
                 )
 
         #        print "\n  AFTER SKY SUBSTRACTION:"
-        #        self.compute_integrated_fibre(plot=False, warnings=warnings)  #title =" - Throughput corrected", text="after throughput correction..."
+        #        self.compute_integrated_fibre(plot=False)  #title =" - Throughput corrected", text="after throughput correction..."
         #        count_negative = 0
         #        for i in range(self.n_spectra):
         #            if self.integrated_fibre[i] < 0.11 :
@@ -3763,7 +3740,6 @@ class KOALA_RSS(RSS):
             self.compute_integrated_fibre(
                 plot=plot,
                 title=" - Intensities Corrected",
-                warnings=warnings,
                 text="after all corrections have been applied...",
                 valid_wave_min=valid_wave_min,
                 valid_wave_max=valid_wave_max,
@@ -3949,7 +3925,6 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         offsets_files_position="",
         shape=[],
         rss_file="",
-        warnings=False,
     ):  # Angel added aligned_coor 6 Sep, flux_calibration, zeros 27 Oct;
         # added ADR 28 Feb offsets_files, shape for defining shape of cube
         # warnings (when cubing) added 13 Jan 2019
@@ -3972,7 +3947,6 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         offsets_files_position
         shape
         rss_file
-        warnings
         """
         self.RSS = RSS
         self.n_wave = RSS.n_wave
@@ -4122,7 +4096,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 )/pixel_size_arcsec)
                 corrected_intensity = RSS.intensity_corrected[i]
                 self.add_spectrum(
-                    corrected_intensity, offset_rows, offset_cols, warnings=warnings
+                    corrected_intensity, offset_rows, offset_cols,
                 )
             self.data = self._weighted_I/self._weight
             self.trace_peak(plot=plot)
@@ -4327,7 +4301,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
 
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
-    def add_spectrum(self, intensity, offset_rows, offset_cols, warnings=False):
+    def add_spectrum(self, intensity, offset_rows, offset_cols):
         """
         Add one single spectrum to the datacube
 
@@ -4362,9 +4336,9 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         y[-1] = 1.0
         weight_y = np.diff(((3.0 * y - y ** 3 + 2.0)/4))
         if x_min < 0 or x_max >= self.n_cols or y_min < 0 or y_max >= self.n_rows:
-            if warnings:
-                print("**** WARNING **** : Spectra outside field of view: {} {} {}".format(x_min, kernel_centre_x, x_max))
-                print("                                                 : {} {} {}".format(y_min, kernel_centre_y, y_max))
+            warn("Spectra outside field of view: {} {} {}, {} {} {}".format(
+                x_min, kernel_centre_x, x_max, y_min, kernel_centre_y, y_max
+            ))
         else:
             bad_wavelengths = np.argwhere(np.isnan(intensity))
             intensity[bad_wavelengths] = 0.0
@@ -6127,7 +6101,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
         plot=True,
         norm=colors.LogNorm(),
         fig_size=12,
-        warnings=False,
         verbose=False,
     ):
         """
@@ -6292,7 +6265,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                 step_csr=step_csr,
                 valid_wave_min=valid_wave_min,
                 valid_wave_max=valid_wave_max,
-                warnings=warnings,
                 verbose=verbose,
                 plot=plot,
                 norm=norm,
@@ -6342,7 +6314,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                     step_csr=step_csr,
                     valid_wave_min=valid_wave_min,
                     valid_wave_max=valid_wave_max,
-                    warnings=warnings,
                     verbose=verbose,
                     plot=plot,
                     norm=norm,
@@ -6392,7 +6363,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                     step_csr=step_csr,
                     valid_wave_min=valid_wave_min,
                     valid_wave_max=valid_wave_max,
-                    warnings=warnings,
                     verbose=verbose,
                     plot=plot,
                     norm=norm,
@@ -6442,7 +6412,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                     step_csr=step_csr,
                     valid_wave_min=valid_wave_min,
                     valid_wave_max=valid_wave_max,
-                    warnings=warnings,
                     verbose=verbose,
                     plot=plot,
                     norm=norm,
@@ -6492,7 +6461,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                     step_csr=step_csr,
                     valid_wave_min=valid_wave_min,
                     valid_wave_max=valid_wave_max,
-                    warnings=warnings,
                     verbose=verbose,
                     plot=plot,
                     norm=norm,
@@ -6542,7 +6510,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                     step_csr=step_csr,
                     valid_wave_min=valid_wave_min,
                     valid_wave_max=valid_wave_max,
-                    warnings=warnings,
                     verbose=verbose,
                     plot=plot,
                     norm=norm,
@@ -6592,7 +6559,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                     step_csr=step_csr,
                     valid_wave_min=valid_wave_min,
                     valid_wave_max=valid_wave_max,
-                    warnings=warnings,
                     verbose=verbose,
                     plot=plot,
                     norm=norm,
@@ -6642,7 +6608,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                     step_csr=step_csr,
                     valid_wave_min=valid_wave_min,
                     valid_wave_max=valid_wave_max,
-                    warnings=warnings,
                     verbose=verbose,
                     plot=plot,
                     norm=norm,
@@ -6692,7 +6657,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                     step_csr=step_csr,
                     valid_wave_min=valid_wave_min,
                     valid_wave_max=valid_wave_max,
-                    warnings=warnings,
                     verbose=verbose,
                     plot=plot,
                     norm=norm,
@@ -6742,7 +6706,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                     step_csr=step_csr,
                     valid_wave_min=valid_wave_min,
                     valid_wave_max=valid_wave_max,
-                    warnings=warnings,
                     verbose=verbose,
                     plot=plot,
                     norm=norm,
@@ -6776,7 +6739,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                 kernel_size_arcsec,
                 plot=plot,
                 flux_calibration=flux_calibration_list[0],
-                warnings=warnings,
             )
             if len(rss_list) > 1:
                 self.cube2 = Interpolated_cube(
@@ -6785,7 +6747,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                     kernel_size_arcsec,
                     plot=plot,
                     flux_calibration=flux_calibration_list[1],
-                    warnings=warnings,
                 )
             if len(rss_list) > 2:
                 self.cube3 = Interpolated_cube(
@@ -6794,7 +6755,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                     kernel_size_arcsec,
                     plot=plot,
                     flux_calibration=flux_calibration_list[2],
-                    warnings=warnings,
                 )
             if len(rss_list) > 3:
                 self.cube4 = Interpolated_cube(
@@ -6803,7 +6763,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                     kernel_size_arcsec,
                     plot=plot,
                     flux_calibration=flux_calibration_list[3],
-                    warnings=warnings,
                 )
             if len(rss_list) > 4:
                 self.cube5 = Interpolated_cube(
@@ -6812,7 +6771,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                     kernel_size_arcsec,
                     plot=plot,
                     flux_calibration=flux_calibration_list[4],
-                    warnings=warnings,
                 )
             if len(rss_list) > 5:
                 self.cube6 = Interpolated_cube(
@@ -6821,7 +6779,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                     kernel_size_arcsec,
                     plot=plot,
                     flux_calibration=flux_calibration_list[5],
-                    warnings=warnings,
                 )
             if len(rss_list) > 6:
                 self.cube7 = Interpolated_cube(
@@ -6830,7 +6787,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                     kernel_size_arcsec,
                     plot=plot,
                     flux_calibration=flux_calibration_list[6],
-                    warnings=warnings,
                 )
             if len(rss_list) > 7:
                 self.cube8 = Interpolated_cube(
@@ -6839,7 +6795,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                     kernel_size_arcsec,
                     plot=plot,
                     flux_calibration=flux_calibration_list[7],
-                    warnings=warnings,
                 )
             if len(rss_list) > 8:
                 self.cube9 = Interpolated_cube(
@@ -6848,7 +6803,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                     kernel_size_arcsec,
                     plot=plot,
                     flux_calibration=flux_calibration_list[8],
-                    warnings=warnings,
                 )
             if len(rss_list) > 9:
                 self.cube10 = Interpolated_cube(
@@ -6857,7 +6811,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                     kernel_size_arcsec,
                     plot=plot,
                     flux_calibration=flux_calibration_list[9],
-                    warnings=warnings,
                 )
 
         if do_alignment:
@@ -6914,7 +6867,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                 plot=plot,
                 offsets=offsets,
                 ADR=ADR,
-                warnings=warnings,
             )
             self.cube1_aligned = cube_aligned_list[0]
             self.cube2_aligned = cube_aligned_list[1]

@@ -124,7 +124,6 @@ def test_main(tmpdir):
         valid_wave_min = 6085,
         valid_wave_max = 9305,
         plot=DO_PLOTTING,
-        warnings=False
     )
 
 
