@@ -49,7 +49,7 @@ def scale_sky_spectrum(
     valid_wave_min=0,
     valid_wave_max=0,
     fibre_list=[100, 200, 300, 400, 500, 600, 700, 800, 900],
-    plot=True,
+    plot=False,
     verbose=True,
     warnings=True,
 ):
@@ -121,7 +121,7 @@ def scale_sky_spectrum(
             fcal=False,
             lowlow=50,
             highhigh=50,
-            plot=False,
+            plot=plot,
             verbose=False,
             warnings=warnings,
         )
@@ -136,7 +136,7 @@ def scale_sky_spectrum(
                 fcal=False,
                 lowlow=50,
                 highhigh=50,
-                plot=False,
+                plot=plot,
                 verbose=False,
                 warnings=warnings,
             )
@@ -207,7 +207,7 @@ def sky_spectrum_from_fibres(
     ymin=0,
     ymax=0,
     verbose=True,
-    plot=True,
+    plot=False,
 ):
     """
 
@@ -258,7 +258,7 @@ def sky_spectrum_from_fibres_using_file(
     ymin=0,
     ymax=0,
     verbose=True,
-    plot=True,
+    plot=False,
 ):
     """
 
@@ -349,7 +349,7 @@ def sky_spectrum_from_fibres_using_file(
 
 
 def obtain_sky_spectrum(
-    sky, low_fibres=200, plot=True, fig_size=12, fcal=False, verbose=True
+    sky, low_fibres=200, plot=False, fig_size=12, fcal=False, verbose=True
 ):
     """
     Obtain a sky-spectrum using N fibres with the lowest intensity values.

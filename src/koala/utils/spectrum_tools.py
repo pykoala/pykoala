@@ -99,7 +99,7 @@ def compare_fix_2dfdr_wavelengths(rss1, rss2):
     ))
 
 
-def obtain_telluric_correction(wlm, telluric_correction_list, plot=True):
+def obtain_telluric_correction(wlm, telluric_correction_list, plot=False):
     """
     Take a list of telluric correction spectra and make a single median telluric spectrum
 

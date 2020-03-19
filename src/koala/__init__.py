@@ -252,7 +252,7 @@ class RSS(object):
         fibre=0,
         broad=1.0,
         verbose=True,
-        plot=True,
+        plot=False,
     ):
         """
         Identify fibres with highest intensity (high_fibres=10).
@@ -354,7 +354,7 @@ class RSS(object):
         remove_5578=False,  # if fibre_p=fibre plots the corrections in that fibre
         clip_high=100,
         warnings=False,
-        plot=True,
+        plot=False,
         plot_suspicious_fibres=True,
         verbose=False,
         fig_size=12,
@@ -391,7 +391,7 @@ class RSS(object):
         Example
         ----------
     	self.correct_high_cosmics_and_defects(correct_high_cosmics=False, step=40, remove_5578 = True,
-                                              clip_high=120, plot_suspicious_fibres=True, warnings=True, 									      verbose=False, plot=True)
+                                              clip_high=120, plot_suspicious_fibres=True, warnings=True, 									      verbose=False, plot=False)
 	    """
         print("\n> Correcting for high cosmics and CCD defects...")
 
@@ -504,7 +504,7 @@ class RSS(object):
             # Removing Skyline 5578 using Gaussian fit if requested
             if wave_min < 5578 and remove_5578:
                 resultado = fluxes(
-                    wlm, s, 5578, plot=False, verbose=False
+                    wlm, s, 5578, plot=plot, verbose=False
                 )  # fmin=-5.0E-17, fmax=2.0E-16,
                 # resultado = [rms_cont, fit[0], fit_error[0], gaussian_flux, gaussian_flux_error, fwhm, fwhm_error, flux, flux_error, ew, ew_error, spectrum  ]
                 self.intensity_corrected[fibre] = resultado[11]
@@ -773,7 +773,7 @@ class RSS(object):
                 wave_min=wave_min,
                 wave_max=wave_max,
                 weight_fit_median=1.0,
-                plot=False,
+                plot=plot,
             )
             old = []
             if plot:
@@ -1378,7 +1378,7 @@ class RSS(object):
                         highhigh=sl_highhigh[i],
                         lmin=sl_lmin[i],
                         lmax=sl_lmax[i],
-                        plot=False,
+                        plot=plot,
                         verbose=verbose,
                     )
 
@@ -1402,7 +1402,7 @@ class RSS(object):
                                 highhigh=sl_highhigh[i],
                                 lmin=sl_lmin[i],
                                 lmax=sl_lmax[i],
-                                plot=False,
+                                plot=plot,
                                 verbose=verbose,
                             )
 
@@ -1534,7 +1534,7 @@ class RSS(object):
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
     def do_extinction_curve(
-        self, observatory_file=pth.join(DATA_PATH, "ssoextinct.dat"), plot=True
+        self, observatory_file=pth.join(DATA_PATH, "ssoextinct.dat"), plot=False
     ):
         """
 
@@ -1596,7 +1596,7 @@ class RSS(object):
     def find_sky_emission(
         self,
         intensidad=[0, 0],
-        plot=True,
+        plot=False,
         n_sky=200,
         sky_fibres=[1000],
         sky_wave_min=0,
@@ -1635,7 +1635,7 @@ class RSS(object):
             # sorted_by_flux = np.argsort(flux_ratio)   ORIGINAL till 21 Jan 2019
             # NEW 21 Jan 2019: Assuming cleaning of cosmics and CCD defects, we just use the spaxels with the LOWEST INTEGRATED VALUES
             self.compute_integrated_fibre(
-                valid_wave_min=sky_wave_min, valid_wave_max=sky_wave_max, plot=False
+                valid_wave_min=sky_wave_min, valid_wave_max=sky_wave_max, plot=plot
             )
             sorted_by_flux = np.argsort(
                 self.integrated_fibre
@@ -1748,7 +1748,7 @@ class RSS(object):
         kernel_sky_spectrum=5,
         wave_min_scale=0,
         wave_max_scale=0,
-        plot=True,
+        plot=False,
     ):
         """
         Determine the relative transmission of each spectrum
@@ -1959,7 +1959,7 @@ class RSS(object):
         ],  # This is range for 1000R
         wave_min=0,
         wave_max=0,
-        plot=True,
+        plot=False,
         fig_size=12,
         verbose=False,
     ):
@@ -2204,7 +2204,7 @@ class RSS(object):
         ymin="",
         fig_size=10,
         save_file="",
-        plot=True,
+        plot=False,
     ):
         """
         Plot combined spectrum of a list and return the combined spectrum.
@@ -2573,7 +2573,7 @@ class RSS(object):
         xmax=7770,
         ymin=0,
         ymax=1000,
-        plot=True,
+        plot=False,
         verbose=True,
         warnings=True,
     ):
@@ -2883,7 +2883,7 @@ class KOALA_RSS(RSS):
         valid_wave_max=0,
         warnings=True,
         verbose=False,
-        plot=True,
+        plot=False,
         norm=colors.LogNorm(),
         fig_size=12,
     ):
@@ -3292,7 +3292,7 @@ class KOALA_RSS(RSS):
                     auto_scale_sky=auto_scale_sky,
                     warnings=False,
                     verbose=False,
-                    plot=False,
+                    plot=plot,
                     fig_size=12,
                     fibre=fibre,
                 )
@@ -3326,7 +3326,7 @@ class KOALA_RSS(RSS):
                             self.wavelength,
                             self.sky_emission,
                             5578,
-                            plot=False,
+                            plot=plot,
                             verbose=False,
                         )  # fmin=-5.0E-17, fmax=2.0E-16,
                         # resultado = [rms_cont, fit[0], fit_error[0], gaussian_flux, gaussian_flux_error, fwhm, fwhm_error, flux, flux_error, ew, ew_error, spectrum  ]
@@ -3339,7 +3339,7 @@ class KOALA_RSS(RSS):
                                 self.wavelength,
                                 self.intensity_corrected[i],
                                 5578,
-                                plot=False,
+                                plot=plot,
                                 verbose=False,
                             )  # fmin=-5.0E-17, fmax=2.0E-16,
                             # resultado = [rms_cont, fit[0], fit_error[0], gaussian_flux, gaussian_flux_error, fwhm, fwhm_error, flux, flux_error, ew, ew_error, spectrum  ]
@@ -3375,7 +3375,7 @@ class KOALA_RSS(RSS):
                                 fmin=fmin,
                                 fibre_list=[i],
                                 verbose=False,
-                                plot=False,
+                                plot=plot,
                                 warnings=False,
                             )
 
@@ -3447,7 +3447,7 @@ class KOALA_RSS(RSS):
                             self.wavelength,
                             self.intensity_corrected[fibre_sky],
                             sky_line,
-                            plot=False,
+                            plot=plot,
                             verbose=False,
                             lowlow=lowlow,
                             lowhigh=lowhigh,
@@ -3461,7 +3461,7 @@ class KOALA_RSS(RSS):
                             self.wavelength,
                             self.sky_emission[fibre_sky],
                             sky_line,
-                            plot=False,
+                            plot=plot,
                             verbose=False,
                             lowlow=lowlow,
                             lowhigh=lowhigh,
@@ -3479,7 +3479,7 @@ class KOALA_RSS(RSS):
                                 self.wavelength,
                                 self.intensity_corrected[fibre_sky],
                                 sky_line_2,
-                                plot=False,
+                                plot=plot,
                                 verbose=False,
                                 lowlow=lowlow_2,
                                 lowhigh=lowhigh_2,
@@ -3493,7 +3493,7 @@ class KOALA_RSS(RSS):
                                 self.wavelength,
                                 self.sky_emission[fibre_sky],
                                 sky_line_2,
-                                plot=False,
+                                plot=plot,
                                 verbose=False,
                                 lowlow=lowlow_2,
                                 lowhigh=lowhigh_2,
@@ -3581,7 +3581,7 @@ class KOALA_RSS(RSS):
                 )
 
         #        print "\n  AFTER SKY SUBSTRACTION:"
-        #        self.compute_integrated_fibre(plot=False, warnings=warnings)  #title =" - Throughput corrected", text="after throughput correction..."
+        #        self.compute_integrated_fibre(plot=plot, warnings=warnings)  #title =" - Throughput corrected", text="after throughput correction..."
         #        count_negative = 0
         #        for i in range(self.n_spectra):
         #            if self.integrated_fibre[i] < 0.11 :
@@ -4168,7 +4168,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
 
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
-    def ADR_correction(self, plot=True, force_ADR=False):
+    def ADR_correction(self, plot=False, force_ADR=False):
         """
         Correct for Atmospheric Diferential Refraction (ADR)
 
@@ -4259,7 +4259,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
     def get_integrated_map_and_plot(
-        self, min_wave=[0], max_wave=[0], plot=True, fcal=False
+        self, min_wave=[0], max_wave=[0], plot=False, fcal=False
     ):  # CHECK
         """
         Integrated map and plot
@@ -5167,7 +5167,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
 
         Example
         -------
-        >>>r2_growth_curve, F_growth_curve, flux, r2_half_light = self.growth_curve_between(min_wave, max_wave, plot=True)    # 0,1E30 ??
+        >>>r2_growth_curve, F_growth_curve, flux, r2_half_light = self.growth_curve_between(min_wave, max_wave, plot=False)    # 0,1E30 ??
 
         """
 
@@ -5270,7 +5270,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
             flux,
             r2_half_light,
         ) = self.growth_curve_between(
-            min_wave, max_wave, plot=True, verbose=True
+            min_wave, max_wave, plot=plot, verbose=True
         )  # 0,1E30 ??
         # print "\n> Computing growth-curve spectrum..."
         intensity = []
@@ -5337,7 +5337,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
         exp_time=60,
         smooth=0.03,
         ha_width=0,
-        plot=True,
+        plot=False,
         verbose=False,
     ):  # smooth new 5 Mar, smooth=21, now we don't use it
         """
@@ -6230,7 +6230,7 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
         # COMMON TO RSS AND CUBING
         valid_wave_min=0,
         valid_wave_max=0,
-        plot=True,
+        plot=False,
         norm=colors.LogNorm(),
         fig_size=12,
         warnings=False,
@@ -6285,7 +6285,7 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
                         do_sky=False,
                         do_extinction=False,
                         apply_throughput=False,
-                        plot=True,
+                        plot=plot,
                     )
 
                     skyflat.find_relative_throughput(

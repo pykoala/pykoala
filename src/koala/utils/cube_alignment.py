@@ -9,7 +9,7 @@ import matplotlib.colors as colors
 from .plots import plot_offset_between_cubes
 
 
-def offset_between_cubes(cube1, cube2, plot=True):
+def offset_between_cubes(cube1, cube2, plot=False):
     """
 
     Parameters
