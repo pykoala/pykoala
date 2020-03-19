@@ -1,8 +1,11 @@
 import os.path as pth
 
-from koala import KOALA_RSS, KOALA_reduce, DATA_PATH, read_table
+import matplotlib.pyplot as plt
 
-DO_PLOTTING = False
+from koala import KOALA_RSS, KOALA_reduce, DATA_PATH, read_table
+plt.ion()
+
+DO_PLOTTING = True
 
 DATE = "20180310"
 GRATING = "385R"
