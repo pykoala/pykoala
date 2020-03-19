@@ -365,7 +365,8 @@ def plot_plot(
     plt.ylabel(ylabel)
 
     if save_file == "":
-        plt.show()
+        pass
+        #plt.show()
     else:
         plt.savefig(save_file)
     plt.close()
