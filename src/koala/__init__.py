@@ -7581,11 +7581,6 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
 # -----------------------------------------------------------------------------
 # GENERAL TASKS
 # -----------------------------------------------------------------------------
-def running_mean(x, N):
-    cumsum = np.cumsum(np.insert(x, 0, 0))
-    return (cumsum[N:] - cumsum[:-N])/N
-
-
 def coord_range(rss_list):
     RA = [rss.RA_centre_deg + rss.offset_RA_arcsec / 3600.0 for rss in rss_list]
     RA_min = np.nanmin(RA)
