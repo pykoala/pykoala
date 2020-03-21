@@ -52,6 +52,11 @@ setuptools.setup(
         #'Programming Language :: Python :: 3.8',
         #'Programming Language :: Python :: 3 :: Only',
     ],
+    entry_points = {
+        'console_scripts': [
+            "reduce-koala-data = koala.cli:reduce_koala_data_main",
+        ],
+    },
     include_package_data=True,
     cmdclass=versioneer.get_cmdclass(),
 )
