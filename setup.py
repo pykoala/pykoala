@@ -26,6 +26,7 @@ setuptools.setup(
         "synphot",
         'future',
         'enum34;python_version<"3.4"',
+        'logbook',
     ],
     #python_requires = '>=3.5',
     author = u"Ángel López-Sánchez",

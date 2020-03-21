@@ -1,7 +1,10 @@
 import argparse
 import sys
 
+from logbook.compat import redirected_warnings, redirected_logging
+
 from . import __version__ as koala_version
+from .logging import logging_options, log_handler
 
 DESCRIPTION = "<Add description here>"
 REQUEST_CITATION_TEXT = "Please cite <TODO> if you use koala."
@@ -35,6 +38,7 @@ def parse_reduce_koala_data_cli(argv):
         description=DESCRIPTION,
         epilog=REQUEST_CITATION_TEXT,
     )
+    logging_options(parser)
     parser.add_argument(
         '--version', action='version', version='%(prog)s ' + koala_version
     )
@@ -67,6 +71,7 @@ def reduce_koala_data_main(argv=None):
 
     args = parse_reduce_koala_data_cli(argv)
 
-    config = parse_reduce_koala_data_config(args)
+    with log_handler(args), redirected_warnings(), redirected_logging():
+        config = parse_reduce_koala_data_config(args)
 
-    reduce_koala_data(config)
+        reduce_koala_data(config)
