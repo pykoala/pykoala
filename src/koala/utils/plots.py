@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, division, print_function
 from builtins import str
-from past.utils import old_div
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -67,7 +66,7 @@ def plot_weights_for_getting_smooth_spectrum(wlm,
     ax.plot(wlm, fit_median_interpolated, label="fit median_interp")
     ax.plot(wlm, weight_fit_median * fit_median + (1 - weight_fit_median) * fit_median_interpolated, label="weighted")
 
-    extra_display = old_div((np.nanmax(fit_median) - np.nanmin(fit_median)), 10)
+    extra_display = (np.nanmax(fit_median) - np.nanmin(fit_median)) / 10
     ax.set_ylim(
         np.nanmin(fit_median) - extra_display, np.nanmax(fit_median) + extra_display
     )
@@ -91,9 +90,9 @@ def plot_weights_for_getting_smooth_spectrum(wlm,
 
 def plot_correction_in_fibre_p_fibre(fig_size,
                                      wlm,
-                                     espectro_old,
-                                     espectro_fit_median,
-                                     espectro_new,
+                                     spectrum_old,
+                                     spectrum_fit_median,
+                                     spectrum_new,
                                      fibre_p,
                                      clip_high, 
                                      show_plot=False):
@@ -103,24 +102,24 @@ def plot_correction_in_fibre_p_fibre(fig_size,
     fig, ax = plt.subplots(figsize=(fig_size, fig_size / 2.5))
     ax.plot(
         wlm,
-        old_div(espectro_old, espectro_fit_median),
+        spectrum_old / spectrum_fit_median,
         "r",
         label="Uncorrected",
         alpha=0.5,
     )
     ax.plot(
         wlm,
-        old_div(espectro_new, espectro_fit_median),
+        spectrum_new / spectrum_fit_median,
         "b",
         label="Corrected",
         alpha=0.5,
     )
-    const = old_div((np.nanmax(espectro_new) - np.nanmin(espectro_new)), 2)
+    const = (np.nanmax(spectrum_new) - np.nanmin(spectrum_new)) / 2
     ax.plot(
         wlm,
-        old_div((const + espectro_new - espectro_old), espectro_fit_median),
+        (const + spectrum_new - spectrum_old) / spectrum_fit_median,
         "k",
-        label="Dif + const",
+        label="Diff + const",
         alpha=0.5,
     )
     ax.axhline(y=clip_high, color="k", linestyle=":", alpha=0.5)
@@ -155,8 +154,8 @@ def plot_suspicious_fibres_graph(self, suspicious_fibres,
             intensity_corrected_fiber[fibre]
         )
         ax.set_ylim(
-            np.nanmin(intensity_corrected_fiber[fibre]) - old_div(scale, 15),
-            np.nanmax(intensity_corrected_fiber[fibre]) + old_div(scale, 15),
+            np.nanmin(intensity_corrected_fiber[fibre]) - scale / 15,
+            np.nanmax(intensity_corrected_fiber[fibre]) + scale / 15,
         )
         ax.set_title("Checking spectrum of suspicious fibre {}. Do you see a cosmic?".format(np.str(fibre)))
         self.plot_spectrum(fibre)  # TODO: self? is plot_splectrum a function of a class which broke during creation of plots.
@@ -266,7 +265,7 @@ def plot_response(calibration_star_cubes, scale=[1, 1, 1, 1], show_plot=False):
     for star in calibration_star_cubes:
         response_rms += np.abs(star.response_full - mean_curve)
     response_rms /= len(calibration_star_cubes)
-    dispersion = old_div(np.nansum(response_rms), np.nansum(mean_curve))
+    dispersion = np.nansum(response_rms) / np.nansum(mean_curve)
     print("\tVariation in flux calibrations =  {:.2f} %".format(dispersion * 100.0))
 
     # dispersion=np.nanmax(mean_values)-np.nanmin(mean_values)
