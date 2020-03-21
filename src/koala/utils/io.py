@@ -2,7 +2,6 @@
 from __future__ import absolute_import, division, print_function
 
 from builtins import str
-from past.utils import old_div
 
 import datetime
 
@@ -156,7 +155,7 @@ def spectrum_to_fits_file(
     if CRVAL1_CDELT1_CRPIX1[0] == 0:
         hdu.header["CRVAL1"] = wavelength[0]
         hdu.header["CRPIX1"] = 1.0
-        hdu.header["CDELT1"] = old_div((wavelength[-1] - wavelength[0]), (len(wavelength) - 1))
+        hdu.header["CDELT1"] = (wavelength[-1] - wavelength[0]) / (len(wavelength) - 1)
     else:
         hdu.header["CRVAL1"] = CRVAL1_CDELT1_CRPIX1[
             0
@@ -186,9 +185,12 @@ def spectrum_to_fits_file(
     if exptime == 1:
         print("  No exposition time given, assumed exptime = 1")
     if CRVAL1_CDELT1_CRPIX1[0] == 0:
-        print("  CRVAL1_CDELT1_CRPIX1 values not given, using ", wavelength[0], "1", old_div((
-            wavelength[-1] - wavelength[0]
-        ), (len(wavelength) - 1)))
+        print(
+            "  CRVAL1_CDELT1_CRPIX1 values not given, using ",
+            wavelength[0],
+            "1",
+            (wavelength[-1] - wavelength[0]) / (len(wavelength) - 1)
+        )
 
 
 def save_bluered_fits_file(
