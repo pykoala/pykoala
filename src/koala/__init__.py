@@ -7571,11 +7571,3 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
 
         print("\n================== REDUCING KOALA DATA COMPLETED ====================\n\n")
 
-
-
-# -----------------------------------------------------------------------------
-# GENERAL TASKS
-# -----------------------------------------------------------------------------
-def running_mean(x, N):
-    cumsum = np.cumsum(np.insert(x, 0, 0))
-    return (cumsum[N:] - cumsum[:-N])/N
