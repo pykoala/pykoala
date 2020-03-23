@@ -1,6 +1,9 @@
 import os.path as pth
 
+import pytest
+
 from koala import KOALA_RSS, KOALA_reduce, DATA_PATH, read_table
+from koala.cli import reduce_koala_data_main
 
 DO_PLOTTING = False
 
@@ -123,3 +126,17 @@ def test_main(tmpdir):
         plot=DO_PLOTTING,
         warnings=False
     )
+
+
+class TestCliFramework:
+    @pytest.mark.xfail
+    def test_version(self):
+        reduce_koala_data_main(["--version"])
+
+    @pytest.mark.xfail
+    def test_citation(self):
+        reduce_koala_data_main(["--citation"])
+
+    @pytest.mark.xfail
+    def test_default(self):
+        reduce_koala_data_main([])
