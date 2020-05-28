@@ -8,14 +8,6 @@ from __future__ import absolute_import, division, print_function
 from past.utils import old_div
 version = "Version 0.72 - 13th February 2020"
 
-from .utils.io import read_table, save_rss_fits, save_fits_file
-from .utils.utils import FitsExt, FitsFibresIFUIndex
-from .utils.cube_alignment import offset_between_cubes, compare_cubes, align_n_cubes
-from .utils.flux import search_peaks, fluxes, dfluxes, substract_given_gaussian
-from .utils.sky_spectrum import scale_sky_spectrum, median_filter
-from .utils.moffat import fit_Moffat
-from .utils.spectrum_tools import rebin_spec_shift, smooth_spectrum
-
 import copy
 import os.path as pth
 import sys
@@ -33,14 +25,20 @@ from scipy import interpolate
 from scipy.ndimage.interpolation import shift
 import scipy.signal as sig
 
-# -----------------------------------------------------------------------------
-# Import Python routines
-# -----------------------------------------------------------------------------
-
+from .constants import C, PARSEC as pc
+from .utils.cube_alignment import offset_between_cubes, compare_cubes, align_n_cubes
+from .utils.flux import search_peaks, fluxes, dfluxes, substract_given_gaussian
+from .utils.io import read_table, save_rss_fits, save_fits_file
+from .utils.moffat import fit_Moffat
 from .utils.plots import (
     plot_redshift_peaks, plot_weights_for_getting_smooth_spectrum,
     plot_correction_in_fibre_p_fibre, plot_suspicious_fibres_graph, plot_skyline_5578,
     plot_offset_between_cubes, plot_response, plot_telluric_correction, plot_plot
+)
+from .utils.sky_spectrum import scale_sky_spectrum, median_filter
+from .utils.spectrum_tools import rebin_spec_shift, smooth_spectrum
+from .utils.utils import (
+    FitsExt, FitsFibresIFUIndex, coord_range, median_absolute_deviation,
 )
 from ._version import get_versions
 
@@ -52,9 +50,6 @@ del get_versions
 # -----------------------------------------------------------------------------
 
 DATA_PATH = pth.join(pth.dirname(__file__), "data")
-
-from .constants import C, PARSEC as pc
-
 
 # -----------------------------------------------------------------------------
 # Define COLOUR scales
@@ -4945,7 +4940,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 fit_len = len(fit_index)
                 sigma_resid = 0.0
             if niter > 0:
-                sigma_resid = MAD(resid)
+                sigma_resid = median_absolute_deviation(resid)
                 fit_index = np.where(np.abs(resid) < 4 * sigma_resid)[0]
                 fit_len = len(fit_index)
             try:
@@ -4987,7 +4982,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 fit_len = len(fit_index)
                 sigma_resid = 0.0
             if niter > 0:
-                sigma_resid = MAD(resid)
+                sigma_resid = median_absolute_deviation(resid)
                 fit_index = np.where(np.abs(resid) < 4 * sigma_resid)[0]
                 fit_len = len(fit_index)
             try:
@@ -5445,7 +5440,7 @@ class Interpolated_cube(object):  # TASK_Interpolated_cube
                 fit_len = len(fit_index)
                 sigma_resid = 0.0
             if niter > 0:
-                sigma_resid = MAD(resid)
+                sigma_resid = median_absolute_deviation(resid)
                 fit_index = np.where(np.abs(resid) < 4 * sigma_resid)[0]
                 fit_len = len(fit_index)
             try:
@@ -7475,30 +7470,3 @@ class KOALA_reduce(RSS, Interpolated_cube):  # TASK_KOALA_reduce
 
         print("\n================== REDUCING KOALA DATA COMPLETED ====================\n\n")
 
-
-
-# -----------------------------------------------------------------------------
-# GENERAL TASKS
-# -----------------------------------------------------------------------------
-def coord_range(rss_list):
-    RA = [rss.RA_centre_deg + rss.offset_RA_arcsec / 3600.0 for rss in rss_list]
-    RA_min = np.nanmin(RA)
-    RA_max = np.nanmax(RA)
-    DEC = [rss.DEC_centre_deg + rss.offset_DEC_arcsec / 3600.0 for rss in rss_list]
-    DEC_min = np.nanmin(DEC)
-    DEC_max = np.nanmax(DEC)
-    return RA_min, RA_max, DEC_min, DEC_max
-
-
-# Definition introduced by Matt
-def MAD(x):
-    """
-    Derive the Median Absolute Deviation of an array
-    Args:
-        x (array): Array of numbers to find the median of
-
-    Returns:
-        float:
-    """
-    MAD = np.nanmedian(np.abs(x - np.nanmedian(x)))
-    return MAD / 0.6745

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from enum import IntEnum
+import numpy as np
 
 class FitsExt(IntEnum):
     """
@@ -30,3 +31,27 @@ class FitsFibresIFUIndex(IntEnum):
     ygpos = 10  # Unknown
     quality_flag_redundant = 11  # A redundancy for quality_flag. P for pass/good data, N for fail
     name = 12  # Unknown, maybe can assign each spectra a name in 2dfdr
+
+
+def coord_range(rss_list):
+    RA = [rss.RA_centre_deg + rss.offset_RA_arcsec / 3600.0 for rss in rss_list]
+    RA_min = np.nanmin(RA)
+    RA_max = np.nanmax(RA)
+    DEC = [rss.DEC_centre_deg + rss.offset_DEC_arcsec / 3600.0 for rss in rss_list]
+    DEC_min = np.nanmin(DEC)
+    DEC_max = np.nanmax(DEC)
+    return RA_min, RA_max, DEC_min, DEC_max
+
+
+# Definition introduced by Matt
+def median_absolute_deviation(x):
+    """
+    Derive the Median Absolute Deviation of an array
+    Args:
+        x (array): Array of numbers to find the median of
+
+    Returns:
+        float:
+    """
+    median_absolute_deviation = np.nanmedian(np.abs(x - np.nanmedian(x)))
+    return median_absolute_deviation / 0.6745

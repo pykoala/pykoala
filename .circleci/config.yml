@@ -7,7 +7,7 @@ orbs:
         parameters:
           tox_name:
             type: string
-            default: py27
+            default: py37
           tox_args:
             type: string
             default: --
@@ -39,7 +39,7 @@ orbs:
         parameters:
           tox_name:
             type: string
-            default: py27
+            default: py37
           tox_args:
             type: string
             default: --
@@ -70,8 +70,8 @@ workflows:
   commit:
     jobs:
       - tox_orb/tox_job:
-          name: py27
-          tox_name: py27
+          name: py37
+          tox_name: py37
           #- tox_orb/tox_job:
           #    name: flake8
           #    tox_name: flake8
@@ -95,8 +95,8 @@ workflows:
                 - master
     jobs:
       - tox_orb/tox_job:
-          name: py27
-          tox_name: py27
+          name: py37
+          tox_name: py37
           #- tox_orb/tox_job:
           #    name: flake8
           #    tox_name: flake8
