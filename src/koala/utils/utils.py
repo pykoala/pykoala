@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from enum import IntEnum
+import numpy as np
 
 class FitsExt(IntEnum):
     """
