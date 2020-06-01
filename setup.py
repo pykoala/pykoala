@@ -20,6 +20,7 @@ setuptools.setup(
     package_dir = {'': 'src'},
     install_requires = [
         "astropy>=2.0.16",
+        "attrs",
         "matplotlib>=2.2.3",
         "numpy>=1.16.6",
         "scipy>=1.2.3",
