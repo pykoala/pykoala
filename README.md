@@ -2,12 +2,8 @@
 [![Build Status](https://travis-ci.com/pykoala/koala.svg?branch=master)](https://travis-ci.com/pykoala/koala)
 [![Documentation Status](https://readthedocs.org/projects/pykoala/badge/?version=latest)](https://pykoala.readthedocs.io/en/latest/?badge=latest)
 [![Coverage Status](https://codecov.io/github/pykoala/koala/coverage.svg?branch=master)](https://codecov.io/github/pykoala/koala?branch=master)
-[![Version](https://img.shields.io/pypi/v/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/)
 [![License](https://img.shields.io/pypi/l/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/)
-[![Wheel](https://img.shields.io/pypi/wheel/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/)
-[![Format](https://img.shields.io/pypi/format/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/)
 [![Supported versions](https://img.shields.io/pypi/pyversions/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/)
-[![Supported implemntations](https://img.shields.io/pypi/implementation/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/)
 [![PyPI](https://img.shields.io/pypi/status/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/)
 
 ---------------------------------------------
@@ -48,3 +44,8 @@ Reviewing commits
 4. Use bors r+ again
 
 You can also use bors try to try running the tests, without merging
+
+<!---[![Version](https://img.shields.io/pypi/v/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/) --->
+<!---[![Wheel](https://img.shields.io/pypi/wheel/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/) --->
+<!---[![Format](https://img.shields.io/pypi/format/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/) --->
+<!---[![Supported implemntations](https://img.shields.io/pypi/implementation/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/)--->
