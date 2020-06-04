@@ -1,0 +1,17 @@
+science_images:  # Links to the location of the .fits files to be reduced and make into data cubes
+  - src/koala/data/385R/10mar20091red.fits
+  - src/koala/data/385R/10mar20092red.fits
+  - src/koala/data/385R/10mar20093red.fits
+
+science_image_calibration_data:  # Links to the .dat files containing information required for reducing science files
+  # If these three files are not specified they can be created using PyKoala
+  throughput_correction: src/koala/data/385R/20180310_385R_throughput_correction.dat
+  flux_calibration: src/koala/data/flux_calibration_20180310_385R_0p6_1k8.dat
+  telluric_correction: src/koala/data/telluric_correction_20180310_385R_0p6_1k25.dat
+  # sky_spectrum: # Unsure if it is a .dat file at this time.
+
+pykoala_reference_data: # Given in PyKoala. Update if moved by user.
+  skyline: src/koala/data/sky_lines.dat
+  skyline_rest: src/koala/data/sky_lines_rest.dat
+  sso_extinction: src/koala/data/ssoextinct.dat
+  abs_flux_stars_dir: src/koala/data/FLUX_CAL
