@@ -4,6 +4,7 @@ include src/koala/_version.py
 include *.toml
 include LICENSE
 include tox.ini
+include *.yml
 include koala.mplstyle
 recursive-include src *.dat
 recursive-include src *.fits
