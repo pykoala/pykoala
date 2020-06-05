@@ -164,9 +164,7 @@ def calibstarobject_configurator(calib_star):
         A container for a calibration star image.
     """
 
-    stars = {}
-    for pos, star_loc in enumerate(calib_star["calib_star"]):
-        stars["pos"+str(pos+1)] = rssobject_configurator(star_loc)
+    stars = [rssobject_configurator(star_loc) for star_loc in calib_star["calib_star"]]  # List of RSSObjects
 
     return GenCalibObject(
         star_name=calib_star["name"],
