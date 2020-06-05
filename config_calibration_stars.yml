@@ -1,7 +1,6 @@
 # Optional files used to create an individual nights throughput_correction, flux_calibration and telluric_correction data.
 # sky_flat and calib_star are required. absolute_flux_cal, telluric_correction, and response will be calculated if not given
 files_for_generating_calibration_data:  # Links to the location of the .fits files containing calibration star images
-  - sky_flat: src\koala\data\385R\10mar2_combined.fits  # Needed for generating throughput_correction.
   - calib_star:
       - src/koala/data/385R/CALIBRATION_STARS/10mar20082red.fits
       - src/koala/data/385R/CALIBRATION_STARS/10mar20083red.fits
