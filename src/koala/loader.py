@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from camel import Camel
 
-from src.koala.containers import (
+from koala.containers import (
     rssobject_configurator,
     scicalibdata_configurator,
     refdata_configurator,
@@ -342,14 +342,12 @@ def load_calibaration_files(calib_file):
     """
     # Load the .yaml file.
     config = _read_yaml_file(calib_file)
-    # Load the skyflat and calibration stars file locations
-    skyflat_file = _get_cal_stars_sky_flat(config)
+    # Load the calibration stars file locations
     calib_stars = _get_cal_stars_stars(config)
 
     # Create a SimpleNamespace for passing the loaded data to the PyKoala pipeline.
     data = SimpleNamespace()
     # Populate the namespace
-    data.skyflat = rssobject_configurator(skyflat_file, skyflat=True)
     data.calib_stars = [
         calibstarobject_configurator(calib_star) for calib_star in calib_stars
     ]
