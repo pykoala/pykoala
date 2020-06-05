@@ -124,7 +124,7 @@ class SciCalibData:
     telluric_correction: str
     all_files_exist: bool
     """
-
+    skyflat = attr.ib()
     throughput_correction = attr.ib()
     flux_calibration = attr.ib()
     telluric_correction = attr.ib()
@@ -197,3 +197,4 @@ class GenCalibObject:
     abs_flux_cal = attr.ib()
     telluric_cal = attr.ib()
     response = attr.ib()
+
