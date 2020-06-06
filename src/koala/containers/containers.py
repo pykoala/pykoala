@@ -129,17 +129,21 @@ class SciCalibData:
     flux_calibration = attr.ib()
     telluric_correction = attr.ib()
 
+    throughput_correction_exists = attr.ib(init=False)
+    flux_calibration_exists = attr.ib(init=False)
+    telluric_correction_exists = attr.ib(init=False)
     all_files_exist = attr.ib(init=False)
 
     def __attrs_post_init__(self):
-        if (
-            self.throughput_correction is not None
-            and self.flux_calibration is not None
-            and self.telluric_correction is not None
-        ):
+        if self.throughput_correction is not None:
+            self.throughput_correction_exists = True
+        if self.flux_calibration is not None:
+            self.flux_calibration_exists = True
+        if self.telluric_correction is not None:
+            self.telluric_correction_exists = True
+
+        if self.throughput_correction_exists and self.flux_calibration_exists and self.telluric_correction_exists:
             self.all_files_exist = True
-        else:
-            self.all_files_exist = False
 
 
 @attr.s
