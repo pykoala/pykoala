@@ -129,10 +129,10 @@ class SciCalibData:
     flux_calibration = attr.ib()
     telluric_correction = attr.ib()
 
-    throughput_correction_exists = attr.ib(init=False)
-    flux_calibration_exists = attr.ib(init=False)
-    telluric_correction_exists = attr.ib(init=False)
-    all_files_exist = attr.ib(init=False)
+    throughput_correction_exists = attr.ib(init=False, default=False)
+    flux_calibration_exists = attr.ib(init=False, default=False)
+    telluric_correction_exists = attr.ib(init=False, default=False)
+    all_files_exist = attr.ib(init=False, default=False)
 
     def __attrs_post_init__(self):
         if self.throughput_correction is not None:
