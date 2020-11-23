@@ -16,10 +16,11 @@ jobs:
     runs-on: "ubuntu-latest"
     env:
       USING_COVERAGE: '3.6,3.8'
+      MPLBACKEND: agg
 
     strategy:
       matrix:
-        python-version: ["3.6", "3.7", "3.8", "pypy3"]
+        python-version: ["3.6", "3.7", "3.8", "3.9"]
 
     steps:
       - uses: "actions/checkout@v2"
@@ -36,7 +37,7 @@ jobs:
 
       - name: "Run tox targets for ${{ matrix.python-version }}"
         run: "python -m tox"
-        
+
       - name: "Combine coverage"
         run: |
           set -xe
