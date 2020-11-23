@@ -2,6 +2,9 @@
 """
 Functions related to flux calculations.
 """
+from logging import getLogger
+from warnings import warn
+
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.signal as sig
@@ -11,6 +14,8 @@ from scipy.optimize import curve_fit
 from ..constants import C
 from .plots import plot_redshift_peaks
 from .io import read_table
+
+logger = getLogger(__name__)
 
 
 def gauss(x, x0, y0, sigma):
@@ -135,7 +140,6 @@ def fluxes(
     fcal=True,
     fit_continuum=True,
     median_kernel=35,
-    warnings=True,
 ):  # Broad is FWHM for Gaussian sigma= 1,
     """
     Provides integrated flux and perform a Gaussian fit to a given emission line.
@@ -249,15 +253,16 @@ def fluxes(
         #            plt.plot(w_cont,f_cont_filtered)
         #            plt.show()
         #            plt.close()
-        #            warnings=True
         try:
             mm, bb = np.polyfit(w_cont, f_cont_filtered, 1)
-        except Exception:
+        except (TypeError, ValueError) as e:
+            logger.debug(e)
             bb = np.nanmedian(f_cont_filtered)
             mm = 0.0
-            if warnings:
-                print("  Impossible to get the continuum!")
-                print("  Scaling the continuum to the median value")
+            warn(
+                "Impossible to get the continuum! Scaling the continuum to the"
+                "median value."
+            )
         continuum = mm * np.array(w_spec) + bb
         c_cont = mm * np.array(w_cont) + bb
     else:
@@ -443,10 +448,11 @@ def fluxes(
 
         if verbose:
             print("  Fit parameters =  ", fit[0], fit[1], fit[2])
-        if fit[2] == broad and warnings == True:
-            print("  WARNING: Fit in", fit[
-                0
-            ], "failed! Using given centre wavelength (cw), peak at (cv) & sigma = broad/2.355 given.")
+        if fit[2] == broad:
+            warn((
+                "Fit in {} failed! Using given centre wavelength (cw), peak "
+                "at (cv) & sigma = broad/2.355 given."
+            ).format(fit[0]))
         gaussian_fit = gauss(w_spec, fit[0], fit[1], fit[2])
 
         # Estimate rms of the Gaussian fit in range [low_limit, high_limit]
@@ -716,7 +722,6 @@ def dfluxes(
     fcal=True,
     fit_continuum=True,
     median_kernel=35,
-    warnings=True,
 ):  # Broad is FWHM for Gaussian sigma= 1,
     """
     Provides integrated flux and perform a Gaussian fit to a given emission line.
@@ -823,12 +828,14 @@ def dfluxes(
         f_cont_filtered = sig.medfilt(f_cont, np.int(median_kernel))
         try:
             mm, bb = np.polyfit(w_cont, f_cont_filtered, 1)
-        except Exception:
+        except (TypeError, ValueError) as e:
+            logger.debug(e)
             bb = np.nanmedian(f_cont_filtered)
             mm = 0.0
-            if warnings:
-                print("  Impossible to get the continuum!")
-                print("  Scaling the continuum to the median value")
+            warn(
+                "Impossible to get the continuum! Scaling the continuum to the"
+                "median value."
+            )
         continuum = mm * np.array(w_spec) + bb
         c_cont = mm * np.array(w_cont) + bb
     else:
@@ -997,20 +1004,35 @@ def dfluxes(
             or fit[3] < guess_centre2 - broad2
             or fit[3] > guess_centre2 + broad2
         ):
-            if warnings:
-                if fit[0] < guess_centre1 - broad1 or fit[0] > guess_centre1 + broad1:
-                    print("  Fitted center wavelength {} is NOT in the expected range [ {} , {} ]".format(
-                        fit[0], guess_centre1 - broad1, guess_centre1 + broad1))
-                else:
-                    print("  Fitted center wavelength {} is in the expected range [ {} , {} ]".format(
-                        fit[0], guess_centre1 - broad1, guess_centre1 + broad1))
-                if fit[3] < guess_centre2 - broad2 or fit[3] > guess_centre2 + broad2:
-                    print("  Fitted center wavelength {} is NOT in the expected range [ {} , {} ]".format(
-                        fit[3], guess_centre2 - broad2, guess_centre2 + broad2))
-                else:
-                    print("  Fitted center wavelength {} is in the expected range [ {} , {} ]".format(
-                    fit[3], guess_centre2 - broad2, guess_centre2 + broad2))
-                print("  Fit failed!")
+            if fit[0] < guess_centre1 - broad1 or fit[0] > guess_centre1 + broad1:
+                warn((
+                    "Fitted center wavelength {} is NOT in the expected range "
+                    "[{}, {}]"
+                ).format(
+                    fit[0], guess_centre1 - broad1, guess_centre1 + broad1
+                ))
+            else:
+                warn((
+                    "Fitted center wavelength {} is in the expected range "
+                    "[{}, {}]"
+                ).format(
+                    fit[0], guess_centre1 - broad1, guess_centre1 + broad1
+                ))
+            if fit[3] < guess_centre2 - broad2 or fit[3] > guess_centre2 + broad2:
+                warn((
+                    "Fitted center wavelength {} is NOT in the expected range "
+                    "[{}, {}]"
+                ).format(
+                    fit[3], guess_centre2 - broad2, guess_centre2 + broad2
+                ))
+            else:
+                warn((
+                    "Fitted center wavelength {} is in the expected range "
+                    "[{}, {}]"
+                ).format(
+                    fit[3], guess_centre2 - broad2, guess_centre2 + broad2
+                ))
+            warn("Fit failed!")
 
             fit[0] = guess_centre1
             fit_error[0] = 0.000001
@@ -1025,19 +1047,25 @@ def dfluxes(
             fit[5] = broad2 / 2.355
             fit_error[5] = 0.000001
         else:
-            if warnings:
-                print("  Fitted center wavelength {} is in the expected range [ {} , {} ]".format(
-                    fit[0], guess_centre1 - broad1, guess_centre1 + broad1))
-            if warnings:
-                print("  Fitted center wavelength {} is in the expected range [ {} , {} ]".format(
-                    fit[3], guess_centre2 - broad2, guess_centre2 + broad2))
+            warn((
+                "Fitted center wavelength {} is in the expected range [{}, {}]"
+            ).format(
+                fit[0], guess_centre1 - broad1, guess_centre1 + broad1
+            ))
+            warn((
+                "Fitted center wavelength {} is in the expected range [{}, {}]"
+            ).format(
+                fit[3], guess_centre2 - broad2, guess_centre2 + broad2
+            ))
 
         gaussian_fit = dgauss(w_spec, fit[0], fit[1], fit[2], fit[3], fit[4], fit[5])
 
-        if warnings:
-            print("  Fit parameters =  {} {} {} {} {} {}".format(fit[0], fit[1], fit[2], fit[3], fit[4], fit[5]))
-        if fit[2] == broad1 and warnings == True:
-            print("  WARNING: Fit in {} failed! Using given centre wavelength (cw), peak at (cv) & sigma = broad/2.355 given.".format(fit[0]))  # CHECK THIS
+        warn("Fit parameters =  {} {} {} {} {} {}".format(
+            fit[0], fit[1], fit[2], fit[3], fit[4], fit[5]
+        ))
+
+        if fit[2] == broad1:
+            warn("Fit in {} failed! Using given centre wavelength (cw), peak at (cv) & sigma = broad/2.355 given.".format(fit[0]))  # CHECK THIS
         # gaussian_fit =  gauss(w_spec, fit[0], fit[1], fit[2])
 
         # Estimate rms of the Gaussian fit in range [low_limit, high_limit]
@@ -1513,8 +1541,7 @@ def search_peaks(
     id_peaks = []
     for i in range(len(peaks_redshift)):
         if np.abs(peaks_redshift[i] - Ha_redshift) > check_redshift:
-            if verbose:
-                print("  WARNING!!! Line {:8s} in w = {:.2f} has redshift z={:.6f}, different than zref={:.6f}".format(
+            warn("Line {:8s} in w = {:.2f} has redshift z={:.6f}, different than zref={:.6f}".format(
                     peaks_name[i],
                     peaks[i],
                     peaks_redshift[i],
@@ -1722,10 +1749,11 @@ def substract_given_gaussian(
         no_substract = False
         if flux < 0:
             if allow_absorptions == False:
-                if verbose:
-                    print("  WARNING! This is an ABSORPTION Gaussian! As requested, this Gaussian is NOT substracted!")
-                    no_substract = True
-        # print no_substract
+                warn(
+                    "This is an ABSORPTION Gaussian! As requested, this "
+                    "Gaussian is NOT substracted!"
+                )
+                no_substract = True
         if no_substract == False:
             if verbose:
                 print("  Substracting Gaussian at {:7.1f}  with peak ={:10.4f}   sigma ={:6.2f}  and flux ={:9.4f}".format(

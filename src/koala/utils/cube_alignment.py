@@ -106,7 +106,6 @@ def compare_cubes(cube1, cube2, line=0):
 #         offsets=[1000],
 #         plot=False,
 #         ADR=False,
-#         warnings=False,
 # ):
 #     """
 #     (OLD) Routine to align 3 cubes.
@@ -226,7 +225,6 @@ def compare_cubes(cube1, cube2, line=0):
 #         offsets_files_position=1,
 #         plot=plot,
 #         ADR=ADR,
-#         warnings=warnings,
 #     )
 #     cube2_aligned = Interpolated_cube(
 #         rss2,
@@ -240,7 +238,6 @@ def compare_cubes(cube1, cube2, line=0):
 #         offsets_files_position=2,
 #         plot=plot,
 #         ADR=ADR,
-#         warnings=warnings,
 #     )
 #     cube3_aligned = Interpolated_cube(
 #         rss3,
@@ -254,7 +251,6 @@ def compare_cubes(cube1, cube2, line=0):
 #         offsets_files_position=3,
 #         plot=plot,
 #         ADR=ADR,
-#         warnings=warnings,
 #     )
 #
 #     print("\n> Checking offsets of ALIGNED cubes (in arcsec):")
@@ -309,7 +305,6 @@ def compare_cubes(cube1, cube2, line=0):
 #         offsets=[1000],
 #         plot=False,
 #         ADR=False,
-#         warnings=False,
 # ):
 #     """
 #     (OLD) Routine to align 4 cubes
@@ -451,7 +446,6 @@ def compare_cubes(cube1, cube2, line=0):
 #         offsets_files_position=1,
 #         plot=plot,
 #         ADR=ADR,
-#         warnings=warnings,
 #     )
 #     cube2_aligned = Interpolated_cube(
 #         rss2,
@@ -465,7 +459,6 @@ def compare_cubes(cube1, cube2, line=0):
 #         offsets_files_position=2,
 #         plot=plot,
 #         ADR=ADR,
-#         warnings=warnings,
 #     )
 #     cube3_aligned = Interpolated_cube(
 #         rss3,
@@ -479,7 +472,6 @@ def compare_cubes(cube1, cube2, line=0):
 #         offsets_files_position=3,
 #         plot=plot,
 #         ADR=ADR,
-#         warnings=warnings,
 #     )
 #     cube4_aligned = Interpolated_cube(
 #         rss4,
@@ -493,7 +485,6 @@ def compare_cubes(cube1, cube2, line=0):
 #         offsets_files_position=4,
 #         plot=plot,
 #         ADR=ADR,
-#         warnings=warnings,
 #     )
 #
 #     print("\n> Checking offsets of ALIGNED cubes (in arcsec):")
@@ -551,7 +542,6 @@ def align_n_cubes(
         offsets=[1000],
         plot=False,
         ADR=False,
-        warnings=False,
 ):  # TASK_align_n_cubes
     """
     Routine to align n cubes
@@ -707,7 +697,6 @@ def align_n_cubes(
             offsets_files_position=i + 1,
             plot=plot,
             ADR=ADR,
-            warnings=warnings,
         )
 
     print("\n> Checking offsets of ALIGNED cubes (in arcsec, everything should be close to 0):")

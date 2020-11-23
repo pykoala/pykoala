@@ -2,10 +2,11 @@
 """
 File contains functions related to the sky spectrum.
 """
+import copy
+
 import numpy as np
 import scipy.signal as sig
 import matplotlib.pyplot as plt
-import copy
 
 from .plots import plot_plot
 from .flux import search_peaks, fluxes
@@ -51,7 +52,6 @@ def scale_sky_spectrum(
     fibre_list=[100, 200, 300, 400, 500, 600, 700, 800, 900],
     plot=True,
     verbose=True,
-    warnings=True,
 ):
     """
 
@@ -68,7 +68,6 @@ def scale_sky_spectrum(
     fibre_list
     plot
     verbose
-    warnings
 
     Returns
     -------
@@ -123,7 +122,6 @@ def scale_sky_spectrum(
             highhigh=50,
             plot=False,
             verbose=False,
-            warnings=warnings,
         )
 
         object_spectrum_data_gauss = []
@@ -138,7 +136,6 @@ def scale_sky_spectrum(
                 highhigh=50,
                 plot=False,
                 verbose=False,
-                warnings=warnings,
             )
             object_spectrum_data_gauss.append(
                 object_spectrum_flux[3]
