@@ -20,3 +20,5 @@ recursive-include * .empty
 recursive-exclude .circleci *
 exclude .circleci
 exclude codecov.yml
+recursive-exclude ci *
+exclude azure-pipelines.yml
