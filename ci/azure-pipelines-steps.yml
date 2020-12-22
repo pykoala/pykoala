@@ -18,6 +18,10 @@ steps:
     tox
   displayName: 'tox'
 
+#- script: |
+#    codecov
+#  displayName: 'codecov'
+# hopefully the bash uploader will work
 - script: |
-    codecov
-  displayName: 'codecov'
+    bash <(curl -s https://codecov.io/bash)
+  displayName: 'Upload to codecov.io'
