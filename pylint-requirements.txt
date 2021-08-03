@@ -1,2 +1,2 @@
-astroid==2.6.5
+astroid==2.6.6
 pylint==2.9.5
