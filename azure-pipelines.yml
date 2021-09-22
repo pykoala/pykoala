@@ -7,7 +7,7 @@ variables:
 jobs:
 - job: 'static_checks'
   pool:
-    vmImage: ubuntu-16.04
+    vmImage: ubuntu-20.04
   variables:
     TOXENV: docs,check-manifest
   steps:
@@ -22,9 +22,9 @@ jobs:
         tox
       displayName: tox
 
-- job: 'ubuntu1604'
+- job: 'ubuntu2004'
   pool:
-    vmImage: ubuntu-16.04
+    vmImage: ubuntu-20.04
   strategy:
     matrix:
       py36:
