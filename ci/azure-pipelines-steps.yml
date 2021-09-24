@@ -23,8 +23,8 @@ steps:
 #  displayName: 'codecov'
 # hopefully the bash uploader will work
 - script: |
-    if [ uname == "Linux" ] 
-        then
+    echo < uname
+    if [ uname == "Linux" ]; then
                 curl -Os https://uploader.codecov.io/latest/linux/codecov 
                 chmod +x codecov
         	./codecov
