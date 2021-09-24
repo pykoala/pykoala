@@ -1,0 +1,29 @@
+steps:
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: '$(python.version)'
+    architecture: 'x64'
+  displayName: 'Use Python $(python.version)'
+  condition: and(succeeded(), ne(variables['python.version'], 'Pre'))
+
+- script: |
+    python -m pip install --upgrade pip
+    pip install tox codecov
+  displayName: 'Install pip dependencies'
+
+- script: env
+  displayName: 'print env'
+
+- script: |
+    tox
+  displayName: 'tox'
+
+#- script: |
+#    codecov
+#  displayName: 'codecov'
+# hopefully the bash uploader will work
+- script: |
+    curl -Os https://uploader.codecov.io/latest/linux/codecov 
+    chmod +x codecov
+    ./codecov
+  displayName: 'Upload to codecov.io'
