@@ -23,5 +23,7 @@ steps:
 #  displayName: 'codecov'
 # hopefully the bash uploader will work
 - script: |
-    bash <(curl -s https://codecov.io/bash)
+    curl -Os https://uploader.codecov.io/latest/linux/codecov 
+    chmod +x codecov
+    ./codecov 
   displayName: 'Upload to codecov.io'
