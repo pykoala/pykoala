@@ -35,12 +35,13 @@ class RSS(object):
         #self.throughput = np.ones((0))   
 # -----------------------------------------------------------------------------           
 # -----------------------------------------------------------------------------
-    def read_mask_from_fits_file(self, mask=[[]], mask_file="", no_nans=True, plot = True, 
+    def read_mask_from_fits_file(self, mask=[[]], mask_file="", no_nans=True, plot = True,
                   verbose= True, include_history=False):
+        #TODO: Merge into a single mask method
         """
         This task reads a fits file containing a full mask and save it as self.mask.
         Note that this mask is an IMAGE, 
-        the default values for self.mask,following the tast 'get_mask' below, are two vectors
+        the default values for self.mask, following the task 'get_mask' below, are two vectors
         with the left -self.mask[0]- and right -self.mask[1]- valid pixels of the RSS.
         This takes more memory & time to process.
         
@@ -59,12 +60,12 @@ class RSS(object):
         include_history  boolean (default = False)
             Include the basic information in the rss.history
         """           
-        # Read mask   
+        # Read mask
         if mask_file != "":
             print("\n> Reading the mask from fits file : ")
             print(" ",mask_file)
             ftf = fits.open(mask_file)
-            self.mask = ftf[0].data  
+            self.mask = ftf[0].data
             if include_history:
                 self.history.append("- Mask read from fits file")
                 self.history.append("  "+mask_file)
@@ -91,8 +92,8 @@ class RSS(object):
                 found = 2
             else:
                 j=j+1
-        if verbose: print("  First good pixels is ",first_good_pixel,", that corresponds to ",w[first_good_pixel],"A") 
-        
+        if verbose: print("  First good pixels is ",first_good_pixel,", that corresponds to ",w[first_good_pixel],"A")
+
         if plot:
             ptitle = "Left edge of the mask, valid minimun wavelength = "+np.str(np.round(w[first_good_pixel],2))+" , that is  w [ "+np.str(first_good_pixel)+" ]"
             plot_plot(w,np.nansum(self.mask, axis=0),ymax=1000,ymin=suma_good_pixels[0]-10,
@@ -191,8 +192,8 @@ class RSS(object):
             Include the basic information in the rss.history
         """                          
         if verbose: print("\n> Getting the mask using the good pixels of this RSS file ...")
-        
-        
+
+
         #  Check if file has 0 or nans in edges
         if np.isnan(self.intensity[0][-1]):
             no_nans = False
