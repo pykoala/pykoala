@@ -1510,7 +1510,7 @@ class RSS(object):
         print("  We use the lowest", n_sky, "fibres for getting sky. Their positions are:")   
         # Compute sky spectrum and plot RSS map with sky positions if requested
         self.sky_fibres = sorted_by_flux[:n_sky]         
-        if plot: self.RSS_map(self.integrated_fibre, None, self.sky_fibres, title =" - Sky Spaxels")        
+        if plot: self.RSS_map(self.integrated_fibre, None, self.sky_fibres, title =" - Sky Spaxels")
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
     def find_sky_emission(self, intensidad=[0,0], plot=True, n_sky=200,
@@ -1540,7 +1540,7 @@ class RSS(object):
             normalises values from 0 to 1 range on a log scale for colour plotting        
             //
             norm:
-            Normalization scale, default is lineal scale. 
+            Normalization scale, default is lineal scale.
             Lineal scale: norm=colors.Normalize().
             Log scale:    norm=colors.LogNorm()
             Power law:    norm=colors.PowerNorm(gamma=1./4.)
@@ -1576,7 +1576,7 @@ class RSS(object):
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
     def substract_sky(self, correct_negative_sky=False, plot=True, verbose = True, warnings=True,
-                      order_fit_negative_sky=3, kernel_negative_sky = 51,  exclude_wlm=[[0,0]], 
+                      order_fit_negative_sky=3, kernel_negative_sky = 51,  exclude_wlm=[[0,0]],
                       individual_check = True, use_fit_for_negative_sky = False, low_fibres=10):
         """
         Substracts the sky stored in self.sky_emission to all fibres in self.intensity_corrected
