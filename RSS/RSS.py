@@ -1,3 +1,7 @@
+import numpy as np
+from matplotlib import pyplot as plt
+from astropy.io import fits
+
 class RSS(object):
     """
     Collection of row-stacked spectra (RSS).
