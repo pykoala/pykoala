@@ -15,7 +15,7 @@ import matplotlib.colors as colors
 import numpy as np
 from scipy import interpolate, signal
 import sys
-from os.path import realpath, dirname, join
+from os.path import realpath, dirname#, join
 import copy
 
 # Disable some annoying warnings
@@ -537,11 +537,16 @@ class RSS(object):
         ----------
         self.correct_ccd_defects()
         """   
-        if verbose: 
-            if only_nans :
-                print("\n> Correcting CCD defects (nan and inf values) using medfilt with kernel",kernel_correct_ccd_defects," ...")
-            else:
-                print("\n> Correcting CCD defects (nan, inf, and negative values) using medfilt with kernel",kernel_correct_ccd_defects," ...")
+        
+        
+        if only_nans :
+            self.history.append("- Data corrected for CCD defects (nan and inf values)")
+            print("\n> Correcting CCD defects (nan and inf values) using medfilt with kernel",kernel_correct_ccd_defects," ...")
+        else:
+            self.history.append("- Data corrected for CCD defects (nan, inf, and negative values)")
+            print("\n> Correcting CCD defects (nan, inf, and negative values) using medfilt with kernel",kernel_correct_ccd_defects," ...")
+
+        self.history.append("  kernel_correct_ccd_defects = "+np.str(kernel_correct_ccd_defects)+" for running median")
 
         wave_min=self.valid_wave_min
         wave_max=self.valid_wave_max 
@@ -550,7 +555,8 @@ class RSS(object):
             flux_5577=[] # For correcting sky line 5577 if requested
             offset_5577=[] 
             if verbose: print("  Sky line 5577.34 will be removed using a Gaussian fit...")
-                
+            self.history.append("  Sky line 5577.34 is removed using a Gaussian fit")
+
         print(" ") 
         output_every_few = np.sqrt(self.n_spectra)+1
         next_output = -1
@@ -1426,7 +1432,8 @@ class RSS(object):
                     self.intensity_corrected[fibre] = f_new_ALL[fibre] -  self.sky_auto_scale_fit[fibre] * sky_sl_gaussian_fitted_ALL[fibre]
                 else:
                     self.intensity_corrected[fibre] = f_new_ALL[fibre] -  sky_sl_gaussian_fitted_ALL[fibre]                                     
-            print("\n  All fibres corrected for sky emission performing individual Gaussian fits to each fibre !")    
+            print("\n  All fibres corrected for sky emission performing individual Gaussian fits to each fibre !")   
+            self.history.append("  Intensities corrected for the sky emission performing individual Gaussian fits to each fibre") 
         #self.variance_corrected += self.sky_variance # TODO: Check if telluric/ext corrections were applied before
 
 # -----------------------------------------------------------------------------
@@ -1647,6 +1654,8 @@ class RSS(object):
             Check individual fibres and correct if integrated value is negative                          
         """
         
+        self.history.append('- Sky sustraction using the self method')
+        
         if len(sky_fibres) != 0: 
             n_sky=len(sky_fibres)               
             print("\n> 'sky_method = self', using list of",n_sky,"fibres to create a sky spectrum ...")
@@ -1722,6 +1731,9 @@ class RSS(object):
         n_sky : integer (default = 50)
             Number of fibres to use for finding sky spectrum
         """
+        
+        self.history.append('- Sky sustraction using the 1D method')
+        
         if sky_spectrum_file != "":
             
             if verbose:        
@@ -1765,7 +1777,7 @@ class RSS(object):
             print("  As requested, we scale the given 1D sky spectrum by",scale_sky_1D)
 
         self.sky_emission=sky_spectrum *   scale_sky_1D       
-        self.history.append('  1D sky spectrum scaled by a factor '+np.str(scale_sky_1D))
+        self.history.append('  1D sky spectrum scaled by ='+np.str(scale_sky_1D))
         
         if verbose: print("\n> Scaled sky spectrum stored in self.sky_emission, substracting to all fibres...")
                 
@@ -1784,6 +1796,8 @@ class RSS(object):
         if self.valid_wave_min < 5577 and remove_5577 == True and scale_sky_1D == 0:# and individual_sky_substraction == False:      
             if verbose:                
                 print("  Removing sky line 5577.34 from the object...")
+            self.history.append("  Sky line 5577.34 removed performing Gaussian fit")
+
             wlm=self.wavelength
             for i in range(self.n_spectra):
                 s = self.intensity_corrected[i]
@@ -1860,7 +1874,9 @@ class RSS(object):
             if fibre_p=fibre only corrects that fibre and plots the corrections, if -1, applies correction to all fibres
         kernel_correct_ccd_defects : odd integer (default = 51)
             width used for the median filter               
-        """              
+        """
+        self.history.append('- Sky sustraction using the 1Dfit method')
+              
         if sky_spectrum_file != "":
             if verbose:
                 print("\n> Reading file with a 1D sky spectrum :")
@@ -1880,12 +1896,14 @@ class RSS(object):
         if len(sky_spectrum) == 0: 
             if verbose:
                 print("  No sky spectrum provided, using",n_sky,"lowest intensity fibres to create a sky...")
+            self.history.append('  ERROR! No sky spectrum provided, using self method with n_sky ='+np.str(n_sky))
             self.find_sky_emission(n_sky=n_sky, plot=plot, sky_fibres=sky_fibres,
                                sky_wave_min=sky_wave_min, sky_wave_max=sky_wave_max, win_sky=win_sky)
         else:
             if scale_sky_1D != 0 :
+                self.history.append('  1D sky spectrum scaled by ='+np.str(scale_sky_1D))
                 if verbose:
-                    print("  1D Sky spectrum scaled by ",scale_sky_1D)
+                    print("  1D sky spectrum scaled by ",scale_sky_1D)
             else:
                 if verbose:
                     print("  No scale between 1D sky spectrum and object given, calculating...")
@@ -1899,6 +1917,8 @@ class RSS(object):
                 scale_sky_1D  = auto_scale_two_spectra(self, sky_r_self, sky_spectrum, scale=[0.1,1.01,0.025], 
                                                        w_scale_min = self.valid_wave_min,  w_scale_max = self.valid_wave_max, plot=plot, verbose = True )
                                                
+            self.history.append('  1D sky spectrum scaled by ='+np.str(scale_sky_1D))
+
             self.sky_emission = np.array(sky_spectrum) * scale_sky_1D
             
         self.fit_and_substract_sky_spectrum(self.sky_emission, sky_lines_file = sky_lines_file,

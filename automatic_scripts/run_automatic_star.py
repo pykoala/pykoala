@@ -16,10 +16,12 @@ def get_calibration_star_data(star, path_star, grating, pk):
                                      [7080,7140,7500,7580], [7400,7580,7705,7850],
                                      [7850,8090,8450,8700] ]
     else:
-        list_of_telluric_ranges = [[0]]
+        list_of_telluric_ranges = [[]]
+    
+    calibration_stars_folder = "input_data/spectrophotometric_stars_data/" # "FLUX_CAL/"
     
     if star in ["cd32d9927", "CD32d9927", "CD32D9927", "cd32d9927auto", "CD32d9927auto", "CD32D9927auto"] : 
-        absolute_flux_file = 'FLUX_CAL/fcd32d9927_edited.dat'  
+        absolute_flux_file = calibration_stars_folder+ 'fcd32d9927_edited.dat'  
         #list_of_telluric_ranges =  [ [6150,6240,6410,6490], [6720,6855,7080,7140], 
         #                             [7080,7140,7500,7580], [7400,7580,7705,7850],
         #                             [7850,8090,8450,8700] ]
@@ -27,21 +29,21 @@ def get_calibration_star_data(star, path_star, grating, pk):
         # if grating in red_gratings : CONFIG_FILE="CONFIG_FILES/STARS/calibration_CD32d9927_red.config"
         # if grating in blue_gratings : CONFIG_FILE="CONFIG_FILES/STARS/calibration_CD32d9927_blue.config"
     if star in ["HD49798" , "hd49798" , "HD49798auto" , "hd49798auto"] : 
-        absolute_flux_file = 'FLUX_CAL/fhd49798.dat'  
+        absolute_flux_file = calibration_stars_folder + 'fhd49798.dat'  
         #list_of_telluric_ranges =  [ [6150,6240,6410,6490], [6720,6855,7080,7140], 
         #                             [7080,7140,7500,7580], [7400,7580,7705,7850],
         #                             [7850,8090,8450,8700] ]           
         # if grating in red_gratings : CONFIG_FILE="CONFIG_FILES/STARS/calibration_HD49798_red.config"
         # if grating in blue_gratings : CONFIG_FILE="CONFIG_FILES/STARS/calibration_HD49798_blue.config"
     if star in ["HD60753", "hd60753" , "HD60753auto" ,"hd60753auto", "HD60753FLUX", "hd60753FLUX" , "HD60753FLUXauto" ,"hd60753FLUXauto" ] : 
-        absolute_flux_file = 'FLUX_CAL/fhd60753.dat'  
+        absolute_flux_file = calibration_stars_folder + 'fhd60753.dat'  
         # list_of_telluric_ranges =  [ [6150,6240,6410,6490], [6720,6855,7080,7140], 
         #                             [7080,7140,7500,7580], [7400,7580,7705,7850],
         #                             [7850,8090,8450,8700] ]    
         # if grating in red_gratings : CONFIG_FILE="CONFIG_FILES/STARS/calibration_HD60753_red.config"
         # if grating in blue_gratings : CONFIG_FILE="CONFIG_FILES/STARS/calibration_HD60753_blue.config"    
     if star in [ "H600", "Hiltner600" , "Hilt600" ,"H600auto"] : 
-        absolute_flux_file = 'FLUX_CAL/fhilt600_edited.dat'  
+        absolute_flux_file = calibration_stars_folder+'fhilt600_edited.dat'  
         # list_of_telluric_ranges =  [ [6150,6240,6410,6490], [6720,6855,7080,7140], 
         #                            [7080,7140,7500,7580], [7400,7580,7705,7850],
         #                            [7850,8090,8450,8700] ] 
@@ -49,28 +51,28 @@ def get_calibration_star_data(star, path_star, grating, pk):
         # if grating in blue_gratings : CONFIG_FILE="CONFIG_FILES/STARS/ccalibration_Hilt600_blue.config"
                           
     if star in [ "EG274" , "E274" , "eg274", "e274", "EG274auto", "E274auto" , "eg274auto", "e274auto" ] :
-        absolute_flux_file = '=FLUX_CAL/feg274_edited.dat'
+        absolute_flux_file = calibration_stars_folder +'feg274_edited.dat'
         list_of_telluric_ranges =  [ [6150,6245,6380,6430], [6720,6855,7080,7150], 
                                      [7080,7140,7500,7580], [7400,7580,7705,7850], 
                                      [7850,8090,8450,8700] ] 
         # if grating in red_gratings : CONFIG_FILE="CONFIG_FILES/STARS/calibration_EG274_red.config"
         # if grating in blue_gratings : CONFIG_FILE="CONFIG_FILES/STARS/calibration_EG274_blue.config"               
     if star in ["EG21", "eg21" , "Eg21", "EG21auto", "eg21auto" , "Eg21auto"]  : 
-        absolute_flux_file = 'FLUX_CAL/feg21_edited.dat'
+        absolute_flux_file = calibration_stars_folder+ 'feg21_edited.dat'
         list_of_telluric_ranges =  [ [6150,6245,6380,6430], [6720,6855,7080,7150], 
                                      [7080,7140,7500,7580], [7400,7580,7705,7850], 
                                      [7850,8090,8450,8700] ]
         # if grating in red_gratings : CONFIG_FILE="CONFIG_FILES/STARS/calibration_EG21_red.config"
         # if grating in blue_gratings : CONFIG_FILE="CONFIG_FILES/STARS/calibration_EG21_blue.config"
     if star in [ "HR3454" ,"Hr3454" , "hr3454", "HR3454auto" ,"Hr3454auto" , "hr3454auto" ]  : 
-        absolute_flux_file = 'FLUX_CAL/fhr3454_edited.dat'
+        absolute_flux_file = calibration_stars_folder+ 'fhr3454_edited.dat'
         list_of_telluric_ranges =  [ [6150,6245,6380,6430], [6720,6855,7080,7150], 
                                      [7080,7140,7500,7580], [7400,7580,7705,7850], 
                                      [7850,8090,8450,8700] ]
         # if grating in red_gratings : CONFIG_FILE="CONFIG_FILES/STARS/calibration_HR3454_red.config"
         # if grating in blue_gratings : CONFIG_FILE="CONFIG_FILES/STARS/calibration_HR3454_blue.config"
     if star in [ "HR718" ,"Hr718" , "hr718", "HR718FLUX","HR718auto" ,"Hr718auto" , "hr718auto", "HR718FLUXauto"  ]  : 
-        absolute_flux_file = 'FLUX_CAL/fhr718_edited.dat'
+        absolute_flux_file = calibration_stars_folder + 'fhr718_edited.dat'
         #list_of_telluric_ranges =  [ [6150,6245,6380,6430], [6720,6855,7080,7150], 
         #                             [7080,7140,7500,7580], [7400,7580,7705,7850], 
         #                             [7850,8090,8450,8700] ]
@@ -78,7 +80,7 @@ def get_calibration_star_data(star, path_star, grating, pk):
         # if grating in blue_gratings : CONFIG_FILE="CONFIG_FILES/STARS/calibration_HR718_blue.config"
 
 
-    return CONFIG_FILE, description, fits_file, response_file, absolute_flux_file, list_of_telluric_ranges
+    return CONFIG_FILE, description, fits_file, response_file, absolute_flux_file, telluric_file, list_of_telluric_ranges
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -137,10 +139,17 @@ def run_automatic_star(CONFIG_FILE="",
                        edgelow = -1, edgehigh =-1,
                        ADR=False, jump = -1,
                        adr_index_fit=2, g2d = True,
+                       kernel_tracing = 0,
+                                   
                        box_x=[0,-1], box_y=[0,-1],
                        trim_cube = True, trim_values =[],
                        scale_cubes_using_integflux = False,
                        flux_ratios =[],
+
+                       telluric_file = "",
+                       order_telluric = 2,
+                       list_of_telluric_ranges = [[]],                                                
+                       apply_tc=True, 
                        
                        do_calibration = True,
                        absolute_flux_file ="",
@@ -158,9 +167,6 @@ def run_automatic_star(CONFIG_FILE="",
                        fit_weight=0., 
                        smooth_weight=0.,
                        
-                       order_telluric = 2,
-                       list_of_telluric_ranges = [[0]],                                                
-                       apply_tc=True, 
                        log = True, gamma = 0,   
                        fig_size = 12,                                     
                        plot = True, warnings = True, verbose = True  ): 
@@ -189,6 +195,14 @@ def run_automatic_star(CONFIG_FILE="",
             rss_list[i]=full_path(rss_list[i],path)
 
 
+# # If grating is not given, we can check reading a RSS file  
+
+    if grating == "" :
+        print("\n> No grating provided! Checking... ")
+        _test_ = KOALA_RSS(rss_list[0], plot_final_rss=False, verbose = False)
+        grating = _test_.grating
+        print("\n> Reading file",rss_list[0], "the grating is",grating)
+
     if CONFIG_FILE == "":
         
         # If no configuration file is given, check if name of the star provided
@@ -196,21 +210,16 @@ def run_automatic_star(CONFIG_FILE="",
             print("  - No name for calibration star given, asuming name = star")
             star="star"
         
-        # If grating is not given, we can check reading a RSS file      
-        if grating == "" :
-            print("\n> No grating provided! Checking... ")
-            _test_ = KOALA_RSS(rss_list[0], plot_final_rss=False, verbose = False)
-            grating = _test_.grating
-            print("\n> Reading file",rss_list[0], "the grating is",grating)
                 
-        CONFIG_FILE, description_, fits_file_, response_file_, absolute_flux_file_, list_of_telluric_ranges_ =  get_calibration_star_data (star, path_star, grating, pk)
+        CONFIG_FILE, description_, fits_file_, response_file_, absolute_flux_file_, telluric_file_, list_of_telluric_ranges_ =  get_calibration_star_data (star, path_star, grating, pk)
 
         if description == "" : description = description_
         if fits_file == "" : fits_file = fits_file_
         if response_file == "" : response_file = response_file_
         if absolute_flux_file == "" : absolute_flux_file = absolute_flux_file_
-        if list_of_telluric_ranges == "" : list_of_telluric_ranges = list_of_telluric_ranges_
-
+        if telluric_file == "" : telluric_file = telluric_file_
+        if len(list_of_telluric_ranges[0]) == 0 : list_of_telluric_ranges = list_of_telluric_ranges_
+                
 
         # Check if folder has throughput if not given
         if throughput_2D_file == "":
@@ -219,11 +228,9 @@ def run_automatic_star(CONFIG_FILE="",
             print("  ",throughput_2D_file)
         
 
-# # Read configuration file
-       
-    #print("\n  CONFIG FILE: ",CONFIG_FILE)
+# # Read configuration file       
     config_property, config_value = read_table(CONFIG_FILE, ["s", "s"] )
-    
+        
     if object_auto == "" : 
         print("\n> Reading configuration file", CONFIG_FILE,"...\n")
         if obj_name =="":
@@ -385,6 +392,8 @@ def run_automatic_star(CONFIG_FILE="",
                 g2d = True
             else: g2d = False
             
+        if  config_property[i] == "kernel_tracing": kernel_tracing = int(config_value[i])
+
         if  config_property[i] == "jump": jump = int(config_value[i])
         
         if  config_property[i] == "trim_cube" : 
@@ -584,6 +593,7 @@ def run_automatic_star(CONFIG_FILE="",
             if edgelow != -1:  print("  edgelow for tracing      = ",edgelow,"pixels")
             if edgehigh != -1: print("  edgehigh for tracing     = ",edgehigh,"pixels")
             print("  2D Gauss for tracing     = ",g2d)
+            if kernel_tracing > 0 : print("  kernel_tracing           = ",kernel_tracing)
             
             print("  ADR                      = ",ADR)       
             if ADR: print("    adr_index_fit          = ",adr_index_fit)
@@ -727,6 +737,8 @@ def run_automatic_star(CONFIG_FILE="",
                            edgelow = edgelow, edgehigh = edgehigh,
                            ADR= ADR,
                            adr_index_fit=adr_index_fit, g2d=g2d,
+                           kernel_tracing = kernel_tracing,
+                           
                            jump=jump,
                            box_x=box_x, box_y=box_y,
                            trim_values=trim_values,

@@ -95,14 +95,18 @@ def full_path(filename,path, verbose=False):
     fullpath : string
         The file with the full path
     """   
-    if path[-1] != "/" : path = path+"/" # If path does not end in "/" it is added
-    
-    if len(filename.replace("/","")) == len(filename):
-        if verbose: print("\n> Variable {} does not include the full path {}".format(filename,path))
-        fullpath = path+filename
+    if path != "": 
+        if path[-1] != "/" : path = path+"/" # If path does not end in "/" it is added
+        
+        if len(filename.replace("/","")) == len(filename):
+            if verbose: print("\n> Variable {} does not include the full path {}".format(filename,path))
+            fullpath = path+filename
+        else:
+            if verbose: print("\n> Variable {} includes the full path {}".format(filename,path))
+            fullpath = filename
     else:
-        if verbose: print("\n> Variable {} includes the full path {}".format(filename,path))
         fullpath = filename
+        if verbose: print("  The path has not been given, returning {} ...".format(filename))
     return fullpath
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------

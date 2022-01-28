@@ -111,6 +111,7 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
     ADR_y_fit_list = []
     adr_index_fit=2
     g2d = False
+    kernel_tracing = 0
     step_tracing = 100
     plot_tracing_maps=[]
     edgelow  = -1
@@ -484,8 +485,10 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
             else:
                 ADR_y_fit_list.append([float(ADR_y_fit_[0]),float(ADR_y_fit_[1]), float(ADR_y_fit_[2])])
 
-        if  config_property[i] == "jump": jump = int(config_value[i])
+        if  config_property[i] == "kernel_tracing": kernel_tracing = int(config_value[i])
     
+        if  config_property[i] == "jump": jump = int(config_value[i])
+        
         if  config_property[i] == "size_arcsec" :     
             size_arcsec_ = config_value[i].strip('][').split(',')
             for i in range(len(size_arcsec_)):
@@ -528,8 +531,7 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
             if config_value[i] == "True" : 
                 remove_spaxels_not_fully_covered = True 
             else: remove_spaxels_not_fully_covered = False 
-            
-        
+             
         if  config_property[i] == "log" :  
             if config_value[i] == "True" : 
                 log = True 
@@ -754,6 +756,8 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
             print("  adr_index_fit            = ",adr_index_fit)
             print("  2D Gauss for tracing     = ",g2d)
             print("  step_tracing             = ",step_tracing)
+            if kernel_tracing > 0 : print("  kernel_tracing           = ",kernel_tracing)
+            
             if len(plot_tracing_maps) > 0 : 
                 print("  plot_tracing_maps        = ",plot_tracing_maps)
 
@@ -841,10 +845,6 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
         if valid_wave_max > 0 : print("  valid_wave_max           = ",valid_wave_max)
         if trim_cube: print("  Trim cube                = ",trim_cube)
         make_combined_cube = True
-
-
-
-        
 
     if make_combined_cube:
         if scale_cubes_using_integflux:
@@ -974,6 +974,7 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
                               ADR_x_fit_list = ADR_x_fit_list, ADR_y_fit_list = ADR_y_fit_list,
                               adr_index_fit = adr_index_fit,
                               g2d = g2d,
+                              kernel_tracing = kernel_tracing,
                               plot_tracing_maps = plot_tracing_maps,
                               step_tracing=step_tracing,
                               edgelow=edgelow, edgehigh = edgehigh, 
@@ -994,6 +995,7 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
                               valid_wave_min = valid_wave_min, valid_wave_max = valid_wave_max,
                               fig_size = fig_size,
                               #norm = norm,
+                              log = log, gamma = gamma,
                               plot=plot, plot_rss = plot_rss, plot_weight=plot_weight, plot_spectra =plot_spectra,
                               warnings=warnings, verbose=verbose) 
 
@@ -1015,6 +1017,7 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
                                       trim_cube = trim_cube,  trim_values =trim_values, 
                                       remove_spaxels_not_fully_covered = remove_spaxels_not_fully_covered,
                                       plot=plot, plot_weight= plot_weight, plot_spectra=plot_spectra,
+                                      log = log, gamma = gamma,
                                       verbose=verbose, say_making_combined_cube= False)                             
  
     if Python_obj_name != 0: exec(Python_obj_name+"=copy.deepcopy(hikids)", globals())

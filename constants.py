@@ -89,4 +89,4 @@ fuego_color_map = colors.LinearSegmentedColormap.from_list("fuego",
                                                             (1, 1, 1)), 
                                                             N=256, gamma=1.0)
 fuego_color_map.set_bad('lightgray')  #('black')
-        
+plt.register_cmap(cmap=fuego_color_map)        

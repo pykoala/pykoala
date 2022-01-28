@@ -82,8 +82,10 @@ class KOALA_RSS(RSS):
                  clean_extreme_negatives = False, percentile_min = 0.5,
                  clean_cosmics = False, #show_cosmics_identification = True,                                                            
                  width_bl = 20., kernel_median_cosmics = 5, cosmic_higher_than = 100., extra_factor = 1., max_number_of_cosmics_per_fibre = 15,
-                 warnings=True, verbose = True,
-                 plot=True, plot_final_rss=True, norm=colors.LogNorm(), fig_size=12):                 
+                 warnings=True, verbose = True, print_summary = False,
+                 plot=True, plot_final_rss=True, 
+                 norm=colors.LogNorm(),  # TODO: this has to be replaced by log and gamma
+                 fig_size=12):                 
 
         # ---------------------------------------------- Checking some details 
              
@@ -132,7 +134,7 @@ class KOALA_RSS(RSS):
         
         if path != "" : filename = full_path(filename,path)
 
-        print("\n> Reading file", '"'+filename+'"', "...")
+        if verbose: print("\n> Reading file", '"'+filename+'"', "...")
         RSS_fits_file = fits.open(filename)  # Open file
         #self.rss_list = []
 
@@ -163,7 +165,7 @@ class KOALA_RSS(RSS):
         wavelength = wcsKOALA.dropaxis(1).wcs_pix2world(index_wave, 0)[0]
         intensity = RSS_fits_file[0].data[good_spaxels]
         
-        if rss_clean == False:
+        if rss_clean == False and verbose:
             print("\n  Number of spectra in this RSS =",len(RSS_fits_file[0].data),",  number of good spectra =",len(good_spaxels)," ,  number of bad spectra =", len(bad_spaxels))
             if len(bad_spaxels) > 0 : print("  Bad fibres =",bad_spaxels)
         
@@ -223,12 +225,12 @@ class KOALA_RSS(RSS):
 
         # Check that dimensions match KOALA numbers
         if self.n_wave != 2048 and len(all_spaxels) != 1000:
-            print("\n *** WARNING *** : These numbers are NOT the standard ones for KOALA")
+            if warnings or verbose: print("\n *** WARNING *** : These numbers are NOT the standard ones for KOALA")
        
-        print("\n> Setting the data for this file:")
+        if verbose: print("\n> Setting the data for this file:")
 
         if variance.shape != intensity.shape:
-            print("\n* ERROR: * the intensity and variance matrices are", \
+            if warnings or verbose: print("\n* ERROR: * the intensity and variance matrices are", \
                   intensity.shape, "and", variance.shape, "respectively\n")
             raise ValueError
         n_dim = len(intensity.shape)
@@ -239,23 +241,25 @@ class KOALA_RSS(RSS):
             self.intensity = intensity.reshape((1, self.n_wave))
             self.variance = variance.reshape((1, self.n_wave))
         else:
-            print("\n* ERROR: * the intensity matrix supplied has", \
+            if warnings or verbose: print("\n* ERROR: * the intensity matrix supplied has", \
                   n_dim, "dimensions\n")
             raise ValueError
 
         self.n_spectra = self.intensity.shape[0]
         self.n_wave = len(self.wavelength)
-        print("  Found {} spectra with {} wavelengths" \
+        if verbose: print("  Found {} spectra with {} wavelengths" \
               .format(self.n_spectra, self.n_wave), \
               "between {:.2f} and {:.2f} Angstrom" \
               .format(self.wavelength[0], self.wavelength[-1]))
         if self.intensity.shape[1] != self.n_wave:
-            print("\n* ERROR: * spectra have", self.intensity.shape[1], \
-                  "wavelengths rather than", self.n_wave)
+            if warnings or verbose:
+                print("\n* ERROR: * spectra have", self.intensity.shape[1], \
+                "wavelengths rather than", self.n_wave)
             raise ValueError
         if len(offset_RA_arcsec) != self.n_spectra or \
            len(offset_DEC_arcsec) != self.n_spectra:
-            print("\n* ERROR: * offsets (RA, DEC) = ({},{})" \
+            if warnings or verbose:   
+                print("\n* ERROR: * offsets (RA, DEC) = ({},{})" \
                   .format(len(self.offset_RA_arcsec),
                           len(self.offset_DEC_arcsec)), \
                   "rather than", self.n_spectra)
@@ -294,14 +298,16 @@ class KOALA_RSS(RSS):
             # Include it in the history ONLY if it is the first time (i.e. applying throughput)
             self.read_mask_from_fits_file(mask=mask, mask_file=mask_file, no_nans=no_nans, plot = plot_mask, verbose= verbose, include_history=apply_throughput) 
 
-        if valid_wave_min == 0 and valid_wave_max == 0:   ##############  DIANA FIX !!!
+        if valid_wave_min == 0 and valid_wave_max == 0:   
             self.valid_wave_min = self.mask_good_wavelength_range[0]
-            self.valid_wave_max = self.mask_good_wavelength_range[1]            
-            print("\n> Using the values provided by the mask for establishing the good wavelenth range:  [ {:.2f} , {:.2f} ]".format(self.valid_wave_min,self.valid_wave_max)) 
+            self.valid_wave_max = self.mask_good_wavelength_range[1]    
+            if verbose:
+                print("\n> Using the values provided by the mask for establishing the good wavelenth range:  [ {:.2f} , {:.2f} ]".format(self.valid_wave_min,self.valid_wave_max)) 
         else:
             self.valid_wave_min = valid_wave_min
             self.valid_wave_max = valid_wave_max
-            print("  As specified, we use the [",self.valid_wave_min," , ",self.valid_wave_max,"] range.")           
+            if verbose:
+                print("  As specified, we use the [",self.valid_wave_min," , ",self.valid_wave_max,"] range.")           
   
         # Plot RSS_image
         if plot: self.RSS_image(image=self.intensity, cmap="binary_r")
@@ -320,7 +326,8 @@ class KOALA_RSS(RSS):
         # However, this correction is not needed is LFLATs have been used in 2dFdr
         # and using a skyflat to get .nresponse (small wavelength variations to throughput)
         if flat != "" :
-            print("\n> Dividing the data by the flatfield provided...")
+            if verbise: print("\n> Dividing the data by the flatfield provided...")
+            #TODO this should be a task
             self.intensity_corrected=self.intensity_corrected/flat.intensity_corrected
             self.history.append("- Data divided by flatfield:")
             self.history.append(flat.filename)
@@ -351,31 +358,29 @@ class KOALA_RSS(RSS):
                     throughput_2D_wavecor = False
 
             if throughput_2D_wavecor:
-                print("\n> The provided throughput 2D information has been computed AFTER fixing small wavelength variations.") 
-                print("  Therefore, the throughput 2D will be applied AFTER correcting for ccd defects and small wavelength variations")            
-                if len(throughput_2D) == 0:
-                    print("  The fits file with the throughput 2D has the solution for fixing small wavelength shifts.")
+                if verbose: 
+                    print("\n> The provided throughput 2D information has been computed AFTER fixing small wavelength variations.") 
+                    print("  Therefore, the throughput 2D will be applied AFTER correcting for ccd defects and small wavelength variations")            
+                    if len(throughput_2D) == 0:
+                        print("  The fits file with the throughput 2D has the solution for fixing small wavelength shifts.")
                 if self.grating == "580V" : remove_5577 = True    
             else:
                 self.apply_throughput_2D(throughput_2D=throughput_2D, throughput_2D_file=throughput_2D_file, plot=plot)
                 text_for_integrated_fibre="after throughput correction..."  
                 title_for_integrated_fibre= " - Throughput corrected"              
         else:
-            if rss_clean == False and verbose == True: print("\n> Intensities NOT corrected for 2D throughput")                        
+            if rss_clean == False and verbose: print("\n> Intensities NOT corrected for 2D throughput")                        
 
         plot_integrated_fibre_again=0   # Check if we need to plot it again        
        
         # ---------------------------------------------------
         # 2. Correcting for CCD defects                          (C)    
         if correct_ccd_defects:
-            self.history.append("- Data corrected for CCD defects, kernel_correct_ccd_defects = "+np.str(kernel_correct_ccd_defects)+" for running median")
             if plot: plot_integrated_fibre_again = 1  
             
             remove_5577_here = remove_5577
             if sky_method == "1D" and scale_sky_1D == 0: remove_5577_here = False
-            
-            if remove_5577_here: self.history.append("  Skyline 5577 removed while cleaning CCD using Gaussian fits")
-                            
+                                        
             self.correct_ccd_defects(kernel_correct_ccd_defects=kernel_correct_ccd_defects, remove_5577 = remove_5577_here, 
                                      fibre_p=fibre_p, apply_throughput=apply_throughput,verbose=verbose, plot=plot)
 
@@ -454,7 +459,6 @@ class KOALA_RSS(RSS):
                     
         if sky_method != "none" and is_sky == False:
             plot_integrated_fibre_again = plot_integrated_fibre_again + 1 
-            self.history.append('- Sky sustraction using the '+sky_method+' method')
 
             if sky_method in ["1Dfit","selffit"] : self.apply_mask(verbose=verbose)     
 
@@ -469,7 +473,6 @@ class KOALA_RSS(RSS):
                
             # (1) If a single sky_spectrum is provided: 
             if sky_method == "1D" : 
-               
                 if len(sky_spectrum) > 0:
                     self.apply_1D_sky(sky_fibres = sky_fibres, sky_wave_min = sky_wave_min, sky_wave_max = sky_wave_max,
                                  win_sky = win_sky, include_history = True, sky_spectrum = sky_spectrum,
@@ -477,7 +480,7 @@ class KOALA_RSS(RSS):
                                  plot = plot, verbose = verbose)
                    
                 else:
-                    print("\n> Sustracting the sky using a sky spectrum requested but any sky spectrum provided !")
+                    if verbose: print("\n> Sustracting the sky using a sky spectrum requested but any sky spectrum provided !")
                     sky_method = "self"
                     n_sky=50    
           
@@ -485,6 +488,7 @@ class KOALA_RSS(RSS):
             if sky_method == "2D" :    # if np.nanmedian(sky_rss.intensity_corrected) != 0:
                 #
                 # TODO : Needs to be checked and move to an INDEPENDENT task
+                self.history.append('- Sky sustraction using the 2D method')
                 
                 if scale_sky_rss != 0:   
                     if verbose: print("\n> Using sky image provided to substract sky, considering a scale of",scale_sky_rss,"...") 
@@ -591,6 +595,7 @@ class KOALA_RSS(RSS):
             # (6) "selffit"            
             if sky_method == "selffit":   
                 # TODO : Needs to be an independent task : apply_selffit_sky !!!
+                self.history.append('- Sky sustraction using the selffit method')
                 
                 if verbose: print("\n> 'sky_method = selffit', hence using",n_sky,"lowest intensity fibres to create a sky spectrum ...")
 
@@ -629,7 +634,7 @@ class KOALA_RSS(RSS):
                 if n_sky == 0 : n_sky=len(sky_fibres) 
                 self.apply_self_sky(sky_fibres = self.sky_fibres, sky_spectrum = sky_spectrum, n_sky=n_sky,
                           sky_wave_min = sky_wave_min, sky_wave_max = sky_wave_max, win_sky = win_sky, scale_sky_1D = scale_sky_1D,
-                          brightest_line = "Ha", brightest_line_wavelength = 0, ranges_with_emission_lines = [0],
+                          brightest_line = brightest_line, brightest_line_wavelength = brightest_line_wavelength, ranges_with_emission_lines = [0],
                           cut_red_end = cut_red_end, low_fibres = low_fibres, use_fit_for_negative_sky = use_fit_for_negative_sky, 
                           kernel_negative_sky = kernel_negative_sky, order_fit_negative_sky = order_fit_negative_sky, 
                           plot = True, verbose = verbose)
@@ -663,10 +668,10 @@ class KOALA_RSS(RSS):
             if brightest_line_wavelength == 0 :           
                 self.el=self.identify_el(high_fibres=high_fibres, brightest_line = brightest_line,
                                          cut=cut, verbose=True, plot=plot_id_el, fibre=0, broad=broad)
-                print("\n  Emission lines identified saved in self.el !!")
+                if verbose: print("\n  Emission lines identified saved in self.el !!")
             else:
                 brightest_line_rest_wave = 6562.82
-                print("\n  As given, line ",brightest_line," at rest wavelength = ",brightest_line_rest_wave," is at ", brightest_line_wavelength)
+                if verbose: print("\n  As given, line ",brightest_line," at rest wavelength = ",brightest_line_rest_wave," is at ", brightest_line_wavelength)
                 self.el=[[brightest_line],[brightest_line_rest_wave],[brightest_line_wavelength],[7.2]]
                 #  sel.el=[peaks_name,peaks_rest, p_peaks_l, p_peaks_fwhm]      
         else:
@@ -675,7 +680,7 @@ class KOALA_RSS(RSS):
         # Check if id_list provided
         if id_list[0] != 0:
             if id_el: 
-                print("\n> Checking if identified emission lines agree with list provided")
+                if verbose: print("\n> Checking if identified emission lines agree with list provided")
                 # Read list with all emission lines to get the name of emission lines
                 emission_line_file="lineas_c89_python.dat"
                 el_center,el_name = read_table(emission_line_file, ["f", "s"] )
@@ -685,7 +690,7 @@ class KOALA_RSS(RSS):
                     if self.el[0][i] == brightest_line:
                         obs_wave= self.el[2][i]
                         redshift = (self.el[2][i]-self.el[1][i]) / self.el[1][i]                        
-                print("  Brightest emission line",  brightest_line, "found at ",  obs_wave,", redshift = ",redshift)     
+                if verbose: print("  Brightest emission line",  brightest_line, "found at ",  obs_wave,", redshift = ",redshift)     
              
                 el_identified = [[], [], [], []]                               
                 n_identified=0
@@ -704,15 +709,15 @@ class KOALA_RSS(RSS):
                         for i in range(len(el_center)):
                             if line == el_center[i] : 
                                 el_identified[0].append(el_name[i])
-                                print("  Emission line",el_name[i],line,"has NOT been identified, adding...")
+                                if verbose: print("  Emission line",el_name[i],line,"has NOT been identified, adding...")
                         el_identified[1].append(line)
                         el_identified[2].append(line *(redshift+1))
                         el_identified[3].append(4*broad)
                         
                 self.el=el_identified                
-                print("  Number of emission lines identified = ",n_identified,"of a total of",len(id_list),"provided. self.el updated accordingly")
+                if verbose: print("  Number of emission lines identified = ",n_identified,"of a total of",len(id_list),"provided. self.el updated accordingly")
             else:
-                if rss_clean == False: print("\n> List of emission lines provided but no identification was requested")
+                if rss_clean == False and verbose: print("\n> List of emission lines provided but no identification was requested")
                 
         # ---------------------------------------------------
         # 8.1. Clean sky residuals if requested           (R)      
@@ -812,96 +817,97 @@ class KOALA_RSS(RSS):
 
             
         # Print summary and information from header
-        print("\n> Summary of reading rss file", '"'+filename+'"', ":\n")
-        print("  This is a KOALA {} file,".format(AAOmega_Arm), \
-              "using the {} grating in AAOmega, ".format(self.grating), \
-              "exposition time = {} s.".format(self.exptime))
-        print("  Object:", self.object)
-        print("  Field of view:", field, \
-              "(spaxel size =", self.spaxel_size, "arcsec)")
-        print("  Center position: (RA, DEC) = ({:.3f}, {:.3f}) degrees" \
-              .format(self.RA_centre_deg, self.DEC_centre_deg))
-        print("  Field covered [arcsec] = {:.1f} x {:.1f}".format(self.RA_segment+self.spaxel_size, self.DEC_segment+self.spaxel_size )) 
-        print("  Position angle (PA) = {:.1f} degrees".format(self.PA))
-        print(" ")
-
-        if rss_clean == True and is_sky == False:
-            print("  This was a CLEAN RSS file, no correction was applied!")
-            print("  Values stored in self.intensity_corrected are the same that those in self.intensity") 
-        else:    
-            if flat != "": print("  Intensities divided by the given flatfield")                 
-            if apply_throughput:
-                if len(throughput_2D) > 0:     
-                    print("  Intensities corrected for throughput 2D using provided variable !")
-                else:
-                    print("  Intensities corrected for throughput 2D using provided file !")
-                    #print " ",throughput_2D_file
-            else:
-                print("  Intensities NOT corrected for throughput 2D")
-            if correct_ccd_defects:
-                print("  Intensities corrected for CCD defects !") 
-            else:    
-                print("  Intensities NOT corrected for CCD defects")                 
-  
-            if sol[0] != 0 and fix_wavelengths :
-                print("  All fibres corrected for small wavelength shifts using wavelength solution provided!")
-            else:    
-                if fix_wavelengths:    
-                    print("  Wavelengths corrected for small shifts using Gaussian fit to selected bright skylines in all fibres!")        
-                else:
-                    print("  Wavelengths NOT corrected for small shifts")
-
-            if do_extinction:
-                print("  Intensities corrected for extinction !") 
-            else:
-                print("  Intensities NOT corrected for extinction")    
-
-            if telluric_correction_applied : 
-                print("  Intensities corrected for telluric absorptions !") 
-            else:
-                if self.grating in red_gratings : print("  Intensities NOT corrected for telluric absorptions")
-                    
-            if is_sky:
-                print("  This is a SKY IMAGE, median filter with window",win_sky,"applied !")
-                print("  The median 1D sky spectrum combining",n_sky,"lowest fibres is stored in self.sky_emission")
-            else:
-                if sky_method == "none" : print("  Intensities NOT corrected for sky emission")
-                if sky_method == "self" : print("  Intensities corrected for sky emission using",n_sky,"spaxels with lowest values !")
-                if sky_method == "selffit" : print("  Intensities corrected for sky emission using",n_sky,"spaxels with lowest values !")
-                if sky_method == "1D" : print("  Intensities corrected for sky emission using (scaled) spectrum provided ! ")
-                if sky_method == "1Dfit" : print("  Intensities corrected for sky emission fitting Gaussians to both 1D sky spectrum and each fibre ! ")
-                if sky_method == "2D" : print("  Intensities corrected for sky emission using sky image provided scaled by",scale_sky_rss,"!")
-                
-            if correct_negative_sky: print("  Intensities corrected to make the integrated value of the lowest fibres = 0 !")  
-                           
-            if id_el:
-                print(" ", len(self.el[0]), "emission lines identified and stored in self.el !") 
-                print(" ", self.el[0])
-
-            if clean_sky_residuals : 
-                print("  Sky residuals CLEANED !")
-            else:
-                print("  Sky residuals have NOT been cleaned")
-                
-            if fix_edges: print("  The edges of the RSS have been fixed")
-            if remove_negative_median_values: print("  Negative median values have been corrected")
-            if clean_extreme_negatives: print("  Extreme negative values have been removed!")                                      
-            if clean_cosmics: print("  Cosmics have been removed!") 
-                       
-            print("\n  All applied corrections are stored in self.intensity_corrected !")    
+        if verbose or print_summary:
+            print("\n> Summary of reading rss file", '"'+filename+'"', ":\n")
+            print("  This is a KOALA {} file,".format(AAOmega_Arm), \
+                  "using the {} grating in AAOmega, ".format(self.grating), \
+                  "exposition time = {} s.".format(self.exptime))
+            print("  Object:", self.object)
+            print("  Field of view:", field, \
+                  "(spaxel size =", self.spaxel_size, "arcsec)")
+            print("  Center position: (RA, DEC) = ({:.3f}, {:.3f}) degrees" \
+                  .format(self.RA_centre_deg, self.DEC_centre_deg))
+            print("  Field covered [arcsec] = {:.1f} x {:.1f}".format(self.RA_segment+self.spaxel_size, self.DEC_segment+self.spaxel_size )) 
+            print("  Position angle (PA) = {:.1f} degrees".format(self.PA))
+            print(" ")
     
-            if save_rss_to_fits_file != "":
-                if save_rss_to_fits_file == "auto":
-                    clean_residuals = False
-                    if clean_cosmics == True or clean_extreme_negatives == True or remove_negative_median_values ==True or fix_edges == True or clean_sky_residuals == True: clean_residuals = True
-                    save_rss_to_fits_file = name_keys(filename, apply_throughput=apply_throughput, correct_ccd_defects = correct_ccd_defects,
-                                                      fix_wavelengths = fix_wavelengths, do_extinction = do_extinction, sky_method = sky_method,
-                                                      do_telluric_correction = telluric_correction_applied, id_el = id_el,
-                                                      correct_negative_sky = correct_negative_sky, clean_residuals = clean_residuals)
-                
-                save_rss_fits(self, fits_file=save_rss_to_fits_file)    
+            if rss_clean == True and is_sky == False:
+                print("  This was a CLEAN RSS file, no correction was applied!")
+                print("  Values stored in self.intensity_corrected are the same that those in self.intensity") 
+            else:    
+                if flat != "": print("  Intensities divided by the given flatfield")                 
+                if apply_throughput:
+                    if len(throughput_2D) > 0:     
+                        print("  Intensities corrected for throughput 2D using provided variable !")
+                    else:
+                        print("  Intensities corrected for throughput 2D using provided file !")
+                        #print " ",throughput_2D_file
+                else:
+                    print("  Intensities NOT corrected for throughput 2D")
+                if correct_ccd_defects:
+                    print("  Intensities corrected for CCD defects !") 
+                else:    
+                    print("  Intensities NOT corrected for CCD defects")                 
+      
+                if sol[0] != 0 and fix_wavelengths :
+                    print("  All fibres corrected for small wavelength shifts using wavelength solution provided!")
+                else:    
+                    if fix_wavelengths:    
+                        print("  Wavelengths corrected for small shifts using Gaussian fit to selected bright skylines in all fibres!")        
+                    else:
+                        print("  Wavelengths NOT corrected for small shifts")
+    
+                if do_extinction:
+                    print("  Intensities corrected for extinction !") 
+                else:
+                    print("  Intensities NOT corrected for extinction")    
+    
+                if telluric_correction_applied : 
+                    print("  Intensities corrected for telluric absorptions !") 
+                else:
+                    if self.grating in red_gratings : print("  Intensities NOT corrected for telluric absorptions")
+                        
+                if is_sky:
+                    print("  This is a SKY IMAGE, median filter with window",win_sky,"applied !")
+                    print("  The median 1D sky spectrum combining",n_sky,"lowest fibres is stored in self.sky_emission")
+                else:
+                    if sky_method == "none" : print("  Intensities NOT corrected for sky emission")
+                    if sky_method == "self" : print("  Intensities corrected for sky emission using",n_sky,"spaxels with lowest values !")
+                    if sky_method == "selffit" : print("  Intensities corrected for sky emission using",n_sky,"spaxels with lowest values !")
+                    if sky_method == "1D" : print("  Intensities corrected for sky emission using (scaled) spectrum provided ! ")
+                    if sky_method == "1Dfit" : print("  Intensities corrected for sky emission fitting Gaussians to both 1D sky spectrum and each fibre ! ")
+                    if sky_method == "2D" : print("  Intensities corrected for sky emission using sky image provided scaled by",scale_sky_rss,"!")
+                    
+                if correct_negative_sky: print("  Intensities corrected to make the integrated value of the lowest fibres = 0 !")  
+                               
+                if id_el:
+                    print(" ", len(self.el[0]), "emission lines identified and stored in self.el !") 
+                    print(" ", self.el[0])
+    
+                if clean_sky_residuals : 
+                    print("  Sky residuals CLEANED !")
+                else:
+                    print("  Sky residuals have NOT been cleaned")
+                    
+                if fix_edges: print("  The edges of the RSS have been fixed")
+                if remove_negative_median_values: print("  Negative median values have been corrected")
+                if clean_extreme_negatives: print("  Extreme negative values have been removed!")                                      
+                if clean_cosmics: print("  Cosmics have been removed!") 
+                           
+                print("\n  All applied corrections are stored in self.intensity_corrected !")    
+        
+                if save_rss_to_fits_file != "":
+                    if save_rss_to_fits_file == "auto":
+                        clean_residuals = False
+                        if clean_cosmics == True or clean_extreme_negatives == True or remove_negative_median_values ==True or fix_edges == True or clean_sky_residuals == True: clean_residuals = True
+                        save_rss_to_fits_file = name_keys(filename, apply_throughput=apply_throughput, correct_ccd_defects = correct_ccd_defects,
+                                                          fix_wavelengths = fix_wavelengths, do_extinction = do_extinction, sky_method = sky_method,
+                                                          do_telluric_correction = telluric_correction_applied, id_el = id_el,
+                                                          correct_negative_sky = correct_negative_sky, clean_residuals = clean_residuals)
+                    
+                    save_rss_fits(self, fits_file=save_rss_to_fits_file)    
 
-        if rss_clean == False: print("\n> KOALA RSS file read !")
+        if rss_clean == False and verbose: print("\n> KOALA RSS file read !")
         
         
 # -----------------------------------------------------------------------------

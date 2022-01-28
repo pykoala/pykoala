@@ -27,7 +27,8 @@ def automatic_calibration_night(CALIBRATION_NIGHT_FILE="",
                                 flux_calibration_name="flux_calibration_auto",
                                 cal_from_calibrated_starcubes = False,
                                 disable_stars=[],                      # stars in this list will not be used
-                                skyflat_names=[]
+                                skyflat_names=[],
+                                list_of_objects = [],
                                 ):
     """
     Use: 
@@ -48,10 +49,7 @@ def automatic_calibration_night(CALIBRATION_NIGHT_FILE="",
     throughput_2D_variable = "" 
     global throughput_2D_
     throughput_2D_ = [0]
-    
-    if flux_calibration_file == "":flux_calibration_file=path+"flux_calibration_file_auto.dat"
-    if telluric_correction_file == "":telluric_correction_file=path+"telluric_correction_file_auto.dat"
-     
+         
     
     check_nothing_done = 0
 
@@ -65,17 +63,22 @@ def automatic_calibration_night(CALIBRATION_NIGHT_FILE="",
         config_property, config_value = read_table(CALIBRATION_NIGHT_FILE, ["s", "s"] )    
         print("\n> Reading configuration file ", CALIBRATION_NIGHT_FILE)
         print("  for performing the automatic calibration of the night...\n")
+        
     else:    
         print("\n> Using the values given in automatic_calibration_night()")
         print("  for performing the automatic calibration of the night...\n")
         config_property = []
         config_value    = []
-        lista_propiedades = ["path", "file_skyflat", "rss_star_file_for_sol", "flux_calibration_file", "telluric_correction_file"]
-        lista_valores     = [path, file_skyflat, rss_star_file_for_sol, flux_calibration_file, telluric_correction_file]
+        lista_propiedades = ["path", "file_skyflat", "rss_star_file_for_sol", "grating", "date", "flux_calibration_file", "telluric_correction_file"]
+        lista_valores     = [path, file_skyflat, rss_star_file_for_sol, grating, date, flux_calibration_file, telluric_correction_file]
         for i in range(len(lista_propiedades)):
             if len(lista_valores[i]) > 0:
                 config_property.append(lista_propiedades[i])
-                config_value.append(lista_valores[i])       
+                config_value.append(lista_valores[i])   
+        if grating == "":
+            print ("  - No information about the grating provided")
+        if date == "":
+            print ("  - No information about the date provided")
         if pixel_size == 0:
             print ("  - No pixel size provided, considering pixel_size = 0.7")
             pixel_size = 0.7
@@ -83,96 +86,102 @@ def automatic_calibration_night(CALIBRATION_NIGHT_FILE="",
             print ("  - No kernel size provided, considering kernel_size = 1.1")
             kernel_size = 1.1
         pk = "_"+str(int(pixel_size))+"p"+str(int((abs(pixel_size)-abs(int(pixel_size)))*10))+"_"+str(int(kernel_size))+"k"+str(int(abs(kernel_size*100))-int(kernel_size)*100)
+
         if sol[0] != 0 : fix_wavelengths = True
         if len(CONFIG_FILE_path) > 0:
             for i in range(len(CONFIG_FILE_list)):
                 CONFIG_FILE_list[i] = full_path (CONFIG_FILE_list[i],CONFIG_FILE_path)                
 
-        
+    if flux_calibration_file == "":flux_calibration_file=path+"flux_calibration_file_"+date+"_"+grating+"_auto.dat"
+    if telluric_correction_file == "":telluric_correction_file=path+"telluric_correction_file_"+date+"_"+grating+"_auto.dat"
+ 
+       
 
 #   Completely automatic reading folder:
     
     if auto:
         fix_wavelengths = True
-        list_of_objetos,list_of_files, list_of_exptimes, date,grating=list_fits_files_in_folder(path, return_list=True)
+        if len(list_of_objects) == 0: 
+            list_of_objects,list_of_files, list_of_exptimes, date,grating=list_fits_files_in_folder(path, return_list=True)
+        else:
+            objects_auto = list_of_objects
         print(" ")
         
         list_of_files_of_stars=[]
-        for i in range(len(list_of_objetos)):
-            if list_of_objetos[i] in skyflat_names:
+        for i in range(len(list_of_objects)):
+            if list_of_objects[i] in skyflat_names:
                 file_skyflat=list_of_files[i][0]
                 print ("  - SKYFLAT automatically identified")
                 
-            if list_of_objetos[i] in ["H600", "HILT600", "Hilt600", "Hiltner600", "HILTNER600"]  and list_of_objetos[i] not in disable_stars:
+            if list_of_objects[i] in ["H600", "HILT600", "Hilt600", "Hiltner600", "HILTNER600"]  and list_of_objects[i] not in disable_stars:
                 print ("  - Calibration star Hilt600 automatically identified")
                 list_of_files_of_stars.append(list_of_files[i])
                 rss_star_file_for_sol=list_of_files[i][0]
-                objects_auto.append("Hilt600_"+grating)                 
+                objects_auto.append("Hilt600_"+grating+"_"+date)                 
                 #_CONFIG_FILE_, _description_, _fits_file_, _response_file_, _absolute_flux_file_, _list_of_telluric_ranges_ =  get_calibration_star_data ("Hilt600", path, grating, pk)
                 #CONFIG_FILE_list.append(_CONFIG_FILE_)
                 star_list.append("Hilt600")
                 CONFIG_FILE_list.append("")
  
-            if list_of_objetos[i] in ["EG274", "Eg274", "eg274", "eG274", "E274", "e274"]  and list_of_objetos[i] not in disable_stars:
+            if list_of_objects[i] in ["EG274", "Eg274", "eg274", "eG274", "E274", "e274"]  and list_of_objects[i] not in disable_stars:
                 print ("  - Calibration star EG274 automatically identified")
                 list_of_files_of_stars.append(list_of_files[i])
                 rss_star_file_for_sol=list_of_files[i][0]
-                objects_auto.append("EG274_"+grating) 
+                objects_auto.append("EG274_"+grating+"_"+date) 
                 #_CONFIG_FILE_, _description_, _fits_file_, _response_file_, _absolute_flux_file_, _list_of_telluric_ranges_ =  get_calibration_star_data ("EG274", path, grating, pk)
                 #CONFIG_FILE_list.append(_CONFIG_FILE_)
                 star_list.append("EG274")
                 CONFIG_FILE_list.append("")
  
-            if list_of_objetos[i] in ["HD60753", "hd60753", "Hd60753", "HD60753FLUX"]  and list_of_objetos[i] not in disable_stars:
+            if list_of_objects[i] in ["HD60753", "hd60753", "Hd60753", "HD60753FLUX"]  and list_of_objects[i] not in disable_stars:
                 print ("  - Calibration star HD60753 automatically identified")
                 list_of_files_of_stars.append(list_of_files[i])
                 rss_star_file_for_sol=list_of_files[i][0]
-                objects_auto.append("HD60753_"+grating) 
+                objects_auto.append("HD60753_"+grating+"_"+date) 
                 #_CONFIG_FILE_, _description_, _fits_file_, _response_file_, _absolute_flux_file_, _list_of_telluric_ranges_ =  get_calibration_star_data ("HD60753", path, grating, pk)
                 #CONFIG_FILE_list.append(_CONFIG_FILE_)
                 star_list.append("HD60753")
                 CONFIG_FILE_list.append("")
 
-            if list_of_objetos[i] in ["HD49798", "hd49798", "Hd49798"]  and list_of_objetos[i] not in disable_stars:
+            if list_of_objects[i] in ["HD49798", "hd49798", "Hd49798"]  and list_of_objects[i] not in disable_stars:
                 print ("  - Calibration star HD49798 automatically identified")
                 list_of_files_of_stars.append(list_of_files[i])
                 rss_star_file_for_sol=list_of_files[i][0]
-                objects_auto.append("HD49798_"+grating) 
+                objects_auto.append("HD49798_"+grating+"_"+date) 
                 #_CONFIG_FILE_, _description_, _fits_file_, _response_file_, _absolute_flux_file_, _list_of_telluric_ranges_ =  get_calibration_star_data ("HD49798", path, grating, pk)
                 #CONFIG_FILE_list.append(_CONFIG_FILE_)
                 star_list.append("HD49798")
                 CONFIG_FILE_list.append("")
 
-            if list_of_objetos[i] in ["cd32d9927", "CD32d9927", "CD32D9927", "CD-32d9927", "cd-32d9927", "Cd-32d9927", "CD-32D9927", "cd-32D9927", "Cd-32D9927"  ]  and list_of_objetos[i] not in disable_stars:
+            if list_of_objects[i] in ["cd32d9927", "CD32d9927", "CD32D9927", "CD-32d9927", "cd-32d9927", "Cd-32d9927", "CD-32D9927", "cd-32D9927", "Cd-32D9927"  ]  and list_of_objects[i] not in disable_stars:
                 print ("  - Calibration star CD32d9927 automatically identified")
                 list_of_files_of_stars.append(list_of_files[i])
                 rss_star_file_for_sol=list_of_files[i][0]
-                objects_auto.append("CD32d9927_"+grating) 
+                objects_auto.append("CD32d9927_"+grating+"_"+date) 
                 #_CONFIG_FILE_, _description_, _fits_file_, _response_file_, _absolute_flux_file_, _list_of_telluric_ranges_ =  get_calibration_star_data ("CD32d9927", path, grating, pk)
                 #CONFIG_FILE_list.append(_CONFIG_FILE_)
                 star_list.append("CD32d9927")
                 CONFIG_FILE_list.append("")
 
-            if list_of_objetos[i] in ["HR3454", "Hr3454", "hr3454"] and list_of_objetos[i] not in disable_stars:
+            if list_of_objects[i] in ["HR3454", "Hr3454", "hr3454"] and list_of_objects[i] not in disable_stars:
                 print ("  - Calibration star HR3454 automatically identified")
                 list_of_files_of_stars.append(list_of_files[i])
                 rss_star_file_for_sol=list_of_files[i][0]
-                objects_auto.append("HR3454_"+grating) 
+                objects_auto.append("HR3454_"+grating+"_"+date) 
                 #_CONFIG_FILE_, _description_, _fits_file_, _response_file_, _absolute_flux_file_, _list_of_telluric_ranges_ =  get_calibration_star_data ("HR3454", path, grating, pk)
                 #CONFIG_FILE_list.append(_CONFIG_FILE_)
                 star_list.append("HR3454")
                 CONFIG_FILE_list.append("")
                 
-            if list_of_objetos[i] in [ "HR718" ,"Hr718" , "hr718", "HR718FLUX","HR718auto" ,"Hr718auto" , "hr718auto", "HR718FLUXauto"  ]  and list_of_objetos[i] not in disable_stars: 
+            if list_of_objects[i] in [ "HR718" ,"Hr718" , "hr718", "HR718FLUX","HR718auto" ,"Hr718auto" , "hr718auto", "HR718FLUXauto"  ]  and list_of_objects[i] not in disable_stars: 
                 print ("  - Calibration star HR718 automatically identified")
                 list_of_files_of_stars.append(list_of_files[i])
                 rss_star_file_for_sol=list_of_files[i][0]
-                objects_auto.append("HR718_"+grating) 
+                objects_auto.append("HR718_"+grating+"_"+date) 
                 #_CONFIG_FILE_, _description_, _fits_file_, _response_file_, _absolute_flux_file_, _list_of_telluric_ranges_ =  get_calibration_star_data ("HR718", path, grating, pk)
                 #CONFIG_FILE_list.append(_CONFIG_FILE_)
                 star_list.append("HR718")
                 CONFIG_FILE_list.append("")
-
 
         if throughput_2D_file != "":
             throughput_2D_file = full_path(throughput_2D_file,path) 
@@ -204,7 +213,7 @@ def automatic_calibration_night(CALIBRATION_NIGHT_FILE="",
             throughput_2D_file = path+"throughput_2D_"+date+"_"+grating+".fits"
             flux_calibration_file = path+"flux_calibration_"+date+"_"+grating+pk+".dat" 
             if flux_calibration_name =="flux_calibration_auto" : flux_calibration_name = "flux_calibration_"+date+"_"+grating+pk 
-            if grating == "385R" or grating == "1000R" :
+            if grating in red_gratings:
                 telluric_correction_file = path+"telluric_correction_"+date+"_"+grating+".dat" 
                 telluric_correction_name = "telluric_correction_"+date+"_"+grating  
                 
@@ -293,7 +302,7 @@ def automatic_calibration_night(CALIBRATION_NIGHT_FILE="",
         print("  pixel_size                 = ",pixel_size)
         print("  kernel_size                = ",kernel_size)
     
-        if CONFIG_FILE_list[0] != "":
+        if len(CONFIG_FILE_list[0]) > 0:
     
             for config_file in range(len(CONFIG_FILE_list)):
                 if config_file == 0 : 
@@ -305,7 +314,9 @@ def automatic_calibration_night(CALIBRATION_NIGHT_FILE="",
                     if config_file == len(CONFIG_FILE_list)-1:
                         print("                                 ",CONFIG_FILE_list[config_file]," ]")
                     else:        
-                        print("                                 ",CONFIG_FILE_list[config_file],",")           
+                        print("                                 ",CONFIG_FILE_list[config_file],",")      
+        else:
+            print("  No configuration file list provided, using generic configuration file for all stars")
 
     else:
         print("\n> The calibration of the night will be obtained using these fully calibrated starcubes:\n")
@@ -366,59 +377,73 @@ def automatic_calibration_night(CALIBRATION_NIGHT_FILE="",
     good_CONFIG_FILE_list =[]
     good_star_names =[]
     stars=[]
+    
     if cal_from_calibrated_starcubes == False: 
-        for i in range(len(CONFIG_FILE_list)):
-      
-            run_star = True
-            
-            if CONFIG_FILE_list[i] != "":            
-                try:
-                    config_property, config_value = read_table(CONFIG_FILE_list[i], ["s", "s"] )
-                    if len(CONFIG_FILE_list) != len(objects_auto)  :               
-                        for j in range (len(config_property)):
-                            if config_property[j] == "obj_name" : running_star = config_value[j] 
-                        if i < len(objects_auto) :
-                            objects_auto[i] = running_star
-                        else:    
-                            objects_auto.append(running_star)                   
-                    else:
-                        running_star = objects_auto[i]
-                except Exception:
-                    print("===================================================================================")
-                    print("\n> ERROR! config file {} not found!".format(CONFIG_FILE_list[i]))
-                    run_star = False
-            else:
-                running_star = star_list[i]
-                if i < len(objects_auto) :
-                    objects_auto[i] = running_star
-                else:    
-                    objects_auto.append(running_star)   
+        
+        if len(CONFIG_FILE_list) > 0:
+            for i in range(len(CONFIG_FILE_list)):
+                run_star = True                
+                if CONFIG_FILE_list[i] != "":    
+                    print(objects_auto[i])
+                    try:
+                        config_property, config_value = read_table(CONFIG_FILE_list[i], ["s", "s"] )
+                        if len(CONFIG_FILE_list) != len(objects_auto)  :               
+                            for j in range (len(config_property)):
+                                if config_property[j] == "obj_name" : running_star = config_value[j] 
+                            if i < len(objects_auto) :
+                                objects_auto[i] = running_star
+                            else:    
+                                objects_auto.append(running_star)                   
+                        else:
+                            running_star = objects_auto[i]
+                    except Exception:
+                        print("===================================================================================")
+                        print("\n> ERROR! config file {} not found!".format(CONFIG_FILE_list[i]))
+                        run_star = False
+                else:
+                    running_star = star_list[i]
+                    #print(running_star)
+                    
+                    
+                #    if i < len(objects_auto) :
+                #        objects_auto[i] = running_star
+                #    else:    
+                #        objects_auto.append(running_star)   
                 
 
-            if run_star:
-                pepe=0
-                if pepe == 0:
-                #try:
-                    print("===================================================================================")        
-                    print("\n> Running automatically calibration star",running_star, "in CONFIG_FILE:")
-                    print(" ",CONFIG_FILE_list[i],"\n")
-                    psol="["+np.str(sol[0])+","+np.str(sol[1])+","+np.str(sol[2])+"]"
-                    exec('run_automatic_star(CONFIG_FILE_list[i], object_auto="'+running_star+'", star=star_list[i], sol ='+psol+', throughput_2D_file = "'+throughput_2D_file+'", rss_list = list_of_files_of_stars[i], path_star=path, date=date,grating=grating,pixel_size=pixel_size,kernel_size=kernel_size, rss_clean=rss_clean)')
-                    print("\n> Running automatically calibration star in CONFIG_FILE")
-                    print("  ",CONFIG_FILE_list[i]," SUCCESSFUL !!\n")
-                    good_CONFIG_FILE_list.append(CONFIG_FILE_list[i])
-                    good_star_names.append(running_star)
-                    try: # This is for a combined cube
-                        exec("stars.append("+running_star+".combined_cube)")      
-                        if grating in red_gratings:
-                            exec("telluric_correction_list.append("+running_star+".combined_cube.telluric_correction)")
-                    except Exception: # This is when we read a cube from fits file
-                        exec("stars.append("+running_star+")")      
-                        if grating in red_gratings:
-                            exec("telluric_correction_list.append("+running_star+".telluric_correction)")                                
-                # except Exception:   
-                #     print("===================================================================================")
-                #     print("\n> ERROR! something wrong happened running config file {} !\n".format(CONFIG_FILE_list[i]))
+                if run_star:
+                    pepe=0
+                    if pepe == 0:
+                    #try:
+                        print("===================================================================================")   
+                        
+                        if CONFIG_FILE_list[i] == "":
+                            print("\n> Running automatically calibration star",running_star, "using the standard configuration_file\n")
+                        else:
+                            print("\n> Running automatically calibration star",running_star, "in CONFIG_FILE:")
+                            print(" ",CONFIG_FILE_list[i],"\n")
+                        psol="["+np.str(sol[0])+","+np.str(sol[1])+","+np.str(sol[2])+"]"
+                        exec('run_automatic_star(CONFIG_FILE_list[i], object_auto="'+objects_auto[i]+'", star=star_list[i], sol ='+psol+', throughput_2D_file = "'+throughput_2D_file+'", rss_list = list_of_files_of_stars[i], path_star=path, date=date, grating=grating,pixel_size=pixel_size,kernel_size=kernel_size, rss_clean=rss_clean)')
+                        
+                        
+                        if CONFIG_FILE_list[i] == "":
+                            print("\n> Running automatically calibration star using generic configuration file SUCCESSFUL !!\n")
+                        else:
+                            print("\n> Running automatically calibration star in CONFIG_FILE")
+                            print("  ",CONFIG_FILE_list[i]," SUCCESSFUL !!\n")
+                        good_CONFIG_FILE_list.append(CONFIG_FILE_list[i])
+                        good_star_names.append(running_star)
+                        try: # This is for a combined cube
+                            exec("stars.append("+objects_auto[i]+".combined_cube)")      
+                            if grating in red_gratings:
+                                exec("telluric_correction_list.append("+objects_auto[i]+".combined_cube.telluric_correction)")
+                        except Exception: # This is when we read a cube from fits file
+                            exec("stars.append("+objects_auto[i]+")")      
+                            if grating in red_gratings:
+                                exec("telluric_correction_list.append("+objects_auto[i]+".telluric_correction)")                                
+                    # except Exception:   
+                    #     print("===================================================================================")
+                    #     print("\n> ERROR! something wrong happened running config file {} !\n".format(CONFIG_FILE_list[i]))
 
     else:       # This is for the case that we have individual star cubes ALREADY calibrated in flux
         pprint = ""
