@@ -1239,7 +1239,8 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                  contours=True, clabel=False,
                  line =0,  
                  spaxel=0, spaxel2=0, spaxel3=0,
-                 box_x=[0,-1], box_y=[0,-1], plot_centroid=False, g2d=True, half_size_for_centroid  = 0,
+                 box_x=[0,-1], box_y=[0,-1], 
+                 plot_centroid=False, g2d=True, half_size_for_centroid  = 0,
                  circle=[0,0,0],circle2=[0,0,0],circle3=[0,0,0],
                  plot_box=False, plot_centre=True, plot_spaxel=False, plot_spaxel_grid=True, alpha_grid=0.1, 
                  plot_spaxel_list=[], color_spaxel_list="blue", alpha_spaxel_list=0.4,
@@ -2400,11 +2401,16 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]], pixel_size_arcsec=0.3, kernel_size_arcsec=1.5, offsets=[1000], 
-                  plot= False, plot_weight=False, plot_tracing_maps=[], plot_spectra=True,
+def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]], 
+                  reference_rss = "",
+                  pixel_size_arcsec=0.3, kernel_size_arcsec=1.5, 
+                  edgelow=-1, edgehigh=-1, size_arcsec=[], centre_deg=[], 
+                  offsets=[], 
                   ADR=False, jump=-1, ADR_x_fit_list=[0], ADR_y_fit_list=[0], force_ADR = False,
-                  half_size_for_centroid =10, box_x=[0,-1], box_y=[0,-1], adr_index_fit = 2, g2d=False, step_tracing = 100, kernel_tracing = 0,
-                  edgelow=-1, edgehigh=-1, size_arcsec=[], centre_deg=[], warnings=False, verbose= True):  
+                  half_size_for_centroid =10, box_x=[0,-1], box_y=[0,-1], 
+                  adr_index_fit = 2, g2d=False, step_tracing = 100, kernel_tracing = 0,
+                  plot= False, plot_weight=False, plot_tracing_maps=[], plot_spectra=True,
+                  warnings=False, verbose= True):  
     """
     Routine to align n cubes
 
@@ -2479,8 +2485,9 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]], pixel_siz
         distance_from_median.append(np.sqrt( 
                 (rss_list[i].RA_centre_deg - median_RA_centre_deg)**2 +
                 (rss_list[i].DEC_centre_deg - median_DEC_centre_deg)**2) )
-    
-    reference_rss = distance_from_median.index(np.nanmin(distance_from_median))
+        
+    if reference_rss == "":
+        reference_rss = distance_from_median.index(np.nanmin(distance_from_median))
     
     if len(centre_deg) == 0:    
         if verbose and n_rss > 1: print("  No central coordenates given, using RSS {} for getting the central coordenates:".format(reference_rss+1))   
@@ -2495,7 +2502,7 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]], pixel_siz
     if verbose and n_rss > 1:
         print("\n> Median central coordenates of RSS files: RA =",RA_centre_deg," DEC =", DEC_centre_deg)
               
-        print("\n  Offsets (in arcsec):        x             y                          ( EAST- / WEST+   NORTH- / SOUTH+) ")
+        print("\n  Offsets (in arcsec):        x             y                          ( EAST+ / WEST-   NORTH- / SOUTH+) ")
         for i in range(1,len(xx)-1):
             print("         {:2.0f} -> {:2.0f}           {:+5.3f}         {:+5.3f}".format(i,i+1,xx[i],yy[i]))      
         print("         {:2.0f} ->  1           {:+5.3f}         {:+5.3f}".format(len(xx)-1,xx[-1],yy[-1]))      
@@ -3481,8 +3488,10 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
         for i in range(n_files):               
             exec("property_values.append(cube_aligned_object["+np.str(i)+"]."+_property_+")")
         #print(property_values)
-        if np.nanvar(property_values[1:-1]) != 0.:
+        if np.nanvar(property_values[1:-1]) > 1E-20:
             print(" - Property {} has DIFFERENT values !!!".format(_property_))
+            print("   Variance of the data = ",np.nanvar(property_values[1:-1])) 
+            print("   Values =  ",property_values)
             do_not_combine = True
      
     if do_not_combine:

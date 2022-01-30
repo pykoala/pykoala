@@ -100,6 +100,7 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
     extra_factor =	1.
 
     offsets=[]
+    reference_rss = ""
     ADR = False
     ADR_cc = False
     force_ADR=False
@@ -427,7 +428,9 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
             offsets_ = config_value[i].strip('][').split(',')
             for i in range(len(offsets_)):
                 offsets.append(float(offsets_[i]))
-                   
+ 
+        if  config_property[i] == "reference_rss" : reference_rss =  int(config_value[i])
+                  
         if  config_property[i] == "valid_wave_min" : valid_wave_min = float(config_value[i])
         if  config_property[i] == "valid_wave_max" : valid_wave_max = float(config_value[i])
 
@@ -749,7 +752,7 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
                 print("  offsets                  = ",offsets)
             else:
                 print("  offsets will be calculated automatically")
-
+            print("  reference_rss            = ",reference_rss) 
 
             if half_size_for_centroid > 0 : print("  half_size_for_centroid   = ",half_size_for_centroid)
             if np.nanmedian(box_x+box_y) != -0.5: print("  box_x, box_y             = ", box_x, box_y)
@@ -965,13 +968,15 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
                               
                               pixel_size_arcsec=pixel_size, 
                               kernel_size_arcsec=kernel_size,
-                              offsets = offsets,    # EAST-/WEST+  NORTH-/SOUTH+
+                              offsets = offsets,    # EAST+/WEST-  NORTH-/SOUTH+
+                              reference_rss = reference_rss,
                                        
                               ADR=ADR, ADR_cc=ADR_cc, force_ADR=force_ADR,
-                              box_x=box_x, box_y=box_y, 
                               jump = jump,
-                              half_size_for_centroid = half_size_for_centroid,
                               ADR_x_fit_list = ADR_x_fit_list, ADR_y_fit_list = ADR_y_fit_list,
+                              
+                              half_size_for_centroid = half_size_for_centroid,
+                              box_x=box_x, box_y=box_y, 
                               adr_index_fit = adr_index_fit,
                               g2d = g2d,
                               kernel_tracing = kernel_tracing,
@@ -990,6 +995,7 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
                               scale_cubes_using_integflux = scale_cubes_using_integflux,
                               apply_scale = apply_scale,
                               flux_ratios = flux_ratios,
+                              remove_spaxels_not_fully_covered = remove_spaxels_not_fully_covered,
                               #cube_list_names =cube_list_names,
                               
                               valid_wave_min = valid_wave_min, valid_wave_max = valid_wave_max,
@@ -1002,23 +1008,39 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
     else:
         #print("else")
         hikids = build_combined_cube(cube_list, obj_name=obj_name, description=description,
-                                      fits_file = fits_file, path=path,
-                                      scale_cubes_using_integflux= scale_cubes_using_integflux, 
-                                      flux_ratios = flux_ratios, apply_scale = apply_scale,
-                                      edgelow=edgelow, edgehigh=edgehigh,
-                                      ADR=ADR, ADR_cc = ADR_cc, jump = jump, pk = pk, 
-                                      ADR_x_fit_list=ADR_x_fit_list, ADR_y_fit_list=ADR_y_fit_list,
-                                      force_ADR=force_ADR,
-                                      half_size_for_centroid = half_size_for_centroid,
-                                      box_x=box_x, box_y=box_y,  
-                                      adr_index_fit=adr_index_fit, g2d=g2d,
-                                      step_tracing = step_tracing, 
-                                      plot_tracing_maps = plot_tracing_maps,
-                                      trim_cube = trim_cube,  trim_values =trim_values, 
-                                      remove_spaxels_not_fully_covered = remove_spaxels_not_fully_covered,
-                                      plot=plot, plot_weight= plot_weight, plot_spectra=plot_spectra,
-                                      log = log, gamma = gamma,
-                                      verbose=verbose, say_making_combined_cube= False)                             
+                                     fits_file = fits_file, path=path,
+                                     pk = pk,
+                                     offsets = offsets,    # EAST+/WEST-  NORTH-/SOUTH+
+                                     reference_rss = reference_rss,
+                                     
+                                     ADR=ADR, ADR_cc = ADR_cc, force_ADR=force_ADR,
+                                     jump = jump, 
+                                     ADR_x_fit_list=ADR_x_fit_list, ADR_y_fit_list=ADR_y_fit_list,
+                                     
+                                     half_size_for_centroid = half_size_for_centroid,
+                                     box_x=box_x, box_y=box_y,  
+                                     adr_index_fit=adr_index_fit, 
+                                     g2d=g2d,
+                                     kernel_tracing = kernel_tracing,
+                                     plot_tracing_maps = plot_tracing_maps,
+                                     step_tracing = step_tracing, 
+                                     edgelow=edgelow, edgehigh=edgehigh,
+                                     
+                                     trim_cube = trim_cube,  
+                                     trim_values =trim_values, 
+                                     size_arcsec=size_arcsec,
+                                     centre_deg = centre_deg,
+                                     scale_cubes_using_integflux= scale_cubes_using_integflux, 
+                                     apply_scale = apply_scale,
+                                     flux_ratios = flux_ratios, 
+                                     remove_spaxels_not_fully_covered = remove_spaxels_not_fully_covered,
+                                     
+                                     fig_size = fig_size,
+                                     log = log, gamma = gamma,
+                                     plot=plot, plot_weight= plot_weight, plot_spectra=plot_spectra,
+                                     
+                                     warnings=warnings, verbose=verbose, 
+                                     say_making_combined_cube= False)                             
  
     if Python_obj_name != 0: exec(Python_obj_name+"=copy.deepcopy(hikids)", globals())
 

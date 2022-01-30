@@ -61,6 +61,7 @@ class KOALA_reduce(RSS,Interpolated_cube):                                      
                  # CUBING
                  pixel_size_arcsec=.4, kernel_size_arcsec=1.2,
                  offsets=[],
+                 reference_rss = "",
                  ADR=False, ADR_cc = False, force_ADR= False,
                  box_x =[0,-1], box_y=[0,-1], jump = -1, 
                  half_size_for_centroid = 10,
@@ -333,14 +334,18 @@ class KOALA_reduce(RSS,Interpolated_cube):                                      
                 
 
             cube_aligned_list=align_n_cubes(rss_list_to_align, cube_list=cube_list, flux_calibration_list=flux_calibration_list, pixel_size_arcsec=pixel_size_arcsec, 
-                                            kernel_size_arcsec=kernel_size_arcsec, plot=plot, plot_weight=plot_weight, 
-                                            offsets=offsets, ADR=ADR, jump=jump, edgelow=edgelow, edgehigh=edgehigh, 
+                                            kernel_size_arcsec=kernel_size_arcsec, 
                                             size_arcsec=size_arcsec,centre_deg=centre_deg,
-                                            half_size_for_centroid=half_size_for_centroid, box_x=box_x, box_y=box_y,
+                                            offsets=offsets, 
+                                            reference_rss= reference_rss,
+                                            ADR=ADR, jump=jump, force_ADR=force_ADR,
+                                            edgelow=edgelow, edgehigh=edgehigh, 
                                             ADR_x_fit_list =ADR_x_fit_list, ADR_y_fit_list = ADR_y_fit_list, 
+                                            half_size_for_centroid=half_size_for_centroid, box_x=box_x, box_y=box_y,
                                             adr_index_fit=adr_index_fit, g2d=g2d, step_tracing = step_tracing, kernel_tracing = kernel_tracing,
+                                            plot=plot, plot_weight=plot_weight, 
                                             plot_tracing_maps=plot_tracing_maps, plot_spectra=plot_spectra,
-                                            force_ADR=force_ADR, warnings=warnings)      
+                                            warnings=warnings, verbose=verbose)      
 
             for i in range(n_files):             
                 exec(cube_aligned_object[i]+'=cube_aligned_list[i]')

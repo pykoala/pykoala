@@ -427,57 +427,170 @@ if __name__ == "__main__":
 
 
     # # For combining several cubes, the best way is running KOALA_reduce:
+        
+    # # We first check the 3 first files    
 
     # # list with RSS files (no need to include path)    
-    rss_list = ["27feb20031red_TCWXUS_NR.fits","27feb20032red_TCWXUS_NR.fits","27feb20033red_TCWXUS_NR.fits"]
+    # rss_list = ["27feb20031red_TCWXUS_NR.fits","27feb20032red_TCWXUS_NR.fits","27feb20033red_TCWXUS_NR.fits"]
     
     # # Once you have run KOALA_reduced and obtained ADRs, you can copy and paste values for speeding tests
 
-    ADR_x_fit_list =  [[-2.3540791265017944e-12, 6.762388793515361e-08, -0.0006627297804396334, 2.1666411712553812], [-3.0634647703827036e-12, 8.407943128848677e-08, -0.0007965956049746986, 2.545773557437055], [-8.043867327151777e-13, 2.8827477735272883e-08, -0.0003496319743184722, 1.34787667608832]]
-    ADR_y_fit_list =  [[1.0585167511142714e-12, -3.972561095302862e-08, 0.00047854197119031385, -1.806746479722604], [5.712676673528853e-13, -2.7118172653512425e-08, 0.00034731129018336117, -1.322842656375085], [-1.2201306546407504e-12, 2.3629083572706315e-08, -0.00013682268516072916, 0.21158456279065121]]
+    # ADR_x_fit_list =  [[-2.3540791265017944e-12, 6.762388793515361e-08, -0.0006627297804396334, 2.1666411712553812], [-3.0634647703827036e-12, 8.407943128848677e-08, -0.0007965956049746986, 2.545773557437055], [-8.043867327151777e-13, 2.8827477735272883e-08, -0.0003496319743184722, 1.34787667608832]]
+    # ADR_y_fit_list =  [[1.0585167511142714e-12, -3.972561095302862e-08, 0.00047854197119031385, -1.806746479722604], [5.712676673528853e-13, -2.7118172653512425e-08, 0.00034731129018336117, -1.322842656375085], [-1.2201306546407504e-12, 2.3629083572706315e-08, -0.00013682268516072916, 0.21158456279065121]]
 
     # # Same thing with offsets
     
-    offsets =  [ -0.2773903893335756 , 0.7159980346947741 , 2.6672716919949306 , 0.8808234960793637 ]
+    # offsets =  [ -0.2773903893335756 , 0.7159980346947741 , 2.6672716919949306 , 0.8808234960793637 ]
     
- 
+    # combined_cube_test=KOALA_reduce(rss_list, path=path_red, 
+    #                                 fits_file="combined_cube_test_.fits",
+    #                                 rss_clean=True,                 # RSS files are clean
+    #                                 pixel_size_arcsec=0.7, kernel_size_arcsec=1.1,
+    #                                 flux_calibration_file=flux_calibration_file,
+    #                                 #size_arcsec=[60,40],
+    
+    #                                 #ADR=True,
+    #                                 #plot_tracing_maps=[6250,7500,9000],
+    #                                 #box_x=[53,64], box_y=[22,32],
+    #                                 #box_x = [10,70],
+    #                                 #box_y = [10,60],
+    #                                 half_size_for_centroid = 0,   # Using all data for registering
+    #                                 step_tracing = 20,            # Increase the number of points for tracing
+    #                                 kernel_tracing = 9,           # Smooth tracing for removing outliers
+    #                                 g2d=False, 
+    #                                 adr_index_fit = 3,
 
-    combined_cube_test=KOALA_reduce(rss_list, path=path_red, 
-                                    fits_file="combined_cube_test_.fits",
-                                    rss_clean=True,                 # RSS files are clean
-                                    pixel_size_arcsec=0.7, kernel_size_arcsec=1.1,
-                                    flux_calibration_file=flux_calibration_file,
-                                    #ADR=True,
-                                    #plot_tracing_maps=[6250,7500,9000],
-                                    #size_arcsec=[60,40],
-                                    step_tracing = 20,            # Increase the number of points for tracing
-                                    kernel_tracing = 9,           # Smooth tracing for removing outliers
-                                    g2d=False, 
-                                    adr_index_fit = 3,
-                                    ADR_x_fit_list = ADR_x_fit_list,
-                                    ADR_y_fit_list = ADR_y_fit_list,
-                                    offsets = offsets,
+    #                                 ADR_x_fit_list = ADR_x_fit_list,
+    #                                 ADR_y_fit_list = ADR_y_fit_list,
+    #                                 offsets = offsets,
                                     
-                                    trim_cube = True,             # Trimming the cube
-                                    #box_x=[53,64], box_y=[22,32],
-                                    #box_x = [10,70],
-                                    #box_y = [10,60],
-                                    half_size_for_centroid = 0,   # Using all data for registering
-                                    scale_cubes_using_integflux = False, # Not scaling cubes using integrated flux of common region
-                                    plot= True, 
-                                    plot_rss=False, 
-                                    plot_weight=False,
-                                    plot_spectra = False,
-                                    fig_size=12,
-                                    warnings=False, verbose = True)
+    #                                 trim_cube = True,             # Trimming the cube
+    #                                 scale_cubes_using_integflux = False, # Not scaling cubes using integrated flux of common region
+    #                                 plot= True, 
+    #                                 plot_rss=False, 
+    #                                 plot_weight=False,
+    #                                 plot_spectra = False,
+    #                                 fig_size=12,
+    #                                 warnings=False, verbose = True)
   
-    # combined_cube_test.combined_cube.plot_map(norm=colors.LogNorm(),vmin=3E4,vmax=1E8, cmap=fuego_color_map)
+    # # Plotting a larger map without plot_spaxel_grid, contours, or grid  
+  
+    # combined_cube_test.combined_cube.plot_map(log=True, cmap=fuego_color_map, fig_size=20, 
+                                              # plot_centre=False, plot_spaxel_grid = False, 
+                                              # contours= False, alpha_grid=0, fraction =0.027)
     
 
+    # # Now we check the 3 last files    
+
+    # # list with RSS files (no need to include path)    
+    # rss_list = ["27feb20034red_TCWXUS_NR.fits","27feb20035red_TCWXUS_NR.fits","27feb20036red_TCWXUS_NR.fits"]
+    
+    # # For these, there is a star in the bottom left corner we can use for aligning / ADR
+    # # g2d=True # it is a star
+    # # box_x=[3,15], box_y=[3,15] # define the box
+    
+    # # Once you have run KOALA_reduced and obtained ADRs, you can copy and paste values for speeding tests
+
+    # ADR_x_fit_list =  [[9.472735325782044e-13, -1.8414272142169123e-08, 0.00010639453474275714, -0.16011731471966129], [1.8706793461446896e-12, -4.151166766143467e-08, 0.00029190493266945084, -0.6408077338639665], [-1.3780071545760161e-12, 3.170991526784723e-08, -0.0002355233904377564, 0.5627653239513558]]
+    # ADR_y_fit_list =  [[-2.0911079335920793e-12, 4.703018551076634e-08, -0.00033904804410673275, 0.7771617214421154], [-2.838537640353266e-12, 6.54908082091063e-08, -0.00048530769637374164, 1.148318135983978], [-3.1271687976010236e-12, 7.140942741912648e-08, -0.0005301049734410775, 1.2753542609892792]]    
+
+    # # Same thing with offsets
+    
+    # offsets =  [ 1.4239020516303178 , 0.003232821107207684 , 1.4757701790022182 , 1.495021090623025 ]
+    # offsets =  [1.5, 0, 1.5, 1.5]  # Given at the telescope
+    
+    # combined_cube_test=KOALA_reduce(rss_list, path=path_red, 
+    #                                 fits_file="combined_cube_test_2.fits",
+    #                                 rss_clean=True,                 # RSS files are clean
+    #                                 pixel_size_arcsec=0.7, kernel_size_arcsec=1.1,
+    #                                 flux_calibration_file=flux_calibration_file,
+    #                                 ADR=True,
+    #                                 plot_tracing_maps=[6400], #[6250,7500,9000],
+    #                                 #size_arcsec=[60,40],
+    #                                 box_x=[3,15], box_y=[3,15],
+    #                                 half_size_for_centroid = 0,   # Using all data for registering
+    #                                 step_tracing = 20,            # Increase the number of points for tracing
+    #                                 kernel_tracing = 19,           # Smooth tracing for removing outliers
+    #                                 g2d=True, 
+    #                                 adr_index_fit = 3,
+                                    
+    #                                 #ADR_x_fit_list = ADR_x_fit_list,
+    #                                 #ADR_y_fit_list = ADR_y_fit_list,
+    #                                 #offsets = offsets,
+                                    
+    #                                 trim_cube = True,             # Trimming the cube
+    #                                 scale_cubes_using_integflux = False, # Not scaling cubes using integrated flux of common region
+    #                                 plot= True, 
+    #                                 plot_rss=False, 
+    #                                 plot_weight=False,
+    #                                 plot_spectra = False,
+    #                                 fig_size=12,
+    #                                 warnings=False, verbose = True)
+  
+
+
+    # Now it is time to merge the 2 sets
+    # Here I'm trusting that the offset between file 33 and 34 is that given at the telescope: 18S 3E (this should be checked)
+    # and put everything together:
+    
+    # rss_list = ["27feb20031red_TCWXUS_NR.fits","27feb20032red_TCWXUS_NR.fits","27feb20033red_TCWXUS_NR.fits",
+    #             "27feb20034red_TCWXUS_NR.fits","27feb20035red_TCWXUS_NR.fits","27feb20036red_TCWXUS_NR.fits"]
+
+    # ADR_x_fit_list =  [[-2.3540791265017944e-12, 6.762388793515361e-08, -0.0006627297804396334, 2.1666411712553812], [-3.0634647703827036e-12, 8.407943128848677e-08, -0.0007965956049746986, 2.545773557437055], [-8.043867327151777e-13, 2.8827477735272883e-08, -0.0003496319743184722, 1.34787667608832],
+    #                    [9.472735325782044e-13, -1.8414272142169123e-08, 0.00010639453474275714, -0.16011731471966129], [1.8706793461446896e-12, -4.151166766143467e-08, 0.00029190493266945084, -0.6408077338639665], [-1.3780071545760161e-12, 3.170991526784723e-08, -0.0002355233904377564, 0.5627653239513558]]
+    # ADR_y_fit_list =  [[1.0585167511142714e-12, -3.972561095302862e-08, 0.00047854197119031385, -1.806746479722604], [5.712676673528853e-13, -2.7118172653512425e-08, 0.00034731129018336117, -1.322842656375085], [-1.2201306546407504e-12, 2.3629083572706315e-08, -0.00013682268516072916, 0.21158456279065121],
+    #                    [-2.0911079335920793e-12, 4.703018551076634e-08, -0.00033904804410673275, 0.7771617214421154], [-2.838537640353266e-12, 6.54908082091063e-08, -0.00048530769637374164, 1.148318135983978], [-3.1271687976010236e-12, 7.140942741912648e-08, -0.0005301049734410775, 1.2753542609892792]] 
+
+    # offsets =  [ -0.2773903893335756 , 0.7159980346947741 , 2.6672716919949306 , 0.8808234960793637,
+    #              3, 18,   
+    #             #0.5, 18.9, # I got these values with Jamila in Feb 21, but they don´t work 
+    #             1.4239020516303178 , 0.003232821107207684 , 1.4757701790022182 , 1.495021090623025 ]
+                
+    # combined_cube=KOALA_reduce(rss_list, path=path_red, 
+    #                            fits_file="combined_cube_.fits",
+    #                            rss_clean=True,                 # RSS files are clean
+    #                            pixel_size_arcsec=0.7, kernel_size_arcsec=1.1,
+    #                            flux_calibration_file=flux_calibration_file,
+    #                            #ADR=True,
+    #                            plot_tracing_maps=[6400], #[6250,7500,9000],
+    #                            size_arcsec=[80,75],
+    #                            #box_x=[3,15], box_y=[3,15],
+    #                            half_size_for_centroid = 0,   # Using all data for registering
+    #                            step_tracing = 20,            # Increase the number of points for tracing
+    #                            kernel_tracing = 19,           # Smooth tracing for removing outliers
+    #                            g2d=False, 
+    #                            adr_index_fit = 3,
+                                    
+    #                            ADR_x_fit_list = ADR_x_fit_list,
+    #                            ADR_y_fit_list = ADR_y_fit_list,
+    #                            offsets = offsets,
+    #                            reference_rss = 0,
+                                    
+    #                            trim_cube = True,             # Trimming the cube
+    #                            scale_cubes_using_integflux = False, # Not scaling cubes using integrated flux of common region
+    #                            plot= True, 
+    #                            plot_rss=False, 
+    #                            plot_weight=False,
+    #                            plot_spectra = False,
+    #                            fig_size=12,
+    #                            warnings=False, verbose = True)
+  
+
+    # # -----------------------------------------------------------------------
+    # # -----------------------------------------------------------------------
+    # # BLUE DATA (To be done ... )
+    # # -----------------------------------------------------------------------
+    # # -----------------------------------------------------------------------
 
 
 
 
+    # # -----------------------------------------------------------------------
+    # # -----------------------------------------------------------------------
+    # # -----------------------------------------------------------------------
+    # # -----------------------------------------------------------------------
+    # # -----------------------------------------------------------------------
+    # # -----------------------------------------------------------------------
 
     # Truco de Pablo para cambiar algo en header:
     # with fits.open(path_blue+"27feb10031red.fits", "update") as f:
