@@ -138,6 +138,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                  plot=False, log=True, gamma=0., 
                  plot_rss=True, plot_spectra = True,
                  warnings=False, verbose=True, fig_size=12):   
+
         
         if plot == False: 
             plot_tracing_maps=[]

@@ -102,7 +102,7 @@ if __name__ == "__main__":
     # # -----------------------------------------------------------------------
 
     # # List the files in the folder
-    #list_fits_files_in_folder(path_red)
+    # list_fits_files_in_folder(path_red)
     
     # PyKOALA finds 4 objects: HD60753, HILT600 (calibration stars),
     #                          He2-10 (the galaxy),
@@ -152,10 +152,10 @@ if __name__ == "__main__":
     # # It is recommended to test it here BEFORE running automatic scripts
     
     
-    file_in   = path_red+"27feb20031red.fits"
-    file_med  = path_red+"27feb20031red_TCWXU____.fits"
-    file_med2 = path_red+"27feb20031red_TCWXUS___.fits"
-    file_out  = path_red+"27feb20031red_TCWXUS_NR.fits"
+    # file_in   = path_red+"27feb20031red.fits"
+    # file_med  = path_red+"27feb20031red_TCWXU____.fits"
+    # file_med2 = path_red+"27feb20031red_TCWXUS___.fits"
+    # file_out  = path_red+"27feb20031red_TCWXUS_NR.fits"
 
     # # As the critical part is the SKY SUBTRACION, first do everything till that
     
@@ -386,8 +386,10 @@ if __name__ == "__main__":
     #                   plot=True, warnings=False, verbose=True)
   
 
-
+    # # -----------------------------------------------------------------------
     # # Once we have the CLEAN RSS files, we can do the cubing & combine
+    # # -----------------------------------------------------------------------
+
     
     # # For making a cube, we call Interpolated_cube defining the
     # # pixel and kernel size and adding the flux_calibration
