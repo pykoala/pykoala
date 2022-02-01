@@ -490,7 +490,26 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
     def build_cube(self, RSS, jump=-1, warnings=False, verbose=True):
-                
+        """
+        This function builds the cube.
+
+        Parameters
+        ----------
+        RSS : File/Object created with KOALA_RSS
+            This is the file that has the raw stacked spectra.
+        jump : Integer, optional
+            If a positive number partitions the wavelengths with step size jump, if -1 will not partition. The default is -1.
+        warnings : Boolean, optional
+            If True will show any problems that arose, else skipped. The default is False.
+        verbose : Boolean, optional
+            Print results. The default is True.
+
+        Returns
+        -------
+        Float
+            The weighted average intensity.
+
+        """     
         
         if verbose:
             print("\n  Smooth cube, (RA, DEC)_centre = ({}, {}) degree" \
@@ -530,8 +549,32 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
     def ADR_correction(self, RSS, plot=True, force_ADR=False, method="new",  remove_spaxels_not_fully_covered = True,
                        jump=-1, warnings=False, verbose=True): 
         """
-        Corrects for Atmospheric Diferential Refraction (ADR)
-        """               
+        Corrects for Atmospheric Differential Refraction (ADR)
+
+        Parameters
+        ----------
+        RSS : File/Object created with KOALA_RSS
+            This is the file that has the raw stacked spectra.
+        plot : Boolean, optional
+            If True generates and shows the plots. The default is True.
+        force_ADR : Boolean, optional
+            If True will correct for ADR even considoring a small correction. The default is False.
+        method : String, optional
+            DESCRIPTION. The default is "new". #TODO 
+        remove_spaxels_not_fully_covered : Boolean, optional
+            DESCRIPTION. The default is True. #TODO 
+        jump : Integer, optional
+            If a positive number partitions the wavelengths with step size jump, if -1 will not partition. The default is -1.
+        warnings : Boolean, optional
+            If True will show any problems that arose, else skipped. The default is False.
+        verbose : Boolean, optional
+            Print results. The default is True.
+
+        Returns
+        -------
+        None.
+
+        """             
         
         
         # Check if this is a self.combined cube or a self
