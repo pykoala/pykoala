@@ -30,13 +30,13 @@ start = timer()
                                     # If the PyKOALA code is not changed, there is no need of reading it again
 
 
-pykoala_path = "/DATA/KOALA/Python/GitHub/koala/"
+pykoala_path = "/DATA/KOALA/Python/GitHub/koala/src/koala/"
 
 
 
 # 0. Read __init__ with the version ( or file version.txt )
 # version="Version 1.1 - 25 January 2022 - First one AFTER breaking the code"
-with open('version.txt') as f:
+with open(pykoala_path+'version.txt') as f:
     version = f.read()
 
 # 1. Add file with constant data
@@ -102,7 +102,7 @@ if __name__ == "__main__":
     # # -----------------------------------------------------------------------
 
     # # List the files in the folder
-    # list_fits_files_in_folder(path_red)
+    list_fits_files_in_folder(path_red)
     
     # PyKOALA finds 4 objects: HD60753, HILT600 (calibration stars),
     #                          He2-10 (the galaxy),
