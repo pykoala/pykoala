@@ -835,18 +835,20 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         This tasks quickly finds the values for the peak in x and y
         
         
-        This is the part of the old get_peaks that we still need, 
-        but perhaps it can be deprecated if defining self.x_peaks etc using new task "centroid of cube"
+            This is the part of the old get_peaks that we still need, 
+            but perhaps it can be deprecated if defining self.x_peaks etc using new task "centroid of cube"
 
         Parameters
         ----------
-        box_x : TYPE, optional
-            DESCRIPTION. The default is [0,-1].
-        box_y : TYPE, optional
-            DESCRIPTION. The default is [0,-1].
-        verbose : TYPE, optional
-            DESCRIPTION. The default is True.
-
+        box_x : Integer List, optional
+            When creating a box to show/trim/alignment these are the x cooridnates in spaxels of the box. The default is [0,-1].
+        box_y : Integer List, optional
+            When creating a box to show/trim/alignment these are the y cooridnates in spaxels of the box. The default is [0,-1].
+        verbose : Boolean, optional
+            Print results. The default is True.
+        plot : Boolean, optional
+            If True generates and shows the plots. The default is False.
+        
         """
     
         if np.nanmedian(box_x+box_y) != -0.5:
@@ -912,7 +914,44 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
     def trace_peak(self, box_x=[0,-1],box_y=[0,-1], edgelow=-1, edgehigh=-1,  
                    adr_index_fit=2, step_tracing = 100, g2d = True, kernel_tracing = 0,
                    plot_tracing_maps = [],
-                   plot=False, log=True, gamma=0., check_ADR=False, verbose = True):   
+                   plot=False, log=True, gamma=0., check_ADR=False, verbose = True): 
+        """
+        #TODO
+        
+        Parameters
+        ----------
+        box_x : Integer List, optional
+            When creating a box to show/trim/alignment these are the x cooridnates in spaxels of the box. The default is [0,-1].
+        box_y : Integer List, optional
+            When creating a box to show/trim/alignment these are the y cooridnates in spaxels of the box. The default is [0,-1].
+        edgelow : Integer, optional
+            This is the lowest value in the wavelength range in terms of pixels. The default is -1. 
+        edgehigh : Integer, optional
+            This is the highest value in the wavelength range in terms of pixels, (maximum wavelength - edgehigh). The default is -1. 
+        adr_index_fit : Integer, optional
+            This is the fitted polynomial with highest degree n. The default is 2. 
+        step_tracing : Integer, optional
+            DESCRIPTION. The default is 100. #TODO 
+        g2d : Boolean, optional
+            If True uses a 2D gaussian, else doesn't. The default is True. 
+        plot_tracing_maps : List, optional
+            DESCRIPTION. The default is []. #TODO 
+        plot : Boolean, optional
+            If True generates and shows the plots. The default is False.
+        log : Boolean, optional
+            If true the map is plotted on a log scale. The default is True.
+        gamma : Float, optional
+            The value for power log. The default is 0..
+        check_ADR : Boolean, optional
+            DESCRIPTION. The default is False. #TODO 
+        verbose : Boolean, optional
+            Print results. The default is True.
+
+        Returns
+        -------
+        None.
+
+        """
         
          if verbose: print("\n> Tracing peaks and checking ADR...")
          
@@ -978,6 +1017,32 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 # -----------------------------------------------------------------------------
     def box_for_centroid(self, half_size_for_centroid=6, verbose=True, plot=False, g2d=False,
                          plot_map = True, log= True, gamma=0.):
+        """
+        Creates a box around centroid.
+
+        Parameters
+        ----------
+        half_size_for_centroid : Integer, optional
+            This is half the length/width of the box. The default is 6.
+        verbose : Boolean, optional
+            Print results. The default is True.
+        plot : Boolean, optional
+            If True generates and shows the plots. The default is False.
+        plot_map : Boolean, optional
+            If True will plot the maps. The default is True.
+        log : Boolean, optional
+            If true the map is plotted on a log scale. The default is True.
+        gamma : Float, optional
+            The value for power log. The default is 0..
+
+        Returns
+        -------
+        box_x_centroid : Integer List
+            This holds the maximum and minimum values for the box in the x direction.
+        box_y_centroid : Integer List
+            This holds the maximum and minimum values for the box in the y direction.
+
+        """
              
         self.get_peaks(plot=plot, verbose=verbose)
         
@@ -1004,6 +1069,58 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                            plot=False, plot_spectra=False, plot_tracing_maps=[], verbose=True) :  ### CHECK
         """
         Compute Integrated map and plot if requested
+
+        Parameters
+        ----------
+        min_wave : Integer, optional
+            The minimum wavelength passed through the mask. The default is 0.
+        max_wave : Integer, optional
+            The maximum wavelength passed through the mask. The default is 0.
+        nansum : Boolean, optional
+            If True will sum the number of NaNs in the columns and rows in the intergrated map. The default is True.
+        vmin : FLoat, optional
+            DESCRIPTION. The default is 1E-30. #TODO 
+        vmax : Float, optional
+            DESCRIPTION. The default is 1E30. #TODO 
+        fcal : Boolean, optional
+            If fcal=True, cube.flux_calibration is used. The default is False. 
+        log : Boolean, optional
+            If true the map is plotted on a log scale. The default is True.
+        gamma : Float, optional
+            The value for power log. The default is 0..
+        cmap : String, optional
+            This is the colour of the map. The default is "fuego". 
+        box_x : Integer List, optional
+            When creating a box to show/trim/alignment these are the x cooridnates in spaxels of the box. The default is [0,-1].
+        box_y : Integer List, optional
+            When creating a box to show/trim/alignment these are the y cooridnates in spaxels of the box. The default is [0,-1].
+        g2d : Boolean, optional
+            If True uses a 2D gaussian, else doesn't. The default is False. 
+        plot_centroid : Boolean, optional
+            If True will plot the centroid. The default is True.
+        trace_peaks : Boolean, optional
+            DESCRIPTION. The default is False. #TODO 
+        adr_index_fit : Integer, optional
+            This is the fitted polynomial with highest degree n. The default is 2. 
+        edgelow : Integer, optional
+            This is the lowest value in the wavelength range in terms of pixels. The default is -1. 
+        edgehigh : Integer, optional
+            This is the highest value in the wavelength range in terms of pixels, (maximum wavelength - edgehigh). The default is -1. 
+        step_tracing : Integer, optional
+            DESCRIPTION. The default is 100. #TODO 
+        plot : Boolean, optional
+            If True generates and shows the plots. The default is False.
+        plot_spectra : Boolean, optional
+            If True will plot the spectra. The default is False.
+        plot_tracing_maps : List, optional
+            If True will plot the tracing maps. The default is [].
+        verbose : Boolean, optional
+            Print results. The default is True.
+
+        Returns
+        -------
+        None.
+
         """
         # Integrated map between good wavelengths
         
@@ -1173,6 +1290,35 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         """
         Given a box (or a center with a width size, all in spaxels), 
         this task provides the integrated or median spectrum and the list of spaxels.
+
+        Parameters
+        ----------
+        box_x : Integer List, optional
+            When creating a box to show/trim/alignment these are the x cooridnates in spaxels of the box. The default is [].
+        box_y : Integer List, optional
+            When creating a box to show/trim/alignment these are the y cooridnates in spaxels of the box. The default is [].
+        center : Integer List, optional
+            The centre of the box. The default is [10,10].
+        width : Integer, optional
+            The width of the box. The default is 3.
+        log : Boolean, optional
+            If true the map is plotted on a log scale. The default is True.
+        gamma : Float, optional
+            The value for power log. The default is 0..
+        plot : Boolean, optional
+            If True generates and shows the plots. The default is True.
+        verbose : Boolean, optional
+            Print results. The default is True.
+        median : Boolean, optional
+            If True prints out the median values. The default is False.
+
+        Returns
+        -------
+        spectrum_box : Plot
+            This is the plot of the spectrum box.
+        spaxel_list : List of Interger Lists
+            The cooridinates of the box corners.
+
         """
         if len(box_x) == 0:
             # Center values must be integer and not float
@@ -1225,6 +1371,35 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         and calls task spectrum_of_box to get the integrated or median spectrum of the region   
         
         Example: spec,spaxel_list = cube.spectrum_offcenter(distance=10, width=5, pa=cube.pa)
+        
+        Parameters
+        ----------
+        offset_x : Integer, optional
+            DESCRIPTION. The default is 5. #TODO 
+        offset_y : Integer, optional
+            DESCRIPTION. The default is 5. #TODO 
+        distance : Integer, optional
+            DESCRIPTION. The default is 5. #TODO 
+        width : Integer, optional
+            DESCRIPTION. The default is 3. #TODO 
+        pa : String, optional
+            This is the position angle. The default is "".
+        peak : List, optional
+            DESCRIPTION. The default is []. #TODO 
+        median : Boolean, optional
+            If True will print out the median specrum of the box. The default is False.
+        plot : Boolean, optional
+            If True generates and shows the plots. The default is True.
+        verbose : Boolean, optional
+            Print results. The default is True.
+
+        Returns
+        -------
+        spectrum_box : Plot
+            This is the plot of the spectrum box.
+        spaxel_list : List of Interger Lists
+            The cooridinates of the box corners.
+
         """
         if peak != []:
             x0 = peak[0]
@@ -1268,12 +1443,84 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                     label_axes_fontsize=15, axes_fontsize = 14, c_fontsize = 12, title_fontsize= 16,
                     fraction=0.0457, pad=0.02, colorbar_ticksize= 14, colorbar_fontsize = 15, barlabel=""):
         """
-        Plot weight map."
+        Plot weight map.
 
         Example
         ----------
         >>> cube1s.plot_weight()
-        """   
+
+        Parameters
+        ----------
+        log : Boolean, optional
+            If true the map is plotted on a log scale. The default is False.
+        gamma : Float, optional
+            The value for power log. The default is 0..
+        vmin : Float, optional
+            DESCRIPTION. The default is 1E-30. #TODO 
+        vmax : Float, optional
+            DESCRIPTION. The default is 1E30. #TODO 
+        cmap : String, optional
+            This is the colour of the map. The default is "gist_gray".
+        fig : Integer, optional
+            DESCRIPTION. The default is 10. #TODO 
+        save_file : String, optional
+            Save plot in file "file.extension". The default is "".
+        #ADR : Boolean, optional
+            If True will correct for ADR (Atmospheric Differential Refraction). The default is True.
+        description : String, optional
+            This is the description of the cube. The default is "".
+        contours : Boolean, optional
+            DESCRIPTION. The default is True. #TODO 
+        clabel : Boolean, optional
+            DESCRIPTION. The default is False. #TODO 
+        verbose : Boolean, optional
+            Print results. The default is True.
+        spaxel : Integer, optional
+            DESCRIPTION. The default is 0. #TODO 
+        spaxel2 : Integer, optional
+            DESCRIPTION. The default is 0. #TODO 
+        spaxel3 : Integer, optional
+            DESCRIPTION. The default is 0. #TODO 
+        box_x : Integer List, optional
+            When creating a box to show/trim/alignment these are the x cooridnates in spaxels of the box. The default is [0,-1].
+        box_y : Integer List, optional
+            When creating a box to show/trim/alignment these are the y cooridnates in spaxels of the box. The default is [0,-1].
+        circle : Integer List, optional
+            DESCRIPTION. The default is [0,0,0].
+        circle2 : Integer List, optional
+            DESCRIPTION. The default is [0,0,0].
+        circle3 : Integer List, optional
+            DESCRIPTION. The default is [0,0,0].
+        plot_centre : Boolean, optional
+            If True plots the centre. The default is True.
+        plot_spaxel : Boolean, optional
+            If True will plot the spaxel. The default is False.
+        plot_spaxel_grid : Boolean, optional
+            If True plots the spaxel grid. The default is True.
+        label_axes_fontsize : Integer, optional
+            This is the size of the axes labels. The default is 15.
+        axes_fontsize : Integer, optional
+            This is the size of the font on the axes. The default is 14.
+        c_fontsize : Integer, optional
+            DESCRIPTION. The default is 12. #TODO 
+        title_fontsize : Integer, optional
+            This is the size of the font for the title. The default is 16.
+        fraction : Float, optional
+            DESCRIPTION. The default is 0.0457. #TODO 
+        pad : Float, optional
+            DESCRIPTION. The default is 0.02. #TODO 
+        colorbar_ticksize : Integer, optional
+            This is the size of the colourbars ticks. The default is 14.
+        colorbar_fontsize : Integer, optional
+            This is the fontsize of the text for the colourbar. The default is 15.
+        barlabel : String, optional
+            This is text for the colourbar. The default is "". 
+
+        Returns
+        -------
+        None.
+
+        """
         interpolated_map = np.mean(self.weight, axis=0)
             
         if np.nansum(interpolated_map) == 0:
@@ -1297,6 +1544,37 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                    show_spaxels=[], verbose = True, description = "" ):
         """
         Runs task "create_map"
+
+        Parameters
+        ----------
+        line : TYPE
+            DESCRIPTION.
+        w2 : Float, optional
+            DESCRIPTION. The default is 0..
+        gaussian_fit : Boolean, optional
+            DESCRIPTION. The default is False. #TODO 
+        gf : Boolean, optional
+            DESCRIPTION. The default is False. #TODO 
+        lowlow : Integer, optional
+            DESCRIPTION. The default is 50. #TODO 
+        lowhigh : Integer, optional
+            DESCRIPTION. The default is 10. #TODO 
+        highlow : Integer, optional
+            DESCRIPTION. The default is 10. #TODO 
+        highhigh : Integer, optional
+            DESCRIPTION. The default is 50. #TODO 
+        show_spaxels : List, optional
+            DESCRIPTION. The default is []. #TODO 
+        verbose : Boolean, optional
+			Print results. The default is True.
+        description : String, optional
+            This is the description of the cube. The default is "".
+
+        Returns
+        -------
+        mapa : Map
+            DESCRIPTION. #TODO 
+
         """
         mapa = create_map(cube=self, line=line, w2 = w2, gaussian_fit = gaussian_fit, gf=gf,
                    lowlow= lowlow, lowhigh=lowhigh, highlow=highlow, highhigh = highhigh,
@@ -1320,18 +1598,80 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 
         Parameters
         ----------
-        wavelength: float
+        wavelength: Float
           wavelength to be mapped.
-        norm:  
-          Colour scale, default = colors.PowerNorm(gamma=1./4.)
-            Normalization scale 
-            Lineal scale: norm=colors.Normalize().
-            Log scale:norm=colors.LogNorm()
+        w2 : Float, optional
+            DESCRIPTION. The default is 0.. #TODO 
+        log : Boolean, optional
+            If true the map is plotted on a log scale. The default is False.
+        gamma : Float, optional
+            DESCRIPTION. The default is 0.. #TODO 
+        vmin : Float, optional
+            DESCRIPTION. The default is 1E-30. #TODO 
+        vmax : Float, optional
+            DESCRIPTION. The default is 1E30. #TODO 
         cmap: 
-            Color map used, default cmap=fuego_color_map
-            Velocities: cmap="seismic"
-        save_file:
-            (Optional) Save plot in file "file.extension"
+            Color map used.
+            Velocities: cmap="seismic". The default is fuego_color_map.
+        fig_size : Integer, optional
+            This is the size of the figure. The default is 10.
+        fcal : Boolean, optional
+            If fcal=True, cube.flux_calibration is used. The default is False. #TODO 
+        save_file : String, optional
+            Save plot in file "file.extension". The default is "".
+        description : String, optional
+            This is the description of the cube. The default is "".
+        contours : Boolean, optional
+            DESCRIPTION. The default is True. #TODO 
+        clabel : Boolean, optional
+            DESCRIPTION. The default is False. #TODO 
+        verbose : Boolean, optional
+			Print results. The default is True.
+        spaxel : Integer, optional
+            DESCRIPTION. The default is 0. #TODO 
+        spaxel2 : Integer, optional
+            DESCRIPTION. The default is 0. #TODO 
+        spaxel3 : Integer, optional
+            DESCRIPTION. The default is 0. #TODO 
+        box_x : Integer List, optional
+            When creating a box to show/trim/alignment these are the x cooridnates in spaxels of the box. The default is [0,-1].
+        box_y : Integer List, optional
+            When creating a box to show/trim/alignment these are the y cooridnates in spaxels of the box. The default is [0,-1].
+        circle : Integer List, optional
+            DESCRIPTION. The default is [0,0,0]. #TODO 
+        circle2 : Integer List, optional
+            DESCRIPTION. The default is [0,0,0]. #TODO 
+        circle3 : Integer List, optional
+            DESCRIPTION. The default is [0,0,0]. #TODO 
+        plot_centre : Boolean, optional
+            DESCRIPTION. The default is True. #TODO 
+        plot_spaxel : Boolean, optional
+            If True will plot the spaxel. The default is False. 
+        plot_spaxel_grid : Boolean, optional
+            If True plots the spaxel grid. The default is True.
+        label_axes_fontsize : Integer, optional
+            This is the size of the axes labels. The default is 15.
+        axes_fontsize : Integer, optional
+            This is the size of the font on the axes. The default is 14.
+        c_fontsize : Integer, optional
+            DESCRIPTION. The default is 12. #TODO 
+        title_fontsize : Integer, optional
+            This is the size of the titles text. The default is 16.
+        fraction : Float, optional
+            DESCRIPTION. The default is 0.0457. #TODO 
+        pad : Float, optional
+            DESCRIPTION. The default is 0.02. #TODO 
+        colorbar_ticksize : Integer, optional
+            This is the size of the colourbars ticks. The default is 14.
+        colorbar_fontsize : Integer, optional
+            This is the fontsize of the text for the colourbar. The default is 15.
+        barlabel : String, optional
+            This is text for the colourbar. The default is "".
+
+        Returns
+        -------
+        None.
+
         """
         
         #mapa, description_ = self.make_map(wavelength, w2=w2)
@@ -1370,8 +1710,6 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         """
         Show a given map.
 
-        Parameters
-        ----------
         map: np.array(float)
           Map to be plotted. If not given, it plots the integrated map.
         norm:
@@ -1386,6 +1724,110 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
             Try also "inferno", "CMRmap", "gnuplot2", "gist_rainbow", "Spectral"
         spaxel,spaxel2,spaxel3:
             [x,y] positions of spaxels to show with a green circle, blue square and red triangle
+
+        Parameters
+        ----------
+        mapa : String, optional
+            DESCRIPTION. The default is "". #TODO 
+        log : Boolean, optional
+            If true the map is plotted on a log scale. The default is False.
+        gamma : Float, optional
+            DESCRIPTION. The default is 0.. #TODO 
+        vmin : Float, optional
+            DESCRIPTION. The default is 1E-30. #TODO 
+        vmax : Float, optional
+            DESCRIPTION. The default is 1E30. #TODO 
+        fcal : Boolean, optional
+            If fcal=True, cube.flux_calibration is used. The default is False.
+        trimmed : Boolean, optional
+            DESCRIPTION. The default is False. #TODO
+        cmap : String, optional
+            This is the colour of the map. The default is "fuego". 
+        weight : Boolean, optional
+            DESCRIPTION. The default is False. #TODO
+        velocity : Boolean, optional
+            DESCRIPTION. The default is False. #TODO
+        fwhm : Boolean, optional
+            DESCRIPTION. The default is False. #TODO
+        ew : Boolean, optional
+            DESCRIPTION. The default is False. #TODO
+        ratio : Boolean, optional
+            DESCRIPTION. The default is False. #TODO
+        contours : Boolean, optional
+            DESCRIPTION. The default is True. #TODO
+        clabel : Boolean, optional
+            DESCRIPTION. The default is False. #TODO
+        line : Integer, optional
+            DESCRIPTION. The default is 0. #TODO
+        spaxel : Integer, optional
+            DESCRIPTION. The default is 0. #TODO
+        spaxel2 : Integer, optional
+            DESCRIPTION. The default is 0. #TODO
+        spaxel3 : Integer, optional
+            DESCRIPTION. The default is 0. #TODO
+        box_x : Integer List, optional
+             When creating a box to show/trim/alignment these are the x cooridnates in spaxels of the box. The default is [0,-1].
+        box_y : Integer List, optional
+            When creating a box to show/trim/alignment these are the y cooridnates in spaxels of the box. The default is [0,-1].
+        plot_centroid : Boolean, optional
+            If True will plot the centroid. The default is False.
+        g2d : Boolean, optional
+            If True uses a 2D gaussian, else doesn't. The default is True. 
+        half_size_for_centroid : Integer, optional
+            This is half the length/width of the box. The default is 0.
+        circle : Integer List, optional
+            DESCRIPTION. The default is [0,0,0]. #TODO
+        circle2 : Integer List, optional
+            DESCRIPTION. The default is [0,0,0]. #TODO
+        circle3 : Integer List, optional
+            DESCRIPTION. The default is [0,0,0]. #TODO
+        plot_box : Boolean, optional
+            DESCRIPTION. The default is False. #TODO
+        plot_centre : Boolean, optional
+            DESCRIPTION. The default is True. #TODO
+        plot_spaxel : Boolean, optional
+            If True will plot the spaxel. The default is False.
+        plot_spaxel_grid : Boolean, optional
+            If True plots the spaxel grid. The default is True.
+        alpha_grid : Float, optional
+            DESCRIPTION. The default is 0.1. #TODO
+        plot_spaxel_list : List, optional
+            DESCRIPTION. The default is []. #TODO
+        color_spaxel_list : String, optional
+            DESCRIPTION. The default is "blue". #TODO
+        alpha_spaxel_list : Float, optional
+            DESCRIPTION. The default is 0.4. #TODO
+        label_axes_fontsize : Integer, optional
+            This is the size of the axes labels. The default is 15.
+        axes_fontsize : Integer, optional
+            This is the size of the font on the axes. The default is 14.
+        c_fontsize : Integer, optional
+            DESCRIPTION. The default is 12. #TODO
+        title_fontsize : Integer, optional
+            This is the size of the font for the title. The default is 16.
+        fraction : Float, optional
+            DESCRIPTION. The default is 0.0457. #TODO
+        pad : Float, optional
+            DESCRIPTION. The default is 0.02. #TODO
+        colorbar_ticksize : Integer, optional
+            This is the size of the colourbars ticks. The default is 14.
+        colorbar_fontsize : Integer, optional
+            This is the fontsize of the text for the colourbar. The default is 15.
+        barlabel : String, optional
+            This is text for the colourbar. The default is "".
+        description : String, optional
+            This is the description of the cube. The default is "".
+        fig_size : Integer, optional
+            This is the size of the figure. The default is 10.
+        save_file : String, optional
+            Save plot in file "file.extension". The default is "".
+        verbose : Boolean, optional
+			Print results. The default is True.
+
+        Returns
+        -------
+        None.
+
         """
                   
         #plot_spaxel_list_ = copy.deepcopy(plot_spaxel_list)
@@ -1702,6 +2144,29 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 # -----------------------------------------------------------------------------
     def mask_cube(self, min_wave = 0, max_wave = 0, include_partial_spectra= False,
                   cmap="binary_r", plot=False, verbose = False):
+        """
+        #TODO
+
+        Parameters
+        ----------
+        min_wave : Integer, optional
+            The minimum wavelength passed through the mask. The default is 0.
+        max_wave : Integer, optional
+            The maximum wavelength passed through the mask. The default is 0.
+        include_partial_spectra : Boolean, optional
+            DESCRIPTION. The default is False. #TODO
+        cmap : String, optional
+            This is the colour of the map. The default is "binary_r".
+        plot : Boolean, optional
+            If True generates and shows the plots. The default is False.
+        verbose : Boolean, optional
+			Print results. The default is False.
+
+        Returns
+        -------
+        None.
+
+        """
         
         if min_wave == 0 : min_wave = self.valid_wave_min
         if max_wave == 0 : max_wave = self.valid_wave_max
@@ -1732,20 +2197,33 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                              plot=False, verbose=False, log = True):  
         """
         Compute growth curve in a wavelength range.
-        Returns r2_growth_curve, F_growth_curve, flux, r2_half_light
-
-        Parameters
-        ----------
-        min_wave, max_wave: floats
-          wavelength range = [min_wave, max_wave].
-        plot: boolean 
-          Plot yes/no  
+        Returns r2_growth_curve, F_growth_curve, flux, r2_half_light 
         
         Example
         -------
         >>>r2_growth_curve, F_growth_curve, flux, r2_half_light = self.growth_curve_between(min_wave, max_wave, plot=True)    # 0,1E30 ??
 
-        """            
+
+        Parameters
+        ----------
+        min_wave : Integer, optional
+            The minimum wavelength passed through the mask. The default is 0.
+        max_wave : Integer, optional
+            The maximum wavelength passed through the mask. The default is 0.
+        sky_annulus_low_arcsec : Float, optional
+            DESCRIPTION. The default is 7..
+        sky_annulus_high_arcsec : Float, optional
+            DESCRIPTION. The default is 12..
+        plot : Boolean, optional
+            If True generates and shows the plots. The default is False.
+        verbose : Boolean, optional
+			Print results. The default is False.
+
+        Returns
+        -------
+        None.
+
+        """      
         if min_wave == 0 : min_wave = self.valid_wave_min 
         if max_wave == 0 : max_wave = self.valid_wave_max
         
@@ -1875,22 +2353,38 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                             sky_annulus_low_arcsec = 5., sky_annulus_high_arcsec = 10.,
                             fig_size=12, plot=True, verbose = True):
         """
-        Compute half light spectrum (for r_max=1) or integrated star spectrum (for r_max=5) in a wavelength range.
-
-        Parameters
-        ----------
-        r_max = 1: float
-          r_max to integrate, in units of r2_half_light (= seeing if object is a star, for flux calibration make r_max=5)
-        min_wave, max_wave: floats
-          wavelength range = [min_wave, max_wave]
-        smooth = 21: float
-          smooth the data
-        plot: boolean 
-          Plot yes/no  
+        Compute half light spectrum (for r_max=1) or integrated star spectrum (for r_max=5) in a wavelength range. 
         
         Example
         -------
         >>> self.half_light_spectrum(5, plot=plot, min_wave=min_wave, max_wave=max_wave)
+                
+
+        Parameters
+        ----------
+        r_max : Integer, optional
+            r_max to integrate, in units of r2_half_light (= seeing if object is a star, for flux calibration make r_max=5). The default is 1.
+        smooth : Integer, optional
+            smooths the data. The default is 21.
+        min_wave : Integer, optional
+            The minimum wavelength passed through the mask. The default is 0.
+        max_wave : Integer, optional
+            The maximum wavelength passed through the mask. The default is 0.
+        sky_annulus_low_arcsec : Float, optional
+            DESCRIPTION. The default is 5.. #TODO
+        sky_annulus_high_arcsec : Float, optional
+            DESCRIPTION. The default is 10.. #TODO
+        fig_size : Integer, optional
+            This is the size of the figure. The default is 12.
+        plot : Boolean, optional
+            If True generates and shows the plots. The default is True.
+        verbose : Boolean, optional
+            Print results. The default is True.
+
+        Returns
+        -------
+        Numpy Array
+            DESCRIPTION. #TODO
         """        
 
         if min_wave == 0 : min_wave = self.valid_wave_min 
@@ -1977,7 +2471,51 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         Example
         -------
         >>> babbsdsad   !
-        """  
+        
+        Parameters
+        ----------
+        absolute_flux_file : String
+            filename where the spectrophotometric data are included (e.g. ffeige56.dat).
+        min_wave_flux : Integer, optional
+            DESCRIPTION. The default is 0. #TODO
+        max_wave_flux : Integer, optional
+            DESCRIPTION. The default is 0. #TODO
+        fit_degree_flux : Integer, optional
+            DESCRIPTION. The default is 3. #TODO
+        step_flux : Float, optional
+            DESCRIPTION. The default is 25.. #TODO
+        r_max : Integer, optional
+            r_max to integrate, in units of r2_half_light (= seeing if object is a star, for flux calibration make r_max=5). The default is 5.
+        exp_time : Integer, optional
+            DESCRIPTION. The default is 0. #TODO
+        ha_width : Integer, optional
+            DESCRIPTION. The default is 0. #TODO
+        after_telluric_correction : Boolean, optional
+            DESCRIPTION. The default is False. #TODO
+        sky_annulus_low_arcsec : Float, optional
+            DESCRIPTION. The default is 5.. #TODO
+        sky_annulus_high_arcsec : Float, optional
+            DESCRIPTION. The default is 10.. #TODO
+        odd_number : Integer, optional
+            DESCRIPTION. The default is 0. #TODO
+        fit_weight : Float, optional
+            DESCRIPTION. The default is 0.. #TODO
+        smooth_weight : Float, optional
+            DESCRIPTION. The default is 0.. #TODO
+        smooth : Float, optional
+            smooths the data. The default is 0..
+        exclude_wlm : List of Lists of Integers, optional
+            DESCRIPTION. The default is [[0,0]]. #TODO
+        plot : Boolean, optional
+            If True generates and shows the plots. The default is True.
+        verbose : Boolean, optional
+            Print results. The default is False.
+
+        Returns
+        -------
+        None.
+
+        """   
         if smooth == 0.0 : smooth=0.05
         
         if min_wave_flux == 0 : min_wave_flux = self.valid_wave_min + step_flux 
@@ -2243,6 +2781,32 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
     def fit_Moffat_between(self, min_wave=0, max_wave=0, r_max=5, plot=False, verbose = False):
+        """
+        #TODO
+
+        Parameters
+        ----------
+        min_wave : Integer, optional
+            The minimum wavelength passed through the mask. The default is 0.
+        max_wave : Integer, optional
+            The maximum wavelength passed through the mask. The default is 0.
+        r_max : Integer, optional
+            r_max to integrate, in units of r2_half_light (= seeing if object is a star, for flux calibration make r_max=5). The default is 5.
+        plot : Boolean, optional
+            If True generates and shows the plots. The default is False.
+        verbose : Boolean, optional
+            Print results. The default is False.
+
+        Returns
+        -------
+        flux : TYPE #TODO
+            DESCRIPTION.
+        TYPE #TODO
+            DESCRIPTION.
+        beta : TYPE #TODO
+            DESCRIPTION.
+
+        """
         
         if min_wave == 0 : min_wave = self.valid_wave_min 
         if max_wave == 0 : max_wave = self.valid_wave_max 
@@ -2273,6 +2837,57 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         if nansum = True, it keeps spaxels in edges that only have a partial spectrum (default = False)
         if remove_spaxels_not_fully_covered = False, it keeps spaxels in edges that only have a partial spectrum (default = True)
         
+        """    
+        """
+        Task for trimming cubes in RA and DEC (not in wavelength)
+
+        Parameters
+        ----------
+        trim_cube : Boolean, optional
+            DESCRIPTION. The default is True. #TODO
+        trim_values : List, optional
+            DESCRIPTION. The default is []. #TODO
+        half_size_for_centroid : Integer, optional
+            This is half the length/width of the box. The default is 10.
+        remove_spaxels_not_fully_covered : Boolean, optional
+            DESCRIPTION. The default is True.
+        nansum : Boolean, optional
+            If True will sum the number of NaNs in the columns and rows in the intergrated map. The default is False.
+        ADR : Boolean, optional
+            If True will correct for ADR (Atmospheric Differential Refraction). The default is True.
+        box_x : Integer List, optional
+             When creating a box to show/trim/alignment these are the x cooridnates in spaxels of the box. The default is [0,-1].
+        box_y : Integer List, optional
+            When creating a box to show/trim/alignment these are the y cooridnates in spaxels of the box. The default is [0,-1].
+        edgelow : Integer, optional
+            This is the lowest value in the wavelength range in terms of pixels. The default is -1. 
+        edgehigh : Integer, optional
+            This is the highest value in the wavelength range in terms of pixels, (maximum wavelength - edgehigh). The default is -1. 
+        adr_index_fit : Integer, optional
+            This is the fitted polynomial with highest degree n. The default is 2. 
+        g2d : Boolean, optional
+            If True uses a 2D gaussian, else doesn't. The default is False. 
+        step_tracing : Integer, optional
+            DESCRIPTION. The default is 100. #TODO
+        plot_tracing_maps : List, optional
+            If True will plot the tracing maps. The default is [].
+        plot_weight : Boolean, optional
+            DESCRIPTION. The default is False. #TODO
+        fcal : Boolean, optional
+            If fcal=True, cube.flux_calibration is used. The default is False.
+        plot : Boolean, optional
+            If True generates and shows the plots. The default is True.
+        plot_spectra : Boolean, optional
+            If True will plot the spectra. The default is False.
+        verbose : Boolean, optional
+            Print results. The default is True.
+        warnings : Boolean, optional
+            If True will show any problems that arose, else skipped. The default is True.
+
+        Returns
+        -------
+        None.
+
         """      
         # Check if this is a self.combined cube or a self
         try:
@@ -2477,14 +3092,14 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 
         Parameters
         ----------
-        verbose : TYPE, optional
-            DESCRIPTION. The default is False.
-        show_results : TYPE, optional
-            DESCRIPTION. The default is True.
-        valid_wave_min : TYPE, optional
-            DESCRIPTION. The default is 0.
-        valid_wave_max : TYPE, optional
-            DESCRIPTION. The default is 0.
+        verbose : Boolean, optional
+            Print results. The default is False.
+        show_results : Boolean, optional
+            DESCRIPTION. The default is True. #TODO
+        valid_wave_min : Integer, optional
+            DESCRIPTION. The default is 0. #TODO
+        valid_wave_max : Integer, optional
+            DESCRIPTION. The default is 0. #TODO
 
         Returns
         -------
