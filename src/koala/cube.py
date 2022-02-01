@@ -42,7 +42,7 @@ parent = dirname(current)
 sys.path.append(current)
 #sys.path.append(join(parent, 'utils'))
 
-
+"to notify people write #TODO"
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -64,45 +64,116 @@ sys.path.append(current)
 class Interpolated_cube(object):                       # TASK_Interpolated_cube
     """
     Constructs a cube by accumulating RSS with given offsets.
-            
     
-    Parameters
-    ----------    
+    Default values:
     
-    pixel_size_arcsec: 0.7, 
-    kernel_size_arcsec: 1.1,
-    shape: [],
-    zeros: False,
-    centre_deg=[], 
-    size_arcsec=[], 
-    aligned_coor=False, 
-    delta_RA =0,  
-    delta_DEC=0,
-     
-    ADR=False, force_ADR = False, jump = -1, apply_ADR = True,
-    ADR_x_fit=[0],ADR_y_fit=[0], check_ADR = False,    
+    RSS : This is the file that has the raw stacked spectra, it can be a file or an object created with KOALA_RSS.
     
-    box_x=[0,-1],box_y=[0,-1], half_size_for_centroid = 10,
-    step_tracing = 100, g2d=False, adr_index_fit = 2,
-    kernel_tracing = 0,
-    plot_tracing_maps=[], 
-    edgelow = -1, edgehigh = -1,
-    
-    offsets_files="", offsets_files_position ="", 
-
-    flux_calibration=[], flux_calibration_file ="",
-    
-    trim_cube = False, remove_spaxels_not_fully_covered = True,
-
-    read_fits_cube = False, n_wave=2048, wavelength=[],description="",objeto="",PA=0,
-    valid_wave_min = 0, valid_wave_max = 0,
-    grating="",CRVAL1_CDELT1_CRPIX1=[0,0,0],total_exptime=0, n_cols=2,n_rows=2, 
-    number_of_combined_files = 1,
-    
-    plot=False, log=True, gamma=0., 
-    plot_rss=True, plot_spectra = True,
-    warnings=False, verbose=True, fig_size=12
+    Defining the cube:
+        pixel_size_arcsec: This is the size of the pixels in arcseconds. (default 0.7)
         
+        kernel_size_arcsec: This is the size of the kernels in arcseconds. (default 1.4)
+        
+        centre_deg=[]: This is the centre of the cube relative to the position in the sky, using RA and DEC, should be either empty or a List of 2 floats. (default empty List)
+            
+        size_arcsec=[]:This is the size of the cube in arcseconds, should be either empty or a List of 2 floats. (default empty List)
+        
+        zeros=False: This decides if the cube created is empty of not, if True creates an empty cube, if False uses RSS to create the cube. (default False)
+    
+        trim_cube = False: If True the cube witll be trimmed based on (box_x and box_y), else no trimming is done. (default False)
+    
+        shape=[]: This is the shape of the cube, should either be empty or an List of 2 integers. (default empty List)
+        
+        n_cols=2: This is the number of columns the cube has. (default 2)
+        
+        n_rows=2: This is the number of rows the cube has. (default 2)
+        
+    
+    Directories:
+        path="": This is the directory path to the folder where the rss_file is located. (default "")
+        
+            
+    Alignment:
+        box_x=[0,-1]: When creating a box to show/trim/alignment these are the x cooridnates in spaxels of the box. (default box not used)
+        
+        box_y=[0,-1]: When creating a box to show/trim/alignment these are the y cooridnates in spaxels of the box. (default box not used)
+        
+        half_size_for_centroid = 10: This determines half the width/height of the for the box centred at the maximum value, should be integer. (default 10)
+        
+        g2d=False: If True uses a 2D gaussian, else doesn't. (default False)
+            
+        aligned_coor=False: If True uses a 2D gaussian, else doesn't. (default False)
+            
+        delta_RA =0: This is a small offset of the RA (right ascension). (default 0)
+        
+        delta_DEC=0: This is a small offset of the DEC (declination). (default 0)
+        
+        offsets_files="": The number of files to be aligned. (default "") ***
+    
+        offsets_files_position ="": The position of the current cube in the list of cubes to be aligned. (default "") ***
+            
+
+    Flux calibration:
+        flux_calibration=[0]: This is the flux calibration. (default empty List)
+            
+        flux_calibration_file="": This is the directory of the flux calibration file. (default "")
+        
+        
+    ADR:
+        ADR=False: If True will correct for ADR (Atmospheric Differential Refraction). (default False)
+    
+        force_ADR = False: If True will correct for ADR even considoring a small correction. (default False)
+    
+        jump = -1: If a positive number partitions the wavelengths with step size jump, if -1 will not partition. (default -1)
+    
+        adr_index_fit = 2: This is the fitted polynomial with highest degree n. (default n = 2)
+        
+        ADR_x_fit=[0]: This is the ADR coefficients values for the x axis. (default constant 0)
+        
+        ADR_y_fit=[0]: This is the ADR coefficients values for the y axis. (default constant 0)               
+        
+        check_ADR = False: ***    # remove check_ADR?
+    
+        edgelow = -1: This is the lowest value in the wavelength range in terms of pixels. (default -1)
+        
+        edgehigh = -1, This is the highest value in the wavelength range in terms of pixels, (maximum wavelength - edgehigh). (default -1) (pixels)
+
+
+    Reading cubes:
+        read_fits_cube = False: If True uses the inputs for the cube, else uses RSS inputs. (default False)
+        
+        n_wave=2048: This is the number of wavelengths, which is the length of the array. (default 2048)
+        
+        wavelength=[]: This is an a List with the wavelength solution. (default empty List)
+        
+        description="": This is the description of the cube. (default "")
+        
+        objeto="": This is an object with an analysis. (default "")
+        
+        PA=0: This is the position angle. (default 0)
+        
+        valid_wave_min = 0: This is the minimum wavelength shown on the spectrum. (default 0)
+        
+        valid_wave_max = 0: This is the maximum wavelegth shown on the sprectrum. (defulat 0)
+        
+        grating="": This is the grating used in AAOmega. (default "")
+        
+        CRVAL1_CDELT1_CRPIX1=[0,0,0]: This are the values for the wavelength calibrations, provided by 2dFdr. (default [0,0,0])
+        
+        total_exptime=0: This is the exposition time. (default 0)
+        
+        number_of_combined_files = 1: This is the total number of files that have been cominded. (default 1)
+       
+        
+    Plotting / Printing:
+        plot_tracing_maps=[]: This is the maps to be plotted. (default empty List)
+    
+        plot=False: If True shows all the plots, else doesn't show plots. (default False)
+        
+        verbose=True: Prints the results. (default True)
+    
+        warnings=False: If True will show any problems that arose, else skipped. (default False)
+    
     
     """
 # -----------------------------------------------------------------------------
