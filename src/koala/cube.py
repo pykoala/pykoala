@@ -953,66 +953,66 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 
         """
         
-         if verbose: print("\n> Tracing peaks and checking ADR...")
-         
-         if self.grating == "580V":
-             if edgelow == -1: edgelow = 150
-             if edgehigh == -1: edgehigh = 10
-         else:
-             if edgelow == -1: edgelow = 10
-             if edgehigh == -1: edgehigh = 10
+        if verbose: print("\n> Tracing peaks and checking ADR...")
+        
+        if self.grating == "580V":
+            if edgelow == -1: edgelow = 150
+            if edgehigh == -1: edgehigh = 10
+        else:
+            if edgelow == -1: edgelow = 10
+            if edgehigh == -1: edgehigh = 10
 
-         x0=box_x[0]
-         x1=box_x[1]
-         y0=box_y[0]
-         y1=box_y[1]  
-         
-         if check_ADR:
-             plot_residua = False
-         else:
-             plot_residua = True
-         
-         ADR_x_fit, ADR_y_fit, ADR_x_max, ADR_y_max, ADR_total, x_peaks, y_peaks, self.ADR_x_residua, self.ADR_y_residua, self.ADR_total_residua = centroid_of_cube(self, x0,x1,y0,y1, edgelow=edgelow, edgehigh=edgehigh,
-                                                                                                    step_tracing=step_tracing, g2d=g2d, plot_tracing_maps=plot_tracing_maps,
-                                                                                                    adr_index_fit=adr_index_fit,
-                                                                                                    kernel_tracing =kernel_tracing,
-                                                                                                    plot=plot, log=log, gamma=gamma,
-                                                                                                    plot_residua=plot_residua, verbose=verbose)      
-         pp=np.poly1d(ADR_x_fit)
-         ADR_x=pp(self.wavelength)    
-         pp=np.poly1d(ADR_y_fit)
-         ADR_y=pp(self.wavelength)
-         
-         #self.get_peaks(box_x=box_x, box_y=box_y, verbose=verbose)  ---> Using old routine, but now we have the values from centroid!
-         self.x_peaks = x_peaks                                          # Vector with the x-peak at each wavelength 
-         self.y_peaks = y_peaks                                          # Vector with the y-peak at each wavelength 
-         self.x_peak_median = np.nanmedian(self.x_peaks)                 # Median value of the x-peak vector
-         self.y_peak_median = np.nanmedian(self.y_peaks)                 # Median value of the y-peak vector
-         #self.x_peak_median_index = np.nanargmin(np.abs(self.x_peaks-self.x_peak_median)) # Index closest to the median value of the x-peak vector
-         #self.y_peak_median_index = np.nanargmin(np.abs(self.y_peaks-self.y_peak_median)) # Index closest to the median value of the y-peak vector           
-         self.offset_from_center_x_arcsec_tracing = (self.x_peak_median-self.spaxel_RA0)*self.pixel_size_arcsec     # Offset from center using CENTROID
-         self.offset_from_center_y_arcsec_tracing = (self.y_peak_median-self.spaxel_DEC0)*self.pixel_size_arcsec    # Offset from center using CENTROID
+        x0=box_x[0]
+        x1=box_x[1]
+        y0=box_y[0]
+        y1=box_y[1]  
+        
+        if check_ADR:
+            plot_residua = False
+        else:
+            plot_residua = True
+        
+        ADR_x_fit, ADR_y_fit, ADR_x_max, ADR_y_max, ADR_total, x_peaks, y_peaks, self.ADR_x_residua, self.ADR_y_residua, self.ADR_total_residua = centroid_of_cube(self, x0,x1,y0,y1, edgelow=edgelow, edgehigh=edgehigh,
+                                                                                                   step_tracing=step_tracing, g2d=g2d, plot_tracing_maps=plot_tracing_maps,
+                                                                                                   adr_index_fit=adr_index_fit,
+                                                                                                   kernel_tracing =kernel_tracing,
+                                                                                                   plot=plot, log=log, gamma=gamma,
+                                                                                                   plot_residua=plot_residua, verbose=verbose)      
+        pp=np.poly1d(ADR_x_fit)
+        ADR_x=pp(self.wavelength)    
+        pp=np.poly1d(ADR_y_fit)
+        ADR_y=pp(self.wavelength)
+        
+        #self.get_peaks(box_x=box_x, box_y=box_y, verbose=verbose)  ---> Using old routine, but now we have the values from centroid!
+        self.x_peaks = x_peaks                                          # Vector with the x-peak at each wavelength 
+        self.y_peaks = y_peaks                                          # Vector with the y-peak at each wavelength 
+        self.x_peak_median = np.nanmedian(self.x_peaks)                 # Median value of the x-peak vector
+        self.y_peak_median = np.nanmedian(self.y_peaks)                 # Median value of the y-peak vector
+        #self.x_peak_median_index = np.nanargmin(np.abs(self.x_peaks-self.x_peak_median)) # Index closest to the median value of the x-peak vector
+        #self.y_peak_median_index = np.nanargmin(np.abs(self.y_peaks-self.y_peak_median)) # Index closest to the median value of the y-peak vector           
+        self.offset_from_center_x_arcsec_tracing = (self.x_peak_median-self.spaxel_RA0)*self.pixel_size_arcsec     # Offset from center using CENTROID
+        self.offset_from_center_y_arcsec_tracing = (self.y_peak_median-self.spaxel_DEC0)*self.pixel_size_arcsec    # Offset from center using CENTROID
 
-         self.ADR_x=ADR_x  
-         self.ADR_y=ADR_y
-         self.ADR_x_max = ADR_x_max   
-         self.ADR_y_max = ADR_y_max
-         self.ADR_total = ADR_total 
+        self.ADR_x=ADR_x  
+        self.ADR_y=ADR_y
+        self.ADR_x_max = ADR_x_max   
+        self.ADR_y_max = ADR_y_max
+        self.ADR_total = ADR_total 
 
-         if ADR_total > self.pixel_size_arcsec*0.1:
-             if verbose: print('\n  The combined ADR, {:.2f}", is larger than 10% of the pixel size! Applying this ADR correction is needed !!'.format(ADR_total))
-         elif verbose: print('\n  The combined ADR, {:.2f}", is smaller than 10% of the pixel size! Applying this ADR correction is NOT needed'.format(ADR_total))
-                    
+        if ADR_total > self.pixel_size_arcsec*0.1:
+            if verbose: print('\n  The combined ADR, {:.2f}", is larger than 10% of the pixel size! Applying this ADR correction is needed !!'.format(ADR_total))
+        elif verbose: print('\n  The combined ADR, {:.2f}", is smaller than 10% of the pixel size! Applying this ADR correction is NOT needed'.format(ADR_total))
+                   
 
-         if check_ADR == False:
-             self.ADR_x_fit = ADR_x_fit
-             self.ADR_y_fit = ADR_y_fit
-             if verbose:
-                 print("\n> Results of the ADR fit (to be applied in a next step if requested):\n")
-                 print("  ADR_x_fit = ",ADR_x_fit)
-                 print("  ADR_y_fit = ",ADR_y_fit)
-         elif verbose:
-                 print("\n> We are only checking the ADR correction, data will NOT be corrected !")             
+        if check_ADR == False:
+            self.ADR_x_fit = ADR_x_fit
+            self.ADR_y_fit = ADR_y_fit
+            if verbose:
+                print("\n> Results of the ADR fit (to be applied in a next step if requested):\n")
+                print("  ADR_x_fit = ",ADR_x_fit)
+                print("  ADR_y_fit = ",ADR_y_fit)
+        elif verbose:
+                print("\n> We are only checking the ADR correction, data will NOT be corrected !")             
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
     def box_for_centroid(self, half_size_for_centroid=6, verbose=True, plot=False, g2d=False,
