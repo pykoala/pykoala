@@ -42,7 +42,6 @@ parent = dirname(current)
 sys.path.append(current)
 #sys.path.append(join(parent, 'utils'))
 
-# Great work everyone!
 # to notify people write #TODO
 
 # -----------------------------------------------------------------------------
@@ -444,7 +443,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                                plot_tracing_maps=plot_tracing_maps)    #### UPDATE THIS, now it is run automatically
         
     
-        if read_fits_cube == False and verbose: print("\n> Interpolated cube done!")
+        if read_fits_cube == False and verbose: print("\n> Interpolated cube done! Well done!")
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
     def apply_flux_calibration(self, flux_calibration=[], flux_calibration_file = "", path="", verbose=True):
