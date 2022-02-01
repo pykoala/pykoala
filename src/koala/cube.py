@@ -42,7 +42,9 @@ parent = dirname(current)
 sys.path.append(current)
 #sys.path.append(join(parent, 'utils'))
 
-"to notify people write #TODO"
+# Great work everyone!
+#"to notify people write #TODO"
+
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
