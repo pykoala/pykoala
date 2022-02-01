@@ -102,7 +102,7 @@ if __name__ == "__main__":
     # # -----------------------------------------------------------------------
 
     # # List the files in the folder
-    list_fits_files_in_folder(path_red)
+    # list_fits_files_in_folder(path_red)
     
     # PyKOALA finds 4 objects: HD60753, HILT600 (calibration stars),
     #                          He2-10 (the galaxy),
@@ -584,7 +584,29 @@ if __name__ == "__main__":
     # # -----------------------------------------------------------------------
     # # -----------------------------------------------------------------------
 
+    # # List the files in the folder
+    # list_fits_files_in_folder(path_blue)
+    
+    # PyKOALA finds 4 objects: HD60753, HILT600 (calibration stars),
+    #                          He2-10 (the galaxy),
+    #                          SKYFLAT
+    
+    # # -----------------------------------------------------------------------
 
+    # # Next, run this for AUTOMATICALLY processing calibration of the night
+    automatic_calibration_night(path=path_blue, auto=True) 
+                                #, kernel_throughput = 21)
+ 
+    
+    # # This will create 2 (3 for red) files needed for the calibration:
+    
+    # # 1. The throughput_2D_file:
+    throughput_2D_file = path_blue+"throughput_2D_20180227_580V.fits"
+    # # 2. The flux calibration file:
+    flux_calibration_file = path_blue+"flux_calibration_20180227_580V_0p7_1k10.dat"
+    # # 3. The telluric correction file (only in red):
+    telluric_correction_file = path_blue+"telluric_correction_20180227_580V.dat"
+ 
 
 
     # # -----------------------------------------------------------------------
