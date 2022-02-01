@@ -43,7 +43,7 @@ sys.path.append(current)
 #sys.path.append(join(parent, 'utils'))
 
 # Great work everyone!
-#"to notify people write #TODO"
+# to notify people write #TODO
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -110,9 +110,9 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         
         delta_DEC=0: This is a small offset of the DEC (declination). (default 0)
         
-        offsets_files="": The number of files to be aligned. (default "") ***
+        offsets_files="": The number of files to be aligned. (default "") #TODO
     
-        offsets_files_position ="": The position of the current cube in the list of cubes to be aligned. (default "") ***
+        offsets_files_position ="": The position of the current cube in the list of cubes to be aligned. (default "") #TODO
             
 
     Flux calibration:
@@ -452,11 +452,14 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 
         Parameters
         ----------
-        flux_calibration : Float array, optional
+        flux_calibration : Float List, optional
             It is a list of floats. The default is empty
             
-        flux_calibration_file : string, optional
+        flux_calibration_file : String, optional
             The file name of the flux_calibration. The default is ""
+            
+        path : String, optional
+            The directory of the folder the flux_calibration_file is in. The default is "" 
         
         verbose : Boolean, optional
             Print results. The default is True.
