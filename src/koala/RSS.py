@@ -2920,7 +2920,7 @@ class RSS(object):
                     verbose_=False
                 corte_wave=self.cut_wave(wave)
                 cosmics_found = find_cosmics_in_cut(x,corte_wave, corte_wave_bl*extra_factor, line_wavelength= wave, plot=plot_, verbose=verbose_, cosmic_higher_than=cosmic_higher_than)
-                if len(cosmics_found) < max_number_of_cosmics_per_fibre :
+                if len(cosmics_found) <= max_number_of_cosmics_per_fibre :
                     for cosmic in cosmics_found:
                         lista_cosmicos.append([wave,cosmic])
                         cosmic_image[cosmic,i] = 1.   
