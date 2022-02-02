@@ -3418,22 +3418,22 @@ def align_blue_and_red_cubes(blue, red, half_size_for_centroid = 8, box_x= [], b
         DESCRIPTION.
     red : TYPE
         DESCRIPTION.
-    half_size_for_centroid : TYPE, optional
-        DESCRIPTION. The default is 8.
-    box_x : TYPE, optional
-        DESCRIPTION. The default is [].
-    box_y : TYPE, optional
-        DESCRIPTION. The default is [].
+    half_size_for_centroid : Integer, optional
+        This is half the length/width of the box. The default is 8.
+    box_x : Integer List, optional
+        When creating a box to show/trim/alignment these are the x cooridnates in spaxels of the box. The default is [].
+    box_y : Integer List, optional
+        When creating a box to show/trim/alignment these are the y cooridnates in spaxels of the box. The default is [].
     kernel_tracing : TYPE, optional
         DESCRIPTION. The default is 0.
-    verbose : TYPE, optional
-        DESCRIPTION. The default is True.
-    plot : TYPE, optional
-        DESCRIPTION. The default is True.
-    plot_centroid : TYPE, optional
-        DESCRIPTION. The default is True.
-    g2d : TYPE, optional
-        DESCRIPTION. The default is False.
+    verbose : Boolean, optional
+        Print results. The default is True.
+    plot : Boolean, optional
+        If True generates and shows the plots. The default is True.
+    plot_centroid : Boolean, optional
+        If True will plot the centroid. The default is True.
+    g2d : Boolean, optional
+        If True uses a 2D gaussian, else doesn't. The default is False.
 
     Returns
     -------
