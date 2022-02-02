@@ -1701,7 +1701,6 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
     def plot_map(self, mapa="", log = False, gamma = 0., vmin=1E-30, vmax=1E30, fcal=False,
-                 #norm=colors.Normalize(), 
                  trimmed= False,
                  cmap="fuego", weight = False, velocity= False, fwhm=False, ew=False, ratio=False,
                  contours=True, clabel=False,
@@ -1735,12 +1734,12 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 
         Parameters
         ----------
-        mapa : String, optional
-            DESCRIPTION. The default is "". #TODO 
+        mapa : np.array(float), optional
+            Map to be plotted. If not given, it plots the integrated map.
         log : Boolean, optional
             If true the map is plotted on a log scale. The default is False.
         gamma : Float, optional
-            DESCRIPTION. The default is 0.. #TODO 
+            The powerlaw exponent.  
         vmin : Float, optional
             DESCRIPTION. The default is 1E-30. #TODO 
         vmax : Float, optional
