@@ -688,9 +688,12 @@ def list_fits_files_in_folder(path, verbose = True, use2=True, use3=False, ignor
 # -----------------------------------------------------------------------------
 
 def read_cube(filename, description="", half_size_for_centroid = 10, plot_spectra = False,
-              valid_wave_min = 0, valid_wave_max = 0, edgelow=50,edgehigh=50, g2d=False,
+              valid_wave_min = 0, valid_wave_max = 0, edgelow=50,edgehigh=50, 
+              g2d=False, step_tracing = 100,  adr_index_fit = 2, kernel_tracing = 0,
               plot = False, verbose = True, print_summary = True,
               text_intro ="\n> Reading datacube from fits file:" ):
+    
+    errors = 0
     
     if verbose: print(text_intro)
     if verbose: print('  "'+filename+'"', "...")
@@ -728,18 +731,20 @@ def read_cube(filename, description="", half_size_for_centroid = 10, plot_spectr
     
     number_of_combined_files = cube_fits_file[0].header['COFILES']
     
-    ADR_x_fit_ = cube_fits_file[0].header['ADRXFIT'].split(',')
     ADR_x_fit =[]
-    for j in range(len(ADR_x_fit_)):
-                ADR_x_fit.append(float(ADR_x_fit_[j]))    
-    ADR_y_fit_ = cube_fits_file[0].header['ADRYFIT'].split(',')
     ADR_y_fit =[]
-    for j in range(len(ADR_y_fit_)):
-                ADR_y_fit.append(float(ADR_y_fit_[j]))    
 
-
-    adr_index_fit=len(ADR_y_fit) -1
-
+    try:
+        ADR_x_fit_ = cube_fits_file[0].header['ADRXFIT'].split(',')
+        for j in range(len(ADR_x_fit_)):
+                    ADR_x_fit.append(float(ADR_x_fit_[j]))    
+        ADR_y_fit_ = cube_fits_file[0].header['ADRYFIT'].split(',')
+        for j in range(len(ADR_y_fit_)):
+                    ADR_y_fit.append(float(ADR_y_fit_[j]))    
+        adr_index_fit=len(ADR_y_fit) -1
+    except Exception:
+        errors=errors+1
+ 
     rss_files = []
     offsets_files_position = cube_fits_file[0].header['OFF_POS']
     offsets_files =[]
@@ -763,17 +768,17 @@ def read_cube(filename, description="", half_size_for_centroid = 10, plot_spectr
             else:
                 head = "RSS_"+np.str(i+1)
             rss_files.append(cube_fits_file[0].header[head])
-        
-    if valid_wave_min == 0 : valid_wave_min = cube_fits_file[0].header["V_W_MIN"]  
-    if valid_wave_max == 0 : valid_wave_max = cube_fits_file[0].header["V_W_MAX"] 
-    
+           
     wavelength = np.array([0.] * n_wave)    
     wavelength[np.int(CRPIX3)-1] = CRVAL3
     for i in range(np.int(CRPIX3)-2,-1,-1):
         wavelength[i] = wavelength[i+1] - CDELT3
     for i in range(np.int(CRPIX3),n_wave):
          wavelength[i] = wavelength[i-1] + CDELT3
-   
+     
+    if valid_wave_min == 0 : valid_wave_min = cube_fits_file[0].header["V_W_MIN"]  
+    if valid_wave_max == 0 : valid_wave_max = cube_fits_file[0].header["V_W_MAX"] 
+     
     cube = Interpolated_cube(filename, pixel_size, kernel_size, plot=False, verbose=verbose,
                              read_fits_cube=True, zeros=True,
                              ADR_x_fit=np.array(ADR_x_fit),ADR_y_fit=np.array(ADR_y_fit),
@@ -791,7 +796,9 @@ def read_cube(filename, description="", half_size_for_centroid = 10, plot_spectr
     else:
         box_x = [0,-1]
         box_y = [0,-1]
-    cube.trace_peak(box_x=box_x, box_y=box_y, plot=plot, edgelow=edgelow,edgehigh=edgehigh, adr_index_fit=adr_index_fit, g2d=g2d,
+    cube.trace_peak(box_x=box_x, box_y=box_y, plot=plot, edgelow=edgelow,edgehigh=edgehigh, 
+                    adr_index_fit=adr_index_fit, g2d=g2d, 
+                    step_tracing = step_tracing, kernel_tracing = kernel_tracing,
                     verbose =False)
     cube.get_integrated_map(plot=plot, plot_spectra=plot_spectra, verbose=verbose, plot_centroid=True, g2d=g2d) #,fcal=fcal, box_x=box_x, box_y=box_y)
     # For calibration stars, we get an integrated star flux and a seeing
