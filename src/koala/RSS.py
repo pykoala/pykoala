@@ -2942,7 +2942,7 @@ class RSS(object):
                 f=g[fibre]
                 gc=signal.medfilt(f,kernel_size=21)
                 bad_indices = [i for i, x in enumerate(cosmic_image[fibre]) if x == 1]
-                if len(bad_indices) < max_number_of_cosmics_per_fibre:
+                if len(bad_indices) <= max_number_of_cosmics_per_fibre:
                     for index in bad_indices:
                         g[fibre,index] = gc[index]
                         cosmics_cleaned =cosmics_cleaned+1

@@ -379,8 +379,8 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         else:
             self.history.append("- Cube built without considering ADR correction")
                   
-        self.RA_segment = self.n_cols *self.pixel_size_arcsec
-        self.DEC_segment= self.n_rows*self.pixel_size_arcsec
+        self.RA_segment = (self.n_cols -1) * self.pixel_size_arcsec
+        self.DEC_segment= (self.n_rows -1) * self.pixel_size_arcsec
 
         if zeros:
             self.data=np.zeros_like(self.weighted_I)
