@@ -81,7 +81,7 @@ class KOALA_RSS(RSS):
                  fix_edges = False,
                  clean_extreme_negatives = False, percentile_min = 0.5,
                  clean_cosmics = False, #show_cosmics_identification = True,                                                            
-                 width_bl = 20., kernel_median_cosmics = 5, cosmic_higher_than = 100., extra_factor = 1., max_number_of_cosmics_per_fibre = 15,
+                 width_bl = 20., kernel_median_cosmics = 5, cosmic_higher_than = 100., extra_factor = 1., max_number_of_cosmics_per_fibre = 12,
                  warnings=True, verbose = True, print_summary = False,
                  plot=True, plot_final_rss=True, 
                  norm=colors.LogNorm(),  # TODO: this has to be replaced by log and gamma

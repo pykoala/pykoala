@@ -56,7 +56,7 @@ class KOALA_reduce(RSS,Interpolated_cube):                                      
                  fix_edges = False,
                  clean_extreme_negatives = False, percentile_min = 0.5,
                  clean_cosmics = False, #show_cosmics_identification = True,                                                            
-                 width_bl = 20., kernel_median_cosmics = 5, cosmic_higher_than = 100., extra_factor = 1.,                                                          
+                 width_bl = 20., kernel_median_cosmics = 5, cosmic_higher_than = 100., extra_factor = 1.,  max_number_of_cosmics_per_fibre = 12,                                                    
 
                  # CUBING
                  pixel_size_arcsec=.4, kernel_size_arcsec=1.2,
@@ -139,8 +139,13 @@ class KOALA_reduce(RSS,Interpolated_cube):                                      
                     for rss in range(n_files):
                         save_rss_to_fits_file_list.append("auto")
             except Exception:
-                if len(save_rss_to_fits_file_list) != len(n_files) and verbose : print("  WARNING! List of rss files to save provided does not have the same number of rss files!!!")
-                       
+                if len(save_rss_to_fits_file_list) != len(n_files):
+                    if verbose or warnings : 
+                        print("\n  WARNING! List of RSS files to save provided does not have the same number of RSS files!!!\n")
+                        print("\n           Using the automatic naming for saving RSS files... \n")
+                    save_rss_to_fits_file_list=[]
+                    for rss in range(n_files):
+                        save_rss_to_fits_file_list.append("auto")
         else:
             for rss in range(n_files):
                 save_rss_to_fits_file_list.append("")
@@ -222,7 +227,7 @@ class KOALA_reduce(RSS,Interpolated_cube):                                      
  
         if do_rss: 
             print("\n-------------------------------------------")
-            print("2. Reading the data stored in rss files ...")
+            print("2. Reading the data stored in RSS files ...")
                                     
             for i in range(n_files):
                      #skyflat=skyflat_list[i], plot_skyflat=plot_skyflat, throughput_file =throughput_file, nskyflat_file=nskyflat_file,\
@@ -247,7 +252,7 @@ class KOALA_reduce(RSS,Interpolated_cube):                                      
                      clean_sky_residuals = clean_sky_residuals, features_to_fix =features_to_fix, sky_fibres_for_residuals=sky_fibres_for_residuals,\
                      fibres_to_fix=fibres_to_fix, remove_negative_median_values = remove_negative_median_values, fix_edges = fix_edges,\
                      clean_extreme_negatives = clean_extreme_negatives, percentile_min = percentile_min, clean_cosmics = clean_cosmics,\
-                     width_bl = width_bl, kernel_median_cosmics = kernel_median_cosmics, cosmic_higher_than = cosmic_higher_than, extra_factor = extra_factor,\
+                     width_bl = width_bl, kernel_median_cosmics = kernel_median_cosmics, cosmic_higher_than = cosmic_higher_than, extra_factor = extra_factor, max_number_of_cosmics_per_fibre=max_number_of_cosmics_per_fibre,\
                      valid_wave_min=valid_wave_min, valid_wave_max=valid_wave_max,\
                      warnings=warnings, verbose = verbose, plot=plot_rss, plot_final_rss=plot_rss, fig_size=fig_size)')
           
