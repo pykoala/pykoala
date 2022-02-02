@@ -650,23 +650,19 @@ if __name__ == "__main__":
 
     # # All good, we can process everything together using self for sky
     # # We already have the OFFSETS, these are the same we obtained for the RED
+    # # We also use centre_deg and size_arcsec given by the TRIMMED red cube
+    # # and select trim_cube = False
+    
     # # But NOT the ADR correction for the blue files, as this is somehow a challenging object
     # # and we are doing mosaic we can't select a region that is good for all files
     # # let's try with half_size_for_centroid = 0
     
     # # Running the following should process the 6 RSS files, clean them, cube them, apply alignment and combine
     # # producing a FINAL combined cube in fits format.
-        
-    rss_list = ["27feb10031red.fits","27feb10032red.fits","27feb10033red.fits",
-                "27feb10034red.fits","27feb10035red.fits","27feb10036red.fits"]
-
-    rss_list = ["27feb10031red_TCWX_S_NR.fits","27feb10032red_TCWX_S_NR.fits","27feb10033red_TCWX_S_NR.fits",
-                "27feb10034red_TCWX_S_NR.fits","27feb10035red_TCWX_S_NR.fits","27feb10036red_TCWX_S_NR.fits"]
+            
+    # rss_list = ["27feb10031red.fits","27feb10032red.fits","27feb10033red.fits",
+    #             "27feb10034red.fits","27feb10035red.fits","27feb10036red.fits"]
     
-    ADR_x_fit_list =  [[9.791374902300966e-11, -1.361731424563216e-06, 0.006168569717114751, -9.062099268442289], [1.5178720729296336e-10, -2.149538359423654e-06, 0.010002596378191356, -15.27549983827299], [-1.5727880041293275e-10, 2.270172789723589e-06, -0.010746153798036104, 16.6669228618847], [-3.587184899956129e-11, 8.061339103441051e-07, -0.005438900897366207, 11.469478296922391], [-1.0888626198857115e-10, 1.833820655023091e-06, -0.010112882237282317, 18.262553011417417], [-2.0507071024794933e-10, 3.19853352438298e-06, -0.016448278016901505, 27.84319868752676]]
-    ADR_y_fit_list =  [[-5.958768890277437e-11, 8.335385578402792e-07, -0.003814158515275198, 5.685826415246691], [9.440481199724225e-11, -1.371028712714804e-06, 0.006603018298665971, -10.547255178451204], [1.5921988914264668e-10, -2.3121137328567566e-06, 0.011046520521171891, -17.337559244322566], [-9.532034466031645e-11, 1.3410760221244944e-06, -0.0062161978911407035, 9.489044815580575], [-3.289714426078901e-11, 4.280544076996474e-07, -0.0018416700437986987, 2.6479564442375496], [1.812993107807248e-11, -2.2424083469823508e-07, 0.000833064491704837, -0.8411422420774155]]
-
-        
     # combined_cube_blue=KOALA_reduce(rss_list, path=path_blue, 
     #                                 fits_file="combined_cube_blue_test.fits",
                                 
@@ -691,12 +687,14 @@ if __name__ == "__main__":
     #                                 brightest_line = "O3b",
     #                                 brightest_line_wavelength = 5022,
                                 
-    #                                 rss_clean=True,                 # RSS files are clean
+    #                                 rss_clean=False,                 # RSS files are clean
                                     
     #                                 # This is the cubing part                                    
     #                                 pixel_size_arcsec=0.7, kernel_size_arcsec=1.1,
     #                                 flux_calibration_file=flux_calibration_file,
-    #                                 #ADR=True,
+    #                                 ADR=True,
+    #                                 #ADR_x_fit_list = ADR_x_fit_list,
+    #                                 #ADR_y_fit_list = ADR_y_fit_list,
     #                                 plot_tracing_maps=[4500], 
     #                                 #box_x=[3,15], box_y=[3,15],
     #                                 half_size_for_centroid = 0,   # Using all data for registering
@@ -704,10 +702,51 @@ if __name__ == "__main__":
     #                                 kernel_tracing = 19,           # Smooth tracing for removing outliers
     #                                 g2d=False, 
     #                                 adr_index_fit = 3,
+                                    
+    #                                 # This is the part for alignment
+    #                                 offsets = offsets,
+    #                                 reference_rss = 0,
+    #                                 centre_deg = [combined_cube.combined_cube.RA_centre_deg, combined_cube.combined_cube.DEC_centre_deg],
+    #                                 size_arcsec= [combined_cube.combined_cube.RA_segment,combined_cube.combined_cube.DEC_segment],
                                         
+    #                                 trim_cube = False,             # Trimming the cube
+    #                                 scale_cubes_using_integflux = False, # Not scaling cubes using integrated flux of common region
+    #                                 plot= True, 
+    #                                 plot_rss=True, 
+    #                                 plot_weight=False,
+    #                                 plot_spectra = False,
+    #                                 fig_size=12,
+    #                                 warnings=False, verbose = True)
+         
+    # # With this we created the CLEAN rss files and obtained the ADR:
+
+    # rss_list = ["27feb10031red_TCWX_S_NR.fits","27feb10032red_TCWX_S_NR.fits","27feb10033red_TCWX_S_NR.fits",
+    #             "27feb10034red_TCWX_S_NR.fits","27feb10035red_TCWX_S_NR.fits","27feb10036red_TCWX_S_NR.fits"]
+    
+    # ADR_x_fit_list =  [[9.791374902300966e-11, -1.361731424563216e-06, 0.006168569717114751, -9.062099268442289], [1.5178720729296336e-10, -2.149538359423654e-06, 0.010002596378191356, -15.27549983827299], [-1.5727880041293275e-10, 2.270172789723589e-06, -0.010746153798036104, 16.6669228618847], [-3.587184899956129e-11, 8.061339103441051e-07, -0.005438900897366207, 11.469478296922391], [-1.0888626198857115e-10, 1.833820655023091e-06, -0.010112882237282317, 18.262553011417417], [-2.0507071024794933e-10, 3.19853352438298e-06, -0.016448278016901505, 27.84319868752676]]
+    # ADR_y_fit_list =  [[-5.958768890277437e-11, 8.335385578402792e-07, -0.003814158515275198, 5.685826415246691], [9.440481199724225e-11, -1.371028712714804e-06, 0.006603018298665971, -10.547255178451204], [1.5921988914264668e-10, -2.3121137328567566e-06, 0.011046520521171891, -17.337559244322566], [-9.532034466031645e-11, 1.3410760221244944e-06, -0.0062161978911407035, 9.489044815580575], [-3.289714426078901e-11, 4.280544076996474e-07, -0.0018416700437986987, 2.6479564442375496], [1.812993107807248e-11, -2.2424083469823508e-07, 0.000833064491704837, -0.8411422420774155]]
+
+        
+    # combined_cube_blue=KOALA_reduce(rss_list, path=path_blue, 
+    #                                 fits_file="combined_cube_blue_test.fits",
+                                
+    #                                 # This is the rss part
+    #                                 rss_clean=True,                 # RSS files are clean
+                                    
+    #                                 # This is the cubing part                                    
+    #                                 pixel_size_arcsec=0.7, kernel_size_arcsec=1.1,
+    #                                 flux_calibration_file=flux_calibration_file,
+    #                                 #ADR=True,
     #                                 ADR_x_fit_list = ADR_x_fit_list,
     #                                 ADR_y_fit_list = ADR_y_fit_list,
-                                    
+    #                                 plot_tracing_maps=[4500], 
+    #                                 #box_x=[3,15], box_y=[3,15],
+    #                                 half_size_for_centroid = 0,   # Using all data for registering
+    #                                 step_tracing = 20,            # Increase the number of points for tracing
+    #                                 kernel_tracing = 19,          # Smooth tracing for removing outliers
+    #                                 g2d=False, 
+    #                                 adr_index_fit = 3,
+                                        
     #                                 # This is the part for alignment
     #                                 offsets = offsets,
     #                                 reference_rss = 0,
@@ -729,13 +768,13 @@ if __name__ == "__main__":
     
     # # Time to check alignment between red and blue cubes!
     
-    red_cube = path_red + "combined_cube_He2-10.fits"
-    blue_cube = path_blue + "combined_cube_blue_test.fits"
+    # red_cube = path_red + "combined_cube_He2-10.fits"
+    # blue_cube = path_blue + "combined_cube_blue_test.fits"
     
     # align_blue_and_red_cubes(combined_cube_blue.combined_cube, combined_cube.combined_cube)
-    align_blue_and_red_cubes(blue_cube, red_cube, 
-                             half_size_for_centroid = 12,
-                             step_tracing = 20, kernel_tracing = 19, adr_index_fit = 3)
+    # align_blue_and_red_cubes(blue_cube, red_cube, 
+    #                          half_size_for_centroid = 12,                                  # These parameters are needed for getting
+    #                          step_tracing = 20, kernel_tracing = 19, adr_index_fit = 3)    # the centroids and check alignment of cubes
 
     # # The red and the blue cubes are basically aligned, a very small offset between them:
     # #   > The offsets between the two cubes following tracing the peak are:
@@ -745,9 +784,9 @@ if __name__ == "__main__":
 
 
 
-    # file_med  = path_blue+"27feb10031red_TCWX_____.fits"
-    # file_med2 = path_blue+"27feb10031red_TCWX_S___.fits"
-    # file_out  = path_blue+"27feb10031red_TCWX_S_NR.fits"
+    # # With this, we have processed and aligned both the blue and red cubes of the galaxy He 2-10 !!
+
+
 
 
 
