@@ -98,6 +98,7 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
     kernel_median_cosmics = 5 
     cosmic_higher_than 	=	100. 
     extra_factor =	1.
+    max_number_of_cosmics_per_fibre = 12
 
     offsets=[]
     reference_rss = ""
@@ -407,6 +408,8 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
         if  config_property[i] == "clean_cosmics" and config_value[i] == "True" : clean_cosmics = True 
         if  config_property[i] == "width_bl" : width_bl = float(config_value[i])  
         if  config_property[i] == "kernel_median_cosmics" : kernel_median_cosmics = int(config_value[i])  
+        if  config_property[i] == "max_number_of_cosmics_per_fibre" : max_number_of_cosmics_per_fibre = int(config_value[i])  
+        
         if  config_property[i] == "cosmic_higher_than" : cosmic_higher_than = float(config_value[i])  
         if  config_property[i] == "extra_factor" : extra_factor = float(config_value[i])  
 
@@ -729,10 +732,11 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
                        
             print("  clean_cosmics            = ",clean_cosmics)
             if clean_cosmics:
-                print("    width_bl               = ",width_bl)
-                print("    kernel_median_cosmics  = ",kernel_median_cosmics)
-                print("    cosmic_higher_than     = ",cosmic_higher_than)
-                print("    extra_factor           = ",extra_factor)
+                print("    width_bl                        = ",width_bl)
+                print("    kernel_median_cosmics           = ",kernel_median_cosmics)
+                print("    cosmic_higher_than              = ",cosmic_higher_than)
+                print("    extra_factor                    = ",extra_factor)
+                print("    max_number_of_cosmics_per_fibre = ",max_number_of_cosmics_per_fibre)
  
             print("  clean_extreme_negatives  = ",clean_extreme_negatives)
             if clean_extreme_negatives:
@@ -960,7 +964,8 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
                               remove_negative_median_values=remove_negative_median_values,
                               clean_cosmics = clean_cosmics,
                               width_bl = width_bl, kernel_median_cosmics = kernel_median_cosmics, 
-                              cosmic_higher_than = cosmic_higher_than, extra_factor = extra_factor,
+                              cosmic_higher_than = cosmic_higher_than, extra_factor = extra_factor, 
+                              max_number_of_cosmics_per_fibre = max_number_of_cosmics_per_fibre,
                                                             
                               do_cubing= do_cubing,
                               do_alignment = do_alignment,
@@ -986,7 +991,7 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
                                                   
                               flux_calibration_file = flux_calibration_file_list,     # this can be a single file (string) or a list of files (list of strings)
                               flux_calibration=flux_calibration,                      # an array
-                              flux_calibration_list  = flux_calibration_list,          # a list of arrays
+                              flux_calibration_list  = flux_calibration_list,         # a list of arrays
                               
                               trim_cube = trim_cube,
                               trim_values = trim_values,
