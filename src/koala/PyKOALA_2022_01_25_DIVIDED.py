@@ -667,61 +667,61 @@ if __name__ == "__main__":
     ADR_y_fit_list =  [[-5.958768890277437e-11, 8.335385578402792e-07, -0.003814158515275198, 5.685826415246691], [9.440481199724225e-11, -1.371028712714804e-06, 0.006603018298665971, -10.547255178451204], [1.5921988914264668e-10, -2.3121137328567566e-06, 0.011046520521171891, -17.337559244322566], [-9.532034466031645e-11, 1.3410760221244944e-06, -0.0062161978911407035, 9.489044815580575], [-3.289714426078901e-11, 4.280544076996474e-07, -0.0018416700437986987, 2.6479564442375496], [1.812993107807248e-11, -2.2424083469823508e-07, 0.000833064491704837, -0.8411422420774155]]
 
         
-    combined_cube_blue=KOALA_reduce(rss_list, path=path_blue, 
-                                    fits_file="combined_cube_blue_test.fits",
+    # combined_cube_blue=KOALA_reduce(rss_list, path=path_blue, 
+    #                                 fits_file="combined_cube_blue_test.fits",
                                 
-                                    # This is the rss part
-                                    save_rss_to_fits_file_list="auto",  
-                                    apply_throughput=True, 
-                                    throughput_2D_file=throughput_2D_file,       # if throughput_2D_file given, use SOL in fits file for fixing wave
-                                    correct_ccd_defects = True, 
-                                    fix_wavelengths = True, 
-                                    do_extinction=True,
-                                    sky_method="self", n_sky = 30,
-                                    remove_5577 = True,
-                                    correct_negative_sky = True, 
-                                    order_fit_negative_sky = 7, kernel_negative_sky=51, individual_check=False, 
-                                    use_fit_for_negative_sky=False, force_sky_fibres_to_zero=True,
-                                    remove_negative_median_values = False,
-                                    fix_edges = False,  # This does not work well for the blue...
-                                    clean_extreme_negatives=True, percentile_min=0.9,
-                                    clean_cosmics=True,
-                                    width_bl=0., kernel_median_cosmics=5, cosmic_higher_than = 100., extra_factor =	2.,
-                                    max_number_of_cosmics_per_fibre = 12,
-                                    brightest_line = "O3b",
-                                    brightest_line_wavelength = 5022,
+    #                                 # This is the rss part
+    #                                 save_rss_to_fits_file_list="auto",  
+    #                                 apply_throughput=True, 
+    #                                 throughput_2D_file=throughput_2D_file,       # if throughput_2D_file given, use SOL in fits file for fixing wave
+    #                                 correct_ccd_defects = True, 
+    #                                 fix_wavelengths = True, 
+    #                                 do_extinction=True,
+    #                                 sky_method="self", n_sky = 30,
+    #                                 remove_5577 = True,
+    #                                 correct_negative_sky = True, 
+    #                                 order_fit_negative_sky = 7, kernel_negative_sky=51, individual_check=False, 
+    #                                 use_fit_for_negative_sky=False, force_sky_fibres_to_zero=True,
+    #                                 remove_negative_median_values = False,
+    #                                 fix_edges = False,  # This does not work well for the blue...
+    #                                 clean_extreme_negatives=True, percentile_min=0.9,
+    #                                 clean_cosmics=True,
+    #                                 width_bl=0., kernel_median_cosmics=5, cosmic_higher_than = 100., extra_factor =	2.,
+    #                                 max_number_of_cosmics_per_fibre = 12,
+    #                                 brightest_line = "O3b",
+    #                                 brightest_line_wavelength = 5022,
                                 
-                                    rss_clean=True,                 # RSS files are clean
+    #                                 rss_clean=True,                 # RSS files are clean
                                     
-                                    # This is the cubing part                                    
-                                    pixel_size_arcsec=0.7, kernel_size_arcsec=1.1,
-                                    flux_calibration_file=flux_calibration_file,
-                                    #ADR=True,
-                                    plot_tracing_maps=[4500], 
-                                    #box_x=[3,15], box_y=[3,15],
-                                    half_size_for_centroid = 0,   # Using all data for registering
-                                    step_tracing = 20,            # Increase the number of points for tracing
-                                    kernel_tracing = 19,           # Smooth tracing for removing outliers
-                                    g2d=False, 
-                                    adr_index_fit = 3,
+    #                                 # This is the cubing part                                    
+    #                                 pixel_size_arcsec=0.7, kernel_size_arcsec=1.1,
+    #                                 flux_calibration_file=flux_calibration_file,
+    #                                 #ADR=True,
+    #                                 plot_tracing_maps=[4500], 
+    #                                 #box_x=[3,15], box_y=[3,15],
+    #                                 half_size_for_centroid = 0,   # Using all data for registering
+    #                                 step_tracing = 20,            # Increase the number of points for tracing
+    #                                 kernel_tracing = 19,           # Smooth tracing for removing outliers
+    #                                 g2d=False, 
+    #                                 adr_index_fit = 3,
                                         
-                                    ADR_x_fit_list = ADR_x_fit_list,
-                                    ADR_y_fit_list = ADR_y_fit_list,
+    #                                 ADR_x_fit_list = ADR_x_fit_list,
+    #                                 ADR_y_fit_list = ADR_y_fit_list,
                                     
-                                    # This is the part for alignment
-                                    offsets = offsets,
-                                    reference_rss = 0,
-                                    centre_deg = [combined_cube.combined_cube.RA_centre_deg, combined_cube.combined_cube.DEC_centre_deg],
-                                    size_arcsec= [combined_cube.combined_cube.RA_segment,combined_cube.combined_cube.DEC_segment],
+    #                                 # This is the part for alignment
+    #                                 offsets = offsets,
+    #                                 reference_rss = 0,
+    #                                 centre_deg = [combined_cube.combined_cube.RA_centre_deg, combined_cube.combined_cube.DEC_centre_deg],
+    #                                 size_arcsec= [combined_cube.combined_cube.RA_segment,combined_cube.combined_cube.DEC_segment],
                                         
-                                    trim_cube = False,             # Trimming the cube
-                                    scale_cubes_using_integflux = False, # Not scaling cubes using integrated flux of common region
-                                    plot= True, 
-                                    plot_rss=True, 
-                                    plot_weight=False,
-                                    plot_spectra = False,
-                                    fig_size=12,
-                                    warnings=False, verbose = True)
+    #                                 trim_cube = False,             # Trimming the cube
+    #                                 scale_cubes_using_integflux = False, # Not scaling cubes using integrated flux of common region
+    #                                 plot= True, 
+    #                                 plot_rss=True, 
+    #                                 plot_weight=False,
+    #                                 plot_spectra = False,
+    #                                 fig_size=12,
+    #                                 warnings=False, verbose = True)
          
 
     # # This created combined cube /DATA/KOALA/Python/GitHub/test_reduce/580V/combined_cube_blue_test.fits
@@ -729,16 +729,25 @@ if __name__ == "__main__":
     
     # # Time to check alignment between red and blue cubes!
     
-    # align_blue_and_red_cubes(combined_cube_blue.combined_cube, combined_cube.combined_cube)
+    red_cube = path_red + "combined_cube_He2-10.fits"
+    blue_cube = path_blue + "combined_cube_blue_test.fits"
     
+    # align_blue_and_red_cubes(combined_cube_blue.combined_cube, combined_cube.combined_cube)
+    align_blue_and_red_cubes(blue_cube, red_cube, 
+                             half_size_for_centroid = 12,
+                             step_tracing = 20, kernel_tracing = 19, adr_index_fit = 3)
+
+    # # The red and the blue cubes are basically aligned, a very small offset between them:
+    # #   > The offsets between the two cubes following tracing the peak are:
+    # #   -> delta_RA  (blue -> red) = 0.076  spaxels         = 0.053 arcsec
+    # #   -> delta_DEC (blue -> red) = 0.094  spaxels         = 0.066 arcsec
+    # #   TOTAL     (blue -> red) = 0.121  spaxels         = 0.084 arcsec      (12.1% of the pix size)     
 
 
 
-
-
-    file_med  = path_blue+"27feb10031red_TCWX_____.fits"
-    file_med2 = path_blue+"27feb10031red_TCWX_S___.fits"
-    file_out  = path_blue+"27feb10031red_TCWX_S_NR.fits"
+    # file_med  = path_blue+"27feb10031red_TCWX_____.fits"
+    # file_med2 = path_blue+"27feb10031red_TCWX_S___.fits"
+    # file_out  = path_blue+"27feb10031red_TCWX_S_NR.fits"
 
 
 
@@ -752,6 +761,9 @@ if __name__ == "__main__":
     # Truco de Pablo para cambiar algo en header:
     # with fits.open(path_blue+"27feb10031red.fits", "update") as f:
     #     f[0].header["OBJECT"]="He2-10"
+    
+    # with fits.open(blue_cube, "update") as f:
+    #     f[0].header["COMCUBE"]="T"
     
 end= timer()
 print("\n> Elapsing time = ",end-start, "s")        
