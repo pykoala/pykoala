@@ -1550,7 +1550,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         line : TYPE
             DESCRIPTION.
         w2 : Float, optional
-            DESCRIPTION. The default is 0..
+            DESCRIPTION. The default is 0.. #TODO
         gaussian_fit : Boolean, optional
             DESCRIPTION. The default is False. #TODO 
         gf : Boolean, optional
@@ -2384,7 +2384,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         Returns
         -------
         Numpy Array
-            DESCRIPTION. #TODO
+            This is a Numpy Array of the intensities.
         """        
 
         if min_wave == 0 : min_wave = self.valid_wave_min 
@@ -2782,6 +2782,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 # -----------------------------------------------------------------------------
     def fit_Moffat_between(self, min_wave=0, max_wave=0, r_max=5, plot=False, verbose = False):
         """
+        Method of Interpolated cube instance.
         #TODO
 
         Parameters
@@ -3565,6 +3566,26 @@ def running_mean(x, N):
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def cumulative_Moffat(r2, L_star, alpha2, beta):
+    """
+    #TODO
+
+    Parameters
+    ----------
+    r2 : TYPE
+        DESCRIPTION.
+    L_star : TYPE
+        DESCRIPTION.
+    alpha2 : TYPE
+        DESCRIPTION.
+    beta : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    TYPE
+        DESCRIPTION.
+
+    """
     return L_star*(1 - np.power(1+(r2/alpha2), -beta))
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -3575,6 +3596,27 @@ def fit_Moffat(r2_growth_curve, F_growth_curve,
     as a function of radius squared,
     cutting at to r_max (in units of the half-light radius),
     provided an initial guess of the total flux and half-light radius squared.
+
+    Parameters #TODO
+    ----------
+    r2_growth_curve : TYPE
+        DESCRIPTION.
+    F_growth_curve : TYPE
+        DESCRIPTION.
+    F_guess : TYPE
+        DESCRIPTION.
+    r2_half_light : TYPE
+        DESCRIPTION.
+    r_max : TYPE
+        DESCRIPTION.
+    plot : TYPE, optional
+        DESCRIPTION. The default is False.
+
+    Returns
+    -------
+    fit : TYPE
+        DESCRIPTION.
+    
     """
     index_cut = np.searchsorted(r2_growth_curve, r2_half_light*r_max**2)
     fit, cov = optimize.curve_fit(cumulative_Moffat,
@@ -3592,6 +3634,27 @@ def fit_Moffat(r2_growth_curve, F_growth_curve,
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def offset_between_cubes(cube1, cube2, plot=True):
+    """
+    #TODO
+
+    Parameters
+    ----------
+    cube1 : TYPE
+        DESCRIPTION.
+    cube2 : TYPE
+        DESCRIPTION.
+    plot : TYPE, optional
+        DESCRIPTION. The default is True.
+
+    Returns
+    -------
+    delta_RA_arcsec : TYPE
+        DESCRIPTION.
+    delta_DEC_arcsec : TYPE
+        DESCRIPTION.
+
+    """
+    
     x = (cube2.x_peak - cube2.n_cols/2. + cube2.RA_centre_deg*3600./cube2.pixel_size_arcsec) \
         - (cube1.x_peak - cube1.n_cols/2. + cube1.RA_centre_deg*3600./cube1.pixel_size_arcsec)
     y = (cube2.y_peak - cube2.n_rows/2. + cube2.DEC_centre_deg*3600./cube2.pixel_size_arcsec) \
