@@ -659,6 +659,9 @@ if __name__ == "__main__":
         
     rss_list = ["27feb10031red.fits","27feb10032red.fits","27feb10033red.fits",
                 "27feb10034red.fits","27feb10035red.fits","27feb10036red.fits"]
+
+    rss_list = ["27feb10031red_TCWX_S_NR.fits","27feb10032red_TCWX_S_NR.fits","27feb10033red_TCWX_S_NR.fits",
+                "27feb10034red_TCWX_S_NR.fits","27feb10035red_TCWX_S_NR.fits","27feb10036red_TCWX_S_NR.fits"]
     
     ADR_x_fit_list =  [[9.791374902300966e-11, -1.361731424563216e-06, 0.006168569717114751, -9.062099268442289], [1.5178720729296336e-10, -2.149538359423654e-06, 0.010002596378191356, -15.27549983827299], [-1.5727880041293275e-10, 2.270172789723589e-06, -0.010746153798036104, 16.6669228618847], [-3.587184899956129e-11, 8.061339103441051e-07, -0.005438900897366207, 11.469478296922391], [-1.0888626198857115e-10, 1.833820655023091e-06, -0.010112882237282317, 18.262553011417417], [-2.0507071024794933e-10, 3.19853352438298e-06, -0.016448278016901505, 27.84319868752676]]
     ADR_y_fit_list =  [[-5.958768890277437e-11, 8.335385578402792e-07, -0.003814158515275198, 5.685826415246691], [9.440481199724225e-11, -1.371028712714804e-06, 0.006603018298665971, -10.547255178451204], [1.5921988914264668e-10, -2.3121137328567566e-06, 0.011046520521171891, -17.337559244322566], [-9.532034466031645e-11, 1.3410760221244944e-06, -0.0062161978911407035, 9.489044815580575], [-3.289714426078901e-11, 4.280544076996474e-07, -0.0018416700437986987, 2.6479564442375496], [1.812993107807248e-11, -2.2424083469823508e-07, 0.000833064491704837, -0.8411422420774155]]
@@ -684,11 +687,11 @@ if __name__ == "__main__":
                                     clean_extreme_negatives=True, percentile_min=0.9,
                                     clean_cosmics=True,
                                     width_bl=0., kernel_median_cosmics=5, cosmic_higher_than = 100., extra_factor =	2.,
-                                    max_number_of_cosmics_per_fibre = 10,
+                                    max_number_of_cosmics_per_fibre = 12,
                                     brightest_line = "O3b",
                                     brightest_line_wavelength = 5022,
                                 
-                                    #rss_clean=True,                 # RSS files are clean
+                                    rss_clean=True,                 # RSS files are clean
                                     
                                     # This is the cubing part                                    
                                     pixel_size_arcsec=0.7, kernel_size_arcsec=1.1,
@@ -720,6 +723,15 @@ if __name__ == "__main__":
                                     fig_size=12,
                                     warnings=False, verbose = True)
          
+
+    # # This created combined cube /DATA/KOALA/Python/GitHub/test_reduce/580V/combined_cube_blue_test.fits
+    # # Plus all the clean RSS files
+    
+    # # Time to check alignment between red and blue cubes!
+    
+    # align_blue_and_red_cubes(combined_cube_blue.combined_cube, combined_cube.combined_cube)
+    
+
 
 
 
