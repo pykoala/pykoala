@@ -3145,22 +3145,78 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
                   half_size_for_centroid =10, box_x=[0,-1], box_y=[0,-1], 
                   adr_index_fit = 2, g2d=False, step_tracing = 100, kernel_tracing = 0,
                   plot= False, plot_weight=False, plot_tracing_maps=[], plot_spectra=True,
-                  warnings=False, verbose= True):  
+                  warnings=False, verbose= True):
     """
     Routine to align n cubes
 
-    Parameters
+    Parameters #TODO
     ----------
-    Cubes:
-        Cubes
-    pointings_RSS : 
-        list with RSS files
-    pixel_size_arcsec:
-        float, default = 0.3
-    kernel_size_arcsec:
-        float, default = 1.5
-        
-    """   
+    rss_list : List of RSS objects
+        This is a list of RSS objects.
+    cube_list : List of Cube Objects, optional
+        DESCRIPTION. The default is [0].
+    flux_calibration_list : TYPE, optional
+        DESCRIPTION. The default is [[]].
+    reference_rss : TYPE, optional
+        DESCRIPTION. The default is "".
+    pixel_size_arcsec : TYPE, optional
+        DESCRIPTION. The default is 0.3.
+    kernel_size_arcsec : TYPE, optional
+        DESCRIPTION. The default is 1.5.
+    edgelow : Integer, optional
+        This is the lowest value in the wavelength range in terms of pixels. The default is -1.
+    edgehigh : Integer, optional
+        This is the highest value in the wavelength range in terms of pixels. The default is -1.
+    size_arcsec : TYPE, optional
+        DESCRIPTION. The default is [].
+    centre_deg : TYPE, optional
+        DESCRIPTION. The default is [].
+    offsets : TYPE, optional
+        DESCRIPTION. The default is [].
+    ADR : Boolean, optional
+        If True will correct for ADR (Atmospheric Differential Refraction). The default is False.
+    jump : Integer, optional
+        If a positive number partitions the wavelengths with step size jump, if -1 will not partition. The default is -1.
+    ADR_x_fit_list : Integer List, optional
+        This is a list of ADR x fits. The default is [0].
+    ADR_y_fit_list : Integer List, optional
+        This is a list of ADR y fits. The default is [0].
+    force_ADR : Boolean, optional
+        If True will correct for ADR even considoring a small correction. The default is False.
+    half_size_for_centroid : Integer, optional
+        This is half the length/width of the box. The default is 10.
+    box_x : Integer List, optional
+        When creating a box to show/trim/alignment these are the x cooridnates in spaxels of the box. The default is [0,-1].
+    box_y : Integer List, optional
+        When creating a box to show/trim/alignment these are the y cooridnates in spaxels of the box. The default is [0,-1].
+    adr_index_fit : Integer, optional
+        This is the fitted polynomial with highest degree n. The default is 2.
+    g2d : Boolean, optional
+        If True uses a 2D gaussian, else doesn't. The default is False.
+    step_tracing : Integer, optional
+        DESCRIPTION. The default is 100.
+    kernel_tracing : TYPE, optional
+        DESCRIPTION. The default is 0.
+    plot : Boolean, optional
+        If True generates and shows the plots. The default is False.
+    plot_weight : Boolean, optional
+        If True will plot the weight. The default is False.
+    plot_tracing_maps : Boolean, optional
+        If True will plot the tracing maps. The default is [].
+    plot_spectra : Boolean, optional
+        If True will plot the spectra. The default is True.
+    warnings : Boolean, optional
+        If True will show any problems that arose, else skipped. The default is False.
+    verbose : Boolean, optional
+        Print results. The default is True.
+
+    Returns
+    -------
+    cube_aligned_list : List of aligned Cube Objects
+        DESCRIPTION.
+
+    """
+       
     n_rss = len(rss_list)
 
     if verbose: 
@@ -3353,6 +3409,39 @@ def align_blue_and_red_cubes(blue, red, half_size_for_centroid = 8, box_x= [], b
     5. Run this task and check that the offsets between the red and blue cubes is < 0.1 arcsec (perhaps a couple of iterations are needed to get this)
     6. Trim the red and blue cubes if needed.      
     """
+    """
+    This Function aligns the blue and red cubes
+
+    Parameters
+    ----------
+    blue : TYPE
+        DESCRIPTION.
+    red : TYPE
+        DESCRIPTION.
+    half_size_for_centroid : TYPE, optional
+        DESCRIPTION. The default is 8.
+    box_x : TYPE, optional
+        DESCRIPTION. The default is [].
+    box_y : TYPE, optional
+        DESCRIPTION. The default is [].
+    kernel_tracing : TYPE, optional
+        DESCRIPTION. The default is 0.
+    verbose : TYPE, optional
+        DESCRIPTION. The default is True.
+    plot : TYPE, optional
+        DESCRIPTION. The default is True.
+    plot_centroid : TYPE, optional
+        DESCRIPTION. The default is True.
+    g2d : TYPE, optional
+        DESCRIPTION. The default is False.
+
+    Returns
+    -------
+    None.
+
+    """
+    
+    
 
     print("\n> Checking the alignment between a blue cube and a red cube...")
 
