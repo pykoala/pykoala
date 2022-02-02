@@ -111,7 +111,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         
         offsets_files="": The number of files to be aligned. (default "") #TODO
     
-        offsets_files_position ="": The position of the current cube in the list of cubes to be aligned. (default "") #TODO
+        offsets_files_position = 0: The position of the current cube in the list of cubes to be aligned. (default 0) #TODO
             
 
     Flux calibration:
@@ -197,7 +197,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                  plot_tracing_maps=[], 
                  edgelow = -1, edgehigh = -1,
                  
-                 offsets_files="", offsets_files_position ="", 
+                 offsets_files="", offsets_files_position =0, 
 
                  flux_calibration=[], flux_calibration_file ="",
                  
@@ -227,12 +227,6 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         self.history=[]
         fcal=False
         
-        
-        if rss_file != "" or type(RSS) == str:
-            if  type(RSS) == str: rss_file=RSS
-            rss_file =full_path(rss_file,path)  #RSS
-            RSS=KOALA_RSS(rss_file, rss_clean=True, plot=plot, plot_final_rss = plot_rss,  verbose=verbose)
-            
 
         if read_fits_cube:    # RSS is a cube given in fits file
             self.n_wave = n_wave       
@@ -246,9 +240,20 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
             self.number_of_combined_files = number_of_combined_files
             self.valid_wave_min = valid_wave_min        
             self.valid_wave_max = valid_wave_max
+            
+            v = np.abs(self.wavelength-valid_wave_min)
+            self.valid_wave_min_index = v.tolist().index(np.nanmin(v))
+            v = np.abs(self.wavelength-valid_wave_max)
+            self.valid_wave_max_index = v.tolist().index(np.nanmin(v))
  
         else:    
             #self.RSS = RSS
+
+            if rss_file != "" or type(RSS) == str:
+                if  type(RSS) == str: rss_file=RSS
+                rss_file =full_path(rss_file,path)  #RSS
+                RSS=KOALA_RSS(rss_file, rss_clean=True, plot=plot, plot_final_rss = plot_rss,  verbose=verbose)
+
             self.n_spectra = RSS.n_spectra
             self.n_wave = RSS.n_wave        
             self.wavelength = RSS.wavelength                   
@@ -1063,7 +1068,8 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 # -----------------------------------------------------------------------------
     def get_integrated_map(self, min_wave = 0, max_wave=0, nansum=True, 
                            vmin=1E-30, vmax=1E30, fcal=False,  log=True, gamma=0., cmap="fuego",
-                           box_x=[0,-1], box_y=[0,-1], g2d=False, plot_centroid=True, 
+                           box_x=[0,-1], box_y=[0,-1], trimmed=False,
+                           g2d=False, plot_centroid=True, 
                            trace_peaks=False, adr_index_fit=2, edgelow=-1, edgehigh=-1, step_tracing=100,
                            kernel_tracing = 0,
                            plot=False, plot_spectra=False, plot_tracing_maps=[], verbose=True) :  ### CHECK
@@ -1078,10 +1084,10 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
             The maximum wavelength passed through the mask. The default is 0.
         nansum : Boolean, optional
             If True will sum the number of NaNs in the columns and rows in the intergrated map. The default is True.
-        vmin : FLoat, optional
-            DESCRIPTION. The default is 1E-30. #TODO 
+        vmin : Float, optional
+            Minimum value to consider in the colour map. The default is 1E-30. 
         vmax : Float, optional
-            DESCRIPTION. The default is 1E30. #TODO 
+            Maximum value to consider in the colour map. The default is 1E30. 
         fcal : Boolean, optional
             If fcal=True, cube.flux_calibration is used. The default is False. 
         log : Boolean, optional
@@ -1094,6 +1100,8 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
             When creating a box to show/trim/alignment these are the x cooridnates in spaxels of the box. The default is [0,-1].
         box_y : Integer List, optional
             When creating a box to show/trim/alignment these are the y cooridnates in spaxels of the box. The default is [0,-1].
+        trimmed : Boolean, optional
+            If True only plots the map within box_x and box_y. The default is False
         g2d : Boolean, optional
             If True uses a 2D gaussian, else doesn't. The default is False. 
         plot_centroid : Boolean, optional
@@ -1162,7 +1170,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 
         if plot:
             self.plot_map(log=log, gamma=gamma, spaxel=[self.max_x,self.max_y], spaxel2=[self.x_peak_median,self.y_peak_median], fcal=fcal, 
-                          box_x=box_x, box_y=box_y, plot_centroid=plot_centroid, g2d=g2d, cmap=cmap, vmin=vmin, vmax=vmax)
+                          box_x=box_x, box_y=box_y, plot_centroid=plot_centroid, g2d=g2d, cmap=cmap, vmin=vmin, vmax=vmax, trimmed=trimmed)
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
     def plot_spectrum_cube(self, x=-1, y=-1, lmin=0, lmax=0, fmin=1E-30, fmax=1E30, 
@@ -3391,8 +3399,9 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def align_blue_and_red_cubes(blue, red, half_size_for_centroid = 8, box_x= [], box_y =[], kernel_tracing = 0,
-                             verbose = True, plot = True, plot_centroid=True, g2d=False):
+def align_blue_and_red_cubes(blue, red, half_size_for_centroid = 12, box_x= [], box_y =[], 
+                             g2d=False, step_tracing = 100,  adr_index_fit = 2, kernel_tracing = 0, 
+                             verbose = True, plot = True, plot_centroid=True, ):
     """
     For aligning the BLUE and RED cubes, follow these steps:\n
     1. First process the RED cube. It's much better for providing the best values of the offsets between RSS files.\n
@@ -3449,23 +3458,28 @@ def align_blue_and_red_cubes(blue, red, half_size_for_centroid = 8, box_x= [], b
         try_read=blue+"  "
         if verbose: text_intro = "\n> Reading the blue cube from the fits file..."+try_read[-2:-1]
         blue_cube=read_cube(blue, text_intro = text_intro,
-                            plot=plot, half_size_for_centroid=half_size_for_centroid, plot_spectra=False, verbose = verbose)
+                            half_size_for_centroid=half_size_for_centroid, 
+                            g2d=g2d, step_tracing = step_tracing,  adr_index_fit = adr_index_fit, kernel_tracing = kernel_tracing,
+                            plot=plot, plot_spectra=False, verbose = verbose)
     except Exception:
         print("  - The blue cube is an object")
         blue_cube = blue
+    
         
     try:
         try_read=red+"  "
         if verbose: text_intro = "\n> Reading the red cube from the fits file..."+try_read[-2:-1]
         red_cube=read_cube(red, text_intro = text_intro,
-                           plot=plot, half_size_for_centroid=half_size_for_centroid, plot_spectra=False, verbose = verbose)
+                           half_size_for_centroid=half_size_for_centroid, 
+                           g2d=g2d, step_tracing = step_tracing,  adr_index_fit = adr_index_fit, kernel_tracing = kernel_tracing,
+                           plot=plot, plot_spectra=False, verbose = verbose)
     except Exception:
         print("  - The red  cube is an object")
         red_cube = red
         if box_x == [] or box_y ==[] :
             box_x, box_y = red_cube.box_for_centroid(half_size_for_centroid = half_size_for_centroid, verbose=verbose)
-        blue_cube.get_integrated_map(box_x = box_x, box_y = box_y, plot_spectra=False, plot=plot, verbose = verbose, plot_centroid=plot_centroid, g2d=g2d, kernel_tracing=kernel_tracing)
-        red_cube.get_integrated_map(box_x = box_x, box_y = box_y, plot_spectra=False, plot=plot, verbose = verbose, plot_centroid=plot_centroid, g2d=g2d, kernel_tracing=kernel_tracing)
+        blue_cube.get_integrated_map(box_x = box_x, box_y = box_y, plot_spectra=False, plot=plot, verbose = verbose, plot_centroid=plot_centroid, g2d=g2d, kernel_tracing=kernel_tracing, trimmed = False)
+        red_cube.get_integrated_map(box_x = box_x, box_y = box_y, plot_spectra=False, plot=plot, verbose = verbose, plot_centroid=plot_centroid, g2d=g2d, kernel_tracing=kernel_tracing, trimmed = False)
   
     print("\n> Checking the properties of these cubes:\n")
     print("  CUBE      RA_centre             DEC_centre     pixel size   kernel size   n_cols      n_rows      x_max      y_max")
@@ -4400,7 +4414,7 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
         combined_cube.data = np.nanmedian(_data_, axis = 0)
         combined_cube.PA = np.mean(_PA_)
         combined_cube.weight = np.nanmean(_weight_ , axis = 0)
-        combined_cube.offsets_files_position = 0
+        combined_cube.offsets_files_position = ""
         
         # # Plot combined weight if requested
         if plot: combined_cube.plot_weight()           
