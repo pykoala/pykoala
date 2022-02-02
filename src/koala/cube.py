@@ -3427,22 +3427,22 @@ def align_blue_and_red_cubes(blue, red, half_size_for_centroid = 12, box_x= [], 
         DESCRIPTION.
     red : TYPE
         DESCRIPTION.
-    half_size_for_centroid : TYPE, optional
-        DESCRIPTION. The default is 8.
-    box_x : TYPE, optional
-        DESCRIPTION. The default is [].
-    box_y : TYPE, optional
-        DESCRIPTION. The default is [].
+    half_size_for_centroid : Integer, optional
+        This is half the length/width of the box. The default is 8.
+    box_x : Integer List, optional
+        When creating a box to show/trim/alignment these are the x cooridnates in spaxels of the box. The default is [].
+    box_y : Integer List, optional
+        When creating a box to show/trim/alignment these are the y cooridnates in spaxels of the box. The default is [].
     kernel_tracing : TYPE, optional
         DESCRIPTION. The default is 0.
-    verbose : TYPE, optional
-        DESCRIPTION. The default is True.
-    plot : TYPE, optional
-        DESCRIPTION. The default is True.
-    plot_centroid : TYPE, optional
-        DESCRIPTION. The default is True.
-    g2d : TYPE, optional
-        DESCRIPTION. The default is False.
+    verbose : Boolean, optional
+        Print results. The default is True.
+    plot : Boolean, optional
+        If True generates and shows the plots. The default is True.
+    plot_centroid : Boolean, optional
+        If True will plot the centroid. The default is True.
+    g2d : Boolean, optional
+        If True uses a 2D gaussian, else doesn't. The default is False.
 
     Returns
     -------
@@ -3558,6 +3558,22 @@ def align_blue_and_red_cubes(blue, red, half_size_for_centroid = 12, box_x= [], 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------  
 def running_mean(x, N):
+    """
+    This function calculates the running mean of an array
+
+    Parameters
+    ----------
+    x : Numpy Array
+        This is the given array.
+    N : Integer
+        This is the number of values to be considered in the array ***. NOTE: N =/= 0 and if N = 1 we just get the array back as floats.
+
+    Returns
+    -------
+    Numpy Array of Floats
+        This is the running mean array.
+
+    """
     cumsum = np.cumsum(np.insert(x, 0, 0))
     return (cumsum[N:] - cumsum[:-N]) / N
 # -----------------------------------------------------------------------------
