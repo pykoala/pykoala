@@ -3544,6 +3544,22 @@ def align_blue_and_red_cubes(blue, red, half_size_for_centroid = 8, box_x= [], b
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------  
 def running_mean(x, N):
+    """
+    This function calculates the running mean of an array
+
+    Parameters
+    ----------
+    x : Numpy Array
+        This is the given array.
+    N : Integer
+        This is the number of values to be considered in the array ***. NOTE: N =/= 0 and if N = 1 we just get the array back as floats.
+
+    Returns
+    -------
+    Numpy Array of Floats
+        This is the running mean array.
+
+    """
     cumsum = np.cumsum(np.insert(x, 0, 0))
     return (cumsum[N:] - cumsum[:-N]) / N
 # -----------------------------------------------------------------------------
