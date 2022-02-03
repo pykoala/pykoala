@@ -16,14 +16,22 @@ import sys
 from os.path import realpath, dirname#, join
 
 from scipy import interpolate, signal, optimize
-from photutils.centroids import centroid_com, centroid_2dg  # pip install photutils     or    conda install -c conda-forge photutils
+from photutils.centroids import centroid_com, centroid_2dg
 
-#from astropy.convolution import Gaussian2DKernel, interpolate_replace_nans
 from scipy.ndimage.interpolation import shift
+from scipy.signal import medfilt
 import copy
 
 # Disable some annoying warnings
 import warnings
+
+from koala.KOALA_RSS import KOALA_RSS
+from koala.RSS import RSS
+from koala.constants import fuego_color_map, C
+from koala.io import full_path, read_table, read_cube, spectrum_to_text_file, save_cube_to_fits_file
+from koala.onedspec import COS, SIN, MAD, fluxes
+from koala.plot_plot import plot_plot, basic_statistics
+
 warnings.simplefilter('ignore', np.RankWarning)
 warnings.simplefilter(action='ignore',category=FutureWarning)
 warnings.filterwarnings('ignore')
@@ -2668,7 +2676,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         # Obtainign smoothed response curve 
         smoothfactor = 2
         if odd_number == 0 : odd_number = smoothfactor * int(np.sqrt(len(response_wavelength )) / 2) - 1
-        response_curve_medfilt_ =sig.medfilt(response_curve,np.int(odd_number))
+        response_curve_medfilt_ =medfilt(response_curve,np.int(odd_number))
         interpolated_curve = interpolate.splrep(response_wavelength, response_curve_medfilt_, s=smooth)
         response_curve_smoothed = interpolate.splev(self.wavelength, interpolated_curve, der=0)  
 
@@ -4598,7 +4606,8 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
         # ADR correction to the combined cube    
         if ADR_cc :
             combined_cube.adrcor = True
-            combined_cube.ADR_correction(RSS, plot=plot, jump=jump, method="old", force_ADR=force_ADR, remove_spaxels_not_fully_covered=remove_spaxels_not_fully_covered)
+            combined_cube.ADR_correction(RSS, plot=plot, jump=jump, method="old", force_ADR=force_ADR,
+                                         remove_spaxels_not_fully_covered=remove_spaxels_not_fully_covered)
             if ADR:
                 combined_cube.trace_peak(box_x=box_x_centroid, box_y=box_y_centroid, 
                                          edgelow=edgelow, edgehigh =edgehigh, 

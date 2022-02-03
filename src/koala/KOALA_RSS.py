@@ -6,10 +6,19 @@ from astropy.wcs import WCS
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import numpy as np
+from scipy.signal import medfilt
 import copy
 #from scipy import signal
 # Disable some annoying warnings
 import warnings
+
+from koala.RSS import RSS, coord_range, replace_el_in_sky_spectrum, sky_spectrum_from_fibres, \
+    fix_these_features_in_all_spectra, remove_negative_pixels
+from koala.constants import red_gratings
+from koala.io import read_table, name_keys, save_rss_fits, full_path
+from koala.onedspec import fluxes, rebin_spec, rebin_spec_shift
+from koala.plot_plot import plot_plot
+
 warnings.simplefilter('ignore', np.RankWarning)
 warnings.simplefilter(action='ignore',category=FutureWarning)
 warnings.filterwarnings('ignore')
@@ -326,7 +335,7 @@ class KOALA_RSS(RSS):
         # However, this correction is not needed is LFLATs have been used in 2dFdr
         # and using a skyflat to get .nresponse (small wavelength variations to throughput)
         if flat != "" :
-            if verbise: print("\n> Dividing the data by the flatfield provided...")
+            if verbose: print("\n> Dividing the data by the flatfield provided...")
             #TODO this should be a task
             self.intensity_corrected=self.intensity_corrected/flat.intensity_corrected
             self.history.append("- Data divided by flatfield:")
@@ -1009,10 +1018,10 @@ class KOALA_RSS(RSS):
             offset_in_range =[]
             x_in_range = []
             valid_range = valid_ranges[sky_lines.index(sky_line)]
-            offset_m = signal.medfilt(offset, kernel_median)
+            offset_m = medfilt(offset, kernel_median)
             text=""
             if apply_median_filter:       
-                #xm = signal.medfilt(x, odd_number)
+                #xm = medfilt(x, odd_number)
                 text=" applying a "+np.str(kernel_median)+" median filter"
                 for i in range(len(offset_m)):       
                     if offset_m[i] > valid_range[0] and offset_m[i] < valid_range[1]: 
