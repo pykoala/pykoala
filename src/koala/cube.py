@@ -3848,7 +3848,8 @@ def obtain_flux_calibration(calibration_star_cubes):
 
     Returns
     -------
-    None.
+    flux_calibration : TYPE
+        DESCRIPTION.
 
     """
     
@@ -3873,6 +3874,29 @@ def obtain_flux_calibration(calibration_star_cubes):
 # -----------------------------------------------------------------------------   
 # -----------------------------------------------------------------------------
 def obtain_telluric_correction(w, telluric_correction_list, plot=True, label_stars=[], scale=[]):
+    """
+    This function obtains the telluric correction.
+
+    Parameters
+    ----------
+    w : TYPE
+        DESCRIPTION.
+    telluric_correction_list : TYPE
+        DESCRIPTION.
+    plot : Boolean, optional
+        DESCRIPTION. The default is True.
+    label_stars : List, optional
+        DESCRIPTION. The default is [].
+    scale : List, optional
+        DESCRIPTION. The default is [].
+
+    Returns
+    -------
+    telluric_correction : TYPE
+        DESCRIPTION.
+
+    """
+    
     if len(scale) == 0:
         for star in telluric_correction_list: scale.append(1.)
     
