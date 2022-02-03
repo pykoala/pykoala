@@ -3885,7 +3885,7 @@ def obtain_telluric_correction(w, telluric_correction_list, plot=True, label_sta
     telluric_correction_list : TYPE
         DESCRIPTION.
     plot : Boolean, optional
-        DESCRIPTION. The default is True.
+        If True generates and shows the plots. The default is True.
     label_stars : List, optional
         DESCRIPTION. The default is [].
     scale : List, optional
@@ -3894,7 +3894,7 @@ def obtain_telluric_correction(w, telluric_correction_list, plot=True, label_sta
     Returns
     -------
     telluric_correction : TYPE
-        DESCRIPTION.
+        This is the telluric correction.
 
     """
     
@@ -3940,22 +3940,52 @@ def telluric_correction_from_star(objeto, save_telluric_file="",
                                   apply_tc=False, 
                                   wave_min=0, wave_max=0, 
                                   plot=True, fig_size=12, verbose=True):
+
     """
     Get telluric correction using a spectrophotometric star  
     
     IMPORTANT! Check task self.get_telluric_correction !!!
-
-    Parameters
-    ----------
-    high_fibres: integer
-        number of fibers to add for obtaining spectrum
-    apply_tc : boolean (default = False)
-        apply telluric correction to data
-
+        
     Example
     ----------
     telluric_correction_star1 = star1r.get_telluric_correction(high_fibres=15)            
-    """         
+    """    """
+    
+
+    Parameters
+    ----------
+    objeto : object
+        This is the object.
+    save_telluric_file : String, optional
+        This is what the file name will be when saving the telluric file. The default is "".
+    object_rss : Boolean, optional
+        If the object is an rss object. The default is False.
+    high_fibres : Integer, optional
+        Number of fibers to add for obtaining spectrum. The default is 20.
+    list_of_telluric_ranges : List of Integer List, optional
+        DESCRIPTION. The default is [[0]].
+    order : Integer, optional
+        DESCRIPTION. The default is 2.
+    apply_tc : Boolean, optional
+        Apply telluric correction to data. The default is False.
+    wave_min : Integer, optional
+        DESCRIPTION. The default is 0.
+    wave_max : Integer, optional
+        DESCRIPTION. The default is 0.
+    plot : Boolean, optional
+        If True generates and shows the plots. The default is True.
+    fig_size : Integer, optional
+        DESCRIPTION. The default is 12.
+    verbose : Boolean, optional
+        Print results. The default is True.
+
+    Returns
+    -------
+    telluric_correction : TYPE
+        This is the telluric correction.
+
+    """
+             
 
     print("\n> Obtaining telluric correction using spectrophotometric star...")
     
@@ -4067,14 +4097,45 @@ def telluric_correction_using_bright_continuum_source(objeto, save_telluric_file
                                                      fibre_list=[-1], high_fibres=20,
                                                      bright_spectrum=[0], odd_number=51,
                                                      list_of_telluric_ranges = [[0]], order = 2,
-                                                     plot=True, verbose=True):    
+                                                     plot=True, verbose=True):
     """
-    "objeto" can be a cube that has been read from a fits file or  
-    an rss, from which getting the integrated spectrum of a bright source.
     If bright_spectrum is given, for example, an 1D spectrum from a cube in "spec",
     "rss" have to be a valid rss for getting wavelength, 
     use:> telluric_correction_with_bright_continuum_source(EG21_red.rss1, bright_spectrum=spec)
     """
+    """
+    #TODO
+
+    Parameters
+    ----------
+    objeto : Object
+        Can be a cube that has been read from a fits file or an rss, from which getting the integrated spectrum of a bright source..
+    save_telluric_file : String, optional
+        This is what the file name will be when saving the telluric file. The default is "".
+    fibre_list : Integer List, optional
+        DESCRIPTION. The default is [-1].
+    high_fibres : Integer, optional
+        DESCRIPTION. The default is 20.
+    bright_spectrum : Integer List, optional
+        DESCRIPTION. The default is [0].
+    odd_number : Integer, optional
+        DESCRIPTION. The default is 51.
+    list_of_telluric_ranges : List of Integer List, optional
+        DESCRIPTION. The default is [[0]].
+    order : Integer, optional
+        DESCRIPTION. The default is 2.
+    plot : Boolean, optional
+        If True generates and shows the plots. The default is True.
+    verbose : Boolean, optional
+        Print results. The default is True.
+
+    Returns
+    -------
+    telluric_correction : TYPE
+        This is the telluric correction.
+
+    """
+
     w = objeto.wavelength
     
     if list_of_telluric_ranges[0][0] == 0: 
