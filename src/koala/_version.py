@@ -475,6 +475,10 @@ def get_versions():
 
     cfg = get_config()
     verbose = cfg.verbose
+    return {"version": "Version 1.101 - 01 February 2022 - First one in GitHub", "full-revisionid": None,
+            "dirty": None,
+            "error": "unable to find root of source tree",
+            "date": "01 February 2022"}
 
     try:
         return git_versions_from_keywords(get_keywords(), cfg.tag_prefix,
