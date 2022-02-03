@@ -30,12 +30,6 @@ warnings.filterwarnings('ignore')
 import logging
 logging.basicConfig(level=logging.CRITICAL)
 
-# from ..utils import constants
-# from ..utils import generic_functions as gf
-# TODO: Fix this
-# from .. import utils.constants as constants
-# from ..utils import generic_functions as gf
-# TODO: Fix this
 current = dirname(realpath(__file__))
 parent = dirname(current)
 # sys.path.append(parent)
@@ -109,9 +103,9 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         
         delta_DEC=0: This is a small offset of the DEC (declination). (default 0)
         
-        offsets_files="": The number of files to be aligned. (default "") #TODO
+        offsets_files="": The number of files to be aligned. (default "")
     
-        offsets_files_position = 0: The position of the current cube in the list of cubes to be aligned. (default 0) #TODO
+        offsets_files_position = 0: The position of the current cube in the list of cubes to be aligned. (default 0)
             
 
     Flux calibration:
@@ -1238,7 +1232,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
             ylabel="Flux [ 10$^{-16}$ erg cm$^{-2}$ s$^{-1}$ $\mathrm{\AA}^{-1}$ ]"
 
 
-        if plot:    # TODO: This should be done with PLOT PLOT
+        if plot:    # TODO: This should be done with plot_plot()
             # Set limits        
             if fmin == 1E-30:
                 fmin = np.nanmin(spectrum)
@@ -1591,7 +1585,6 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
     def plot_wavelength(self, wavelength, w2=0.,  
-                        #norm=colors.PowerNorm(gamma=1./4.), 
                         log = False, gamma=0., vmin=1E-30, vmax=1E30,
                         cmap=fuego_color_map, fig_size= 10, fcal=False,
                         save_file="", description="", contours=True, clabel=False, verbose = True,
@@ -1602,18 +1595,18 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                         label_axes_fontsize=15, axes_fontsize = 14, c_fontsize = 12, title_fontsize= 16,
                         fraction=0.0457, pad=0.02, colorbar_ticksize= 14, colorbar_fontsize = 15, barlabel="") :
         """
-        Plot map at a particular wavelength or in a wavelength range
+        Plot map at a particular wavelength or in a wavelength range.
 
         Parameters
         ----------
         wavelength: Float
-          wavelength to be mapped.
+              wavelength to be mapped.
         w2 : Float, optional
-            DESCRIPTION. The default is 0.. #TODO 
+            if this parameter is given, the map is the integrated map between "wavelength" and "w2". The default is 0 (not given) 
         log : Boolean, optional
             If true the map is plotted on a log scale. The default is False.
         gamma : Float, optional
-            DESCRIPTION. The default is 0.. #TODO 
+            Exponent of a powerlaw for plotting the map. Default is 0. If given, this has preference over log.
         vmin : Float, optional
             DESCRIPTION. The default is 1E-30. #TODO 
         vmax : Float, optional
