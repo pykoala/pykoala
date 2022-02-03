@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
-
-
+from matplotlib import pyplot as plt
 from synphot import observation   ########from pysynphot import observation
 #from synphot import spectrum      ########from pysynphot import spectrum
 from synphot import SourceSpectrum, SpectralElement
@@ -30,6 +28,11 @@ import copy
 
 # Disable some annoying warnings
 import warnings
+
+from koala.constants import C
+from koala.io import read_table
+from koala.plot_plot import plot_plot, basic_statistics
+
 warnings.simplefilter('ignore', np.RankWarning)
 warnings.simplefilter(action='ignore',category=FutureWarning)
 warnings.filterwarnings('ignore')

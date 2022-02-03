@@ -39,6 +39,11 @@ from astropy.io import fits as pyfits
 
 # Disable some annoying warnings
 import warnings
+
+from koala._version import version
+from koala.constants import red_gratings, blue_gratings
+from koala.cube import Interpolated_cube
+
 warnings.simplefilter('ignore', np.RankWarning)
 warnings.simplefilter(action='ignore',category=FutureWarning)
 warnings.filterwarnings('ignore')
@@ -237,7 +242,7 @@ def spectrum_to_fits_file(wavelength, flux, filename="spectrum.fits", name="spec
     hdu.header["TOTALEXP"] = exptime
     hdu.header['HISTORY'] = 'Spectrum derived using the KOALA Python pipeline'
     hdu.header['HISTORY'] = 'Developed by Angel Lopez-Sanchez, Yago Ascasibar, Lluis Galbany et al.'
-    hdu.header['HISTORY'] =  version     
+    hdu.header['HISTORY'] =  version
     now=datetime.datetime.now()
     hdu.header['HISTORY'] = now.strftime("Created on %d %b %Y, %H:%M:%S")
     hdu.header['DATE'] = now.strftime("%Y-%m-%dT%H:%M:%S") #'2002-09-16T18:52:44'   # /Date of FITS file creation
@@ -352,7 +357,7 @@ def save_rss_fits(rss, data=[[0],[0]], fits_file="RSS_rss.fits", text="RSS data"
             fits_image_hdu.header['HISTORY'] = item        
     fits_image_hdu.header['FILE_IN'] = rss.filename     
 
-    fits_image_hdu.header['HISTORY'] = '-- RSS processing using PyKOALA '+version
+    fits_image_hdu.header['HISTORY'] = '-- RSS processing using PyKOALA '+ version
     #fits_image_hdu.header['HISTORY'] = 'Developed by Angel Lopez-Sanchez, Yago Ascasibar, Lluis Galbany et al.'
     #fits_image_hdu.header['HISTORY'] =  version #'Version 0.10 - 12th February 2019'    
     now=datetime.datetime.now()
