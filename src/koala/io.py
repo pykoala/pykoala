@@ -36,7 +36,6 @@ import glob
 # Disable some annoying warnings
 import warnings
 
-from koala._version import version
 from koala.constants import red_gratings, blue_gratings
 #from koala.cube import create_mask
 
@@ -45,6 +44,9 @@ warnings.simplefilter(action='ignore',category=FutureWarning)
 warnings.filterwarnings('ignore')
 import logging
 logging.basicConfig(level=logging.CRITICAL)
+from koala._version import get_versions
+version = get_versions()["version"]
+del get_versions
 
 
 current = os.path.dirname(os.path.realpath(__file__))
