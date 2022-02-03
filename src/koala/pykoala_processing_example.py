@@ -22,67 +22,20 @@
 from timeit import default_timer as timer    
 start = timer()
 # -----------------------------------------------------------------------------
-# Import PyKOALA
+# Load all PyKOALA tasks   / Import PyKOALA 
 # -----------------------------------------------------------------------------
-#import PyKOALA_2021_02_02 as PK    # This will NOT import variables and all tasks 
-                                    # would need to be called using PK.task() ....
-#exec(compile(open('PyKOALA_2021_02_13_P3.py', "rb").read(), 'PyKOALA_2021_02_13_P3.py', 'exec'))   # This just reads the file. 
-                                    # If the PyKOALA code is not changed, there is no need of reading it again
-
 
 pykoala_path = "/DATA/KOALA/Python/GitHub/koala/src/koala/"
 
-
-
-# 0. Read __init__ with the version ( or file version.txt )
-# version="Version 1.1 - 25 January 2022 - First one AFTER breaking the code"
-with open(pykoala_path+'version.txt') as f:
-    version = f.read()
-
-# 1. Add file with constant data
-exec(compile(open(pykoala_path+"constants.py", "rb").read(), pykoala_path+"constants.py", 'exec'))   # This just reads the file. 
-#from pykoala import constants 
-
-# 2. Add file with I/O tasks
-exec(compile(open(pykoala_path+"io.py", "rb").read(), pykoala_path+"io.py", 'exec'))   
-# #from pykoala import io 
-
-# 3. Add file with plot_plot and basic_statistics (task included in plot_plot.py)
-exec(compile(open(pykoala_path+"plot_plot.py", "rb").read(), pykoala_path+"plot_plot.py", 'exec'))   
-# #from pykoala import plot_plot as plot_plot
-
-# 4. Add file with 1D spectrum tasks
-exec(compile(open(pykoala_path+"onedspec.py", "rb").read(), pykoala_path+"onedspec.py", 'exec'))  
-#from pykoala import onedspec 
-
-# 5. Add file with RSS class & RSS tasks
-exec(compile(open(pykoala_path+"rss.py", "rb").read(), pykoala_path+"rss.py", 'exec'))   
-
-# 5. Add file with KOALA_RSS class & KOALA_RSS specific tasks
-exec(compile(open(pykoala_path+"koala_rss.py", "rb").read(), pykoala_path+"koala_rss.py", 'exec'))   
-
-# 7. Add file with Interpolated_cube class & cube specific tasks
-exec(compile(open(pykoala_path+"cube.py", "rb").read(), pykoala_path+"cube.py", 'exec'))   
-
-# 8. Add the 4 AUTOMATIC SCRIPTS 
-exec(compile(open(pykoala_path+"automatic_scripts/automatic_calibration_night.py", "rb").read(), pykoala_path+"automatic_scripts/automatic_calibration_night.py", 'exec'))   
-
-exec(compile(open(pykoala_path+"automatic_scripts/run_automatic_star.py", "rb").read(), pykoala_path+"automatic_scripts/run_automatic_star.py", 'exec'))   
-
-exec(compile(open(pykoala_path+"automatic_scripts/automatic_koala_reduce.py", "rb").read(), pykoala_path+"automatic_scripts/automatic_koala_reduce.py", 'exec'))   
-
-exec(compile(open(pykoala_path+"automatic_scripts/koala_reduce.py", "rb").read(), pykoala_path+"automatic_scripts/koala_reduce.py", 'exec'))   
-
-
+exec(compile(open(pykoala_path+"load_PyKOALA.py", "rb").read(), pykoala_path+"load_PyKOALA.py", 'exec'))   # This just reads the file. 
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 
 if __name__ == "__main__":
 
-    print("\n> Testing PyKOALA. Running", version)
+    print("\n\n> Running PyKOALA -", version)
       
-    
     # # First, copy the input data to a local folder (not within PyKOALA)
 
     # # Type where your data will be:
