@@ -42,7 +42,7 @@ import warnings
 
 from koala._version import version
 from koala.constants import red_gratings, blue_gratings
-from koala.cube import Interpolated_cube
+#from koala.cube import Interpolated_cube
 
 warnings.simplefilter('ignore', np.RankWarning)
 warnings.simplefilter(action='ignore',category=FutureWarning)

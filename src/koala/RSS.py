@@ -60,7 +60,7 @@ class RSS(object):
         self.description = "Undefined row-stacked spectra (RSS)"
         self.n_spectra = 0
         self.n_wave = 0
-        self.wavelength = np.zeros((0))
+        self.wavelength = np.zeros(0)
         self.intensity = np.zeros((0, 0))
         self.intensity_corrected = self.intensity
         self.variance = np.zeros_like(self.intensity)
@@ -68,7 +68,7 @@ class RSS(object):
         self.corrections = []
         self.RA_centre_deg = 0.
         self.DEC_centre_deg = 0.
-        self.offset_RA_arcsec = np.zeros((0))
+        self.offset_RA_arcsec = np.zeros(0)
         self.offset_DEC_arcsec = np.zeros_like(self.offset_RA_arcsec)
         self.ALIGNED_RA_centre_deg = 0.
         self.ALIGNED_DEC_centre_deg = 0.
