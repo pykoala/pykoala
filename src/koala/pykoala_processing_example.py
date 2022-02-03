@@ -19,15 +19,21 @@
 # -----------------------------------------------------------------------------
 # Start timer
 # -----------------------------------------------------------------------------
-from timeit import default_timer as timer    
+import os
+from timeit import default_timer as timer
+
+from koala._version import version
+
 start = timer()
 # -----------------------------------------------------------------------------
 # Load all PyKOALA tasks   / Import PyKOALA 
 # -----------------------------------------------------------------------------
 
-pykoala_path = "/DATA/KOALA/Python/GitHub/koala/src/koala/"
+#pykoala_path = "/DATA/KOALA/Python/GitHub/koala/src/koala/"
+pykoala_path = os.getcwd()
 
-exec(compile(open(pykoala_path+"load_PyKOALA.py", "rb").read(), pykoala_path+"load_PyKOALA.py", 'exec'))   # This just reads the file. 
+exec(compile(open(os.path.join(pykoala_path, "load_PyKOALA.py"), "rb").read(),
+             os.path.join(pykoala_path, "load_PyKOALA.py"), 'exec'))   # This just reads the file.
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -39,7 +45,8 @@ if __name__ == "__main__":
     # # First, copy the input data to a local folder (not within PyKOALA)
 
     # # Type where your data will be:
-    path = "/DATA/KOALA/Python/GitHub/test_reduce/"     
+    path = "/DATA/KOALA/Python/GitHub/test_reduce/"
+    # path = os.path.join(os.getcwd(), '../../../.') other possibility
 
     # # If needed, you can copy the example data using this:        
     #os.system("mkdir "+path)
