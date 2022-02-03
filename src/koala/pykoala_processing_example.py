@@ -46,7 +46,6 @@ if __name__ == "__main__":
 
     # # Type where your data will be:
     path = "/DATA/KOALA/Python/GitHub/test_reduce/"
-    #path = os.path.join(os.getcwd(), 'input_data', 'sample_RSS')
 
     # # If needed, you can copy the example data using this:        
     #os.system("mkdir "+path)
