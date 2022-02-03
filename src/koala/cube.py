@@ -3939,6 +3939,7 @@ def telluric_correction_from_star(objeto, save_telluric_file="",
                                   apply_tc=False, 
                                   wave_min=0, wave_max=0, 
                                   plot=True, fig_size=12, verbose=True):
+
     """
     Get telluric correction using a spectrophotometric star  
     
@@ -3954,7 +3955,43 @@ def telluric_correction_from_star(objeto, save_telluric_file="",
     Example
     ----------
     telluric_correction_star1 = star1r.get_telluric_correction(high_fibres=15)            
-    """         
+    """    """
+    
+
+    Parameters
+    ----------
+    objeto : object
+        This is the object.
+    save_telluric_file : TYPE, optional
+        DESCRIPTION. The default is "".
+    object_rss : TYPE, optional
+        DESCRIPTION. The default is False.
+    high_fibres : TYPE, optional
+        DESCRIPTION. The default is 20.
+    list_of_telluric_ranges : TYPE, optional
+        DESCRIPTION. The default is [[0]].
+    order : TYPE, optional
+        DESCRIPTION. The default is 2.
+    apply_tc : TYPE, optional
+        DESCRIPTION. The default is False.
+    wave_min : TYPE, optional
+        DESCRIPTION. The default is 0.
+    wave_max : TYPE, optional
+        DESCRIPTION. The default is 0.
+    plot : TYPE, optional
+        DESCRIPTION. The default is True.
+    fig_size : TYPE, optional
+        DESCRIPTION. The default is 12.
+    verbose : TYPE, optional
+        DESCRIPTION. The default is True.
+
+    Returns
+    -------
+    telluric_correction : TYPE
+        DESCRIPTION.
+
+    """
+             
 
     print("\n> Obtaining telluric correction using spectrophotometric star...")
     
