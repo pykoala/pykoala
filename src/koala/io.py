@@ -272,7 +272,7 @@ def spectrum_to_fits_file(wavelength, flux, filename="spectrum.fits", name="spec
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def save_rss_fits(rss, data=[[0],[0]], fits_file="RSS_rss.fits", text="RSS data", sol="",
+def save_rss_fits(rss, data=[[0],[0]], fits_file="RSS_rss.fits", text="RSS data", sol=None,
                   description="", verbose=True): # fcal=[0],     # TASK_save_rss_fits
     """
     Routine to save RSS data as fits
@@ -337,10 +337,10 @@ def save_rss_fits(rss, data=[[0],[0]], fits_file="RSS_rss.fits", text="RSS data"
     fits_image_hdu.header["CDELT2"] = 1.000000000000E+00 # / Co-ordinate increment along axis 2
     fits_image_hdu.header["CRPIX2"] = 1.000000000000E+00 # / Reference pixel along axis 2 
                  
-    if len(sol) > 0:  # sol has been provided
+    if sol != None: # len(sol) > 0:  # sol has been provided
         fits_image_hdu.header["SOL0"] = sol[0]
-        fits_image_hdu.header["SOL1"] = sol[1]
-        fits_image_hdu.header["SOL2"] = sol[2]
+        if len(sol) > 1: fits_image_hdu.header["SOL1"] = sol[1]
+        if len(sol) > 2: fits_image_hdu.header["SOL2"] = sol[2]
      
     if description == "":
         description = rss.object
