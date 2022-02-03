@@ -39,18 +39,19 @@ if __name__ == "__main__":
     # # First, copy the input data to a local folder (not within PyKOALA)
 
     # # Type where your data will be:
-    path = "/DATA/KOALA/Python/GitHub/test_reduce/"             
+    path = "/DATA/KOALA/Python/GitHub/test_reduce/"     
+
+    # # If needed, you can copy the example data using this:        
     #os.system("mkdir "+path)
     #os.system("cp -R ./input_data/sample_RSS/* "+path)
 
     # # For AAOmega, we have TWO folders per night: blue (580V) and red (385R)
-
     path_red = path+"385R/"
     path_blue = path+"580V/"
 
     # # -----------------------------------------------------------------------
     # # -----------------------------------------------------------------------
-    # # Now, it is recommended to first process the RED data
+    # # Now, it is recommended to start processing the RED data
     # # -----------------------------------------------------------------------
     # # -----------------------------------------------------------------------
 
@@ -85,7 +86,6 @@ if __name__ == "__main__":
     # automatic_calibration_night(path=path_red, auto=True, 
     #                             throughput_2D_file=throughput_2D_file)
     
-    
     # # Run automatic calibration when throughput 2D has been obtained
     # # AND 2 Python objects (only for checking FLUX calibration)
     # # In this case, adding abs_flux_scale =[1.1, 1.0],
@@ -103,7 +103,6 @@ if __name__ == "__main__":
     # # -----------------------------------------------------------------------
     # # Now it is time to process an RSS file, using KOALA_RSS
     # # It is recommended to test it here BEFORE running automatic scripts
-    
     
     # file_in   = path_red+"27feb20031red.fits"
     # file_med  = path_red+"27feb20031red_TCWXU____.fits"
@@ -260,7 +259,7 @@ if __name__ == "__main__":
 
     # # Now we need to repeat for the remaining 5 files of He 2-10.
     # # Again, the critical part is the SKY SUBTRACTION!
-    # # As we are doing the Gaussian fit,  we first need to process TCWXU,
+    # # As we are doing the Gaussian fit, we first need to process TCWXU,
     # # then extract self sky, fit Gaussian (double),
     # # and then running again KOALA_RSS with 1Dfit and residuals
     
@@ -295,7 +294,6 @@ if __name__ == "__main__":
     #                   do_extinction=True,
     #                   telluric_correction_file=telluric_correction_file)
   
-
     # sky = KOALA_RSS(file_med, sky_method="self", n_sky=25)
     # sky_spec=sky.sky_emission     
     # dfluxes(w,sky_spec ,6577,6584, lowlow=50,lowhigh=30, highlow=30,highhigh=50)
@@ -343,7 +341,6 @@ if __name__ == "__main__":
     # # Once we have the CLEAN RSS files, we can do the cubing & combine
     # # -----------------------------------------------------------------------
 
-    
     # # For making a cube, we call Interpolated_cube defining the
     # # pixel and kernel size and adding the flux_calibration
     
@@ -496,10 +493,10 @@ if __name__ == "__main__":
     # ADR_y_fit_list =  [[1.0585167511142714e-12, -3.972561095302862e-08, 0.00047854197119031385, -1.806746479722604], [5.712676673528853e-13, -2.7118172653512425e-08, 0.00034731129018336117, -1.322842656375085], [-1.2201306546407504e-12, 2.3629083572706315e-08, -0.00013682268516072916, 0.21158456279065121],
     #                    [-2.0911079335920793e-12, 4.703018551076634e-08, -0.00033904804410673275, 0.7771617214421154], [-2.838537640353266e-12, 6.54908082091063e-08, -0.00048530769637374164, 1.148318135983978], [-3.1271687976010236e-12, 7.140942741912648e-08, -0.0005301049734410775, 1.2753542609892792]] 
 
-    offsets =  [ -0.2773903893335756 , 0.7159980346947741 , 2.6672716919949306 , 0.8808234960793637,
-                  3, 18,   
-                #0.5, 18.9, # I got these values with Jamila in Feb 21, but they don´t work 
-                1.4239020516303178 , 0.003232821107207684 , 1.4757701790022182 , 1.495021090623025 ]
+    # offsets =  [ -0.2773903893335756 , 0.7159980346947741 , 2.6672716919949306 , 0.8808234960793637,
+    #               3, 18,   
+    #             #0.5, 18.9, # I got these values with Jamila in Feb 21, but they don´t work 
+    #             1.4239020516303178 , 0.003232821107207684 , 1.4757701790022182 , 1.495021090623025 ]
                 
     # combined_cube=KOALA_reduce(rss_list, path=path_red, 
     #                            fits_file="combined_cube_.fits",
@@ -533,7 +530,7 @@ if __name__ == "__main__":
 
     # # -----------------------------------------------------------------------
     # # -----------------------------------------------------------------------
-    # # BLUE DATA (To be done ... )
+    # # BLUE DATA 
     # # -----------------------------------------------------------------------
     # # -----------------------------------------------------------------------
 
@@ -570,12 +567,12 @@ if __name__ == "__main__":
     #                             do_skyflat = False,
     #                             #list_of_objects =["HD60753_580V_20180227", "Hilt600_580V_20180227"], # if needed
     #                             abs_flux_scale =[1.1, 1.0], # add this for SCALING stars, if needed
-    #                             cal_from_calibrated_starcubes = True)
+    #                             cal_from_calibrated_starcubes = True)   # This assumes the cubes ARE created as Python objects
     
     
     # # Now, quickly check if [O III] 5007 and/or Hbeta are everywhere in the data
     
-    file_in   = path_blue+"27feb10031red.fits"
+    # file_in   = path_blue+"27feb10031red.fits"
 
     # test = KOALA_RSS(file_in, 
     #                  save_rss_to_fits_file="auto",  
@@ -584,7 +581,6 @@ if __name__ == "__main__":
     #                  correct_ccd_defects = True, 
     #                  fix_wavelengths = True, 
     #                  do_extinction=True)
-
 
     # # It doesn't look like there is emission everywhere, but a 1D plot can help
     
@@ -610,7 +606,7 @@ if __name__ == "__main__":
     # # and we are doing mosaic we can't select a region that is good for all files
     # # let's try with half_size_for_centroid = 0
     
-    # # Running the following should process the 6 RSS files, clean them, cube them, apply alignment and combine
+    # # Running the following should process the 6 RSS files, clean them, cube them, apply alignments and combine them
     # # producing a FINAL combined cube in fits format.
             
     # rss_list = ["27feb10031red.fits","27feb10032red.fits","27feb10033red.fits",
@@ -670,16 +666,22 @@ if __name__ == "__main__":
     #                                 plot_spectra = False,
     #                                 fig_size=12,
     #                                 warnings=False, verbose = True)
-         
-    # # With this we created the CLEAN rss files and obtained the ADR:
+
+    # # This created combined cube /DATA/KOALA/Python/GitHub/test_reduce/580V/combined_cube_blue_test.fits
+    # # Plus all the clean RSS files         
 
     # rss_list = ["27feb10031red_TCWX_S_NR.fits","27feb10032red_TCWX_S_NR.fits","27feb10033red_TCWX_S_NR.fits",
     #             "27feb10034red_TCWX_S_NR.fits","27feb10035red_TCWX_S_NR.fits","27feb10036red_TCWX_S_NR.fits"]
+
+    # # We also obtained the ADR correction
     
     # ADR_x_fit_list =  [[9.791374902300966e-11, -1.361731424563216e-06, 0.006168569717114751, -9.062099268442289], [1.5178720729296336e-10, -2.149538359423654e-06, 0.010002596378191356, -15.27549983827299], [-1.5727880041293275e-10, 2.270172789723589e-06, -0.010746153798036104, 16.6669228618847], [-3.587184899956129e-11, 8.061339103441051e-07, -0.005438900897366207, 11.469478296922391], [-1.0888626198857115e-10, 1.833820655023091e-06, -0.010112882237282317, 18.262553011417417], [-2.0507071024794933e-10, 3.19853352438298e-06, -0.016448278016901505, 27.84319868752676]]
     # ADR_y_fit_list =  [[-5.958768890277437e-11, 8.335385578402792e-07, -0.003814158515275198, 5.685826415246691], [9.440481199724225e-11, -1.371028712714804e-06, 0.006603018298665971, -10.547255178451204], [1.5921988914264668e-10, -2.3121137328567566e-06, 0.011046520521171891, -17.337559244322566], [-9.532034466031645e-11, 1.3410760221244944e-06, -0.0062161978911407035, 9.489044815580575], [-3.289714426078901e-11, 4.280544076996474e-07, -0.0018416700437986987, 2.6479564442375496], [1.812993107807248e-11, -2.2424083469823508e-07, 0.000833064491704837, -0.8411422420774155]]
 
-        
+
+    # # If we want to iterate a bit more, we can use the RSS list with the CLEAN RSS files
+    # # and select rss_clean=True
+    
     # combined_cube_blue=KOALA_reduce(rss_list, path=path_blue, 
     #                                 fits_file="combined_cube_blue_test.fits",
                                 
@@ -715,9 +717,6 @@ if __name__ == "__main__":
     #                                 fig_size=12,
     #                                 warnings=False, verbose = True)
          
-
-    # # This created combined cube /DATA/KOALA/Python/GitHub/test_reduce/580V/combined_cube_blue_test.fits
-    # # Plus all the clean RSS files
     
     # # Time to check alignment between red and blue cubes!
     
@@ -738,9 +737,6 @@ if __name__ == "__main__":
 
 
     # # With this, we have processed and aligned both the blue and red cubes of the galaxy He 2-10 !!
-
-
-
 
 
     # # -----------------------------------------------------------------------
