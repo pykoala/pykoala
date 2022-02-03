@@ -3622,8 +3622,8 @@ def fit_Moffat(r2_growth_curve, F_growth_curve,
         DESCRIPTION.
     r_max : TYPE
         DESCRIPTION.
-    plot : TYPE, optional
-        DESCRIPTION. The default is False.
+    plot : Boolean, optional
+        If True generates and shows the plots. The default is False.
 
     Returns
     -------
@@ -3648,16 +3648,16 @@ def fit_Moffat(r2_growth_curve, F_growth_curve,
 # -----------------------------------------------------------------------------
 def offset_between_cubes(cube1, cube2, plot=True):
     """
-    #TODO
+    This is the offset between the 2 cubes, in terms of Right Ascension and Declination.
 
-    Parameters
+    Parameters #TODO
     ----------
-    cube1 : TYPE
+    cube1 : Object Cube
         DESCRIPTION.
-    cube2 : TYPE
+    cube2 : Object Cube
         DESCRIPTION.
-    plot : TYPE, optional
-        DESCRIPTION. The default is True.
+    plot : Boolean, optional
+        If True generates and shows the plots. The default is True.
 
     Returns
     -------
@@ -3702,6 +3702,24 @@ def offset_between_cubes(cube1, cube2, plot=True):
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def compare_cubes(cube1, cube2, line=0):
+    """
+    This function compares the inputted cubes and plots them
+
+    Parameters
+    ----------
+    cube1 : TYPE
+        DESCRIPTION.
+    cube2 : TYPE
+        DESCRIPTION.
+    line : Integer, optional
+        DESCRIPTION. The default is 0.
+
+    Returns
+    -------
+    None.
+
+    """
+    
     if line == 0:
         map1=cube1.integrated_map
         map2=cube2.integrated_map
@@ -3728,6 +3746,24 @@ def compare_cubes(cube1, cube2, line=0):
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def plot_response(calibration_star_cubes, scale=[], use_median=False):
+    """
+    #TODO
+
+    Parameters #TODO
+    ----------
+    calibration_star_cubes : TYPE
+        DESCRIPTION.
+    scale : List, optional
+        DESCRIPTION. The default is [].
+    use_median : Boolean, optional
+        If True will use the median instead of mean. The default is False.
+
+    Returns
+    -------
+    None.
+
+    """
+    
  
     n_cubes = len(calibration_star_cubes)
     if len(scale) == 0:
@@ -3802,6 +3838,20 @@ def plot_response(calibration_star_cubes, scale=[], use_median=False):
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def obtain_flux_calibration(calibration_star_cubes):
+    """
+    This function obtains the flux calibration of the star cubes
+
+    Parameters
+    ----------
+    calibration_star_cubes : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    """
+    
 #    print "\n> Obtaining flux calibration...\n" 
     vector_wave = []
     vector_response = []
