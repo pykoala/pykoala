@@ -63,7 +63,7 @@ class KOALA_RSS(RSS):
 
     # -----------------------------------------------------------------------------
     def __init__(self, filename, save_rss_to_fits_file="", rss_clean=False, path="",
-                 flat="",  # normalized flat, if needed
+                 flat=None,  # normalized flat, if needed
                  no_nans=False, mask="", mask_file="", plot_mask=False,  # Mask if given
                  valid_wave_min=0, valid_wave_max=0,  # These two are not needed if Mask is given
                  apply_throughput=False,
@@ -153,18 +153,19 @@ class KOALA_RSS(RSS):
         if path != "":
             filename = full_path(filename, path)
 
-        if verbose: print("\n> Reading file", '"' + filename + '"', "...")
-        RSS_fits_file = fits.open(filename)  # Open file
+        if verbose:
+            print("\n> Reading file", '"' + filename + '"', "...")
+        rss_fits_file = fits.open(filename)  # Open file
         # self.rss_list = []
 
         #  General info:
-        self.object = RSS_fits_file[0].header['OBJECT']
+        self.object = rss_fits_file[0].header['OBJECT']
         self.filename = filename
         self.description = self.object + ' \n ' + filename
-        self.RA_centre_deg = RSS_fits_file[2].header['CENRA'] * 180 / np.pi
-        self.DEC_centre_deg = RSS_fits_file[2].header['CENDEC'] * 180 / np.pi
-        self.exptime = RSS_fits_file[0].header['EXPOSED']
-        self.history_RSS = RSS_fits_file[0].header['HISTORY']
+        self.RA_centre_deg = rss_fits_file[2].header['CENRA'] * 180 / np.pi
+        self.DEC_centre_deg = rss_fits_file[2].header['CENDEC'] * 180 / np.pi
+        self.exptime = rss_fits_file[0].header['EXPOSED']
+        self.history_RSS = rss_fits_file[0].header['HISTORY']
         self.history = []
         if sol[0] in [0, -1]:
             self.sol = [0, 0, 0]
@@ -172,29 +173,29 @@ class KOALA_RSS(RSS):
             self.sol = sol
 
         # Read good/bad spaxels
-        all_spaxels = list(range(len(RSS_fits_file[2].data)))
-        quality_flag = [RSS_fits_file[2].data[i][1] for i in all_spaxels]
+        all_spaxels = list(range(len(rss_fits_file[2].data)))
+        quality_flag = [rss_fits_file[2].data[i][1] for i in all_spaxels]
         good_spaxels = [i for i in all_spaxels if quality_flag[i] == 1]
         bad_spaxels = [i for i in all_spaxels if quality_flag[i] == 0]
 
         # Create wavelength, intensity, and variance arrays only for good spaxels
-        wcsKOALA = WCS(RSS_fits_file[0].header)
-        # variance = RSS_fits_file[1].data[good_spaxels]
-        index_wave = np.arange(RSS_fits_file[0].header['NAXIS1'])
+        wcsKOALA = WCS(rss_fits_file[0].header)
+        index_wave = np.arange(rss_fits_file[0].header['NAXIS1'])
         wavelength = wcsKOALA.dropaxis(1).wcs_pix2world(index_wave, 0)[0]
-        intensity = RSS_fits_file[0].data[good_spaxels]
+        intensity = rss_fits_file[0].data[good_spaxels]
+        variance = rss_fits_file[1].data[good_spaxels]
 
-        if rss_clean == False and verbose:
-            print("\n  Number of spectra in this RSS =", len(RSS_fits_file[0].data), ",  number of good spectra =",
+        if not rss_clean and verbose:
+            print("\n  Number of spectra in this RSS =", len(rss_fits_file[0].data), ",  number of good spectra =",
                   len(good_spaxels), " ,  number of bad spectra =", len(bad_spaxels))
             if len(bad_spaxels) > 0: print("  Bad fibres =", bad_spaxels)
 
-        # Read errors using RSS_fits_file[1]
-        # self.header1 = RSS_fits_file[1].data      # CHECK WHEN DOING ERRORS !!!
+        # Read errors using rss_fits_file[1]
+        # self.header1 = rss_fits_file[1].data      # CHECK WHEN DOING ERRORS !!!
 
-        # Read spaxel positions on sky using RSS_fits_file[2]
-        self.header2_data = RSS_fits_file[2].data
-        # print RSS_fits_file[2].data
+        # Read spaxel positions on sky using rss_fits_file[2]
+        self.header2_data = rss_fits_file[2].data
+        # print rss_fits_file[2].data
 
         # CAREFUL !! header 2 has the info of BAD fibres, if we are reading from our created RSS files we have to do
         # it in a different way...
@@ -207,51 +208,48 @@ class KOALA_RSS(RSS):
                 offset_DEC_arcsec_.append(self.header2_data[i][6])
             offset_RA_arcsec = np.array(offset_RA_arcsec_)
             offset_DEC_arcsec = np.array(offset_DEC_arcsec_)
-            variance = np.zeros_like(intensity)  # CHECK FOR ERRORS
 
         else:
-            offset_RA_arcsec = np.array([RSS_fits_file[2].data[i][5]
+            offset_RA_arcsec = np.array([rss_fits_file[2].data[i][5]
                                          for i in good_spaxels])
-            offset_DEC_arcsec = np.array([RSS_fits_file[2].data[i][6]
+            offset_DEC_arcsec = np.array([rss_fits_file[2].data[i][6]
                                           for i in good_spaxels])
 
-            self.ID = np.array([RSS_fits_file[2].data[i][0] for i in good_spaxels])  # These are the good fibres
-            variance = RSS_fits_file[1].data[good_spaxels]  # CHECK FOR ERRORS
+            self.ID = np.array([rss_fits_file[2].data[i][0] for i in good_spaxels])  # These are the good fibres
 
-        self.ZDSTART = RSS_fits_file[0].header['ZDSTART']
-        self.ZDEND = RSS_fits_file[0].header['ZDEND']
+        self.ZDSTART = rss_fits_file[0].header['ZDSTART']
+        self.ZDEND = rss_fits_file[0].header['ZDEND']
 
         # KOALA-specific stuff
-        self.PA = RSS_fits_file[0].header['TEL_PA']
-        self.grating = RSS_fits_file[0].header['GRATID']
+        self.PA = rss_fits_file[0].header['TEL_PA']
+        self.grating = rss_fits_file[0].header['GRATID']
         # Check RED / BLUE arm for AAOmega
-        if (RSS_fits_file[0].header['SPECTID'] == "RD"):
+        if (rss_fits_file[0].header['SPECTID'] == "RD"):
             AAOmega_Arm = "RED"
-        if (RSS_fits_file[0].header['SPECTID'] == "BL"):  # VIRUS
+        if (rss_fits_file[0].header['SPECTID'] == "BL"):  # VIRUS
             AAOmega_Arm = "BLUE"
 
         # For WCS
         self.CRVAL1_CDELT1_CRPIX1 = []
-        self.CRVAL1_CDELT1_CRPIX1.append(RSS_fits_file[0].header['CRVAL1'])
-        self.CRVAL1_CDELT1_CRPIX1.append(RSS_fits_file[0].header['CDELT1'])
-        self.CRVAL1_CDELT1_CRPIX1.append(RSS_fits_file[0].header['CRPIX1'])
-        RSS_fits_file.close()
-
-        # SET RSS    
-        # FROM HERE IT WAS self.set_data before   ------------------------------------------ 
+        self.CRVAL1_CDELT1_CRPIX1.append(rss_fits_file[0].header['CRVAL1'])
+        self.CRVAL1_CDELT1_CRPIX1.append(rss_fits_file[0].header['CDELT1'])
+        self.CRVAL1_CDELT1_CRPIX1.append(rss_fits_file[0].header['CRPIX1'])
+        rss_fits_file.close()
 
         self.wavelength = wavelength
         self.n_wave = len(wavelength)
 
         # Check that dimensions match KOALA numbers
         if self.n_wave != 2048 and len(all_spaxels) != 1000:
-            if warnings or verbose: print("\n *** WARNING *** : These numbers are NOT the standard ones for KOALA")
+            if warnings or verbose:
+                print("\n *** WARNING *** : These numbers are NOT the standard ones for KOALA")
 
         if verbose: print("\n> Setting the data for this file:")
 
         if variance.shape != intensity.shape:
-            if warnings or verbose: print("\n* ERROR: * the intensity and variance matrices are",
-                                          intensity.shape, "and", variance.shape, "respectively\n")
+            if warnings or verbose:
+                print("\n* ERROR: * the intensity and variance arrays are",
+                      intensity.shape, "and", variance.shape, "respectively\n")
             raise ValueError
         n_dim = len(intensity.shape)
         if n_dim == 2:
@@ -261,27 +259,23 @@ class KOALA_RSS(RSS):
             self.intensity = intensity.reshape((1, self.n_wave))
             self.variance = variance.reshape((1, self.n_wave))
         else:
-            if warnings or verbose: print("\n* ERROR: * the intensity matrix supplied has", \
-                                          n_dim, "dimensions\n")
+            if warnings or verbose:
+                print("\n* ERROR: * the intensity matrix supplied has", n_dim, "dimensions\n")
             raise ValueError
 
         self.n_spectra = self.intensity.shape[0]
         self.n_wave = len(self.wavelength)
-        if verbose: print("  Found {} spectra with {} wavelengths" \
-                          .format(self.n_spectra, self.n_wave), \
-                          "between {:.2f} and {:.2f} Angstrom" \
-                          .format(self.wavelength[0], self.wavelength[-1]))
+        if verbose:
+            print("  Found {} spectra with {} wavelengths".format(self.n_spectra, self.n_wave),
+                  "between {:.2f} and {:.2f} Angstrom".format(self.wavelength[0], self.wavelength[-1]))
         if self.intensity.shape[1] != self.n_wave:
             if warnings or verbose:
-                print("\n* ERROR: * spectra have", self.intensity.shape[1], \
-                      "wavelengths rather than", self.n_wave)
+                print("\n* ERROR: * spectra have", self.intensity.shape[1], "wavelengths rather than", self.n_wave)
             raise ValueError
-        if len(offset_RA_arcsec) != self.n_spectra or \
-                len(offset_DEC_arcsec) != self.n_spectra:
-            if warnings or verbose:
-                print("\n* ERROR: * offsets (RA, DEC) = ({},{})" \
-                      .format(len(self.offset_RA_arcsec),
-                              len(self.offset_DEC_arcsec)), \
+        if (len(offset_RA_arcsec) != self.n_spectra) |(len(offset_DEC_arcsec) != self.n_spectra):
+            if warnings | verbose:
+                print("\n* ERROR: * offsets (RA, DEC) = ({},{})".format(len(self.offset_RA_arcsec),
+                                                                        len(self.offset_DEC_arcsec)),
                       "rather than", self.n_spectra)
             raise ValueError
         else:
@@ -317,7 +311,6 @@ class KOALA_RSS(RSS):
             # Include it in the history ONLY if it is the first time (i.e. applying throughput)
             self.read_mask_from_fits_file(mask=mask, mask_file=mask_file, no_nans=no_nans, plot=plot_mask,
                                           verbose=verbose, include_history=apply_throughput)
-
         if valid_wave_min == 0 and valid_wave_max == 0:
             self.valid_wave_min = self.mask_good_wavelength_range[0]
             self.valid_wave_max = self.mask_good_wavelength_range[1]
@@ -332,11 +325,12 @@ class KOALA_RSS(RSS):
                 print("  As specified, we use the [", self.valid_wave_min, " , ", self.valid_wave_max, "] range.")
 
                 # Plot RSS_image
-        if plot: self.RSS_image(image=self.intensity, cmap="binary_r")
+        if plot:
+            self.RSS_image(image=self.intensity, cmap="binary_r")
 
         # Deep copy of intensity into intensity_corrected
         self.intensity_corrected = copy.deepcopy(self.intensity)
-
+        self.variance = variance.copy()
         # ---------------------------------------------------
         # ------------- PROCESSING THE RSS FILE -------------
         # ---------------------------------------------------
@@ -347,10 +341,11 @@ class KOALA_RSS(RSS):
         # Usually this is found .nresponse , see task "nresponse_flappyflat"
         # However, this correction is not needed is LFLATs have been used in 2dFdr
         # and using a skyflat to get .nresponse (small wavelength variations to throughput)
-        if flat != "":
-            if verbose: print("\n> Dividing the data by the flatfield provided...")
-            # TODO this should be a task
+        if flat is not None:
+            if verbose:
+                print("\n> Dividing the data by the flatfield provided...")
             self.intensity_corrected = self.intensity_corrected / flat.intensity_corrected
+            self.variance_corrected = self.variance_corrected / (flat.intensity_corrected)**2
             self.history.append("- Data divided by flatfield:")
             self.history.append(flat.filename)
 
@@ -409,9 +404,10 @@ class KOALA_RSS(RSS):
             self.correct_ccd_defects(kernel_correct_ccd_defects=kernel_correct_ccd_defects,
                                      remove_5577=remove_5577_here,
                                      fibre_p=fibre_p, apply_throughput=apply_throughput, verbose=verbose, plot=plot)
-
+            # TODO: THIS FUNCTION SHOULD ALSO BE APPLIED TO THE VARIANCE
             # Compare corrected vs uncorrected spectrum
-            if plot: self.plot_corrected_vs_uncorrected_spectrum(high_fibres=high_fibres, fig_size=fig_size)
+            if plot:
+                self.plot_corrected_vs_uncorrected_spectrum(high_fibres=high_fibres, fig_size=fig_size)
 
             # If removing_5577_here, use the linear fit to the 5577 Gaussian fits in "fix_2dFdr_wavelengths"
             if fix_wavelengths and sol[0] == 0: sol = self.sol
@@ -445,7 +441,8 @@ class KOALA_RSS(RSS):
         ZD = (self.ZDSTART + self.ZDEND) / 2
         self.airmass = 1 / np.cos(np.radians(ZD))
         self.extinction_correction = np.ones(self.n_wave)
-        if do_extinction: self.do_extinction_curve(plot=plot, verbose=verbose, fig_size=fig_size)
+        if do_extinction:
+            self.do_extinction_curve(plot=plot, verbose=verbose, fig_size=fig_size)
 
         # ---------------------------------------------------                            
         # 5. Check if telluric correction is needed & apply    (U)   
@@ -516,8 +513,6 @@ class KOALA_RSS(RSS):
 
                     # (2) If a 2D sky, sky_rss, is provided
             if sky_method == "2D":  # if np.nanmedian(sky_rss.intensity_corrected) != 0:
-                #
-                # TODO : Needs to be checked and move to an INDEPENDENT task
                 self.history.append('- Sky sustraction using the 2D method')
 
                 if scale_sky_rss != 0:
@@ -903,7 +898,8 @@ class KOALA_RSS(RSS):
                 print("  This was a CLEAN RSS file, no correction was applied!")
                 print("  Values stored in self.intensity_corrected are the same that those in self.intensity")
             else:
-                if flat != "": print("  Intensities divided by the given flatfield")
+                if flat is not None:
+                    print("  Intensities divided by the given flatfield")
                 if apply_throughput:
                     if len(throughput_2D) > 0:
                         print("  Intensities corrected for throughput 2D using provided variable !")
