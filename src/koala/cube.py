@@ -919,7 +919,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 # -----------------------------------------------------------------------------
     def trace_peak(self, box_x=[0,-1],box_y=[0,-1], edgelow=-1, edgehigh=-1,  
                    adr_index_fit=2, step_tracing = 100, g2d = True, kernel_tracing = 0,
-                   plot_tracing_maps = [],
+                   half_size_for_centroid=0, plot_tracing_maps = [],
                    plot=False, log=True, gamma=0., check_ADR=False, verbose = True): 
         """
         #TODO
@@ -968,6 +968,9 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
             if edgelow == -1: edgelow = 10
             if edgehigh == -1: edgehigh = 10
 
+        if half_size_for_centroid != 0 and box_x[1] == -1 and box_y[1] == -1:
+            box_x,box_y = self.box_for_centroid(half_size_for_centroid=half_size_for_centroid, plot=False, verbose=False, plot_map=False)
+        
         x0=box_x[0]
         x1=box_x[1]
         y0=box_y[0]
@@ -3646,7 +3649,7 @@ def fit_Moffat(r2_growth_curve, F_growth_curve,
     return fit
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def offset_between_cubes(cube1, cube2, plot=True):
+def offset_between_cubes(cube1, cube2, plot=True, verbose = True, smooth = 51):   
     """
     This is the offset between the 2 cubes, in terms of Right Ascension and Declination.
 
@@ -3667,37 +3670,57 @@ def offset_between_cubes(cube1, cube2, plot=True):
         DESCRIPTION.
 
     """
+    p = cube1.pixel_size_arcsec
     
-    x = (cube2.x_peak - cube2.n_cols/2. + cube2.RA_centre_deg*3600./cube2.pixel_size_arcsec) \
-        - (cube1.x_peak - cube1.n_cols/2. + cube1.RA_centre_deg*3600./cube1.pixel_size_arcsec)
-    y = (cube2.y_peak - cube2.n_rows/2. + cube2.DEC_centre_deg*3600./cube2.pixel_size_arcsec) \
-        - (cube1.y_peak - cube1.n_rows/2. + cube1.DEC_centre_deg*3600./cube1.pixel_size_arcsec)
+    x = (cube2.x_peaks - cube2.n_cols/2. + cube2.RA_centre_deg*3600./cube2.pixel_size_arcsec) \
+        - (cube1.x_peaks - cube1.n_cols/2. + cube1.RA_centre_deg*3600./cube1.pixel_size_arcsec)
+    y = (cube2.y_peaks - cube2.n_rows/2. + cube2.DEC_centre_deg*3600./cube2.pixel_size_arcsec) \
+        - (cube1.y_peaks - cube1.n_rows/2. + cube1.DEC_centre_deg*3600./cube1.pixel_size_arcsec)
+        
     delta_RA_pix = np.nanmedian(x)
     delta_DEC_pix = np.nanmedian(y)
-    delta_RA_arcsec = delta_RA_pix * cube1.pixel_size_arcsec
-    delta_DEC_arcsec = delta_DEC_pix * cube1.pixel_size_arcsec
-    print('(delta_RA, delta_DEC) = ({:.3f}, {:.3f}) arcsec' \
-        .format(delta_RA_arcsec, delta_DEC_arcsec))
-    if plot:
-        x -= delta_RA_pix
-        y -= delta_DEC_pix
-        smooth_x = signal.medfilt(x, 151)
-        smooth_y = signal.medfilt(y, 151)
-        
-        print(np.nanmean(smooth_x))
-        print(np.nanmean(smooth_y))
+    
+    delta_RA_arcsec = delta_RA_pix * p
+    delta_DEC_arcsec = delta_DEC_pix * p
+    
+    bsx = basic_statistics(x, return_data=True, verbose = False)
+    bsy = basic_statistics(y, return_data=True, verbose = False)
+    
+    #dx_arcsec = (x - delta_RA_pix) * p
+    #dy_arcsec = (y - delta_DEC_pix) * p  
+    
+    smooth_x = signal.medfilt(x, smooth)
+    smooth_y = signal.medfilt(y, smooth)
 
-        plt.figure(figsize=(10, 5))
-        wl = cube1.RSS.wavelength
-        plt.plot(wl, x, 'k.', alpha=0.1)
-        plt.plot(wl, y, 'r.', alpha=0.1)
-        plt.plot(wl, smooth_x, 'k-')
-        plt.plot(wl, smooth_y, 'r-')
-    #    plt.plot(wl, x_max-np.nanmedian(x_max), 'g-')
-    #    plt.plot(wl, y_max-np.nanmedian(y_max), 'y-')
-        plt.ylim(-1.6, 1.6)
-        plt.show()
-        plt.close()
+    delta_RA_pix_smooth = np.nanmedian(smooth_x)
+    delta_DEC_pix_smooth = np.nanmedian(smooth_y)
+
+    delta_RA_arcsec_smooth = delta_RA_pix_smooth * p
+    delta_DEC_arcsec_smooth = delta_DEC_pix_smooth * p
+    
+    bsx_s = basic_statistics(smooth_x, return_data=True, verbose = False)
+    bsy_s = basic_statistics(smooth_y, return_data=True, verbose = False)
+    
+    #dx_arcsec_smooth = (smooth_x - delta_RA_pix_smooth) * p
+    #dy_arcsec_smooth = (smooth_y - delta_DEC_pix_smooth) * p 
+    
+    if verbose:
+        print("\n> Computing offsets between 2 cubes:\n")
+        print('  - No smoothing:            (delta_RA, delta_DEC) = ({:.2f} +- {:.2f} , {:.2f} +- {:.2f}) arcsec' \
+              .format(delta_RA_arcsec, bsx[3], delta_DEC_arcsec, bsy[3]))
+        print('  - With smoothing {:4.0f} :    (delta_RA, delta_DEC) = ({:.2f} +- {:.2f} , {:.2f} +- {:.2f}) arcsec' \
+            .format(smooth, delta_RA_arcsec_smooth, bsx_s[3], delta_DEC_arcsec_smooth, bsy_s[3]))   
+                        
+    if plot:
+        w = cube1.wavelength
+        plot_plot(w, [x*p, y*p, smooth_x*p, smooth_y*p], 
+                  alpha=[0.1,0.1,1,1],
+                  ptitle="Offsets between cubes",
+                  color=["k","r","k","r"],
+                  psym=[".",".","-","-"],
+                  hlines =[0], ylabel="Offset [arcsec]",
+                  label=["RA","DEC","RA smooth", "DEC smooth"])
+        
     return delta_RA_arcsec, delta_DEC_arcsec
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
