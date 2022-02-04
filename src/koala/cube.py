@@ -3747,7 +3747,7 @@ def compare_cubes(cube1, cube2, line=0):
         map1=cube1.integrated_map
         map2=cube2.integrated_map
     else:     
-        l = np.searchsorted(cube1.RSS.wavelength, line)
+        l = np.searchsorted(cube1.wavelength, line)
         map1 = cube1.data[l]
         map2 = cube2.data[l]
         
