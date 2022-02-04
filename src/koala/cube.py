@@ -4597,7 +4597,7 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
                         plot=True, plot_weight= True, plot_spectra=True, 
                         verbose=True, say_making_combined_cube = True):
     """
-    This function builds the cubes together.
+    This function builds a cuvbe that is a combination of individual cubes.
 
     Parameters
     ----------
