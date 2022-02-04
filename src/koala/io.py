@@ -64,10 +64,10 @@ sys.path.append(os.path.join(parent, 'automatic_scripts'))
 # from koala_rss import KOALA_RSS
 
 
-developers = 'Developed by Angel Lopez-Sanchez, Pablo Corcho-Caballero, \
-    Yago Ascasibar, Lluis Galbany, Barr Perez, Nathan Pidcock,\
-    Diana Dalae, Giacomo Biviano, Adithya Gudalur Balasubramania,\
-    Blake Staples, Taylah Beard, Matt Owers, James Tocknell et al.'
+developers = 'Developed by Angel Lopez-Sanchez, Pablo Corcho-Caballero,\
+ Yago Ascasibar, Lluis Galbany, Barr Perez, Nathan Pidcock,\
+ Diana Dalae, Giacomo Biviano, Adithya Gudalur Balasubramania,\
+ Blake Staples, Taylah Beard, Matt Owers, James Tocknell et al.'
 
 
 # -----------------------------------------------------------------------------
