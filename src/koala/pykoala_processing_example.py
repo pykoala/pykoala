@@ -15,21 +15,16 @@
 
 # This is the first full version of the code DIVIDED
 
-
 # -----------------------------------------------------------------------------
 # Start timer
 # -----------------------------------------------------------------------------
 import os
 from timeit import default_timer as timer
-
-from koala._version import version
-
 start = timer()
 # -----------------------------------------------------------------------------
 # Load all PyKOALA tasks   / Import PyKOALA 
 # -----------------------------------------------------------------------------
 
-#pykoala_path = "/DATA/KOALA/Python/GitHub/koala/src/koala/"
 pykoala_path = os.getcwd()
 
 exec(compile(open(os.path.join(pykoala_path, "load_PyKOALA.py"), "rb").read(),

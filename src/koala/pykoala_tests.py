@@ -15,14 +15,11 @@
 
 # This is the first full version of the code DIVIDED
 
-
 # -----------------------------------------------------------------------------
 # Start timer
 # -----------------------------------------------------------------------------
 import os
 from timeit import default_timer as timer
-
-#from koala._version import version
 
 start = timer()
 # -----------------------------------------------------------------------------
