@@ -1613,7 +1613,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         log : Boolean, optional
             If true the map is plotted on a log scale. The default is False.
         gamma : Float, optional
-            Exponent of a powerlaw for plotting the map. Default is 0. If given, this has preference over log.
+            Exponent of a powerlaw for plotting the map. Default is 0.. If given, this has preference over log.
         vmin : Float, optional
             DESCRIPTION. The default is 1E-30. #TODO 
         vmax : Float, optional
@@ -1739,7 +1739,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         log : Boolean, optional
             If true the map is plotted on a log scale. The default is False.
         gamma : Float, optional
-            The powerlaw exponent.  
+            The value for power log. The default is 0..
         vmin : Float, optional
             DESCRIPTION. The default is 1E-30. #TODO 
         vmax : Float, optional
@@ -4269,7 +4269,7 @@ def centroid_of_cube(cube, x0=0,x1=-1,y0=0,y1=-1, box_x=[], box_y=[],
     """
     This finds the centroid of an inputted cube and returns the relevent attributes.
 
-    Parameters
+    Parameters #TODO
     ----------
     cube : Cube Object
         This is the Cube object being worked on.
@@ -4281,9 +4281,9 @@ def centroid_of_cube(cube, x0=0,x1=-1,y0=0,y1=-1, box_x=[], box_y=[],
         DESCRIPTION. The default is 0.
     y1 : TYPE, optional
         DESCRIPTION. The default is -1.
-    box_x : TYPE, optional
+    box_x : List, optional
         When creating a box to show/trim/alignment these are the x cooridnates in spaxels of the box. The default is [].
-    box_y : TYPE, optional
+    box_y : List, optional
         When creating a box to show/trim/alignment these are the y cooridnates in spaxels of the box. The default is [].
     step_tracing : Integer, optional
         DESCRIPTION. The default is 100.
@@ -4291,24 +4291,24 @@ def centroid_of_cube(cube, x0=0,x1=-1,y0=0,y1=-1, box_x=[], box_y=[],
         If True uses a 2D gaussian, else doesn't. The default is True.
     adr_index_fit : Integer, optional
         This is the fitted polynomial with highest degree n. The default is 2.
-    kernel_tracing : TYPE, optional
+    kernel_tracing : Integer, optional
         DESCRIPTION. The default is 0.
-    edgelow : TYPE, optional
-        DESCRIPTION. The default is -1.
-    edgehigh : TYPE, optional
-        DESCRIPTION. The default is -1.
-    plot : TYPE, optional
-        DESCRIPTION. The default is True.
-    log : TYPE, optional
-        DESCRIPTION. The default is True.
-    gamma : TYPE, optional
-        DESCRIPTION. The default is 0..
-    plot_residua : TYPE, optional
+    edgelow : Integer, optional
+        This is the lowest value in the wavelength range in terms of pixels. The default is -1.
+    edgehigh : Integer, optional
+        This is the highest value in the wavelength range in terms of pixels. The default is -1.
+    plot : Boolean, optional
+        If True generates and shows the plots. The default is True.
+    log : Boolean, optional
+        If true the map is plotted on a log scale. The default is True.
+    gamma : Float, optional
+        The value for power log. The default is 0..
+    plot_residua : Boolean, optional
         DESCRIPTION. The default is True.
     plot_tracing_maps : TYPE, optional
-        DESCRIPTION. The default is [].
-    verbose : TYPE, optional
-        DESCRIPTION. The default is True.
+        If True will plot the tracing maps. The default is [].
+    verbose : Boolean, optional
+        Print results. The default is True.
 
     Returns
     -------
@@ -4326,9 +4326,9 @@ def centroid_of_cube(cube, x0=0,x1=-1,y0=0,y1=-1, box_x=[], box_y=[],
         DESCRIPTION.
     y_peaks : TYPE
         DESCRIPTION.
-    TYPE
+    stat_x[3] : TYPE
         DESCRIPTION.
-    TYPE
+    stat_y[3] : TYPE
         DESCRIPTION.
     stat_total : TYPE
         DESCRIPTION.
@@ -4480,7 +4480,34 @@ def centroid_of_cube(cube, x0=0,x1=-1,y0=0,y1=-1, box_x=[], box_y=[],
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def scale_cubes_using_common_region(cube_list, flux_ratios=[], min_wave = 0, max_wave = 0,
-                                    apply_scale = True, verbose=True, plot=False):   #SCORE
+                                    apply_scale = True, verbose=True, plot=False):    #SCORE
+    """
+    
+
+    Parameters
+    ----------
+    cube_list : TYPE
+        DESCRIPTION.
+    flux_ratios : TYPE, optional
+        DESCRIPTION. The default is [].
+    min_wave : TYPE, optional
+        DESCRIPTION. The default is 0.
+    max_wave : TYPE, optional
+        DESCRIPTION. The default is 0.
+    apply_scale : TYPE, optional
+        DESCRIPTION. The default is True.
+    verbose : TYPE, optional
+        DESCRIPTION. The default is True.
+    plot : TYPE, optional
+        DESCRIPTION. The default is False.
+
+    Returns
+    -------
+    object_list : TYPE
+        DESCRIPTION.
+
+    """
+
     
     if verbose: print("\n> Scaling intensities of the cubes using the integrated value of their common region...")
     # Check if cube_list are fits or objects
