@@ -4620,81 +4620,81 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
                         plot=True, plot_weight= True, plot_spectra=True, 
                         verbose=True, say_making_combined_cube = True):
     """
-    This function builds a cuvbe that is a combination of individual cubes.
+    This function builds a cube that is a combination of individual cubes.
 
-    Parameters
+    Parameters #TODO
     ----------
-    cube_list : TYPE
-        DESCRIPTION.
-    obj_name : TYPE, optional
+    cube_list : Cube List
+        This is a list of Cube Objects.
+    obj_name : String, optional
         DESCRIPTION. The default is "".
-    description : TYPE, optional
-        DESCRIPTION. The default is "".
-    fits_file : TYPE, optional
-        DESCRIPTION. The default is "".
-    path : TYPE, optional
-        DESCRIPTION. The default is "".
-    scale_cubes_using_integflux : TYPE, optional
+    description : String, optional
+        This is the description of the cube. The default is "".
+    fits_file : String, optional
+        The name of the fits file, if left "" will not save. The default is "".
+    path : String, optional
+        Where you want to save the combinded cube. The default is "".
+    scale_cubes_using_integflux : Boolean, optional
         DESCRIPTION. The default is True.
-    flux_ratios : TYPE, optional
-        DESCRIPTION. The default is [].
-    apply_scale : TYPE, optional
+    flux_ratios : List, optional
+        This is a list of flux ratios between the cubes. The default is [].
+    apply_scale : Boolean, optional
         DESCRIPTION. The default is True.
-    edgelow : TYPE, optional
-        DESCRIPTION. The default is 30.
-    edgehigh : TYPE, optional
-        DESCRIPTION. The default is 30.
-    ADR : TYPE, optional
-        DESCRIPTION. The default is True.
-    ADR_cc : TYPE, optional
+    edgelow : Integer, optional
+        This is the lowest value in the wavelength range in terms of pixels. The default is 30.
+    edgehigh : Integer, optional
+        This is the highest value in the wavelength range in terms of pixels. The default is 30.
+    ADR : Boolean, optional
+        If True will correct for ADR even considoring a small correction. The default is True.
+    ADR_cc : Boolean, optional
         DESCRIPTION. The default is False.
-    jump : TYPE, optional
-        DESCRIPTION. The default is -1.
+    jump : Integer, optional
+        If a positive number partitions the wavelengths with step size jump, if -1 will not partition. The default is -1.
     pk : TYPE, optional
         DESCRIPTION. The default is "".
-    ADR_x_fit_list : TYPE, optional
-        DESCRIPTION. The default is [].
-    ADR_y_fit_list : TYPE, optional
-        DESCRIPTION. The default is [].
-    force_ADR : TYPE, optional
-        DESCRIPTION. The default is False.
-    half_size_for_centroid : TYPE, optional
-        DESCRIPTION. The default is 10.
-    box_x : TYPE, optional
-        DESCRIPTION. The default is [0,-1].
-    box_y : TYPE, optional
-        DESCRIPTION. The default is [0,-1].
-    adr_index_fit : TYPE, optional
-        DESCRIPTION. The default is 2.
-    g2d : TYPE, optional
-        DESCRIPTION. The default is False.
-    step_tracing : TYPE, optional
+    ADR_x_fit_list : List, optional
+        This is a list of ADR x fits. The default is [].
+    ADR_y_fit_list : List, optional
+        This is a list of ADR y fits. The default is [].
+    force_ADR : Boolean, optional
+        If True will correct for ADR even considoring a small correction. The default is False.
+    half_size_for_centroid : Integer, optional
+        This is half the length/width of the box. The default is 10.
+    box_x : Integer List, optional
+        When creating a box to show/trim/alignment these are the x cooridnates in spaxels of the box. The default is [0,-1].
+    box_y : Integer List, optional
+        When creating a box to show/trim/alignment these are the y cooridnates in spaxels of the box. The default is [0,-1].
+    adr_index_fit : Integer, optional
+        This is the fitted polynomial with highest degree n. The default is 2.
+    g2d : Boolean, optional
+        If True uses a 2D gaussian, else doesn't. The default is False.
+    step_tracing : Integer, optional
         DESCRIPTION. The default is 100.
-    kernel_tracing : TYPE, optional
+    kernel_tracing : Integer, optional
         DESCRIPTION. The default is 0.
-    plot_tracing_maps : TYPE, optional
+    plot_tracing_maps : List, optional
+        If True will plot the tracing maps. The default is [].
+    trim_cube : Boolean, optional
+        DESCRIPTION. The default is True.
+    trim_values : List, optional
         DESCRIPTION. The default is [].
-    trim_cube : TYPE, optional
+    remove_spaxels_not_fully_covered : Boolean, optional
         DESCRIPTION. The default is True.
-    trim_values : TYPE, optional
-        DESCRIPTION. The default is [].
-    remove_spaxels_not_fully_covered : TYPE, optional
-        DESCRIPTION. The default is True.
-    plot : TYPE, optional
-        DESCRIPTION. The default is True.
-    plot_weight : TYPE, optional
-        DESCRIPTION. The default is True.
-    plot_spectra : TYPE, optional
-        DESCRIPTION. The default is True.
-    verbose : TYPE, optional
-        DESCRIPTION. The default is True.
-    say_making_combined_cube : TYPE, optional
+    plot : Boolean, optional
+        If True generates and shows the plots. The default is True.
+    plot_weight : Boolean, optional
+        If True will plot the weight. The default is True.
+    plot_spectra : Boolean, optional
+        If True will plot the spectra. The default is True.
+    verbose : Boolean, optional
+        Print results. The default is True.
+    say_making_combined_cube : Boolean, optional
         DESCRIPTION. The default is True.
 
     Returns
     -------
-    combined_cube : TYPE
-        DESCRIPTION.
+    combined_cube : Cube Object
+        This is a cube combined of multiple cubes.
 
     """
     
@@ -4932,6 +4932,51 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
 def create_map(cube, line, w2 = 0., gaussian_fit = False, gf=False,
                lowlow= 50, lowhigh=10, highlow=10, highhigh = 50, no_nans = False,
                show_spaxels=[], verbose = True, description = "" ):
+    """
+    This function creates a map given inputs.
+
+    Parameters
+    ----------
+    cube : Cube Object
+        This is the inputted Cube Object.
+    line : TYPE
+        DESCRIPTION.
+    w2 : TYPE, Float
+        DESCRIPTION. The default is 0..
+    gaussian_fit : Boolean, optional
+        DESCRIPTION. The default is False.
+    gf : Boolean, optional
+        DESCRIPTION. The default is False.
+    lowlow : Integer, optional
+        DESCRIPTION. The default is 50.
+    lowhigh : Integer, optional
+        DESCRIPTION. The default is 10.
+    highlow : Integer, optional
+        DESCRIPTION. The default is 10.
+    highhigh : Integer, optional
+        DESCRIPTION. The default is 50.
+    no_nans : Boolean, optional
+        This is to say if there are nans or not. The default is False.
+    show_spaxels : List, optional
+        DESCRIPTION. The default is [].
+    verbose : Boolean, optional
+        Print results. The default is True.
+    description : String, optional
+        This is the description of the cube. The default is "".
+
+    Returns
+    -------
+    description : TYPE
+        This is the description of the cube.
+    interpolated_map : TYPE
+        DESCRIPTION.
+    w1 : TYPE
+        DESCRIPTION.
+    w2 : TYPE
+        DESCRIPTION.
+
+    """
+    
     
   
     if gaussian_fit or gf:
@@ -5036,6 +5081,51 @@ def read_cube(filename, description="", half_size_for_centroid = 10,
               plot = False, verbose = True, plot_spectra = False,
               print_summary = True,
               text_intro ="\n> Reading datacube from fits file:" ):
+    """
+    This function reads the cube.
+
+    Parameters #TODO
+    ----------
+    filename : String
+        The name of the file.
+    description : String, optional
+        This is the description of the cube. The default is "".
+    half_size_for_centroid : Integer, optional
+        This is half the length/width of the box. The default is 10.
+    valid_wave_min : Integer, optional
+        DESCRIPTION. The default is 0.
+    valid_wave_max : Integer, optional
+        DESCRIPTION. The default is 0.
+    edgelow : Integer, optional
+        This is the lowest value in the wavelength range in terms of pixels. The default is 50.
+    edgehigh : Integer, optional
+        This is the highest value in the wavelength range in terms of pixels. The default is 50.
+    g2d : Boolean, optional
+        If True uses a 2D gaussian, else doesn't. The default is False.
+    step_tracing : Integer, optional
+        DESCRIPTION. The default is 100.
+    adr_index_fit : Integer, optional
+        This is the fitted polynomial with highest degree n. The default is 2.
+    kernel_tracing : Integer, optional
+        DESCRIPTION. The default is 0.
+    plot : Boolean, optional
+        If True generates and shows the plots. The default is False.
+    verbose : Boolean, optional
+        Print results. The default is True.
+    plot_spectra : Boolean, optional
+        If True will plot the spectra. The default is False.
+    print_summary : Boolean, optional
+        DESCRIPTION. The default is True.
+    text_intro : TYPE, optional
+        DESCRIPTION. The default is "\n> Reading datacube from fits file:".
+
+    Returns
+    -------
+    cube : Cube Object
+        This is the inputted Cube Object.
+
+    """
+    
     
     errors = 0
     
