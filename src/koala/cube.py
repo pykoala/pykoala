@@ -4266,9 +4266,77 @@ def centroid_of_cube(cube, x0=0,x1=-1,y0=0,y1=-1, box_x=[], box_y=[],
     """
     New Routine 20 Nov 2021 for using astropy photutils tasks for centroid
 
+    """
+    """
+    
 
+    Parameters
+    ----------
+    cube : TYPE
+        DESCRIPTION.
+    x0 : TYPE, optional
+        DESCRIPTION. The default is 0.
+    x1 : TYPE, optional
+        DESCRIPTION. The default is -1.
+    y0 : TYPE, optional
+        DESCRIPTION. The default is 0.
+    y1 : TYPE, optional
+        DESCRIPTION. The default is -1.
+    box_x : TYPE, optional
+        DESCRIPTION. The default is [].
+    box_y : TYPE, optional
+        DESCRIPTION. The default is [].
+    step_tracing : TYPE, optional
+        DESCRIPTION. The default is 100.
+    g2d : TYPE, optional
+        DESCRIPTION. The default is True.
+    adr_index_fit : TYPE, optional
+        DESCRIPTION. The default is 2.
+    kernel_tracing : TYPE, optional
+        DESCRIPTION. The default is 0.
+    edgelow : TYPE, optional
+        DESCRIPTION. The default is -1.
+    edgehigh : TYPE, optional
+        DESCRIPTION. The default is -1.
+    plot : TYPE, optional
+        DESCRIPTION. The default is True.
+    log : TYPE, optional
+        DESCRIPTION. The default is True.
+    gamma : TYPE, optional
+        DESCRIPTION. The default is 0..
+    plot_residua : TYPE, optional
+        DESCRIPTION. The default is True.
+    plot_tracing_maps : TYPE, optional
+        DESCRIPTION. The default is [].
+    verbose : TYPE, optional
+        DESCRIPTION. The default is True.
+
+    Returns
+    -------
+    ADR_x_fit : TYPE
+        DESCRIPTION.
+    ADR_y_fit : TYPE
+        DESCRIPTION.
+    ADR_x_max : TYPE
+        DESCRIPTION.
+    ADR_y_max : TYPE
+        DESCRIPTION.
+    ADR_total : TYPE
+        DESCRIPTION.
+    x_peaks : TYPE
+        DESCRIPTION.
+    y_peaks : TYPE
+        DESCRIPTION.
+    TYPE
+        DESCRIPTION.
+    TYPE
+        DESCRIPTION.
+    stat_total : TYPE
+        DESCRIPTION.
 
     """
+    
+    
     
     if plot == False: plot_residua = False
     
