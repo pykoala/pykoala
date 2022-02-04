@@ -4482,29 +4482,29 @@ def centroid_of_cube(cube, x0=0,x1=-1,y0=0,y1=-1, box_x=[], box_y=[],
 def scale_cubes_using_common_region(cube_list, flux_ratios=[], min_wave = 0, max_wave = 0,
                                     apply_scale = True, verbose=True, plot=False):    #SCORE
     """
-    
+    This scales the cubes based on a common region the cubes have.
 
     Parameters
     ----------
-    cube_list : TYPE
-        DESCRIPTION.
-    flux_ratios : TYPE, optional
-        DESCRIPTION. The default is [].
-    min_wave : TYPE, optional
-        DESCRIPTION. The default is 0.
-    max_wave : TYPE, optional
-        DESCRIPTION. The default is 0.
-    apply_scale : TYPE, optional
-        DESCRIPTION. The default is True.
-    verbose : TYPE, optional
-        DESCRIPTION. The default is True.
-    plot : TYPE, optional
-        DESCRIPTION. The default is False.
+    cube_list : Cube List
+        This is a list of Cube Objects.
+    flux_ratios : List, optional
+        This is a list of flux ratios between the cubes. The default is [].
+    min_wave : Integer, optional
+        The minimum wavelength passed through the mask. The default is 0.
+    max_wave : Integer, optional
+        The maximum wavelength passed through the mask. The default is 0.
+    apply_scale : Boolean, optional
+        DESCRIPTION. The default is True. #TODO
+    verbose : Boolean, optional
+        Print results. The default is True.
+    plot : Boolean, optional
+        If True generates and shows the plots. The default is False.
 
     Returns
     -------
-    object_list : TYPE
-        DESCRIPTION.
+    object_list : Object List
+        A list of Objects.
 
     """
 
