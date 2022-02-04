@@ -23,32 +23,30 @@
 #    4. Map In / Out tasks
 
 
-
 from astropy.io import fits
+#from astropy.io import fits as pyfits 
 
 import numpy as np
 import sys
 import os
-
 import datetime
 
 import glob
-from astropy.io import fits as pyfits 
-
-#import constants
 
 # Disable some annoying warnings
 import warnings
 
-from koala._version import version
 from koala.constants import red_gratings, blue_gratings
-from koala.cube import Interpolated_cube
+#from koala.cube import create_mask
 
 warnings.simplefilter('ignore', np.RankWarning)
 warnings.simplefilter(action='ignore',category=FutureWarning)
 warnings.filterwarnings('ignore')
 import logging
 logging.basicConfig(level=logging.CRITICAL)
+from koala._version import get_versions
+version = get_versions()["version"]
+del get_versions
 
 
 current = os.path.dirname(os.path.realpath(__file__))
@@ -616,7 +614,7 @@ def list_fits_files_in_folder(path, verbose = True, use2=True, use3=False, ignor
         for skyflat_name in skyflat_names:
             if skyflat_name in fitsName : check_file = True
         
-        hdulist = pyfits.open(fitsName)
+        hdulist = fits.open(fitsName)   # it was pyfits
 
         object_fits = hdulist[0].header['OBJECT'].split(" ")
         if object_fits[0] in ["HD", "NGC", "IC"] or use2:
@@ -692,169 +690,170 @@ def list_fits_files_in_folder(path, verbose = True, use2=True, use3=False, ignor
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 
-def read_cube(filename, description="", half_size_for_centroid = 10, plot_spectra = False,
-              valid_wave_min = 0, valid_wave_max = 0, edgelow=50,edgehigh=50, 
-              g2d=False, step_tracing = 100,  adr_index_fit = 2, kernel_tracing = 0,
-              plot = False, verbose = True, print_summary = True,
-              text_intro ="\n> Reading datacube from fits file:" ):
+# def read_cube(filename, description="", half_size_for_centroid = 10, 
+#               valid_wave_min = 0, valid_wave_max = 0, edgelow=50,edgehigh=50, 
+#               g2d=False, step_tracing=100, adr_index_fit=2, kernel_tracing = 0,
+#               plot = False, verbose = True, plot_spectra = False,
+#               print_summary = True,
+#               text_intro ="\n> Reading datacube from fits file:" ):
     
-    errors = 0
+#     errors = 0
     
-    if verbose: print(text_intro)
-    if verbose: print('  "'+filename+'"', "...")
-    cube_fits_file = fits.open(filename)  # Open file
+#     if verbose: print(text_intro)
+#     if verbose: print('  "'+filename+'"', "...")
+#     cube_fits_file = fits.open(filename)  # Open file
     
-    objeto = cube_fits_file[0].header['OBJECT']
-    if description == "": description = objeto + " - CUBE"
-    grating = cube_fits_file[0].header['GRATID']
+#     objeto = cube_fits_file[0].header['OBJECT']
+#     if description == "": description = objeto + " - CUBE"
+#     grating = cube_fits_file[0].header['GRATID']
     
-    total_exptime=  cube_fits_file[0].header['TOTALEXP']  
-    exptimes_ =  cube_fits_file[0].header['EXPTIMES'].strip('][').split(',')
-    exptimes = []
-    for j in range(len(exptimes_)):
-        exptimes.append(float(exptimes_[j]))
-    number_of_combined_files  = cube_fits_file[0].header['COFILES']          
-    #fcal = cube_fits_file[0].header['FCAL']
+#     total_exptime=  cube_fits_file[0].header['TOTALEXP']  
+#     exptimes_ =  cube_fits_file[0].header['EXPTIMES'].strip('][').split(',')
+#     exptimes = []
+#     for j in range(len(exptimes_)):
+#         exptimes.append(float(exptimes_[j]))
+#     number_of_combined_files  = cube_fits_file[0].header['COFILES']          
+#     #fcal = cube_fits_file[0].header['FCAL']
 
-    filename = cube_fits_file[0].header['FILE_OUT'] 
-    RACEN   =  cube_fits_file[0].header['RACEN']                                                   
-    DECCEN  =  cube_fits_file[0].header['DECCEN'] 
-    centre_deg =[RACEN,DECCEN]
-    pixel_size = cube_fits_file[0].header['PIXsize']
-    kernel_size= cube_fits_file[0].header['KERsize']
-    n_cols   =  cube_fits_file[0].header['NCOLS']                                               
-    n_rows   =  cube_fits_file[0].header['NROWS']                                                
-    PA      =   cube_fits_file[0].header['PA']                                               
+#     filename = cube_fits_file[0].header['FILE_OUT'] 
+#     RACEN   =  cube_fits_file[0].header['RACEN']                                                   
+#     DECCEN  =  cube_fits_file[0].header['DECCEN'] 
+#     centre_deg =[RACEN,DECCEN]
+#     pixel_size = cube_fits_file[0].header['PIXsize']
+#     kernel_size= cube_fits_file[0].header['KERsize']
+#     n_cols   =  cube_fits_file[0].header['NCOLS']                                               
+#     n_rows   =  cube_fits_file[0].header['NROWS']                                                
+#     PA      =   cube_fits_file[0].header['PA']                                               
 
-    CRVAL3  =  cube_fits_file[0].header['CRVAL3']    # 4695.841684048                                                  
-    CDELT3  =  cube_fits_file[0].header['CDELT3']    # 1.038189521346                                                  
-    CRPIX3  =  cube_fits_file[0].header['CRPIX3']    #         1024.0  
-    CRVAL1_CDELT1_CRPIX1 = [CRVAL3,CDELT3,CRPIX3]
-    n_wave  =  cube_fits_file[0].header['NAXIS3']
+#     CRVAL3  =  cube_fits_file[0].header['CRVAL3']    # 4695.841684048                                                  
+#     CDELT3  =  cube_fits_file[0].header['CDELT3']    # 1.038189521346                                                  
+#     CRPIX3  =  cube_fits_file[0].header['CRPIX3']    #         1024.0  
+#     CRVAL1_CDELT1_CRPIX1 = [CRVAL3,CDELT3,CRPIX3]
+#     n_wave  =  cube_fits_file[0].header['NAXIS3']
     
-    adrcor = cube_fits_file[0].header['ADRCOR']
+#     adrcor = cube_fits_file[0].header['ADRCOR']
     
-    number_of_combined_files = cube_fits_file[0].header['COFILES']
+#     number_of_combined_files = cube_fits_file[0].header['COFILES']
     
-    ADR_x_fit =[]
-    ADR_y_fit =[]
+#     ADR_x_fit =[]
+#     ADR_y_fit =[]
 
-    try:
-        ADR_x_fit_ = cube_fits_file[0].header['ADRXFIT'].split(',')
-        for j in range(len(ADR_x_fit_)):
-                    ADR_x_fit.append(float(ADR_x_fit_[j]))    
-        ADR_y_fit_ = cube_fits_file[0].header['ADRYFIT'].split(',')
-        for j in range(len(ADR_y_fit_)):
-                    ADR_y_fit.append(float(ADR_y_fit_[j]))    
-        adr_index_fit=len(ADR_y_fit) -1
-    except Exception:
-        errors=errors+1
+#     try:
+#         ADR_x_fit_ = cube_fits_file[0].header['ADRXFIT'].split(',')
+#         for j in range(len(ADR_x_fit_)):
+#                     ADR_x_fit.append(float(ADR_x_fit_[j]))    
+#         ADR_y_fit_ = cube_fits_file[0].header['ADRYFIT'].split(',')
+#         for j in range(len(ADR_y_fit_)):
+#                     ADR_y_fit.append(float(ADR_y_fit_[j]))    
+#         adr_index_fit=len(ADR_y_fit) -1
+#     except Exception:
+#         errors=errors+1
  
-    rss_files = []
-    offsets_files_position = cube_fits_file[0].header['OFF_POS']
-    offsets_files =[]
-    offsets_files_ =  cube_fits_file[0].header['OFFSETS'].split(',')           
-    for j in range(len(offsets_files_)):
-        valor = offsets_files_[j].split(' ') 
-        offset_=[]
-        p = 0
-        for k in range(len(valor)):
-            try:            
-                offset_.append(np.float(valor[k]))
-            except Exception:
-                p = p + 1
-                #print j,k,valor[k], "no es float"
-        offsets_files.append(offset_)        
+#     rss_files = []
+#     offsets_files_position = cube_fits_file[0].header['OFF_POS']
+#     offsets_files =[]
+#     offsets_files_ =  cube_fits_file[0].header['OFFSETS'].split(',')           
+#     for j in range(len(offsets_files_)):
+#         valor = offsets_files_[j].split(' ') 
+#         offset_=[]
+#         p = 0
+#         for k in range(len(valor)):
+#             try:            
+#                 offset_.append(np.float(valor[k]))
+#             except Exception:
+#                 p = p + 1
+#                 #print j,k,valor[k], "no es float"
+#         offsets_files.append(offset_)        
         
-    if  number_of_combined_files > 1:   
-        for i in range(number_of_combined_files):
-            if i < 10 :
-                head = "RSS_0"+np.str(i+1)
-            else:
-                head = "RSS_"+np.str(i+1)
-            rss_files.append(cube_fits_file[0].header[head])
+#     if  number_of_combined_files > 1:   
+#         for i in range(number_of_combined_files):
+#             if i < 10 :
+#                 head = "RSS_0"+np.str(i+1)
+#             else:
+#                 head = "RSS_"+np.str(i+1)
+#             rss_files.append(cube_fits_file[0].header[head])
            
-    wavelength = np.array([0.] * n_wave)    
-    wavelength[np.int(CRPIX3)-1] = CRVAL3
-    for i in range(np.int(CRPIX3)-2,-1,-1):
-        wavelength[i] = wavelength[i+1] - CDELT3
-    for i in range(np.int(CRPIX3),n_wave):
-         wavelength[i] = wavelength[i-1] + CDELT3
+#     wavelength = np.array([0.] * n_wave)    
+#     wavelength[np.int(CRPIX3)-1] = CRVAL3
+#     for i in range(np.int(CRPIX3)-2,-1,-1):
+#         wavelength[i] = wavelength[i+1] - CDELT3
+#     for i in range(np.int(CRPIX3),n_wave):
+#          wavelength[i] = wavelength[i-1] + CDELT3
      
-    if valid_wave_min == 0 : valid_wave_min = cube_fits_file[0].header["V_W_MIN"]  
-    if valid_wave_max == 0 : valid_wave_max = cube_fits_file[0].header["V_W_MAX"] 
+#     if valid_wave_min == 0 : valid_wave_min = cube_fits_file[0].header["V_W_MIN"]  
+#     if valid_wave_max == 0 : valid_wave_max = cube_fits_file[0].header["V_W_MAX"] 
      
-    cube = Interpolated_cube(filename, pixel_size, kernel_size, plot=False, verbose=verbose,
-                             read_fits_cube=True, zeros=True,
-                             ADR_x_fit=np.array(ADR_x_fit),ADR_y_fit=np.array(ADR_y_fit),
-                             objeto = objeto, description = description,
-                             n_cols = n_cols, n_rows=n_rows, PA=PA,
-                             wavelength = wavelength, n_wave = n_wave, 
-                             total_exptime = total_exptime, valid_wave_min = valid_wave_min, valid_wave_max=valid_wave_max,
-                             CRVAL1_CDELT1_CRPIX1 = CRVAL1_CDELT1_CRPIX1,
-                             grating = grating, centre_deg=centre_deg, number_of_combined_files=number_of_combined_files)
+#     cube = Interpolated_cube(filename, pixel_size, kernel_size, plot=False, verbose=verbose,
+#                              read_fits_cube=True, zeros=True,
+#                              ADR_x_fit=np.array(ADR_x_fit),ADR_y_fit=np.array(ADR_y_fit),
+#                              objeto = objeto, description = description,
+#                              n_cols = n_cols, n_rows=n_rows, PA=PA,
+#                              wavelength = wavelength, n_wave = n_wave, 
+#                              total_exptime = total_exptime, valid_wave_min = valid_wave_min, valid_wave_max=valid_wave_max,
+#                              CRVAL1_CDELT1_CRPIX1 = CRVAL1_CDELT1_CRPIX1,
+#                              grating = grating, centre_deg=centre_deg, number_of_combined_files=number_of_combined_files)
     
-    cube.exptimes=exptimes
-    cube.data = cube_fits_file[0].data   
-    if half_size_for_centroid > 0:
-        box_x,box_y = cube.box_for_centroid(half_size_for_centroid=half_size_for_centroid, verbose=verbose)
-    else:
-        box_x = [0,-1]
-        box_y = [0,-1]
-    cube.trace_peak(box_x=box_x, box_y=box_y, plot=plot, edgelow=edgelow,edgehigh=edgehigh, 
-                    adr_index_fit=adr_index_fit, g2d=g2d, 
-                    step_tracing = step_tracing, kernel_tracing = kernel_tracing,
-                    verbose =False)
-    cube.get_integrated_map(plot=plot, plot_spectra=plot_spectra, verbose=verbose, plot_centroid=True, g2d=g2d) #,fcal=fcal, box_x=box_x, box_y=box_y)
-    # For calibration stars, we get an integrated star flux and a seeing
-    cube.integrated_star_flux = np.zeros_like(cube.wavelength) 
-    cube.offsets_files = offsets_files
-    cube.offsets_files_position = offsets_files_position
-    cube.rss_files = rss_files    # Add this in Interpolated_cube
-    cube.adrcor = adrcor
-    cube.rss_list = filename
+#     cube.exptimes=exptimes
+#     cube.data = cube_fits_file[0].data   
+#     if half_size_for_centroid > 0:
+#         box_x,box_y = cube.box_for_centroid(half_size_for_centroid=half_size_for_centroid, verbose=verbose)
+#     else:
+#         box_x = [0,-1]
+#         box_y = [0,-1]
+#     cube.trace_peak(box_x=box_x, box_y=box_y, plot=plot, edgelow=edgelow,edgehigh=edgehigh, 
+#                     adr_index_fit=adr_index_fit, g2d=g2d, 
+#                     step_tracing = step_tracing, kernel_tracing = kernel_tracing,
+#                     verbose =False)
+#     cube.get_integrated_map(plot=plot, plot_spectra=plot_spectra, verbose=verbose, plot_centroid=True, g2d=g2d) #,fcal=fcal, box_x=box_x, box_y=box_y)
+#     # For calibration stars, we get an integrated star flux and a seeing
+#     cube.integrated_star_flux = np.zeros_like(cube.wavelength) 
+#     cube.offsets_files = offsets_files
+#     cube.offsets_files_position = offsets_files_position
+#     cube.rss_files = rss_files    # Add this in Interpolated_cube
+#     cube.adrcor = adrcor
+#     cube.rss_list = filename
     
-    if number_of_combined_files > 1 and verbose:
-        print("\n> This cube was created using the following rss files:")
-        for i in range(number_of_combined_files):
-            print(" ",rss_files[i])
+#     if number_of_combined_files > 1 and verbose:
+#         print("\n> This cube was created using the following rss files:")
+#         for i in range(number_of_combined_files):
+#             print(" ",rss_files[i])
         
-        print_offsets = "  Offsets used : "
-        for i in range(number_of_combined_files-1):
-            print_offsets=print_offsets+(np.str(offsets_files[i]))
-            if i <number_of_combined_files-2 : print_offsets=print_offsets+ " , "
-        print(print_offsets)
+#         print_offsets = "  Offsets used : "
+#         for i in range(number_of_combined_files-1):
+#             print_offsets=print_offsets+(np.str(offsets_files[i]))
+#             if i <number_of_combined_files-2 : print_offsets=print_offsets+ " , "
+#         print(print_offsets)
 
-    if verbose and print_summary:
-        print("\n> Summary of reading cube :")        
-        print("  Object          = ",cube.object)
-        print("  Description     = ",cube.description)
-        print("  Centre:  RA     = ",cube.RA_centre_deg, "Deg")
-        print("          DEC     = ",cube.DEC_centre_deg, "Deg")
-        print("  PA              = ",np.round(cube.PA,2), "Deg")
-        print("  Size [pix]      = ",cube.n_cols," x ", cube.n_rows)
-        print("  Size [arcsec]   = ",np.round(cube.n_cols*cube.pixel_size_arcsec,1)," x ", np.round(cube.n_rows*cube.pixel_size_arcsec,1))
-        print("  Pix size        = ",cube.pixel_size_arcsec, " arcsec")
-        print("  Total exp time  = ",total_exptime, "s")
-        if number_of_combined_files > 1 : print("  Files combined  = ",cube.number_of_combined_files)
-        print("  Med exp time    = ",np.nanmedian(cube.exptimes),"s")
-        print("  ADR corrected   = ",cube.adrcor)
-    #    print "  Offsets used   = ",self.offsets_files
-        print("  Wave Range      =  [",np.round(cube.wavelength[0],2),",",np.round(cube.wavelength[-1],2),"]")
-        print("  Wave Resolution =  {:.3} A/pix".format(CDELT3))
-        print("  Valid wav range =  [",np.round(valid_wave_min,2),",",np.round(valid_wave_max,2),"]")
+#     if verbose and print_summary:
+#         print("\n> Summary of reading cube :")        
+#         print("  Object          = ",cube.object)
+#         print("  Description     = ",cube.description)
+#         print("  Centre:  RA     = ",cube.RA_centre_deg, "Deg")
+#         print("          DEC     = ",cube.DEC_centre_deg, "Deg")
+#         print("  PA              = ",np.round(cube.PA,2), "Deg")
+#         print("  Size [pix]      = ",cube.n_cols," x ", cube.n_rows)
+#         print("  Size [arcsec]   = ",np.round(cube.n_cols*cube.pixel_size_arcsec,1)," x ", np.round(cube.n_rows*cube.pixel_size_arcsec,1))
+#         print("  Pix size        = ",cube.pixel_size_arcsec, " arcsec")
+#         print("  Total exp time  = ",total_exptime, "s")
+#         if number_of_combined_files > 1 : print("  Files combined  = ",cube.number_of_combined_files)
+#         print("  Med exp time    = ",np.nanmedian(cube.exptimes),"s")
+#         print("  ADR corrected   = ",cube.adrcor)
+#     #    print "  Offsets used   = ",self.offsets_files
+#         print("  Wave Range      =  [",np.round(cube.wavelength[0],2),",",np.round(cube.wavelength[-1],2),"]")
+#         print("  Wave Resolution =  {:.3} A/pix".format(CDELT3))
+#         print("  Valid wav range =  [",np.round(valid_wave_min,2),",",np.round(valid_wave_max,2),"]")
         
-        if np.nanmedian(cube.data) < 0.001:
-            print("  Cube is flux calibrated ")
-        else:
-            print("  Cube is NOT flux calibrated ")
+#         if np.nanmedian(cube.data) < 0.001:
+#             print("  Cube is flux calibrated ")
+#         else:
+#             print("  Cube is NOT flux calibrated ")
         
-        print("\n> Use these parameters for acceding the data :\n")
-        print("  cube.wavelength       : Array with wavelengths")
-        print("  cube.data[w, y, x]    : Flux of the w wavelength in spaxel (x,y) - NOTE x and y positions!")
-    #    print "\n> Cube read! "
+#         print("\n> Use these parameters for acceding the data :\n")
+#         print("  cube.wavelength       : Array with wavelengths")
+#         print("  cube.data[w, y, x]    : Flux of the w wavelength in spaxel (x,y) - NOTE x and y positions!")
+#     #    print "\n> Cube read! "
 
-    return cube
+#     return cube
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -1265,53 +1264,53 @@ def save_map(cube, mapa, fits_file, mask=[], description="", path="", verbose = 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def load_map(mapa_fits, description="", path="", verbose = True):
+# def load_map(mapa_fits, description="", path="", verbose = True):
     
-    if verbose: print("\n> Reading map(s) stored in file", mapa_fits,"...")
+#     if verbose: print("\n> Reading map(s) stored in file", mapa_fits,"...")
         
-    if path != "" : mapa_fits=full_path(mapa_fits,path)
-    mapa_fits_data = fits.open(mapa_fits)  # Open file
+#     if path != "" : mapa_fits=full_path(mapa_fits,path)
+#     mapa_fits_data = fits.open(mapa_fits)  # Open file
 
-    if description == "" : description = mapa_fits_data[0].header['DESCRIP']    #
-    if verbose: print("- Description stored in [0]")
+#     if description == "" : description = mapa_fits_data[0].header['DESCRIP']    #
+#     if verbose: print("- Description stored in [0]")
 
-    intensity_map = mapa_fits_data[0].data
+#     intensity_map = mapa_fits_data[0].data
 
-    try:
-        vel_map = mapa_fits_data[1].data
-        fwhm_map = mapa_fits_data[2].data
-        ew_map = mapa_fits_data[3].data
-        mapa = [description, intensity_map, vel_map, fwhm_map, ew_map]
-        if verbose: 
-            print("  This map comes from a Gaussian fit: ")
-            print("- Intensity map stored in [1]")
-            print("- Radial velocity map [km/s] stored in [2]")
-            print("- FWHM map [km/s] stored in [3]")
-            print("- EW map [A] stored in [4]")
+#     try:
+#         vel_map = mapa_fits_data[1].data
+#         fwhm_map = mapa_fits_data[2].data
+#         ew_map = mapa_fits_data[3].data
+#         mapa = [description, intensity_map, vel_map, fwhm_map, ew_map]
+#         if verbose: 
+#             print("  This map comes from a Gaussian fit: ")
+#             print("- Intensity map stored in [1]")
+#             print("- Radial velocity map [km/s] stored in [2]")
+#             print("- FWHM map [km/s] stored in [3]")
+#             print("- EW map [A] stored in [4]")
 
-    except Exception:
-        if verbose: print("- Map stored in [1]")
-        mapa = [description, intensity_map]
+#     except Exception:
+#         if verbose: print("- Map stored in [1]")
+#         mapa = [description, intensity_map]
     
-    fail=0
-    try:
-        for i in range(4):
-            try:
-                mask_name1="MASK"+np.str(i+1)+"1" 
-                mask_name2="MASK"+np.str(i+1)+"2" 
-                mask_low_limit = mapa_fits_data[0].header[mask_name1] 
-                mask_high_limit = mapa_fits_data[0].header[mask_name2] 
-                _mask_ = create_mask(mapa_fits_data[i].data, low_limit=mask_low_limit,  high_limit=mask_high_limit, verbose=False)
-                mapa.append(_mask_)
-                if verbose: print("- Mask with good values between {} and {} created and stored in [{}]".format(mask_low_limit,mask_high_limit,len(mapa)-1))
-            except Exception:
-                fail=fail+1                    
+#     fail=0
+#     try:
+#         for i in range(4):
+#             try:
+#                 mask_name1="MASK"+np.str(i+1)+"1" 
+#                 mask_name2="MASK"+np.str(i+1)+"2" 
+#                 mask_low_limit = mapa_fits_data[0].header[mask_name1] 
+#                 mask_high_limit = mapa_fits_data[0].header[mask_name2] 
+#                 _mask_ = create_mask(mapa_fits_data[i].data, low_limit=mask_low_limit,  high_limit=mask_high_limit, verbose=False)
+#                 mapa.append(_mask_)
+#                 if verbose: print("- Mask with good values between {} and {} created and stored in [{}]".format(mask_low_limit,mask_high_limit,len(mapa)-1))
+#             except Exception:
+#                 fail=fail+1                    
             
-    except Exception:
-        if verbose: print("- Map does not have any mask.")
+#     except Exception:
+#         if verbose: print("- Map does not have any mask.")
         
 
-    return mapa
+#     return mapa
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------

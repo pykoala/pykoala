@@ -60,7 +60,7 @@ class RSS(object):
         self.description = "Undefined row-stacked spectra (RSS)"
         self.n_spectra = 0
         self.n_wave = 0
-        self.wavelength = np.zeros((0))
+        self.wavelength = np.zeros(0)
         self.intensity = np.zeros((0, 0))
         self.intensity_corrected = self.intensity
         self.variance = np.zeros_like(self.intensity)
@@ -68,7 +68,7 @@ class RSS(object):
         self.corrections = []
         self.RA_centre_deg = 0.
         self.DEC_centre_deg = 0.
-        self.offset_RA_arcsec = np.zeros((0))
+        self.offset_RA_arcsec = np.zeros(0)
         self.offset_DEC_arcsec = np.zeros_like(self.offset_RA_arcsec)
         self.ALIGNED_RA_centre_deg = 0.
         self.ALIGNED_DEC_centre_deg = 0.
@@ -1073,8 +1073,10 @@ class RSS(object):
 
         redshift = brightest_line_wavelength / brightest_line_wavelength_rest - 1.
 
-        if w == 1000: w = self.wavelength
-        if spectra == 1000: spectra = copy.deepcopy(self.intensity_corrected)
+        if w == 1000:
+            w = self.wavelength
+        if spectra == 1000:
+            spectra = copy.deepcopy(self.intensity_corrected)
 
         if wmin == 0: wmin = w[0]
         if wmax == 0: wmax = w[-1]
@@ -1534,7 +1536,6 @@ class RSS(object):
                 ymin = np.nanpercentile(self.intensity_corrected[fibre], 0.1) - (
                             np.nanpercentile(self.intensity_corrected[fibre], 99.5) - np.nanpercentile(
                         self.intensity_corrected[fibre], 0.1)) / 15.
-                ymax = np.nanpercentile(self.intensity_corrected[fibre], 99.5)
                 self.intensity_corrected[fibre] = f_new - auto_scale * sky_sl_gaussian_fitted
                 plot_plot(w, [self.intensity_corrected[fibre], self.intensity[fibre]], color=["b", "r"], ymin=ymin,
                           ymax=ymax,
@@ -1579,7 +1580,7 @@ class RSS(object):
             self.history.append(
                 "  Intensities corrected for the sky emission performing individual Gaussian fits to each fibre")
             # self.variance_corrected += self.sky_variance # TODO: Check if telluric/ext corrections were applied before
-
+            # DOES VARIANCE NEED SKY SUBSTRACTION?
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
@@ -2216,7 +2217,7 @@ class RSS(object):
             print("  Variance corrected for extinction stored in self.variance_corrected")
 
         self.intensity_corrected *= extinction_correction[np.newaxis, :]
-        # self.variance_corrected *= extinction_correction[np.newaxis, :]**2
+        self.variance_corrected *= extinction_correction[np.newaxis, :]**2
         # self.corrections.append('Extinction correction')
         self.history.append("- Data corrected for extinction using file :")
         self.history.append("  " + observatory_extinction_file)
@@ -2435,7 +2436,7 @@ class RSS(object):
             before_telluric_correction = copy.deepcopy(self.intensity_corrected)
 
             self.intensity_corrected *= telluric_correction[np.newaxis, :]
-            # self.variance_corrected *= telluric_correction[np.newaxis, :]
+            self.variance_corrected *= telluric_correction[np.newaxis, :]**2
 
             # for i in range(self.n_spectra):
             #    self.intensity_corrected[i,:]=self.intensity_corrected[i,:] * telluric_correction
@@ -2929,6 +2930,7 @@ class RSS(object):
             self.RSS_image()
 
         self.intensity_corrected = self.intensity_corrected / self.throughput_2D
+        self.variance_corrected = self.variance_corrected / self.throughput_2D**2
         if plot:
             print("  Plotting map AFTER correcting throughput:")
             self.RSS_image()

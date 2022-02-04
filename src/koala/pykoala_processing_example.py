@@ -19,15 +19,21 @@
 # -----------------------------------------------------------------------------
 # Start timer
 # -----------------------------------------------------------------------------
-from timeit import default_timer as timer    
+import os
+from timeit import default_timer as timer
+
+from koala._version import version
+
 start = timer()
 # -----------------------------------------------------------------------------
 # Load all PyKOALA tasks   / Import PyKOALA 
 # -----------------------------------------------------------------------------
 
-pykoala_path = "/DATA/KOALA/Python/GitHub/koala/src/koala/"
+#pykoala_path = "/DATA/KOALA/Python/GitHub/koala/src/koala/"
+pykoala_path = os.getcwd()
 
-exec(compile(open(pykoala_path+"load_PyKOALA.py", "rb").read(), pykoala_path+"load_PyKOALA.py", 'exec'))   # This just reads the file. 
+exec(compile(open(os.path.join(pykoala_path, "load_PyKOALA.py"), "rb").read(),
+             os.path.join(pykoala_path, "load_PyKOALA.py"), 'exec'))   # This just reads the file.
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -39,15 +45,15 @@ if __name__ == "__main__":
     # # First, copy the input data to a local folder (not within PyKOALA)
 
     # # Type where your data will be:
-    path = "/DATA/KOALA/Python/GitHub/test_reduce/"     
+    path = "/DATA/KOALA/Python/GitHub/test_reduce/"
 
     # # If needed, you can copy the example data using this:        
     #os.system("mkdir "+path)
     #os.system("cp -R ./input_data/sample_RSS/* "+path)
 
     # # For AAOmega, we have TWO folders per night: blue (580V) and red (385R)
-    path_red = path+"385R/"
-    path_blue = path+"580V/"
+    path_red = os.path.join(path, "385R")
+    path_blue = os.path.join(path, "580V")
 
     # # -----------------------------------------------------------------------
     # # -----------------------------------------------------------------------
@@ -56,7 +62,7 @@ if __name__ == "__main__":
     # # -----------------------------------------------------------------------
 
     # # List the files in the folder
-    # list_fits_files_in_folder(path_red)
+    list_fits_files_in_folder(path_red)
     
     # PyKOALA finds 4 objects: HD60753, HILT600 (calibration stars),
     #                          He2-10 (the galaxy),
@@ -65,18 +71,18 @@ if __name__ == "__main__":
     # # -----------------------------------------------------------------------
 
     # # Next, run this for AUTOMATICALLY processing calibration of the night
-    #automatic_calibration_night(path=path_red, auto=True) 
+    # automatic_calibration_night(path=path_red, auto=True)
                                 #, kernel_throughput = 21)
  
     
     # # This will create 2 (3 for red) files needed for the calibration:
     
     # # 1. The throughput_2D_file:
-    throughput_2D_file = path_red+"throughput_2D_20180227_385R.fits"
+    throughput_2D_file = os.path.join(path_red, "throughput_2D_20180227_385R.fits")
     # # 2. The flux calibration file:
-    flux_calibration_file = path_red+"flux_calibration_20180227_385R_0p7_1k10.dat"
+    flux_calibration_file = os.path.join(path_red, "flux_calibration_20180227_385R_0p7_1k10.dat")
     # # 3. The telluric correction file (only in red):
-    telluric_correction_file = path_red+"telluric_correction_20180227_385R.dat"
+    telluric_correction_file = os.path.join(path_red, "telluric_correction_20180227_385R.dat")
     
     # # It will also create 2 Python objects:
     # # HD60753_385R_20180227 : Python object with calibration star HD60753
