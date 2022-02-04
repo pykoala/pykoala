@@ -22,7 +22,7 @@
 import os
 from timeit import default_timer as timer
 
-from koala._version import version
+#from koala._version import version
 
 start = timer()
 # -----------------------------------------------------------------------------
@@ -592,13 +592,13 @@ if __name__ == "__main__":
     #                   plot=True, warnings=False, verbose=True)
 
 
-    test_new = KOALA_RSS(file_in)
-    x = range(test.n_spectra)    
-    plot_plot(x,test_new.integrated_fibre/1E6, ymin=0., ymax=0.2, 
-              ptitle="Integrated flux using 2dfdr v8.00b", xlabel="Fibre", 
-              ylabel="Flux [ 10$^6$ counts ]",
-              fig_size="big",
-              save_file=path_blue+"/2022_02_03_integrated_flux_v8d00b.jpg")
+    # test_new = KOALA_RSS(file_in)
+    # x = range(test.n_spectra)    
+    # plot_plot(x,test_new.integrated_fibre/1E6, ymin=0., ymax=0.2, 
+    #           ptitle="Integrated flux using 2dfdr v8.00b", xlabel="Fibre", 
+    #           ylabel="Flux [ 10$^6$ counts ]",
+    #           fig_size="big",
+    #           save_file=path_blue+"/2022_02_03_integrated_flux_v8d00b.jpg")
 
 
 
@@ -620,8 +620,8 @@ if __name__ == "__main__":
     # path_blue_old = os.path.join(path_old, "580V")
  
     
-    file_in_old=full_path("27feb10025red.fits", path_blue_old)
-    test_old = KOALA_RSS(file_in_old)
+    # file_in_old=full_path("27feb10025red.fits", path_blue_old)
+    # test_old = KOALA_RSS(file_in_old)
     # plot_plot(x,test_old.integrated_fibre/1E6, ymin=-0.02, ymax=0.2, 
     #           ptitle="Integrated flux using 2dfdr v7.1", xlabel="Fibre", 
     #           ylabel="Flux [ 10$^6$ counts ]", fig_size="big",

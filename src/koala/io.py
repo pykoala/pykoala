@@ -64,7 +64,11 @@ sys.path.append(os.path.join(parent, 'automatic_scripts'))
 # from koala_rss import KOALA_RSS
 
 
-#version = 'NOT IMPLEMENTED'  
+developers = 'Developed by Angel Lopez-Sanchez, Pablo Corcho-Caballero, \
+    Yago Ascasibar, Lluis Galbany, Barr Perez, Nathan Pidcock,\
+    Diana Dalae, Giacomo Biviano, Adithya Gudalur Balasubramania,\
+    Blake Staples, Taylah Beard, Matt Owers, James Tocknell et al.'
+
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -239,7 +243,7 @@ def spectrum_to_fits_file(wavelength, flux, filename="spectrum.fits", name="spec
     hdu.header['OBJECT'] = name    
     hdu.header["TOTALEXP"] = exptime
     hdu.header['HISTORY'] = 'Spectrum derived using the KOALA Python pipeline'
-    hdu.header['HISTORY'] = 'Developed by Angel Lopez-Sanchez, Yago Ascasibar, Lluis Galbany et al.'
+    hdu.header['HISTORY'] = developers
     hdu.header['HISTORY'] =  version
     now=datetime.datetime.now()
     hdu.header['HISTORY'] = now.strftime("Created on %d %b %Y, %H:%M:%S")
@@ -690,7 +694,7 @@ def list_fits_files_in_folder(path, verbose = True, use2=True, use3=False, ignor
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 
-# def read_cube(filename, description="", half_size_for_centroid = 10, 
+# def read_cube(filename, description="", half_size_for_centroid = 10,          # MOVED TO cube.py
 #               valid_wave_min = 0, valid_wave_max = 0, edgelow=50,edgehigh=50, 
 #               g2d=False, step_tracing=100, adr_index_fit=2, kernel_tracing = 0,
 #               plot = False, verbose = True, plot_spectra = False,
@@ -884,10 +888,9 @@ def save_cube_to_fits_file(cube, fits_file, description="", obj_name = "", path=
     else:
         fits_image_hdu.header['HISTORY'] = 'Interpolated datacube using PyKOALA'
         
-    fits_image_hdu.header['HISTORY'] = 'Developed by Angel Lopez-Sanchez, Yago Ascasibar, Lluis Galbany,'
-    fits_image_hdu.header['HISTORY'] = 'Blake Staples, Taylah Beard, Matt Owers, James Tocknell et al.'
-
-    fits_image_hdu.header['HISTORY'] =  version #'Version 0.10 - 12th February 2019'    
+    fits_image_hdu.header['HISTORY'] =  version 
+    fits_image_hdu.header['HISTORY'] =  developers    
+        
     now=datetime.datetime.now()
     fits_image_hdu.header['HISTORY'] = now.strftime("Created on %d %b %Y, %H:%M:%S")
     fits_image_hdu.header['DATE'] = now.strftime("%Y-%m-%dT%H:%M:%S") #'2002-09-16T18:52:44'   # /Date of FITS file creation
@@ -1039,7 +1042,7 @@ def save_cube_to_fits_file(cube, fits_file, description="", obj_name = "", path=
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-# This needs to be updated!
+# This is OLD and needs to be updated if ever needed!
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # def save_bluered_fits_file(blue_cube,red_cube, fits_file, fcalb=[0], fcalr=[0], ADR=False, objeto="", description="", trimb=[0], trimr=[0]): 
@@ -1176,9 +1179,9 @@ def save_map(cube, mapa, fits_file, mask=[], description="", path="", verbose = 
     fits_image_hdu = fits.PrimaryHDU(mapa[1])
          
     fits_image_hdu.header['HISTORY'] = 'Map created by PyKOALA'        
-    fits_image_hdu.header['HISTORY'] = 'Developed by Angel Lopez-Sanchez, Yago Ascasibar, Lluis Galbany,'
-    fits_image_hdu.header['HISTORY'] = 'Blake Staples, Taylah Beard, Matt Owers, James Tocknell et al.'
-    fits_image_hdu.header['HISTORY'] =  version    
+    fits_image_hdu.header['HISTORY'] =  version
+    fits_image_hdu.header['HISTORY'] =  developers    
+    
     now=datetime.datetime.now()
     fits_image_hdu.header['HISTORY'] = now.strftime("Created on %d %b %Y, %H:%M:%S")
     fits_image_hdu.header['DATE'] = now.strftime("%Y-%m-%dT%H:%M:%S") #'2002-09-16T18:52:44'   # /Date of FITS file creation

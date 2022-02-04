@@ -4834,25 +4834,6 @@ def create_map(cube, line, w2 = 0., gaussian_fit = False, gf=False,
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def create_mask(mapa, low_limit, high_limit=1E20, plot = False, verbose = True):
-    
-    n_rows = mapa.shape[0]
-    n_cols = mapa.shape[1]
-    
-    mask = np.ones((n_rows,n_cols))
-    
-    for x in range(n_rows):
-        for y in range(n_cols):
-            value = mapa[x,y]                      
-            if value < low_limit or value > high_limit: 
-                mask[x][y] = np.nan
-    
-    if verbose: print("\n> Mask with good values between", low_limit,"and",high_limit,"created!")
-        
-    return mask,low_limit, high_limit
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
 def read_cube(filename, description="", half_size_for_centroid = 10, 
               valid_wave_min = 0, valid_wave_max = 0, edgelow=50,edgehigh=50, 
               g2d=False, step_tracing=100, adr_index_fit=2, kernel_tracing = 0,
@@ -5020,50 +5001,3 @@ def read_cube(filename, description="", half_size_for_centroid = 10,
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def load_map(mapa_fits, description="", path="", verbose = True):
-    
-    if verbose: print("\n> Reading map(s) stored in file", mapa_fits,"...")
-        
-    if path != "" : mapa_fits=full_path(mapa_fits,path)
-    mapa_fits_data = fits.open(mapa_fits)  # Open file
-
-    if description == "" : description = mapa_fits_data[0].header['DESCRIP']    #
-    if verbose: print("- Description stored in [0]")
-
-    intensity_map = mapa_fits_data[0].data
-
-    try:
-        vel_map = mapa_fits_data[1].data
-        fwhm_map = mapa_fits_data[2].data
-        ew_map = mapa_fits_data[3].data
-        mapa = [description, intensity_map, vel_map, fwhm_map, ew_map]
-        if verbose: 
-            print("  This map comes from a Gaussian fit: ")
-            print("- Intensity map stored in [1]")
-            print("- Radial velocity map [km/s] stored in [2]")
-            print("- FWHM map [km/s] stored in [3]")
-            print("- EW map [A] stored in [4]")
-
-    except Exception:
-        if verbose: print("- Map stored in [1]")
-        mapa = [description, intensity_map]
-    
-    fail=0
-    try:
-        for i in range(4):
-            try:
-                mask_name1="MASK"+np.str(i+1)+"1" 
-                mask_name2="MASK"+np.str(i+1)+"2" 
-                mask_low_limit = mapa_fits_data[0].header[mask_name1] 
-                mask_high_limit = mapa_fits_data[0].header[mask_name2] 
-                _mask_ = create_mask(mapa_fits_data[i].data, low_limit=mask_low_limit,  high_limit=mask_high_limit, verbose=False)
-                mapa.append(_mask_)
-                if verbose: print("- Mask with good values between {} and {} created and stored in [{}]".format(mask_low_limit,mask_high_limit,len(mapa)-1))
-            except Exception:
-                fail=fail+1                    
-            
-    except Exception:
-        if verbose: print("- Map does not have any mask.")
-        
-
-    return mapa
