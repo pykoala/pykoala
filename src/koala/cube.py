@@ -4596,6 +4596,85 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
                         trim_cube = True,  trim_values =[], remove_spaxels_not_fully_covered = True,                                              
                         plot=True, plot_weight= True, plot_spectra=True, 
                         verbose=True, say_making_combined_cube = True):
+    """
+    This function builds the cubes together.
+
+    Parameters
+    ----------
+    cube_list : TYPE
+        DESCRIPTION.
+    obj_name : TYPE, optional
+        DESCRIPTION. The default is "".
+    description : TYPE, optional
+        DESCRIPTION. The default is "".
+    fits_file : TYPE, optional
+        DESCRIPTION. The default is "".
+    path : TYPE, optional
+        DESCRIPTION. The default is "".
+    scale_cubes_using_integflux : TYPE, optional
+        DESCRIPTION. The default is True.
+    flux_ratios : TYPE, optional
+        DESCRIPTION. The default is [].
+    apply_scale : TYPE, optional
+        DESCRIPTION. The default is True.
+    edgelow : TYPE, optional
+        DESCRIPTION. The default is 30.
+    edgehigh : TYPE, optional
+        DESCRIPTION. The default is 30.
+    ADR : TYPE, optional
+        DESCRIPTION. The default is True.
+    ADR_cc : TYPE, optional
+        DESCRIPTION. The default is False.
+    jump : TYPE, optional
+        DESCRIPTION. The default is -1.
+    pk : TYPE, optional
+        DESCRIPTION. The default is "".
+    ADR_x_fit_list : TYPE, optional
+        DESCRIPTION. The default is [].
+    ADR_y_fit_list : TYPE, optional
+        DESCRIPTION. The default is [].
+    force_ADR : TYPE, optional
+        DESCRIPTION. The default is False.
+    half_size_for_centroid : TYPE, optional
+        DESCRIPTION. The default is 10.
+    box_x : TYPE, optional
+        DESCRIPTION. The default is [0,-1].
+    box_y : TYPE, optional
+        DESCRIPTION. The default is [0,-1].
+    adr_index_fit : TYPE, optional
+        DESCRIPTION. The default is 2.
+    g2d : TYPE, optional
+        DESCRIPTION. The default is False.
+    step_tracing : TYPE, optional
+        DESCRIPTION. The default is 100.
+    kernel_tracing : TYPE, optional
+        DESCRIPTION. The default is 0.
+    plot_tracing_maps : TYPE, optional
+        DESCRIPTION. The default is [].
+    trim_cube : TYPE, optional
+        DESCRIPTION. The default is True.
+    trim_values : TYPE, optional
+        DESCRIPTION. The default is [].
+    remove_spaxels_not_fully_covered : TYPE, optional
+        DESCRIPTION. The default is True.
+    plot : TYPE, optional
+        DESCRIPTION. The default is True.
+    plot_weight : TYPE, optional
+        DESCRIPTION. The default is True.
+    plot_spectra : TYPE, optional
+        DESCRIPTION. The default is True.
+    verbose : TYPE, optional
+        DESCRIPTION. The default is True.
+    say_making_combined_cube : TYPE, optional
+        DESCRIPTION. The default is True.
+
+    Returns
+    -------
+    combined_cube : TYPE
+        DESCRIPTION.
+
+    """
+    
                             
     if say_making_combined_cube: print("\n> Making combined cube ...")
     n_files = len(cube_list)
