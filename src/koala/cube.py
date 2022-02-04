@@ -4267,12 +4267,12 @@ def centroid_of_cube(cube, x0=0,x1=-1,y0=0,y1=-1, box_x=[], box_y=[],
 
     """
     """
-    
+    This finds the centroid of an inputted cube and returns the relevent attributes.
 
     Parameters
     ----------
-    cube : TYPE
-        DESCRIPTION.
+    cube : Cube Object
+        This is the Cube object being worked on.
     x0 : TYPE, optional
         DESCRIPTION. The default is 0.
     x1 : TYPE, optional
@@ -4282,15 +4282,15 @@ def centroid_of_cube(cube, x0=0,x1=-1,y0=0,y1=-1, box_x=[], box_y=[],
     y1 : TYPE, optional
         DESCRIPTION. The default is -1.
     box_x : TYPE, optional
-        DESCRIPTION. The default is [].
+        When creating a box to show/trim/alignment these are the x cooridnates in spaxels of the box. The default is [].
     box_y : TYPE, optional
-        DESCRIPTION. The default is [].
-    step_tracing : TYPE, optional
+        When creating a box to show/trim/alignment these are the y cooridnates in spaxels of the box. The default is [].
+    step_tracing : Integer, optional
         DESCRIPTION. The default is 100.
-    g2d : TYPE, optional
-        DESCRIPTION. The default is True.
-    adr_index_fit : TYPE, optional
-        DESCRIPTION. The default is 2.
+    g2d : Boolean, optional
+        If True uses a 2D gaussian, else doesn't. The default is True.
+    adr_index_fit : Integer, optional
+        This is the fitted polynomial with highest degree n. The default is 2.
     kernel_tracing : TYPE, optional
         DESCRIPTION. The default is 0.
     edgelow : TYPE, optional
