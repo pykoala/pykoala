@@ -30,7 +30,7 @@ exec(compile(open(os.path.join(pykoala_path, "constants.py"), "rb").read(),
              os.path.join(pykoala_path, "constants.py"), 'exec'))   # This just reads the file.
 #from pykoala import constants 
 
-# 2. Load file with I/O tasks and version
+# 2. Load file with I/O tasks and version and developers
 exec(compile(open(os.path.join(pykoala_path, "io.py"), "rb").read(),
              os.path.join(pykoala_path, "io.py"), 'exec'))
 # #from pykoala import io 
