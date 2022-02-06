@@ -1,6 +1,7 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
+from koala.io import full_path
 
 # import basic_statistics
 # import full_path
@@ -8,10 +9,12 @@ import numpy as np
 
 
 def plot_plot(x, y,  xmin="",xmax="",ymin="",ymax="",percentile_min=2, percentile_max=98,
-              ptitle="Pretty plot", xlabel="Wavelength [$\mathrm{\AA}$]", ylabel="", fcal="", 
+              ptitle = None, xlabel = None, ylabel = None,
+              #ptitle="Pretty plot", xlabel="Wavelength [$\mathrm{\AA}$]", ylabel="", 
+              fcal="", 
               psym="", color="blue", alpha="", linewidth=1,  linestyle="-", markersize = 10,
-              vlines=[], hlines=[], chlines=[], axvspan=[[0,0]], hwidth =1, vwidth =1,
-              frameon = False, loc = 0, ncol = 5, label="",  text=[],
+              vlines=[], hlines=[], chlines=[], cvlines=[], axvspan=[[0,0]], hwidth =1, vwidth =1,
+              frameon = False, loc = 0, ncol = 6, label="",  text=[],
               title_fontsize=12, label_axes_fontsize=10, axes_fontsize=10, tick_size=[5,1,2,1], axes_thickness =0,
               save_file="", path="", fig_size=12, warnings = True, show=True, statistics=""):
     
@@ -54,6 +57,8 @@ def plot_plot(x, y,  xmin="",xmax="",ymin="",ymax="",percentile_min=2, percentil
         Draws horizontal lines at the specified y positions
     chlines : list of strings (default = [])
         Color of the horizontal lines
+    cvlines : list of strings (default = [])
+        Color of the vertical lines
     axvspan : list of floats (default = [[0,0]])
         Shades the region between the x positions specified
     hwidth: float (default =1)
@@ -64,7 +69,7 @@ def plot_plot(x, y,  xmin="",xmax="",ymin="",ymax="",percentile_min=2, percentil
         Display the frame of the legend section
     loc : string or pair of floats or integer (default = 0)
         Location of the legend in pixels. See matplotlib.pyplot.legend() documentation
-    ncol : integer (default = 5)
+    ncol : integer (default = 6)
         Number of columns of the legend
     label : string or list of strings (default = "")
         Specify labels for the graphs
@@ -158,6 +163,7 @@ def plot_plot(x, y,  xmin="",xmax="",ymin="",ymax="",percentile_min=2, percentil
            if psym[i] == "":
                plt.plot(xx[i],y[i], color=color[i], alpha=alpha[i], label=label[i], linewidth=linewidth[i], linestyle=linestyle[i])
            else:
+               #print(len(xx),len(y), len(psym), len(color), len(alpha), len(label), len(linewidth), len(markersize))
                plt.plot(xx[i],y[i], psym[i], color=color[i], alpha=alpha[i], label=label[i], mew=linewidth[i], markersize=markersize[i])
            if ymax == "":
                     y_max_ = []                
@@ -193,12 +199,15 @@ def plot_plot(x, y,  xmin="",xmax="",ymin="",ymax="",percentile_min=2, percentil
        
    plt.xlim(xmin,xmax)                    
    plt.ylim(ymin,ymax)
+   if ptitle is None: ptitle="Pretty plot"
+   
    try:   
        plt.title(ptitle, fontsize=title_fontsize)
    except Exception:
        if warnings : print("  WARNING: Something failed when including the title of the plot")
    
    plt.minorticks_on()
+   if xlabel is None: xlabel="Wavelength [$\mathrm{\AA}$]"
    plt.xlabel(xlabel, fontsize=label_axes_fontsize)
    #plt.xticks(rotation=90)
    plt.tick_params('both', length=tick_size[0], width=tick_size[1], which='major')
@@ -209,7 +218,7 @@ def plot_plot(x, y,  xmin="",xmax="",ymin="",ymax="",percentile_min=2, percentil
    plt.axhline(y=ymax,linewidth=axes_thickness, color="k")    
    plt.axvline(x=xmax,linewidth=axes_thickness, color="k")    
    
-   if ylabel=="": 
+   if ylabel is None: 
        if fcal: 
            ylabel = "Flux [ erg cm$^{-2}$ s$^{-1}$ $\mathrm{\AA}^{-1}$ ]"
        else:         
@@ -229,8 +238,20 @@ def plot_plot(x, y,  xmin="",xmax="",ymin="",ymax="",percentile_min=2, percentil
            hlinestyle="--" 
            halpha=0.3
        plt.axhline(y=hlines[i], color=chlines[i], linestyle=hlinestyle, alpha=halpha, linewidth=hwidth)
+
+    
+   if len(cvlines) != len(vlines):
+       for i in range(len(vlines)-len(cvlines)):
+           cvlines.append("k") 
+    
    for i in range(len(vlines)):
-       plt.axvline(x=vlines[i], color="k", linestyle="--", alpha=0.3, linewidth=vwidth)
+       if cvlines[i] != "k":
+           vlinestyle="-"
+           valpha=0.8
+       else:
+           vlinestyle="--" 
+           valpha=0.3
+       plt.axvline(x=vlines[i], color=cvlines[i], linestyle=vlinestyle, alpha=valpha, linewidth=vwidth)
     
    if label_ != "" : 
        plt.legend(frameon=frameon, loc=loc, ncol=ncol)
