@@ -1,3 +1,12 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+from koala.io import full_path, read_table
+from koala.automatic_scripts.koala_reduce import KOALA_reduce
+from koala.cube import build_combined_cube
+
+import numpy as np
+
 
 def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):   
 
@@ -11,6 +20,7 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
     flux_calibration_file_list = []
     flux_calibration = []
     flux_calibration = ""
+    flux_calibration_list =[]  # Check
     
     telluric_correction_name = ""
     telluric_correction_file = ""
@@ -100,6 +110,7 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
     extra_factor =	1.
     max_number_of_cosmics_per_fibre = 12
 
+
     offsets=[]
     reference_rss = ""
     ADR = False
@@ -113,8 +124,8 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
     ADR_y_fit_list = []
     adr_index_fit=2
     g2d = False
-    kernel_tracing = 0
-    step_tracing = 100
+    kernel_tracing = 5
+    step_tracing = 50
     plot_tracing_maps=[]
     edgelow  = -1
     edgehigh = -1
@@ -990,7 +1001,7 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
                               edgelow=edgelow, edgehigh = edgehigh, 
                                                   
                               flux_calibration_file = flux_calibration_file_list,     # this can be a single file (string) or a list of files (list of strings)
-                              flux_calibration=flux_calibration,                      # an array
+                              flux_calibration = flux_calibration,                      # an array
                               flux_calibration_list  = flux_calibration_list,         # a list of arrays
                               
                               trim_cube = trim_cube,
