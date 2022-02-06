@@ -183,7 +183,11 @@ class KOALA_RSS(RSS):
         index_wave = np.arange(rss_fits_file[0].header['NAXIS1'])
         wavelength = wcsKOALA.dropaxis(1).wcs_pix2world(index_wave, 0)[0]
         intensity = rss_fits_file[0].data[good_spaxels]
-        variance = rss_fits_file[1].data[good_spaxels]
+        try:
+            variance = rss_fits_file[1].data[good_spaxels]
+        except Exception:
+            variance = copy.deepcopy(intensity)
+            if warnings or verbose: print("\n  WARNING! Variance extension not found in fits file!")
 
         if not rss_clean and verbose:
             print("\n  Number of spectra in this RSS =", len(rss_fits_file[0].data), ",  number of good spectra =",
