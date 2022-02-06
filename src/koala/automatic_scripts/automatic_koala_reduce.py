@@ -122,11 +122,14 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
     half_size_for_centroid = 10
     ADR_x_fit_list = []
     ADR_y_fit_list = []
-    adr_index_fit=2
+    
     g2d = False
+    adr_index_fit = 2
+    step_tracing=25
     kernel_tracing = 5
-    step_tracing = 50
-    plot_tracing_maps=[]
+    adr_clip_fit=0.3
+    plot_tracing_maps =[]
+    
     edgelow  = -1
     edgehigh = -1
 
@@ -466,7 +469,8 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
                 g2d = True
             else: g2d = False
         if  config_property[i] == "step_tracing" : step_tracing =  int(config_value[i])
-
+        if  config_property[i] == "adr_clip_fit" : adr_clip_fit =  float(config_value[i])
+        
         if  config_property[i] == "plot_tracing_maps" :
             plot_tracing_maps_ = config_value[i].strip('][').split(',')
             for i in range(len(plot_tracing_maps_)):
@@ -774,6 +778,7 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
             print("  adr_index_fit            = ",adr_index_fit)
             print("  2D Gauss for tracing     = ",g2d)
             print("  step_tracing             = ",step_tracing)
+            print("  adr_clip_fit             = ",adr_clip_fit)
             if kernel_tracing > 0 : print("  kernel_tracing           = ",kernel_tracing)
             
             if len(plot_tracing_maps) > 0 : 
@@ -913,8 +918,8 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
       # Values for improving alignment:   # TODO: CHECK THIS!!! Now I think it is wrong!!!
         if delta_RA+delta_DEC != 0:          
             for i in range(len(ADR_x_fit_list)):
-                ADR_x_fit_list[i][2] = ADR_x_fit_list[i][2] + (delta_RA/2)
-                ADR_y_fit_list[i][2] = ADR_y_fit_list[i][2] + (delta_DEC/2)
+                ADR_x_fit_list[i][2] = ADR_x_fit_list[i][2] + (delta_RA)
+                ADR_y_fit_list[i][2] = ADR_y_fit_list[i][2] + (delta_DEC)
        
                 
      # Now run KOALA_reduce      
@@ -996,6 +1001,7 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
                               adr_index_fit = adr_index_fit,
                               g2d = g2d,
                               kernel_tracing = kernel_tracing,
+                              adr_clip_fit = adr_clip_fit,
                               plot_tracing_maps = plot_tracing_maps,
                               step_tracing=step_tracing,
                               edgelow=edgelow, edgehigh = edgehigh, 
@@ -1036,6 +1042,7 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
                                      half_size_for_centroid = half_size_for_centroid,
                                      box_x=box_x, box_y=box_y,  
                                      adr_index_fit=adr_index_fit, 
+                                     adr_clip_fit = adr_clip_fit,
                                      g2d=g2d,
                                      kernel_tracing = kernel_tracing,
                                      plot_tracing_maps = plot_tracing_maps,

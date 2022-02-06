@@ -195,8 +195,8 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                  ADR_x_fit=[0],ADR_y_fit=[0], check_ADR = False,    
                  
                  box_x=[0,-1],box_y=[0,-1], half_size_for_centroid = 10,
-                 step_tracing = 50, g2d=False, adr_index_fit = 2,
-                 kernel_tracing = 5, adr_clip_fit = 0.4,
+                 step_tracing = 25, g2d=False, adr_index_fit = 2,
+                 kernel_tracing = 5, adr_clip_fit = 0.3,
                  plot_tracing_maps=[], 
                  edgelow = -1, edgehigh = -1,
                  
@@ -1035,8 +1035,8 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
     def trace_peak(self, box_x=[0,-1],box_y=[0,-1], edgelow=-1, edgehigh=-1,  
-                   adr_index_fit=2, step_tracing = 50, g2d = True, 
-                   kernel_tracing = 19, adr_clip_fit = 0.4,
+                   adr_index_fit=2, step_tracing = 25, g2d = True, 
+                   kernel_tracing = 5, adr_clip_fit = 0.3,
                    half_size_for_centroid=0, plot_tracing_maps = [],
                    plot=False, log=True, gamma=0., check_ADR=False, verbose = True): 
         """
@@ -1197,9 +1197,9 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
     def get_integrated_map(self, min_wave = None, max_wave= None, nansum=True, 
                            vmin=1E-30, vmax=1E30, fcal=False,  log=True, gamma=0., cmap="fuego",
                            box_x=[0,-1], box_y=[0,-1], trimmed=False,
-                           g2d=False, plot_centroid=True,  adr_clip_fit=0.4,
-                           trace_peaks=False, adr_index_fit=2, edgelow=-1, edgehigh=-1, step_tracing=50,
-                           kernel_tracing = 5,
+                           g2d=False, plot_centroid=True, 
+                           trace_peaks=False, adr_index_fit=2, edgelow=-1, edgehigh=-1, step_tracing=25,
+                           kernel_tracing = 5,  adr_clip_fit=0.3,
                            plot=False, plot_spectra=False, plot_tracing_maps=[], verbose=True) :  ### CHECK
         """
         Compute Integrated map and plot if requested
@@ -2072,7 +2072,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         if vmax == 1E30  : vmax = np.nanmax(mapa)
                            
         pmapa=ax.imshow(mapa, origin='lower', interpolation='none', norm = norm, cmap=cmap,    # cax=ax.imshow
-                      extent=(extent1, extent2, extent3, extent4)) #,    aspect="auto")         # BOBA
+                      extent=(extent1, extent2, extent3, extent4)) #,    aspect="auto")         
         
         pmapa.set_clim(vmin=vmin) 
         pmapa.set_clim(vmax=vmax)
@@ -2980,7 +2980,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
     def trim_cube(self, trim_cube=True, trim_values=[],   half_size_for_centroid = 10,     
                   remove_spaxels_not_fully_covered = True,      #nansum=False,          
                   ADR=True, box_x=[0,-1], box_y=[0,-1], edgelow=-1, edgehigh=-1, 
-                  adr_index_fit = 2, g2d=False, step_tracing=50, adr_clip_fit=0.4,
+                  adr_index_fit = 2, g2d=False, step_tracing=25, adr_clip_fit=0.3,
                   kernel_tracing = 5, plot_tracing_maps =[],
                   plot_weight = False, fcal=False, plot=True, plot_spectra=False, verbose=True, warnings=True):
         """ 
@@ -3296,7 +3296,7 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
                   offsets=[], 
                   ADR=False, jump=-1, ADR_x_fit_list=[0], ADR_y_fit_list=[0], force_ADR = False,
                   half_size_for_centroid =10, box_x=[0,-1], box_y=[0,-1], 
-                  adr_index_fit = 2, g2d=False, step_tracing = 50, kernel_tracing = 5,
+                  adr_index_fit = 2, g2d=False, step_tracing = 25, kernel_tracing = 5, adr_clip_fit=0.3,
                   plot= False, plot_weight=False, plot_tracing_maps=[], plot_spectra=True,
                   warnings=False, verbose= True):
     """
@@ -3350,6 +3350,8 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
         DESCRIPTION. The default is 100.
     kernel_tracing : TYPE, optional
         DESCRIPTION. The default is 0.
+    adr_clip_fit:
+        
     plot : Boolean, optional
         If True generates and shows the plots. The default is False.
     plot_weight : Boolean, optional
@@ -3504,7 +3506,7 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
                                                    aligned_coor=True, flux_calibration=flux_calibration_list[i],  offsets_files = offsets_files, offsets_files_position =i+1, 
                                                    ADR=ADR, jump=jump, ADR_x_fit = ADR_x_fit_list[i], ADR_y_fit = ADR_y_fit_list[i], check_ADR=True,
                                                    half_size_for_centroid=half_size_for_centroid, box_x=box_x, box_y=box_y,
-                                                   adr_index_fit=adr_index_fit, g2d=g2d, step_tracing=step_tracing, plot_tracing_maps=plot_tracing_maps, kernel_tracing = kernel_tracing,
+                                                   adr_index_fit=adr_index_fit, g2d=g2d, step_tracing=step_tracing, plot_tracing_maps=plot_tracing_maps, kernel_tracing = kernel_tracing, adr_clip_fit=adr_clip_fit,
                                                    plot=plot, plot_spectra=plot_spectra, edgelow=edgelow, edgehigh=edgehigh, 
                                                    
                                                    warnings=warnings, verbose=verbose)
@@ -3545,7 +3547,7 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def align_blue_and_red_cubes(blue, red, half_size_for_centroid = 12, box_x= [], box_y =[], 
-                             g2d=False, step_tracing = 50,  adr_index_fit = 2, kernel_tracing = 5, 
+                             g2d=False, step_tracing = 25,  adr_index_fit = 2, kernel_tracing = 5, adr_clip_fit = 0.3,
                              verbose = True, plot = True, plot_centroid=True, ):
     """
     For aligning the BLUE and RED cubes, follow these steps:\n
@@ -3604,7 +3606,7 @@ def align_blue_and_red_cubes(blue, red, half_size_for_centroid = 12, box_x= [], 
         if verbose: text_intro = "\n> Reading the blue cube from the fits file..."+try_read[-2:-1]
         blue_cube=read_cube(blue, text_intro = text_intro,
                             half_size_for_centroid=half_size_for_centroid, 
-                            g2d=g2d, step_tracing = step_tracing,  adr_index_fit = adr_index_fit, kernel_tracing = kernel_tracing,
+                            g2d=g2d, step_tracing = step_tracing,  adr_index_fit = adr_index_fit, kernel_tracing = kernel_tracing, adr_clip_fit=adr_clip_fit,
                             plot=plot, plot_spectra=False, verbose = verbose)
     except Exception:
         print("  - The blue cube is an object")
@@ -3616,7 +3618,7 @@ def align_blue_and_red_cubes(blue, red, half_size_for_centroid = 12, box_x= [], 
         if verbose: text_intro = "\n> Reading the red cube from the fits file..."+try_read[-2:-1]
         red_cube=read_cube(red, text_intro = text_intro,
                            half_size_for_centroid=half_size_for_centroid, 
-                           g2d=g2d, step_tracing = step_tracing,  adr_index_fit = adr_index_fit, kernel_tracing = kernel_tracing,
+                           g2d=g2d, step_tracing = step_tracing,  adr_index_fit = adr_index_fit, kernel_tracing = kernel_tracing,adr_clip_fit=adr_clip_fit,
                            plot=plot, plot_spectra=False, verbose = verbose)
     except Exception:
         print("  - The red  cube is an object")
@@ -3965,7 +3967,7 @@ def estimate_offsets_comparing_cubes(cube1, cube2, line=None, line2=None,   # BO
                                      map1=None, map2=None,
                                      step=0.1, delta_RA_max=2, delta_DEC_max=2,
                                      delta_RA_values=None, 
-                                     delta_DEC_values = None, do_fit = True,
+                                     delta_DEC_values = None, index_fit = 2,
                                      plot=True, plot_comparison=True, 
                                      verbose = True, return_values = False): 
     
@@ -4033,11 +4035,11 @@ def estimate_offsets_comparing_cubes(cube1, cube2, line=None, line2=None,   # BO
     best_delta_RA  = delta_RA_values[x_index]
     best_delta_DEC = delta_DEC_values[y_index]
     
-    if do_fit:
-        fit_RA = np.polyfit(delta_RA_values,scatter_x, 2)
+    if index_fit > 0:
+        fit_RA = np.polyfit(delta_RA_values,scatter_x, index_fit)
         yfit = np.poly1d(fit_RA)
         scatter_x_fit = yfit(delta_RA_values)
-        fit_DEC = np.polyfit(delta_DEC_values,scatter_y, 2)
+        fit_DEC = np.polyfit(delta_DEC_values,scatter_y, index_fit)
         yfit = np.poly1d(fit_DEC)
         scatter_y_fit = yfit(delta_DEC_values)        
         
@@ -4049,7 +4051,7 @@ def estimate_offsets_comparing_cubes(cube1, cube2, line=None, line2=None,   # BO
         ymin = ymin_ -rango/15.
         ymax = ymax_ + rango/15.        
 
-        if do_fit:
+        if index_fit > 0:
             x=[delta_RA_values, delta_DEC_values, delta_RA_values, delta_DEC_values]
             y=[scatter_x, scatter_y, scatter_x_fit, scatter_y_fit]
             label=["RA", "DEC", "RA fit", "DEC fit"]
@@ -4594,8 +4596,8 @@ def telluric_correction_using_bright_continuum_source(objeto, save_telluric_file
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def centroid_of_cube(cube, x0=0,x1=-1,y0=0,y1=-1, box_x=[], box_y=[],
-                     step_tracing=50, g2d=True, adr_index_fit=2,
-                     kernel_tracing = 21 , adr_clip_fit = 0.4,
+                     step_tracing=25, g2d=True, adr_index_fit=2,
+                     kernel_tracing = 5 , adr_clip_fit = 0.3,
                      edgelow=-1, edgehigh=-1,
                      plot=True, log=True, gamma=0.,
                      plot_residua=True, plot_tracing_maps=[], verbose=True) :
@@ -4927,8 +4929,8 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
                         ADR=True, ADR_cc = False, jump =-1, pk = "", 
                         ADR_x_fit_list=[], ADR_y_fit_list=[],  force_ADR= False,
                         half_size_for_centroid = 10, box_x=[0,-1],box_y=[0,-1],  
-                        adr_index_fit = 2, g2d=False, step_tracing=50, 
-                        kernel_tracing = 19, adr_clip_fit=0.4,
+                        adr_index_fit = 2, g2d=False, step_tracing=25, 
+                        kernel_tracing = 5, adr_clip_fit=0.3,
                         plot_tracing_maps=[],                       
                         trim_cube = True,  trim_values =[], remove_spaxels_not_fully_covered = True,                                              
                         plot=True, plot_weight= True, plot_spectra=True, 
@@ -5182,9 +5184,10 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
             if ADR:
                 combined_cube.trace_peak(box_x=box_x_centroid, box_y=box_y_centroid, 
                                          edgelow=edgelow, edgehigh =edgehigh, 
-                                         plot=plot, check_ADR=True, step_tracing=step_tracing, adr_clip_fit=adr_clip_fit,
-                                         plot_tracing_maps=plot_tracing_maps, 
-                                         adr_index_fit=adr_index_fit, g2d=g2d)
+                                         check_ADR=True, 
+                                         adr_index_fit=adr_index_fit, g2d=g2d,
+                                         step_tracing=step_tracing, adr_clip_fit=adr_clip_fit,
+                                         plot_tracing_maps=plot_tracing_maps, plot=plot)
                                                    
         combined_cube.get_integrated_map(box_x=box_x, box_y=box_y, fcal=fcal, plot=plot, plot_spectra=plot_spectra, 
                                          plot_centroid=True, g2d=g2d, kernel_tracing = kernel_tracing)
@@ -5193,7 +5196,8 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
         # Trimming combined cube if requested or needed
         combined_cube.trim_cube(trim_cube=trim_cube, trim_values=trim_values, 
                                 half_size_for_centroid =half_size_for_centroid, ADR=ADR, 
-                                adr_index_fit=adr_index_fit, g2d=g2d, step_tracing=step_tracing, plot_tracing_maps=plot_tracing_maps,
+                                adr_index_fit=adr_index_fit, g2d=g2d, step_tracing=step_tracing, 
+                                adr_clip_fit=adr_clip_fit, plot_tracing_maps=plot_tracing_maps,
                                 remove_spaxels_not_fully_covered = remove_spaxels_not_fully_covered,
                                 box_x=box_x, box_y=box_y, edgelow=edgelow, edgehigh=edgehigh, 
                                 plot_weight = plot_weight, fcal=fcal, plot=plot, plot_spectra= plot_spectra)
@@ -5246,8 +5250,8 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
 # -----------------------------------------------------------------------------
 def read_cube(filename, description="", half_size_for_centroid = 10, 
               valid_wave_min = 0, valid_wave_max = 0, edgelow=50,edgehigh=50, 
-              g2d=False, step_tracing=50, adr_index_fit=2, 
-              kernel_tracing = 19, adr_clip_fit=0.4,
+              g2d=False, step_tracing=25, adr_index_fit=2, 
+              kernel_tracing = 5, adr_clip_fit=0.3,
               plot = False, verbose = True, plot_spectra = False,
               print_summary = True,
               text_intro ="\n> Reading datacube from fits file:" ):

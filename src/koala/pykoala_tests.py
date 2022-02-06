@@ -654,10 +654,12 @@ if __name__ == "__main__":
     #                           plot=True, plot_spectra=False)  
     
     # file4 =  "27feb20034red_TCWXUS_NR.fits"
-    cube4 = Interpolated_cube(file4, path = path_red_old,
-                              pixel_size_arcsec=0.5, kernel_size_arcsec=1.1, adr_clip_fit=0.2,
-                              flux_calibration_file=flux_calibration_file, 
-                              plot=True, plot_spectra=False, ADR=True, step_tracing=20, kernel_tracing=19)     
+    # cube4 = Interpolated_cube(file4, path = path_red_old,
+    #                           pixel_size_arcsec=0.7, kernel_size_arcsec=1.1, 
+    #                           adr_clip_fit=0.2, # step_tracing=50, kernel_tracing=5 ,
+    #                           adr_index_fit = 3,
+    #                           flux_calibration_file=flux_calibration_file, 
+    #                           plot=True, plot_spectra=False, ADR=True)     
     
     # a=cube4.shift_cube(delta_RA=1,delta_DEC=1, return_cube=True)
     
@@ -683,97 +685,46 @@ if __name__ == "__main__":
     # print(eocc12)
     # print(eocc23)
   
+    # file_star = "27feb20028red_TCWX_S_NR.fits"
+    # cubestar = Interpolated_cube(file_star, path = path_red_old,
+    #                           pixel_size_arcsec=0.7, kernel_size_arcsec=1.1, 
+    #                           #adr_clip_fit=0.2, g2d=True, step_tracing=100, kernel_tracing=0 ,
+    #                           adr_index_fit = 3,
+    #                           flux_calibration_file=flux_calibration_file, 
+    #                           plot=True, plot_spectra=False, ADR=True)  
     
-    # # -----------------------------------------------------------------------
-    # # -----------------------------------------------------------------------
+    # # # -----------------------------------------------------------------------
+    # # # -----------------------------------------------------------------------
   
-    
-    #out=centroid_of_cube(cube4,g2d=False, step_tracing=10)
-    wc = np.array(out[-1][0])
-    xc = out[-1][1]
-    # yc = out[-1][2]
-    
-#     kernel_tracing = 11
-#     clip =0.4
-#     adr_index_fit = 2
-   
-    
-#     xc_smooth = signal.medfilt(xc, kernel_tracing)
-#     xc_norm = xc - xc_smooth
-#     xc_std = np.std(xc_norm)
-    
  
-#     xc_nan = [np.nan if np.abs(x) > xc_std*clip else 1. for x in xc_norm ]
-#     xc_clipped = xc *xc_nan
+    # # # Testing alignment using star
     
-#     #xc_nan = np.abs(xc_norm) > xc_std*clip
-#     #xc_goods =  np.abs(xc_norm) < xc_std*clip
-#     #xc_clipped = xc *xc_goods
-    
-#     #plot_plot(wc, [xc_norm,xc_nan], hlines=[0,xc_std, xc_std*clip])
-    
-    
-#     #plot_plot(wc, [xc,xc_smooth, xc_clipped], psym=["+","-", "+"])
-    
-# #    plot_plot(wc, [xc,yc], psym=["+","."])
+    # file_star2 = "27feb20029red_TCWX_S_NR.fits"
+    # cubestar2 = Interpolated_cube(file_star2, path = path_red_old,
+    #                           pixel_size_arcsec=0.7, kernel_size_arcsec=1.1, 
+    #                           #adr_clip_fit=0.2, g2d=True, step_tracing=100, kernel_tracing=0 ,
+    #                           adr_index_fit = 3,
+    #                           flux_calibration_file=flux_calibration_file, 
+    #                           plot=True, plot_spectra=False, ADR=True)  
 
-#     idx = np.isfinite(wc) & np.isfinite(xc_clipped)
-        
+    # file_star3 = "27feb20030red_TCWX_S_NR.fits"
+    # cubestar3 = Interpolated_cube(file_star3, path = path_red_old,
+    #                           pixel_size_arcsec=0.7, kernel_size_arcsec=1.1, 
+    #                           #adr_clip_fit=0.2, g2d=True, step_tracing=100, kernel_tracing=0 ,
+    #                           adr_index_fit = 3,
+    #                           flux_calibration_file=flux_calibration_file, 
+    #                           plot=True, plot_spectra=False, ADR=True) 
 
     
-#     #wc_nonnan = [ for x in wc if ]
-     
-#     x_peaks_fit  = np.polyfit(wc[idx], xc_clipped[idx], adr_index_fit) 
-#     pp=np.poly1d(x_peaks_fit)
-#     xc_peaks=pp(wc)
-    
-    
-#     plot_plot(wc, [xc,xc_smooth, xc_clipped, xc_peaks], psym=["+","--", "+","-"],
-#               alpha=[0.4,0.3,0.8,1], color=["r","b","g","k"])
-    
-    
-    # def fit_clip(x, y, clip=0.4, index_fit = 2, kernel = 21,
-    #              ptitle=None, xlabel=None, ylabel = None,
-    #              plot=True, verbose=True):
         
-    #     x = np.array(x)
-    #     y = np.array(y)
-        
-    #     y_smooth = signal.medfilt(y, kernel)
-    #     y_norm = y - y_smooth
-    #     y_std = np.std(y_norm)
-        
-    #     y_nan = [np.nan if np.abs(i) > y_std*clip else 1. for i in y_norm ] 
-    #     y_clipped = y * y_nan
-        
-    #     idx = np.isfinite(x) & np.isfinite(y_clipped)
-        
-    #     fit  = np.polyfit(x[idx], y_clipped[idx], index_fit) 
-    #     pp=np.poly1d(fit)
-    #     y_fit=pp(x)
-
-    #     if verbose: 
-    #         print("\n> Fitting a polynomium of degree",index_fit,"using clip =",clip,"* std ...")
-    #         print("  Eliminated",len(x)-len(x[idx]),"outliers, the solution is: ",fit)
-        
-    #     if plot:
-    #         if ylabel is None: ylabel = "y (x)"
-            
-    #         if ptitle is None:
-    #             ptitle = "Polyfit of degree "+np.str(index_fit)+" using clip = "+np.str(clip)+" * std"
-    #         plot_plot(x, [y,y_smooth, y_clipped, y_fit], psym=["+","-", "+","-"],
-    #                   alpha=[0.5,0.5,0.8,1], color=["r","b","g","k"], 
-    #                   xlabel=xlabel, ylabel=ylabel, ptitle=ptitle)
-            
-    #     return fit, pp, y_fit, x[idx], y_clipped[idx]
-            
-        
-    #fit, pp, y_fit, x_c, y_c= fit_clip(wc,xc)
-    
-    #plot_plot([wc,x_c, wc],[xc,y_c, y_fit], psym=["+","+","-"] )
-    
-        
-        
+    eocc12=estimate_offsets_comparing_cubes(cubestar,cubestar2, 
+                                            delta_RA_max = 4,
+                                            delta_DEC_max = 4,
+                                            #line=6400,line2=6500,
+                                            index_fit =0,
+                                            step=0.1,
+                                      plot=True, plot_comparison=False,
+                                      verbose=True, return_values=True)        
         
         
   

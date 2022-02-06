@@ -1,12 +1,9 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 import matplotlib.pyplot as plt
 import numpy as np
 from koala.io import full_path
-
-# import basic_statistics
-# import full_path
-
-
 
 def plot_plot(x, y,  xmin="",xmax="",ymin="",ymax="",percentile_min=2, percentile_max=98,
               ptitle = None, xlabel = None, ylabel = None,
@@ -281,8 +278,6 @@ def plot_plot(x, y,  xmin="",xmax="",ymin="",ymax="",percentile_min=2, percentil
        else:    
            for i in range(len(y)):
                basic_statistics(y[i], x=xx[i], xmin=xmin, xmax=xmax)
-       
-   
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -321,5 +316,3 @@ def basic_statistics(y, x="", xmin="", xmax="", return_data=False, verbose = Tru
         print("  standard deviation = {}, rms = {}, snr = {}".format(std, rms, snr))
     
     if return_data : return min_value,median_value,max_value,std, rms, snr
-       
-   

@@ -78,12 +78,14 @@ class KOALA_reduce(RSS,Interpolated_cube):                                      
                  ADR=False, ADR_cc = False, force_ADR= False,
                  box_x =[0,-1], box_y=[0,-1], jump = -1, 
                  half_size_for_centroid = 10,
-                 ADR_x_fit_list=[],ADR_y_fit_list=[], adr_index_fit = 2, 
+                 ADR_x_fit_list=[],ADR_y_fit_list=[], 
                  g2d = False,
+                 adr_index_fit = 2, 
+                 step_tracing=25,
+                 kernel_tracing = 5,
+                 adr_clip_fit=0.3,
                  plot_tracing_maps =[],
-                 step_tracing=100,
-                 kernel_tracing = 0,
-
+                 
                  edgelow=-1, edgehigh=-1,
                  flux_calibration_file="",  # this can be a single file (string) or a list of files (list of strings)
                  flux_calibration=[],       # an array
@@ -313,7 +315,7 @@ class KOALA_reduce(RSS,Interpolated_cube):                                      
                     flux_calibration_list.append("")
                 
         if do_cubing: 
-            if fcal:
+            if fcal: 
                 print("\n------------------------------------------------")
                 print("3. Cubing applying flux calibration provided ...")                
             else:    
@@ -321,9 +323,11 @@ class KOALA_reduce(RSS,Interpolated_cube):                                      
                 print("3. Cubing without considering any flux calibration ...")
              
             for i in range(n_files):              
-                exec(cube_object[i]+'=Interpolated_cube('+rss_object[i]+', pixel_size_arcsec=pixel_size_arcsec, kernel_size_arcsec=kernel_size_arcsec, plot=plot, half_size_for_centroid=half_size_for_centroid,\
-                     ADR_x_fit = ADR_x_fit_list[i], ADR_y_fit = ADR_y_fit_list[i], box_x=box_x, box_y=box_y, kernel_tracing=kernel_tracing, plot_spectra=plot_spectra, \
-                     adr_index_fit=adr_index_fit, g2d=g2d, plot_tracing_maps = plot_tracing_maps, step_tracing=step_tracing,  ADR=ADR, apply_ADR = False, \
+                exec(cube_object[i]+'=Interpolated_cube('+rss_object[i]+', pixel_size_arcsec=pixel_size_arcsec, kernel_size_arcsec=kernel_size_arcsec, plot=plot, \
+                     half_size_for_centroid=half_size_for_centroid, box_x=box_x, box_y=box_y,\
+                     ADR_x_fit = ADR_x_fit_list[i], ADR_y_fit = ADR_y_fit_list[i], ADR=ADR, apply_ADR = False,  \
+                     g2d=g2d, kernel_tracing=kernel_tracing, step_tracing=step_tracing, adr_index_fit=adr_index_fit, adr_clip_fit=adr_clip_fit, \
+                     plot_tracing_maps = plot_tracing_maps,  plot_spectra=plot_spectra,   \
                      flux_calibration=flux_calibration_list[i], edgelow=edgelow, edgehigh=edgehigh, size_arcsec=size_arcsec, centre_deg=centre_deg,warnings=warnings)')    
         else:
             if do_alignment:
@@ -361,6 +365,7 @@ class KOALA_reduce(RSS,Interpolated_cube):                                      
                                             ADR_x_fit_list =ADR_x_fit_list, ADR_y_fit_list = ADR_y_fit_list, 
                                             half_size_for_centroid=half_size_for_centroid, box_x=box_x, box_y=box_y,
                                             adr_index_fit=adr_index_fit, g2d=g2d, step_tracing = step_tracing, kernel_tracing = kernel_tracing,
+                                            adr_clip_fit = adr_clip_fit,
                                             plot=plot, plot_weight=plot_weight, 
                                             plot_tracing_maps=plot_tracing_maps, plot_spectra=plot_spectra,
                                             warnings=warnings, verbose=verbose)      
@@ -377,7 +382,7 @@ class KOALA_reduce(RSS,Interpolated_cube):                                      
                 print("4. Applying ADR ...")
             
                 for i in range(n_files): 
-                    exec(cube_object[i]+'=Interpolated_cube('+rss_object[i]+', pixel_size_arcsec, kernel_size_arcsec, plot=plot, half_size_for_centroid=half_size_for_centroid, adr_index_fit=adr_index_fit, g2d=g2d, step_tracing = step_tracing, kernel_tracing = kernel_tracing, plot_tracing_maps=plot_tracing_maps, \
+                    exec(cube_object[i]+'=Interpolated_cube('+rss_object[i]+', pixel_size_arcsec, kernel_size_arcsec, plot=plot, half_size_for_centroid=half_size_for_centroid, adr_index_fit=adr_index_fit, g2d=g2d, step_tracing = step_tracing, kernel_tracing = kernel_tracing, adr_clip_fit=adr_clip_fit, plot_tracing_maps=plot_tracing_maps, \
                          ADR_x_fit = cube_list[i].ADR_x_fit, ADR_y_fit = cube_list[i].ADR_y_fit, box_x=box_x, box_y=box_y, check_ADR = True, \
                          flux_calibration=flux_calibration_list[i], edgelow=edgelow, edgehigh=edgehigh, size_arcsec=size_arcsec, centre_deg=centre_deg,warnings=warnings)')   
  
@@ -448,7 +453,7 @@ class KOALA_reduce(RSS,Interpolated_cube):                                      
                                                   box_x=box_x, box_y=box_y,  
                                                   adr_index_fit=adr_index_fit, g2d=g2d,
                                                   step_tracing = step_tracing, 
-                                                  kernel_tracing = kernel_tracing,
+                                                  kernel_tracing = kernel_tracing, adr_clip_fit=adr_clip_fit,
                                                   plot_tracing_maps = plot_tracing_maps,
                                                   trim_cube = trim_cube,  trim_values =trim_values, 
                                                   remove_spaxels_not_fully_covered = remove_spaxels_not_fully_covered,
@@ -466,7 +471,8 @@ class KOALA_reduce(RSS,Interpolated_cube):                                      
                 # Trimming cube if requested or needed
                 cube_aligned_list[0].trim_cube(trim_cube=trim_cube, trim_values=trim_values, ADR=ADR,
                                half_size_for_centroid =half_size_for_centroid, 
-                               adr_index_fit=adr_index_fit, g2d=g2d, step_tracing=step_tracing, kernel_tracing = kernel_tracing,
+                               adr_index_fit=adr_index_fit, g2d=g2d, step_tracing=step_tracing, 
+                               kernel_tracing = kernel_tracing, adr_clip_fit=adr_clip_fit,
                                plot_tracing_maps=plot_tracing_maps,
                                remove_spaxels_not_fully_covered = remove_spaxels_not_fully_covered,
                                box_x=box_x, box_y=box_y, edgelow=edgelow, edgehigh=edgehigh, 

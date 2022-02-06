@@ -1,3 +1,15 @@
+
+from koala.constants import red_gratings, blue_gratings, fibres_best_sky_100
+from koala.io import full_path, read_table, spectrum_to_text_file
+from koala.KOALA_RSS import KOALA_RSS
+from koala.automatic_scripts.koala_reduce import KOALA_reduce
+from koala.cube import read_cube, telluric_correction_from_star
+
+import numpy as np
+
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -138,8 +150,10 @@ def run_automatic_star(CONFIG_FILE="",
                        do_cubing = True, do_alignment=True, make_combined_cube=True,
                        edgelow = -1, edgehigh =-1,
                        ADR=False, jump = -1,
-                       adr_index_fit=2, g2d = True,
-                       kernel_tracing = 0,
+                       adr_index_fit=2, 
+                       g2d = True,
+                       step_tracing=100, 
+                       kernel_tracing=0,
                                    
                        box_x=[0,-1], box_y=[0,-1],
                        trim_cube = True, trim_values =[],
