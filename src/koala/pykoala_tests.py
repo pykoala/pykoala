@@ -497,7 +497,7 @@ if __name__ == "__main__":
     #                    [-2.0911079335920793e-12, 4.703018551076634e-08, -0.00033904804410673275, 0.7771617214421154], [-2.838537640353266e-12, 6.54908082091063e-08, -0.00048530769637374164, 1.148318135983978], [-3.1271687976010236e-12, 7.140942741912648e-08, -0.0005301049734410775, 1.2753542609892792]] 
 
     # offsets =  [ -0.2773903893335756 , 0.7159980346947741 , 2.6672716919949306 , 0.8808234960793637,
-    #               3, 18,   
+    #               2.9, 18.1, # 3, 18,   
     #             #0.5, 18.9, # I got these values with Jamila in Feb 21, but they don´t work 
     #             1.4239020516303178 , 0.003232821107207684 , 1.4757701790022182 , 1.495021090623025 ]
                 
@@ -613,8 +613,9 @@ if __name__ == "__main__":
     
     # # PREVIOUS
      
-    # path_old = "/DATA/KOALA/Python/GitHub/test_reduce/"  
-    # path_blue_old = os.path.join(path_old, "580V")
+    path_old = "/DATA/KOALA/Python/GitHub/test_reduce/"  
+    path_blue_old = os.path.join(path_old, "580V")
+    path_red_old  = os.path.join(path_old, "385R")
  
     
     # file_in_old=full_path("27feb10025red.fits", path_blue_old)
@@ -626,12 +627,160 @@ if __name__ == "__main__":
     
  
     
+    # # -----------------------------------------------------------------------
+    # # -----------------------------------------------------------------------
+    # # Quick testing of estimate_offsets_comparing_cubes & alignment
+    # # -----------------------------------------------------------------------
+    # # -----------------------------------------------------------------------
+
+    flux_calibration_file = os.path.join(path_red_old, "flux_calibration_20180227_385R_0p7_1k10.dat")
+    
+    # file1 =  "27feb20031red_TCWXUS_NR.fits"
+    # cube1 = Interpolated_cube(file1, path = path_red_old,
+    #                           pixel_size_arcsec=0.5, kernel_size_arcsec=1.1,
+    #                           flux_calibration_file=flux_calibration_file, 
+    #                           plot=True, plot_spectra=False)
  
+    # file2 =  "27feb20032red_TCWXUS_NR.fits"
+    # cube2 = Interpolated_cube(file2, path = path_red_old,
+    #                           pixel_size_arcsec=0.5, kernel_size_arcsec=1.1,
+    #                           flux_calibration_file=flux_calibration_file, 
+    #                           plot=True, plot_spectra=False)   
+ 
+    # file3 =  "27feb20033red_TCWXUS_NR.fits"
+    # cube3 = Interpolated_cube(file3, path = path_red_old,
+    #                           pixel_size_arcsec=0.5, kernel_size_arcsec=1.1,
+    #                           flux_calibration_file=flux_calibration_file, 
+    #                           plot=True, plot_spectra=False)  
+    
+    # file4 =  "27feb20034red_TCWXUS_NR.fits"
+    cube4 = Interpolated_cube(file4, path = path_red_old,
+                              pixel_size_arcsec=0.5, kernel_size_arcsec=1.1, adr_clip_fit=0.2,
+                              flux_calibration_file=flux_calibration_file, 
+                              plot=True, plot_spectra=False, ADR=True, step_tracing=20, kernel_tracing=19)     
+    
+    # a=cube4.shift_cube(delta_RA=1,delta_DEC=1, return_cube=True)
+    
+    
+    # eocc12=estimate_offsets_comparing_cubes(cube1,cube2, line=6400,line2=6500,
+    #                                  plot=False, plot_comparison=False,
+    #                                  verbose=False, return_values=True)
+
+    # eocc23=estimate_offsets_comparing_cubes(cube2,cube3, line=6400,line2=6500,
+    #                                  plot=False, plot_comparison=False,
+    #                                  verbose=False, return_values=True)
+
+    # eocc34=estimate_offsets_comparing_cubes(cube3,cube4, line=6400,line2=6500,
+    #                                         delta_RA_values=np.arange(-4,0,0.25),
+    #                                         delta_DEC_values=np.arange(-20,-16,0.25),
+    #                                   plot=True, plot_comparison=True,
+    #                                   verbose=True, return_values=True)
+    
+    # compare_cubes(cube3, cube4, line=6600,line2=6700,
+    #               delta_RA=-2.9, delta_DEC=-18.2, plot =True, verbose = True)
+    
+    
+    # print(eocc12)
+    # print(eocc23)
+  
+    
+    # # -----------------------------------------------------------------------
+    # # -----------------------------------------------------------------------
+  
+    
+    #out=centroid_of_cube(cube4,g2d=False, step_tracing=10)
+    wc = np.array(out[-1][0])
+    xc = out[-1][1]
+    # yc = out[-1][2]
+    
+#     kernel_tracing = 11
+#     clip =0.4
+#     adr_index_fit = 2
+   
+    
+#     xc_smooth = signal.medfilt(xc, kernel_tracing)
+#     xc_norm = xc - xc_smooth
+#     xc_std = np.std(xc_norm)
     
  
+#     xc_nan = [np.nan if np.abs(x) > xc_std*clip else 1. for x in xc_norm ]
+#     xc_clipped = xc *xc_nan
     
+#     #xc_nan = np.abs(xc_norm) > xc_std*clip
+#     #xc_goods =  np.abs(xc_norm) < xc_std*clip
+#     #xc_clipped = xc *xc_goods
+    
+#     #plot_plot(wc, [xc_norm,xc_nan], hlines=[0,xc_std, xc_std*clip])
+    
+    
+#     #plot_plot(wc, [xc,xc_smooth, xc_clipped], psym=["+","-", "+"])
+    
+# #    plot_plot(wc, [xc,yc], psym=["+","."])
+
+#     idx = np.isfinite(wc) & np.isfinite(xc_clipped)
+        
+
+    
+#     #wc_nonnan = [ for x in wc if ]
+     
+#     x_peaks_fit  = np.polyfit(wc[idx], xc_clipped[idx], adr_index_fit) 
+#     pp=np.poly1d(x_peaks_fit)
+#     xc_peaks=pp(wc)
+    
+    
+#     plot_plot(wc, [xc,xc_smooth, xc_clipped, xc_peaks], psym=["+","--", "+","-"],
+#               alpha=[0.4,0.3,0.8,1], color=["r","b","g","k"])
+    
+    
+    # def fit_clip(x, y, clip=0.4, index_fit = 2, kernel = 21,
+    #              ptitle=None, xlabel=None, ylabel = None,
+    #              plot=True, verbose=True):
+        
+    #     x = np.array(x)
+    #     y = np.array(y)
+        
+    #     y_smooth = signal.medfilt(y, kernel)
+    #     y_norm = y - y_smooth
+    #     y_std = np.std(y_norm)
+        
+    #     y_nan = [np.nan if np.abs(i) > y_std*clip else 1. for i in y_norm ] 
+    #     y_clipped = y * y_nan
+        
+    #     idx = np.isfinite(x) & np.isfinite(y_clipped)
+        
+    #     fit  = np.polyfit(x[idx], y_clipped[idx], index_fit) 
+    #     pp=np.poly1d(fit)
+    #     y_fit=pp(x)
+
+    #     if verbose: 
+    #         print("\n> Fitting a polynomium of degree",index_fit,"using clip =",clip,"* std ...")
+    #         print("  Eliminated",len(x)-len(x[idx]),"outliers, the solution is: ",fit)
+        
+    #     if plot:
+    #         if ylabel is None: ylabel = "y (x)"
+            
+    #         if ptitle is None:
+    #             ptitle = "Polyfit of degree "+np.str(index_fit)+" using clip = "+np.str(clip)+" * std"
+    #         plot_plot(x, [y,y_smooth, y_clipped, y_fit], psym=["+","-", "+","-"],
+    #                   alpha=[0.5,0.5,0.8,1], color=["r","b","g","k"], 
+    #                   xlabel=xlabel, ylabel=ylabel, ptitle=ptitle)
+            
+    #     return fit, pp, y_fit, x[idx], y_clipped[idx]
+            
+        
+    #fit, pp, y_fit, x_c, y_c= fit_clip(wc,xc)
+    
+    #plot_plot([wc,x_c, wc],[xc,y_c, y_fit], psym=["+","+","-"] )
+    
+        
+        
+        
+        
+  
  
-    
+    # # -----------------------------------------------------------------------
+    # # -----------------------------------------------------------------------
+   
  
     
     # # This will create the 2 files needed for the calibration:
