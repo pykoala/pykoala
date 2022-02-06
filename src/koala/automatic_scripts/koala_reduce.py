@@ -1,3 +1,14 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+from koala.constants import red_gratings
+from koala.io import full_path, read_table, save_cube_to_fits_file
+from koala.cube import Interpolated_cube,build_combined_cube, align_n_cubes
+from koala.RSS import RSS
+
+import numpy as np
+
+
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -7,6 +18,8 @@
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
+
+
 class KOALA_reduce(RSS,Interpolated_cube):                                      # TASK_KOALA_reduce
  
     def __init__(self, rss_list, fits_file="", obj_name="",  description = "", path="",
@@ -295,7 +308,7 @@ class KOALA_reduce(RSS,Interpolated_cube):                                      
                     flux_calibration_list.append(flux_calibration)
                 if verbose: print("\n  - Using same flux calibration for all object files")
             else:
-                if verbose or warning: print("\n  - No flux calibration provided!")
+                if verbose or warnings: print("\n  - No flux calibration provided!")
                 for i in range(n_files):
                     flux_calibration_list.append("")
                 
