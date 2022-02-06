@@ -2003,3 +2003,38 @@ def find_cosmics_in_cut(x, cut_wave, cut_brightest_line, line_wavelength = 0.,
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
+def fit_clip(x, y, clip=0.4, index_fit = 2, kernel = 21,
+              ptitle=None, xlabel=None, ylabel = None,
+              plot=True, verbose=True):
+     
+     x = np.array(x)
+     y = np.array(y)
+     
+     y_smooth = signal.medfilt(y, kernel)
+     y_norm = y - y_smooth
+     y_std = np.std(y_norm)
+     
+     y_nan = [np.nan if np.abs(i) > y_std*clip else 1. for i in y_norm ] 
+     y_clipped = y * y_nan
+     
+     idx = np.isfinite(x) & np.isfinite(y_clipped)
+     
+     fit  = np.polyfit(x[idx], y_clipped[idx], index_fit) 
+     pp=np.poly1d(fit)
+     y_fit=pp(x)
+     y_clipped_fit =pp(x[idx])
+
+     if verbose: 
+         print("\n> Fitting a polynomium of degree",index_fit,"using clip =",clip,"* std ...")
+         print("  Eliminated",len(x)-len(x[idx]),"outliers, the solution is: ",fit)
+     
+     if plot:
+         if ylabel is None: ylabel = "y (x)"
+         
+         if ptitle is None:
+             ptitle = "Polyfit of degree "+np.str(index_fit)+" using clip = "+np.str(clip)+" * std"
+         plot_plot(x, [y,y_smooth, y_clipped, y_fit], psym=["+","-", "+","-"],
+                   alpha=[0.5,0.5,0.8,1], color=["r","b","g","k"], 
+                   xlabel=xlabel, ylabel=ylabel, ptitle=ptitle)
+         
+     return fit, pp, y_fit, y_clipped_fit, x[idx], y_clipped[idx]
