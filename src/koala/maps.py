@@ -16,30 +16,22 @@
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 
-
 from astropy.io import fits
-#from astropy.io import fits as pyfits 
 
 import numpy as np
 import sys
 import os
 import datetime
+import copy
+
+from scipy.ndimage.interpolation import shift
+from koala.constants import red_gratings, blue_gratings, C
+from koala.io import full_path, version, developers
+from koala.onedspec import fluxes
+
 
 # Disable some annoying warnings
 import warnings
-
-from koala.constants import red_gratings, blue_gratings
-#from koala.io import full_path
-
-
-from koala.io import full_path, version, developers
-
-
-#developers
-# from koala._version import get_versions
-# version = get_versions()["version"]
-# del get_versions
-
 warnings.simplefilter('ignore', np.RankWarning)
 warnings.simplefilter(action='ignore',category=FutureWarning)
 warnings.filterwarnings('ignore')
@@ -53,13 +45,154 @@ sys.path.append(parent)
 sys.path.append(os.path.join(parent, 'RSS'))
 sys.path.append(os.path.join(parent, 'cube'))
 sys.path.append(os.path.join(parent, 'automatic_scripts'))
-# sys.path.append('../cube')
-# sys.path.append('../automatic_scripts')
 
-# from koala_reduce import KOALA_reduce
-# from InterpolatedCube import Interpolated_cube
-# from koala_rss import KOALA_RSS
 
+
+
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------  
+def create_map(cube, line, w2=None, gaussian_fit = False, gf=False,
+               lowlow= 50, lowhigh=10, highlow=10, highhigh = 50, no_nans = False,
+               show_spaxels=[], verbose = True, description = "" ):
+    """
+    This function creates a map given inputs.
+
+    Parameters
+    ----------
+    cube : Cube Object
+        This is the inputted Cube Object.
+    line : TYPE
+        DESCRIPTION.
+    w2 : TYPE, Float
+        DESCRIPTION. The default is 0..
+    gaussian_fit : Boolean, optional
+        DESCRIPTION. The default is False.
+    gf : Boolean, optional
+        DESCRIPTION. The default is False.
+    lowlow : Integer, optional
+        DESCRIPTION. The default is 50.
+    lowhigh : Integer, optional
+        DESCRIPTION. The default is 10.
+    highlow : Integer, optional
+        DESCRIPTION. The default is 10.
+    highhigh : Integer, optional
+        DESCRIPTION. The default is 50.
+    no_nans : Boolean, optional
+        This is to say if there are nans or not. The default is False.
+    show_spaxels : List, optional
+        DESCRIPTION. The default is [].
+    verbose : Boolean, optional
+        Print results. The default is True.
+    description : String, optional
+        This is the description of the cube. The default is "".
+
+    Returns
+    -------
+    description : TYPE
+        This is the description of the cube.
+    interpolated_map : TYPE
+        DESCRIPTION.
+    w1 : TYPE
+        DESCRIPTION.
+    w2 : TYPE
+        DESCRIPTION.
+
+    """
+  
+    if gaussian_fit or gf:
+        
+        if description == "" : 
+            description = "{} - Gaussian fit to {}".format(cube.description, line)
+            description = description+" $\mathrm{\AA}$"
+    
+        map_flux = np.zeros((cube.n_rows,cube.n_cols))
+        map_vel  = np.zeros((cube.n_rows,cube.n_cols))
+        map_fwhm = np.zeros((cube.n_rows,cube.n_cols))
+        map_ew   = np.zeros((cube.n_rows,cube.n_cols))
+        
+        n_fits = cube.n_rows*cube.n_cols
+        w = cube.wavelength
+        if verbose: print("\n> Fitting emission line",line,"A in cube ( total = ",n_fits,"fits) ...")
+        
+        # For showing fits
+        show_x=[]
+        show_y=[]
+        name_list=[]
+        for i in range(len(show_spaxels)):
+            show_x.append(show_spaxels[i][0]) 
+            show_y.append(show_spaxels[i][1])
+            name_list_ = "["+np.str(show_x[i])+","+np.str(show_y[i])+"]"
+            name_list.append(name_list_)
+        
+        empty_spaxels=[]
+        fit_failed_list=[]
+        for x in range(cube.n_rows):
+            for y in range(cube.n_cols):
+                plot_fit = False
+                verbose_fit = False
+                warnings_fit = False
+
+                for i in range(len(show_spaxels)):
+                    if x == show_x[i] and y == show_y[i]:
+                        if verbose: print("\n  - Showing fit and results for spaxel",name_list[i],":")
+                        plot_fit = True
+                        if verbose: verbose_fit = True
+                        if verbose: warnings_fit = True
+                                     
+                spectrum=cube.data[:,x,y]
+                
+                if np.isnan(np.nanmedian(spectrum)):
+                    if verbose_fit: print("  SPAXEL ",x,y," is empty! Skipping Gaussian fit...")
+                    resultado = [np.nan]*10  
+                    empty_spaxel = [x,y]
+                    empty_spaxels.append(empty_spaxel)
+                                          
+                else:    
+                    resultado = fluxes(w, spectrum, line, lowlow= lowlow, lowhigh=lowhigh, highlow=highlow, highhigh = highhigh, 
+                                   plot=plot_fit, verbose=verbose_fit, warnings=warnings_fit)
+                map_flux[x][y] = resultado[3]                      # Gaussian Flux, use 7 for integrated flux
+                map_vel[x][y] = resultado[1]
+                map_fwhm[x][y] = resultado[5] * C / resultado[1]   # In km/s
+                map_ew[x][y] = resultado[9]                        # In \AA
+                # checking than resultado[3] is NOT 0 (that means the Gaussian fit has failed!)
+                if resultado[3] == 0:
+                    map_flux[x][y] = np.nan                     
+                    map_vel[x][y] = np.nan 
+                    map_fwhm[x][y] = np.nan 
+                    map_ew[x][y] = np.nan 
+                    #if verbose_fit: print "  Gaussian fit has FAILED in SPAXEL ",x,y,"..."
+                    fit_failed = [x,y]
+                    fit_failed_list.append(fit_failed)
+                    
+        
+        median_velocity= np.nanmedian(map_vel)
+        map_vel = C*(map_vel - median_velocity) / median_velocity
+        
+        if verbose: 
+            #print "\n> Summary of Gaussian fitting : "
+            print("\n> Found ",len(empty_spaxels)," the list with empty spaxels is ",empty_spaxels)
+            print("  Gaussian fit FAILED in",len(fit_failed_list)," spaxels = ",fit_failed_list)
+            print("\n> Returning [map_flux, map_vel, map_fwhm, map_ew, description] ")
+        return description, map_flux, map_vel, map_fwhm, map_ew 
+
+    else:
+        w1 = line
+        if w2 is None:
+            if verbose: print("\n> Creating map using channel closest to ",w1)
+            interpolated_map = cube.data[np.searchsorted(cube.wavelength, w1)]
+            descr = "{} - only {} ".format(cube.description, w1)
+        
+        else:
+            if verbose: print("\n> Creating map integrating [{}-{}]".format(w1, w2))
+            interpolated_map = np.nansum(cube.data[np.searchsorted(cube.wavelength, w1):np.searchsorted(cube.wavelength, w2)],axis=0)        
+            descr ="{} - Integrating [{}-{}] ".format(cube.description, w1, w2)
+
+        if description == "" : description = descr+"$\mathrm{\AA}$"
+        if verbose: print("  Description =",description)
+        # All 0 values should be nan
+        if no_nans == False: interpolated_map[interpolated_map == 0] = np.nan
+        return description,interpolated_map, w1, w2
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -228,6 +361,26 @@ def load_map(mapa_fits, description="", path="", verbose = True):
     except Exception:
         if verbose: print("- Map does not have any mask.")
     return mapa
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+def shift_map(mapa, delta_RA=0, delta_DEC=0, pixel_size_arcsec = None,
+              verbose = True):
+    
+    if verbose: print('\n> Shifting map in RA = {:.2f}" and DEC = {:.2f}" ...'.format(delta_RA, delta_DEC))
+        
+    if pixel_size_arcsec is None:
+        print('  - Pixel_size_arcsec is not provided, assuming 0.7"...')
+        pixel_size_arcsec = 0.7
+    
+    mapa_shifted = copy.deepcopy(mapa) * 0.
+    tmp=copy.deepcopy(mapa)
+    mask=copy.deepcopy(mapa)*0.
+    mask[np.where( np.isnan(tmp) == False  )]=1.      # Nans stay the same, when a good value = 1.
+    tmp_nonan=np.nan_to_num(tmp, nan=np.nanmedian(tmp))  # map without nans, replaced for median value
+    mapa_shifted[:,:]=mask*shift(tmp_nonan[:,:],[delta_DEC/pixel_size_arcsec, delta_RA/pixel_size_arcsec], cval=np.nan)
+    
+    return mapa_shifted
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
