@@ -21,17 +21,18 @@ from scipy.ndimage.interpolation import shift
 from scipy.signal import medfilt
 import copy
 
-# Disable some annoying warnings
-import warnings
-
+# Import other PyKOALA tasks
 from koala.KOALA_RSS import KOALA_RSS
 from koala.RSS import RSS
-from koala.constants import fuego_color_map, C
+from koala.constants import fuego_color_map
 #from koala.io import full_path, read_table, read_cube, spectrum_to_text_file, save_cube_to_fits_file
 from koala.io import full_path, read_table, spectrum_to_text_file, save_cube_to_fits_file
-from koala.onedspec import COS, SIN, MAD, fluxes
+from koala.onedspec import COS, SIN, MAD, fit_clip
 from koala.plot_plot import plot_plot, basic_statistics
+from koala.maps import shift_map, create_map
 
+# Disable some annoying warnings
+import warnings
 warnings.simplefilter('ignore', np.RankWarning)
 warnings.simplefilter(action='ignore',category=FutureWarning)
 warnings.filterwarnings('ignore')
@@ -40,9 +41,7 @@ logging.basicConfig(level=logging.CRITICAL)
 
 current = dirname(realpath(__file__))
 parent = dirname(current)
-# sys.path.append(parent)
 sys.path.append(current)
-#sys.path.append(join(parent, 'utils'))
 
 # to notify people write #TODO
 
@@ -131,6 +130,8 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
     
         adr_index_fit = 2: This is the fitted polynomial with highest degree n. (default n = 2)
         
+        adr_clip_fit = 0.4
+        
         ADR_x_fit=[0]: This is the ADR coefficients values for the x axis. (default constant 0)
         
         ADR_y_fit=[0]: This is the ADR coefficients values for the y axis. (default constant 0)               
@@ -194,8 +195,8 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                  ADR_x_fit=[0],ADR_y_fit=[0], check_ADR = False,    
                  
                  box_x=[0,-1],box_y=[0,-1], half_size_for_centroid = 10,
-                 step_tracing = 100, g2d=False, adr_index_fit = 2,
-                 kernel_tracing = 0,
+                 step_tracing = 50, g2d=False, adr_index_fit = 2,
+                 kernel_tracing = 5, adr_clip_fit = 0.4,
                  plot_tracing_maps=[], 
                  edgelow = -1, edgehigh = -1,
                  
@@ -394,13 +395,6 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
             # Build the cube
             self.data=self.build_cube(jump=jump, RSS=RSS) 
 
-            # Define box for tracing peaks if requested
-            if half_size_for_centroid > 0 and np.nanmedian(box_x+box_y) == -0.5:   
-                box_x,box_y = self.box_for_centroid(half_size_for_centroid=half_size_for_centroid, verbose=verbose, plot_map=plot, log=log, g2d=g2d)
-                if verbose: print("  Using this box for tracing peaks and checking ADR ...")
-            else:
-                self.get_peaks(plot=False, verbose=True)
-                            
             # Trace peaks (check ADR only if requested)          
             if ADR_repeat or check_ADR:
                 _check_ADR_ = False
@@ -408,15 +402,21 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                 _check_ADR_ = True
                         
             if ADR:
-                self.trace_peak(box_x=box_x, box_y=box_y, edgelow=edgelow, edgehigh =edgehigh, plot=plot, plot_tracing_maps=plot_tracing_maps,
+                # Define box for tracing peaks if requested / needed
+                box_x,box_y = self.box_for_centroid(half_size_for_centroid=half_size_for_centroid, verbose=verbose, plot_map=plot, log=log, g2d=g2d)
+                if verbose: print("  Using this box for tracing peaks and checking ADR ...")
+                self.trace_peak(box_x=box_x, box_y=box_y, #half_size_for_centroid = half_size_for_centroid,
+                                edgelow=edgelow, edgehigh =edgehigh, plot=plot, plot_tracing_maps=plot_tracing_maps,
                                 verbose=verbose, adr_index_fit=adr_index_fit, g2d=g2d, kernel_tracing = kernel_tracing,
-                                check_ADR = _check_ADR_, step_tracing= step_tracing)
-            elif verbose:
-                print("\n> ADR will NOT be checked!")
-                if np.nansum(self.ADR_y + self.ADR_x) != 0:
-                    print("  However ADR fits provided and applied:")
-                    print("  ADR_x_fit = ",self.ADR_x_fit)
-                    print("  ADR_y_fit = ",self.ADR_y_fit)
+                                check_ADR = _check_ADR_, step_tracing= step_tracing, adr_clip_fit=adr_clip_fit)
+            else:
+                self.get_peaks(plot=False, verbose=True)
+                if verbose:
+                    print("\n> ADR will NOT be checked!")
+                    if np.nansum(self.ADR_y + self.ADR_x) != 0:
+                        print("  However ADR fits provided and applied:")
+                        print("  ADR_x_fit = ",self.ADR_x_fit)
+                        print("  ADR_y_fit = ",self.ADR_y_fit)
                     
                     
             # Correct for Atmospheric Differential Refraction (ADR) if requested and not done before
@@ -424,9 +424,10 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                 self.weighted_I = np.zeros((self.n_wave, self.n_rows, self.n_cols))
                 self.weight = np.zeros_like(self.weighted_I)
                 self.ADR_correction(RSS, plot=plot, force_ADR=force_ADR, jump=jump, remove_spaxels_not_fully_covered=remove_spaxels_not_fully_covered)                
-                self.trace_peak(check_ADR=True, box_x=box_x, box_y=box_y, edgelow=edgelow, edgehigh =edgehigh, 
+                self.trace_peak(check_ADR=True, box_x=box_x, box_y=box_y, half_size_for_centroid=half_size_for_centroid,
+                                edgelow=edgelow, edgehigh =edgehigh, 
                                 step_tracing =step_tracing,  adr_index_fit=adr_index_fit, g2d=g2d, 
-                                kernel_tracing = kernel_tracing,
+                                kernel_tracing = kernel_tracing, adr_clip_fit=adr_clip_fit,
                                 plot_tracing_maps = plot_tracing_maps, plot=plot, verbose = verbose)
                   
             # Apply flux calibration
@@ -452,9 +453,10 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         if read_fits_cube == False and verbose: print("\n> Interpolated cube done!")
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-    def apply_flux_calibration(self, flux_calibration=[], flux_calibration_file = "", path="", verbose=True):
+    def apply_flux_calibration(self, flux_calibration=None, path="",
+                               flux_calibration_file = None,  verbose=True):
         """
-        Function for applying the flux calibration to a cube
+        Function for applying the flux calibration to a cube.
 
         Parameters
         ----------
@@ -462,26 +464,30 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
             It is a list of floats. The default is empty
             
         flux_calibration_file : String, optional
-            The file name of the flux_calibration. The default is ""
+            The file name of the flux_calibration. The default is None
             
         path : String, optional
-            The directory of the folder the flux_calibration_file is in. The default is "" 
+            The directory of the folder the flux_calibration_file is in. The default is None 
         
         verbose : Boolean, optional
             Print results. The default is True.
                          
         Returns
         -------
-        None.
+        self.flux_calibration
 
         """      
-        if flux_calibration_file  != "": 
+        if flux_calibration_file is not None : 
             flux_calibration_file = full_path(flux_calibration_file,path) 
-            if verbose: print("\n> Flux calibration provided in file:\n ",flux_calibration_file)
             w_star,flux_calibration = read_table(flux_calibration_file, ["f", "f"] ) 
 
         if len(flux_calibration) > 0: 
-            if verbose: print("\n> Applying the absolute flux calibration...")
+            if verbose: 
+                if flux_calibration_file is not None:
+                    print("\n> Applying the absolute flux calibration provided in file:\n ",flux_calibration_file," ...")
+                else:
+                    print("\n> Applying the absolute flux calibration...")
+            
             self.flux_calibration=flux_calibration        
             # This should be in 1 line of step of loop, I couldn't get it # Yago HELP !!
             for y in range(self.n_rows):
@@ -489,7 +495,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                     self.data[:,y,x]=self.data[:,y,x] / self.flux_calibration  / 1E16 / self.total_exptime
 
             self.history.append("- Applied flux calibration")
-            if flux_calibration_file  != "": self.history.append("  Using file "+flux_calibration_file)
+            if flux_calibration_file  is not None: self.history.append("  Using file "+flux_calibration_file)
             
         else:
             if verbose: print("\n\n> Absolute flux calibration not provided! Nothing done!")                
@@ -773,7 +779,118 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 
         else:    
             if verbose: print (" NOTHING APPLIED !!!")
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+    def shift_cube(self, jump=-1, delta_RA = 0, delta_DEC = 0, 
+                   plot = True, plot_comparison = True,
+                   warnings=True, verbose =True, return_cube = False):
+        """
+        New task for shifting cubes, it works but it needs to be checked
+        is the mask is working well and include jump
+        Still is best to build the cube with delta_RA and delta_DEC than this
+
+        Parameters
+        ----------
+        jump : TYPE, optional
+            DESCRIPTION. The default is -1.
+        delta_RA : TYPE, optional
+            DESCRIPTION. The default is 0.
+        delta_DEC : TYPE, optional
+            DESCRIPTION. The default is 0.
+        plot : TYPE, optional
+            DESCRIPTION. The default is True.
+        warnings : TYPE, optional
+            DESCRIPTION. The default is True.
+        verbose : TYPE, optional
+            DESCRIPTION. The default is True.
+
+        Returns
+        -------
+        None.
+
+        """
+        
+        # Check if this is a self.combined cube or a self
+        try:
+            _x_ = np.nanmedian(self.combined_cube.data)
+            if _x_ > 0 : 
+                cubo = self.combined_cube
+        except Exception:
+            cubo = self
+
+        
+
+
+        cubo.get_integrated_map(plot=plot, log=True)
+
+        if verbose: print('\n> Shifting the cube in RA = '+np.str(delta_RA)+'" and DEC = '+np.str(delta_DEC)+'" ...')
+                        
+        #sys.stdout.flush()
+        #output_every_few = np.sqrt(cubo.n_wave)+1
+        #next_output = -1
+        
+        # First create a CUBE without NaNs and a mask
+        cube_shifted = copy.deepcopy(cubo.data) * 0.
+        tmp=copy.deepcopy(cubo.data)
+        mask=copy.deepcopy(tmp)*0.
+        mask[np.where( np.isnan(tmp) == False  )]=1      # Nans stay the same, when a good value = 1.
+        #median_value_tmp = np.nanmedian(tmp)
+        #cubo.plot_map(mapa=mask[1000])
+        tmp_nonan=np.nan_to_num(tmp, nan=np.nanmedian(tmp))  # cube without nans, replaced for median value
                     
+        # #for l in range(cubo.n_wave):
+        # for l in range(0,cubo.n_wave,jump):
+            
+        #     median_ADR_x = np.nanmedian(cubo.ADR_x[l:l+jump])
+        #     median_ADR_y = np.nanmedian(cubo.ADR_y[l:l+jump])
+
+        #     if l > next_output:
+        #         sys.stdout.write("\b"*37)
+        #         sys.stdout.write("  Moving plane {:5} /{:5}... {:5.2f}%".format(l, cubo.n_wave, l*100./cubo.n_wave))
+        #         sys.stdout.flush()
+        #         next_output = l + output_every_few
+            
+        #     # For applying shift the array MUST NOT HAVE ANY nans
+        #     cube_shifted[l:l+jump,:,:]=shift(tmp_nonan[l:l+jump,:,:],[0,-median_ADR_y/cubo.pixel_size_arcsec, -median_ADR_x/cubo.pixel_size_arcsec],cval=np.nan)
+ 
+    
+        cube_shifted[:,:,:]=shift(tmp_nonan[:,:,:],[0,delta_DEC/cubo.pixel_size_arcsec, delta_RA/cubo.pixel_size_arcsec],cval=np.nan)
+        
+        # The mask should be also moved!
+        mask_shifted_ = copy.deepcopy(mask)
+        mask_shifted  = np.nan_to_num(mask_shifted_, nan=0)  # Change nans to 0
+        #cubo.plot_map(mapa=mask_shifted[1000])
+        
+        mask_shifted[:,:,:]=shift(mask_shifted[:,:,:],[0,delta_DEC/cubo.pixel_size_arcsec, delta_RA/cubo.pixel_size_arcsec],cval=np.nan)
+        
+        mask_shifted=np.where( mask_shifted < 0.5 , np.nan,  mask_shifted  )   # Solo valen 0 y 1 para máscara
+                
+        #cubo.plot_map(mapa=mask_shifted[1000])
+        
+
+        cubo_final = copy.deepcopy(cubo)
+        cubo_final.data = cube_shifted * mask_shifted
+        cubo_final.get_peaks(verbose=verbose)
+        cubo_final.get_integrated_map(plot=plot, log=True)
+
+
+
+        if plot_comparison:
+            comparison_cube =  copy.deepcopy(cubo)
+            comparison_cube.data =  (cube_shifted  - cubo.data) * mask
+            comparison_cube.description="Comparing original and shifted cubes"
+            vmin=-np.nanmax([np.abs(np.nanmin(comparison_cube.data)), np.abs(np.nanmax(comparison_cube.data))])
+            vmax= np.nanmax([np.abs(np.nanmin(comparison_cube.data)), np.abs(np.nanmax(comparison_cube.data))])
+            
+            comparison_cube.get_integrated_map(plot=plot, plot_spectra=False, verbose=False, plot_centroid=False, 
+                                               cmap="seismic", log=False,vmin=vmin, vmax=vmax)
+
+        if return_cube:
+            return cubo_final.data
+        else:
+            cubo.data = cubo_final.data
+            cubo.history.append('- Cube shifted in RA = '+np.str(delta_RA)+'" and DEC = '+np.str(delta_DEC)+'"')
+
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
     def add_spectrum_ADR(self, intensity, offset_rows, offset_cols, ADR_x=[0], ADR_y=[0], 
@@ -918,7 +1035,8 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
     def trace_peak(self, box_x=[0,-1],box_y=[0,-1], edgelow=-1, edgehigh=-1,  
-                   adr_index_fit=2, step_tracing = 100, g2d = True, kernel_tracing = 0,
+                   adr_index_fit=2, step_tracing = 50, g2d = True, 
+                   kernel_tracing = 19, adr_clip_fit = 0.4,
                    half_size_for_centroid=0, plot_tracing_maps = [],
                    plot=False, log=True, gamma=0., check_ADR=False, verbose = True): 
         """
@@ -981,7 +1099,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         else:
             plot_residua = True
         
-        ADR_x_fit, ADR_y_fit, ADR_x_max, ADR_y_max, ADR_total, x_peaks, y_peaks, self.ADR_x_residua, self.ADR_y_residua, self.ADR_total_residua = centroid_of_cube(self, x0,x1,y0,y1, edgelow=edgelow, edgehigh=edgehigh,
+        ADR_x_fit, ADR_y_fit, ADR_x_max, ADR_y_max, ADR_total, x_peaks, y_peaks, self.ADR_x_residua, self.ADR_y_residua, self.ADR_total_residua, vectors = centroid_of_cube(self, x0,x1,y0,y1, edgelow=edgelow, edgehigh=edgehigh, adr_clip_fit=adr_clip_fit,
                                                                                                    step_tracing=step_tracing, g2d=g2d, plot_tracing_maps=plot_tracing_maps,
                                                                                                    adr_index_fit=adr_index_fit,
                                                                                                    kernel_tracing =kernel_tracing,
@@ -1061,6 +1179,12 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         if verbose: print("\n> Defining a box centered in [ {} , {} ] and width +-{} spaxels:".format(max_x, max_y, half_size_for_centroid))
         box_x_centroid = [max_x-half_size_for_centroid,max_x+half_size_for_centroid]
         box_y_centroid = [max_y-half_size_for_centroid,max_y+half_size_for_centroid]
+        
+        if box_x_centroid[0] < 0 : box_x_centroid[0] = 0
+        if box_y_centroid[0] < 0 : box_y_centroid[0] = 0
+        if box_x_centroid[1] > self.n_cols-1 :  box_x_centroid[1] = self.n_cols-1 
+        if box_y_centroid[1] > self.n_rows-1 :  box_y_centroid[1] = self.n_rows-1 
+        
         if verbose: print("  box_x =[ {}, {} ],  box_y =[ {}, {} ]".format(box_x_centroid[0],box_x_centroid[1],box_y_centroid[0],box_y_centroid[1]))
 
         if plot_map: self.plot_map(plot_box=True, box_x=box_x_centroid, box_y=box_y_centroid, log=log, gamma=gamma, g2d=g2d,
@@ -1070,12 +1194,12 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         return box_x_centroid,box_y_centroid
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-    def get_integrated_map(self, min_wave = 0, max_wave=0, nansum=True, 
+    def get_integrated_map(self, min_wave = None, max_wave= None, nansum=True, 
                            vmin=1E-30, vmax=1E30, fcal=False,  log=True, gamma=0., cmap="fuego",
                            box_x=[0,-1], box_y=[0,-1], trimmed=False,
-                           g2d=False, plot_centroid=True, 
-                           trace_peaks=False, adr_index_fit=2, edgelow=-1, edgehigh=-1, step_tracing=100,
-                           kernel_tracing = 0,
+                           g2d=False, plot_centroid=True,  adr_clip_fit=0.4,
+                           trace_peaks=False, adr_index_fit=2, edgelow=-1, edgehigh=-1, step_tracing=50,
+                           kernel_tracing = 5,
                            plot=False, plot_spectra=False, plot_tracing_maps=[], verbose=True) :  ### CHECK
         """
         Compute Integrated map and plot if requested
@@ -1136,9 +1260,9 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         """
         # Integrated map between good wavelengths
         
-        if min_wave == 0: min_wave = self.valid_wave_min
-        if max_wave == 0: max_wave = self.valid_wave_max
-        
+        if min_wave is None: min_wave = self.valid_wave_min
+        if max_wave is None: max_wave = self.valid_wave_max
+                
         if nansum:
             self.integrated_map_all = np.nansum(self.data, axis=0)                        
             self.integrated_map = np.nansum(self.data[np.searchsorted(self.wavelength, min_wave):np.searchsorted(self.wavelength, max_wave)],axis=0)            
@@ -1163,8 +1287,10 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         if trace_peaks:
             if verbose: print("\n> Tracing peaks using all data...")
             self.trace_peak(edgelow=edgelow, edgehigh=edgehigh,  #box_x=box_x,box_y=box_y,
-                   adr_index_fit=adr_index_fit, step_tracing = step_tracing, g2d = g2d, 
+                   adr_index_fit=adr_index_fit, step_tracing = step_tracing, g2d = g2d, adr_clip_fit=adr_clip_fit,
                    plot_tracing_maps = plot_tracing_maps, plot=False, check_ADR=False, verbose = False)
+        #else:
+            #self.get_peaks(verbose=verbose)
 
         if verbose: 
             print("\n> Created integrated map between {:5.2f} and {:5.2f} considering nansum = {:}".format(min_wave, max_wave,nansum))
@@ -1453,7 +1579,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                     circle=[0,0,0],circle2=[0,0,0],circle3=[0,0,0],
                     plot_centre=True, plot_spaxel=False, plot_spaxel_grid=True,
                     label_axes_fontsize=15, axes_fontsize = 14, c_fontsize = 12, title_fontsize= 16,
-                    fraction=0.0457, pad=0.02, colorbar_ticksize= 14, colorbar_fontsize = 15, barlabel=""):
+                    fraction=None, pad=None, colorbar_ticksize= 14, colorbar_fontsize = 15, barlabel=""):
         """
         Plot weight map.
 
@@ -1603,7 +1729,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                         circle=[0,0,0],circle2=[0,0,0],circle3=[0,0,0],
                         plot_centre=True, plot_spaxel=False, plot_spaxel_grid=True, 
                         label_axes_fontsize=15, axes_fontsize = 14, c_fontsize = 12, title_fontsize= 16,
-                        fraction=0.0457, pad=0.02, colorbar_ticksize= 14, colorbar_fontsize = 15, barlabel="") :
+                        fraction=None, pad=None, colorbar_ticksize= 14, colorbar_fontsize = 15, barlabel="") :
         """
         Plot map at a particular wavelength or in a wavelength range.
 
@@ -1704,7 +1830,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
     def plot_map(self, mapa="", log = False, gamma = 0., vmin=1E-30, vmax=1E30, fcal=False,
-                 trimmed= False,
+                 trimmed=False,
                  cmap="fuego", weight = False, velocity= False, fwhm=False, ew=False, ratio=False,
                  contours=True, clabel=False,
                  line =0,  
@@ -1715,7 +1841,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                  plot_box=False, plot_centre=True, plot_spaxel=False, plot_spaxel_grid=True, alpha_grid=0.1, 
                  plot_spaxel_list=[], color_spaxel_list="blue", alpha_spaxel_list=0.4,
                  label_axes_fontsize=15, axes_fontsize = 14, c_fontsize = 12, title_fontsize= 16,
-                 fraction=0.0457, pad=0.02, colorbar_ticksize= 14, colorbar_fontsize = 15, barlabel="",
+                 fraction=None, pad=None, colorbar_ticksize= 14, colorbar_fontsize = 15, barlabel="",
                  description="", fig_size=10, save_file="", verbose = True):
         """
         Show a given map.
@@ -1846,30 +1972,40 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         #print (plot_spaxel_list)
                 
         mapa_=mapa
+        
+        # Check if map needs to be trimmed:
+        if np.nanmedian(box_x+box_y)!=-0.5 and plot_box is False: trimmed=True  
+
+        # Get description
+        ptrimmed = " - trimmed x = [ {:}, {:} ] , y = [ {:} , {:} ]".format(box_x[0],box_x[1], box_y[0],box_y[1]) 
         try:
             if type(mapa[0]) == str:       # Maps created by PyKOALA have [description, map, l1, l2 ...] 
                 mapa_ = mapa[1]
-                if description == "": mapa = mapa[0]
+                if description == "": 
+                    if trimmed:
+                        description = mapa[0]+ ptrimmed   
+                    else:
+                        description = mapa[0]
         except Exception:
             if mapa == "" :
                 if len(self.integrated_map) == 0:  self.get_integrated_map(verbose=verbose)
                        
                 mapa_=self.integrated_map 
-                if description == "": description = self.description+" - Integrated Map"                 
-
+                if description == "": 
+                    if trimmed:
+                        description = self.description+" - Integrated Map" + ptrimmed           
+                    else:
+                        description = self.description+" - Integrated Map" 
+                        
         if description == "" :
-            description = self.description
-            
-            
-        # Trim the map if requested   
-        if np.nanmedian(box_x+box_y) != -0.5 and plot_box == False:
-            trimmed= True        
-            mapa= copy.deepcopy(mapa_[box_y[0]:box_y[1],box_x[0]:box_x[1]])
-        else:
-            mapa = mapa_
-            
+            if trimmed:
+                description = self.description + ptrimmed
+            else:
+                description = self.description
 
+        # Trim the map if requested 
         if trimmed:
+            mapa= copy.deepcopy(mapa_[box_y[0]:box_y[1],box_x[0]:box_x[1]])
             extent1 = 0 
             #extent2 = (box_x[1]-box_x[0])*self.pixel_size_arcsec 
             extent2 = len(mapa[0])*self.pixel_size_arcsec 
@@ -1879,22 +2015,36 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
             alpha_grid = 0
             plot_spaxel_grid = False
             plot_centre = False
-            fig_size= fig_size*0.5
+            fig_size= fig_size*0.75 # Make it a bit smaller
+            label_axes_fontsize = label_axes_fontsize *0.85
+            colorbar_fontsize = colorbar_fontsize * 0.75
+            title_fontsize = title_fontsize * 0.7
+            if len(mapa[0]) * len(mapa) < 100 : fig_size = fig_size * 0.6
+            aspect_ratio = len(mapa[0]) / len(mapa)
+            xlabel='$\Delta$ RA [ spaxels ]'
+            ylabel='$\Delta$ DEC [ spaxels ]'
         else:
+            mapa = mapa_
             extent1 = (0.5-self.n_cols/2) * self.pixel_size_arcsec
             extent2 = (0.5+self.n_cols/2) * self.pixel_size_arcsec
             extent3 = (0.5-self.n_rows/2) * self.pixel_size_arcsec
             extent4 = (0.5+self.n_rows/2) * self.pixel_size_arcsec
-            
-            
-        if verbose: print("\n> Plotting map '"+description.replace("\n ","")+"' :")
+            xlabel='$\Delta$ RA [ arcsec ]'
+            ylabel='$\Delta$ DEC [ arcsec ]'
+            # We want squared pixels for plotting
+            try:
+                aspect_ratio = self.combined_cube.n_cols/self.combined_cube.n_rows * 1.
+            except Exception:
+                aspect_ratio = self.n_cols/self.n_rows *1.
+        if aspect_ratio > 1.5 : fig_size = fig_size *1.7 # Make figure bigger
+                                
+        if verbose: print("\n> Plotting map '"+description.replace("\n "," - ")+"' :")
         if verbose and trimmed: print("  Trimmed in x = [ {:} , {:} ]  ,  y = [ {:} , {:} ] ".format(box_x[0],box_x[1],box_y[0],box_y[1]))
-        
         
         # Check fcal
         if fcal == False and np.nanmedian(self.flux_calibration) != 0: fcal = True
         
-        
+        # Check specific maps
         if velocity and cmap=="fuego": cmap="seismic" 
         if fwhm and cmap=="fuego": cmap="Spectral" 
         if ew and cmap=="fuego": cmap="CMRmap_r"
@@ -1904,12 +2054,6 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
             fcal=False
             if vmin == 1E-30 : vmin=np.nanpercentile(mapa,5)
             if vmax == 1E30 : vmax=np.nanpercentile(mapa,95)
-            
-        # We want squared pixels for plotting
-        try:
-            aspect_ratio = self.combined_cube.n_cols/self.combined_cube.n_rows * 1.
-        except Exception:
-            aspect_ratio = self.n_cols/self.n_rows *1.
             
         fig, ax = plt.subplots(figsize=(fig_size/aspect_ratio, fig_size))
                 
@@ -1927,10 +2071,11 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
             
         if vmax == 1E30  : vmax = np.nanmax(mapa)
                            
-        cax=ax.imshow(mapa, origin='lower', interpolation='none', norm = norm, cmap=cmap,
-                      extent=(extent1, extent2, extent3, extent4))
-        cax.set_clim(vmin=vmin) 
-        cax.set_clim(vmax=vmax)
+        pmapa=ax.imshow(mapa, origin='lower', interpolation='none', norm = norm, cmap=cmap,    # cax=ax.imshow
+                      extent=(extent1, extent2, extent3, extent4)) #,    aspect="auto")         # BOBA
+        
+        pmapa.set_clim(vmin=vmin) 
+        pmapa.set_clim(vmax=vmax)
 
         if contours:
             CS=plt.contour(mapa, extent=(extent1, extent2, extent3, extent4))
@@ -1938,12 +2083,11 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         
         ax.set_title(description, fontsize=title_fontsize)  
         plt.tick_params(labelsize=axes_fontsize)
-        plt.xlabel('$\Delta$ RA [arcsec]', fontsize=label_axes_fontsize)
-        plt.ylabel('$\Delta$ DEC [arcsec]', fontsize=label_axes_fontsize)
+        plt.xlabel(xlabel, fontsize=label_axes_fontsize)
+        plt.ylabel(ylabel, fontsize=label_axes_fontsize)
         plt.legend(loc='upper right', frameon=False)
         plt.minorticks_on()
         plt.grid(which='both', color="white", alpha=alpha_grid)
-        #plt.axis('square')
         
         
         # IMPORTANT:
@@ -2069,11 +2213,9 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
             ax.add_patch(cuadrado) 
 
  
-        #print( "\n plot_centroid", plot_centroid,"\n")
         if plot_centroid:
             # If box defined, compute centroid there
             if np.nanmedian(box_x+box_y) != -0.5 and plot_box:
-            #if trimmed:    
                 _mapa_ = mapa[box_y[0]:box_y[1],box_x[0]:box_x[1]]
             else:
                 _mapa_ = mapa
@@ -2086,22 +2228,9 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
             # if box values not given, both box_x[0] and box_y[0] are 0
             offset_from_center_x_arcsec =  (xc+box_x[0]-self.spaxel_RA0)*self.pixel_size_arcsec         
             offset_from_center_y_arcsec =  (yc+box_y[0]-self.spaxel_DEC0)*self.pixel_size_arcsec 
-            #print(xc,yc)
-            #print(offset_from_center_x_arcsec,offset_from_center_y_arcsec)
             
-            #if np.nanmedian(box_x+box_y) != -0.5 and plot_box == False:
             plt.plot((xc+box_x[0]-ox)*self.pixel_size_arcsec,(yc+box_y[0]-oy)*self.pixel_size_arcsec, color="black", marker="+", ms=15, mew=2)
     
-                
-            # if trimmed:    
-            #     #print("ESTA TRIMMED, haciendo ESTAA")
-            #     plt.plot((xc-ox)*self.pixel_size_arcsec,(yc-oy)*self.pixel_size_arcsec, color="black", marker="+", ms=15, mew=2)
-
-            # else:
-            #     #print("NO ESTA TRIMMED, haciendo LA OTRA")
-            #     plt.plot((xc+box_x[0]-ox)*self.pixel_size_arcsec,(yc+box_y[0]-oy)*self.pixel_size_arcsec, color="black", marker="+", ms=15, mew=2)
-
-
             if verbose: 
                 if trimmed:
                     if line != 0:
@@ -2115,17 +2244,29 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                         print('  - Centroid (box): [{:.2f} {:.2f}]    , Offset from center :   {:.2f}" , {:.2f}"'.format(xc+box_x[0],yc+box_y[0], offset_from_center_x_arcsec, offset_from_center_y_arcsec))            
 
                   
-
-        if np.nanmedian(box_x+box_y) != -0.5 and plot_box:   # Plot box
+        # Plox box if requested
+        if np.nanmedian(box_x+box_y) != -0.5 and plot_box:  
             box_x=[box_x[0]-ox,box_x[1]-ox]
-            box_y=[box_y[0]-oy,box_y[1]-oy]
-            
+            box_y=[box_y[0]-oy,box_y[1]-oy]    
             vertices_x =[box_x[0]*self.pixel_size_arcsec,box_x[0]*self.pixel_size_arcsec,box_x[1]*self.pixel_size_arcsec,box_x[1]*self.pixel_size_arcsec,box_x[0]*self.pixel_size_arcsec]
             vertices_y =[box_y[0]*self.pixel_size_arcsec,box_y[1]*self.pixel_size_arcsec,box_y[1]*self.pixel_size_arcsec,box_y[0]*self.pixel_size_arcsec,box_y[0]*self.pixel_size_arcsec]          
             plt.plot(vertices_x,vertices_y, "-b", linewidth=2., alpha=0.6)
 
+        # Plot color bar
+        if 0.8  <= aspect_ratio <= 1.2:
+            bth = 0.05
+            gap = 0.03
+        else:
+            bth = 0.03
+            gap = 0.02
 
-        cbar = fig.colorbar(cax, fraction=fraction, pad=pad)  
+        if fraction is None:
+            fraction = np.max((aspect_ratio * bth, bth))
+        if pad is None:
+            pad = np.max((aspect_ratio * gap, gap))
+
+        cax  = ax.inset_axes((1+pad, 0, fraction , 1))
+        cbar = fig.colorbar(pmapa,cax=cax) 
         cbar.ax.tick_params(labelsize=colorbar_ticksize)
         
         if barlabel == "" :
@@ -2143,7 +2284,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         cbar.set_label(barlabel, rotation=270, labelpad=20, fontsize=colorbar_fontsize)
 #        cbar.ax.set_yticklabels(['< -1', '0', '> 1'])# vertically oriented colorbar
         
-
+        # Save plot in figure if requested
         if save_file == "":
             plt.show()
         else:
@@ -2839,8 +2980,8 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
     def trim_cube(self, trim_cube=True, trim_values=[],   half_size_for_centroid = 10,     
                   remove_spaxels_not_fully_covered = True,      #nansum=False,          
                   ADR=True, box_x=[0,-1], box_y=[0,-1], edgelow=-1, edgehigh=-1, 
-                  adr_index_fit = 2, g2d=False, step_tracing=100, 
-                  kernel_tracing=0, plot_tracing_maps =[],
+                  adr_index_fit = 2, g2d=False, step_tracing=50, adr_clip_fit=0.4,
+                  kernel_tracing = 5, plot_tracing_maps =[],
                   plot_weight = False, fcal=False, plot=True, plot_spectra=False, verbose=True, warnings=True):
         """ 
         Task for trimming cubes in RA and DEC (not in wavelength)
@@ -3086,7 +3227,8 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
            
                 try:
                     cube.trace_peak(check_ADR=True, box_x=box_x_, box_y=box_y_, edgelow=edgelow, edgehigh =edgehigh, 
-                                    adr_index_fit=adr_index_fit, g2d=g2d, step_tracing=step_tracing,kernel_tracing=kernel_tracing,
+                                    adr_index_fit=adr_index_fit, g2d=g2d, step_tracing=step_tracing,
+                                    kernel_tracing=kernel_tracing,adr_clip_fit=adr_clip_fit,
                                     plot=plot, plot_tracing_maps=plot_tracing_maps, verbose=verbose)
                 except Exception:
                     if verbose or warnings: print("\n  WARNING !! Failing tracing the peak of the trimmed cube...\n\n")
@@ -3154,7 +3296,7 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
                   offsets=[], 
                   ADR=False, jump=-1, ADR_x_fit_list=[0], ADR_y_fit_list=[0], force_ADR = False,
                   half_size_for_centroid =10, box_x=[0,-1], box_y=[0,-1], 
-                  adr_index_fit = 2, g2d=False, step_tracing = 100, kernel_tracing = 0,
+                  adr_index_fit = 2, g2d=False, step_tracing = 50, kernel_tracing = 5,
                   plot= False, plot_weight=False, plot_tracing_maps=[], plot_spectra=True,
                   warnings=False, verbose= True):
     """
@@ -3403,7 +3545,7 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def align_blue_and_red_cubes(blue, red, half_size_for_centroid = 12, box_x= [], box_y =[], 
-                             g2d=False, step_tracing = 100,  adr_index_fit = 2, kernel_tracing = 0, 
+                             g2d=False, step_tracing = 50,  adr_index_fit = 2, kernel_tracing = 5, 
                              verbose = True, plot = True, plot_centroid=True, ):
     """
     For aligning the BLUE and RED cubes, follow these steps:\n
@@ -3724,7 +3866,9 @@ def offset_between_cubes(cube1, cube2, plot=True, verbose = True, smooth = 51):
     return delta_RA_arcsec, delta_DEC_arcsec
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def compare_cubes(cube1, cube2, line=0):
+def compare_cubes(cube1, cube2, line=None, line2=None, 
+                  map1 = None, map2 = None,
+                  delta_RA=0, delta_DEC=0, plot =True, verbose = True):
     """
     This function compares the inputted cubes and plots them
 
@@ -3743,29 +3887,199 @@ def compare_cubes(cube1, cube2, line=0):
 
     """
     
-    if line == 0:
+    if map1 is None:
+        if line is not None:
+            cube1.get_integrated_map(min_wave=line, max_wave=line2, 
+                                        plot=False, verbose=False)
+            if line2 is not None:
+                if verbose: print("\n> Comparing 2 cubes using the integrated map between {:.2f} and {:.2f} A ...".format(line,line2))
+            else:
+                if verbose: print("\n> Comparing 2 cubes using the map closest to {:.2f} A ...".format(line))
+        else:
+            if verbose: print("\n> Comparing 2 cubes using their integrated map ...")
         map1=cube1.integrated_map
-        map2=cube2.integrated_map
-    else:     
-        l = np.searchsorted(cube1.wavelength, line)
-        map1 = cube1.data[l]
-        map2 = cube2.data[l]
-        
-    scale = np.nanmedian(map1+map2)*3
-    scatter = np.nanmedian(np.nonzero(map1-map2))
-
-    plt.figure(figsize=(12, 8))
-    plt.imshow(map1-map2, vmin=-scale, vmax=scale, cmap=plt.cm.get_cmap('RdBu'))   # vmin = -scale
-    plt.colorbar()
-    plt.contour(map1, colors='w', linewidths=2, norm=colors.LogNorm())
-    plt.contour(map2, colors='k', linewidths=1, norm=colors.LogNorm())
-    if line != 0:
-        plt.title("{:.2f} AA".format(line))
     else:
-        plt.title("Integrated Map")
-    plt.show()
-    plt.close()
-    print("  Medium scatter : ",scatter)
+        if verbose: print("\n> Comparing 2 cubes using the maps provided ...")
+        
+    if map2 is None:
+        if line is not None:
+            cube2.get_integrated_map(min_wave=line, max_wave=line2, 
+                                        plot=False, verbose=False)
+        map2=cube2.integrated_map
+
+        
+    # Shift the second map if requested
+    if delta_RA + delta_DEC != 0:
+        if verbose: 
+            print('  - Shifting map2 in RA = {:.2f}" and DEC = {:.2f}" ...'.format(delta_RA, delta_DEC))            
+        map2_shifted=shift_map(map2, delta_RA=delta_RA, delta_DEC=delta_DEC, pixel_size_arcsec=cube2.pixel_size_arcsec, verbose=False)
+    else:
+        map2_shifted=map2
+        
+    # Normalize maps using common region
+    map_median = map1-map2_shifted
+    mask = map_median*0.
+    mask[np.where( np.isnan(map_median) == False  )]=1.
+    
+    spaxels_comunes = np.nansum(mask)
+    
+    map1_median_mask = np.nanmedian(mask * map1)
+    map2_shifted_median_mask = np.nanmedian(mask * map2_shifted)
+    
+    factor12 = map1_median_mask / map2_shifted_median_mask
+    scale = np.nanmedian(map1+map2_shifted * factor12) * 3
+    scatter = np.nansum(np.abs((map1-map2_shifted * factor12))) / spaxels_comunes
+    
+    if verbose: 
+        print("  - Spaxels in common =  {:.0f}".format(spaxels_comunes))
+        print("  - Scale for cube2   = ", factor12)
+        print("  - Medium scatter    = ",scatter)
+
+    if plot:
+        plt.figure(figsize=(12, 8))
+        plt.imshow(map1-map2_shifted*factor12, vmin=-scale, vmax=scale, cmap=plt.cm.get_cmap('RdBu'))
+        plt.colorbar()
+        plt.contour(map1, colors='g', linewidths=2, norm=colors.LogNorm())
+        plt.contour(map2_shifted, colors='k', linewidths=1, norm=colors.LogNorm())
+        plt.minorticks_on()                
+        plt.xlabel('$\Delta$ RA [ pix ]', fontsize=10)
+        plt.ylabel('$\Delta$ DEC [ pix ]', fontsize=10)
+        plt.legend(loc='upper right', frameon=False)
+
+        if line is None:
+            ptitle="Comparing cubes using their integrated maps"
+        else:
+            AA = "$\mathrm{\AA}$"
+            if line2 is None: 
+                ptitle = "Comparing cubes using wavelength closest to {:.2f} ".format(line)
+            else:
+                ptitle= "Comparing cubes using integrated map between {:.2f} and {:.2f} ".format(line, line2)
+            ptitle = ptitle+AA
+        plt.title(ptitle)
+        plt.show()
+        plt.close()
+    return scatter
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+def estimate_offsets_comparing_cubes(cube1, cube2, line=None, line2=None,   # BOBA
+                                     map1=None, map2=None,
+                                     step=0.1, delta_RA_max=2, delta_DEC_max=2,
+                                     delta_RA_values=None, 
+                                     delta_DEC_values = None, do_fit = True,
+                                     plot=True, plot_comparison=True, 
+                                     verbose = True, return_values = False): 
+    
+    if verbose: print("\n> Estimating offsets comparing two cubes...")
+    
+    # Get maps
+    if map1 is None:
+        if line is not None:
+            # cube1.get_integrated_map(min_wave=line, max_wave=line2, 
+            #                             plot=False, verbose=False)
+            map1_ = create_map(cube1, line, w2=line2, verbose = False )
+            map1 = map1_[1]
+            
+            if line2 is not None:
+                if verbose: print("  - Comparing 2 cubes using the integrated map between {:.2f} and {:.2f} A ...".format(line,line2))
+            else:
+                if verbose: print("  - Comparing 2 cubes using the map closest to {:.2f} A ...".format(line))
+        else:
+            if verbose: print("  - Comparing 2 cubes using their integrated map... ")
+            
+    else:
+        map1=cube1.integrated_map
+        if verbose: print("  - Comparing 2 cubes using the maps provided ...")
+        
+    if map2 is None:
+        if line is not None:
+            # cube2.get_integrated_map(min_wave=line, max_wave=line2, 
+            #                             plot=False, verbose=False)
+            map2_ = create_map(cube2, line, w2=line2, verbose = False )
+            map2 = map2_[1]
+        else:
+            map2=cube2.integrated_map
+    
+    # Get offsets values
+    if delta_RA_values is None:
+        delta_RA_values = np.arange(-delta_RA_max*100,delta_RA_max*100,step*100)/100
+
+    if delta_DEC_values is None:
+        delta_DEC_values = np.arange(-delta_DEC_max*100,delta_DEC_max*100,step*100)/100
+    
+    # Iterate    
+    
+    scatter_x =[]    
+    for delta_RA in delta_RA_values:
+        scatter_x.append(compare_cubes(cube1, cube2, map1=map1, map2=map2, 
+                                       line=line, delta_RA=delta_RA, 
+                                       plot=False, verbose =False))
+        
+    scatter_x_min = np.nanmin(scatter_x)
+    v = np.abs(scatter_x-scatter_x_min)
+    x_index = v.tolist().index(np.nanmin(v))
+
+    scatter_y =[]    
+    for delta_DEC in delta_DEC_values:
+        scatter_y.append(compare_cubes(cube1, cube2, map1=map1, map2=map2, 
+                                       line=line, delta_DEC=delta_DEC, 
+                                       plot=False, verbose =False))
+
+    scatter_y_min = np.nanmin(scatter_y)
+    v = np.abs(scatter_y-scatter_y_min)
+    y_index = v.tolist().index(np.nanmin(v))
+    
+    # Compute
+    
+    best_delta_RA  = delta_RA_values[x_index]
+    best_delta_DEC = delta_DEC_values[y_index]
+    
+    if do_fit:
+        fit_RA = np.polyfit(delta_RA_values,scatter_x, 2)
+        yfit = np.poly1d(fit_RA)
+        scatter_x_fit = yfit(delta_RA_values)
+        fit_DEC = np.polyfit(delta_DEC_values,scatter_y, 2)
+        yfit = np.poly1d(fit_DEC)
+        scatter_y_fit = yfit(delta_DEC_values)        
+        
+    if plot:
+        # Determine max and min for plotting
+        ymin_ = np.nanmin([scatter_x_min,scatter_y_min])   
+        ymax_ = np.nanmax([np.nanmax(scatter_x),np.nanmax(scatter_y)])                  
+        rango = ymax_ - ymin_
+        ymin = ymin_ -rango/15.
+        ymax = ymax_ + rango/15.        
+
+        if do_fit:
+            x=[delta_RA_values, delta_DEC_values, delta_RA_values, delta_DEC_values]
+            y=[scatter_x, scatter_y, scatter_x_fit, scatter_y_fit]
+            label=["RA", "DEC", "RA fit", "DEC fit"]
+            psym=[".","+", "-","-"]
+        else:
+            x=[delta_RA_values, delta_DEC_values]
+            y=[scatter_x, scatter_y]
+            label=["RA", "DEC"]
+            psym=[".","+"]            
+              
+        plot_plot(x,y,label=label, psym=psym,
+                  xlabel = "Offset [ arcsec ]", 
+                  ylabel="Scatter [ counts / spaxels ]",
+                  ymax=ymax, ymin = ymin, 
+                  vlines=[0, best_delta_RA, best_delta_DEC],
+                  cvlines=["k", "r", "b"],
+                  ptitle="Estimating offsets comparing cubes")
+        
+    if plot_comparison:
+        compare_cubes(cube1, cube2, line=line, line2=line2, map1=map1,map2=map2,
+                      delta_RA=best_delta_RA, delta_DEC=best_delta_DEC, 
+                      plot=True, verbose =verbose)
+
+    if verbose:
+        print('  - The offsets with the smallest scatter in common region are:  delta_RA = {:.2f}" , delta_DEC = {:.2f}"'.format(np.round(best_delta_RA,2), np.round(best_delta_DEC,2)))
+
+    if return_values:
+        return best_delta_RA, best_delta_DEC
+
+
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def plot_response(calibration_star_cubes, scale=[], use_median=False):
@@ -4280,8 +4594,8 @@ def telluric_correction_using_bright_continuum_source(objeto, save_telluric_file
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def centroid_of_cube(cube, x0=0,x1=-1,y0=0,y1=-1, box_x=[], box_y=[],
-                     step_tracing=100, g2d=True, adr_index_fit=2,
-                     kernel_tracing = 0 ,
+                     step_tracing=50, g2d=True, adr_index_fit=2,
+                     kernel_tracing = 21 , adr_clip_fit = 0.4,
                      edgelow=-1, edgehigh=-1,
                      plot=True, log=True, gamma=0.,
                      plot_residua=True, plot_tracing_maps=[], verbose=True) :
@@ -4314,8 +4628,10 @@ def centroid_of_cube(cube, x0=0,x1=-1,y0=0,y1=-1, box_x=[], box_y=[],
         If True uses a 2D gaussian, else doesn't. The default is True.
     adr_index_fit : Integer, optional
         This is the fitted polynomial with highest degree n. The default is 2.
-    kernel_tracing : Integer, optional
+    kernel_tracing : Odd integer, optional
         DESCRIPTION. The default is 0.
+    adr_clip_fit: float, optional. The default is 0.4.
+        Value over the std to clip
     edgelow : Integer, optional
         This is the lowest value in the wavelength range in terms of pixels. The default is -1.
     edgehigh : Integer, optional
@@ -4375,9 +4691,9 @@ def centroid_of_cube(cube, x0=0,x1=-1,y0=0,y1=-1, box_x=[], box_y=[],
         else:
             print("\n> Computing the centroid of the cube using all spaxels with the given parameters:")
         if g2d:
-            print("  step =", step_tracing, " , adr_index_fit =", adr_index_fit, " , using a 2D Gaussian fit")
+            print("  step =", step_tracing, ", adr_index_fit =", adr_index_fit, ", kernel_tracing =",kernel_tracing,", adr_clip_fit =",adr_clip_fit,", using a 2D Gaussian fit")
         else:
-            print("  step =", step_tracing, " , adr_index_fit =", adr_index_fit, " , using the center of mass of the image")
+            print("  step =", step_tracing, ", adr_index_fit =", adr_index_fit, ", kernel_tracing =",kernel_tracing,", adr_clip_fit =",adr_clip_fit,", using the center of mass of the image")
             
     cube_trimmed = copy.deepcopy(cube)
     
@@ -4431,60 +4747,57 @@ def centroid_of_cube(cube, x0=0,x1=-1,y0=0,y1=-1, box_x=[], box_y=[],
                        
         xc_vector.append(xc)
         yc_vector.append(yc)
+    
         
-    x_peaks_fit  = np.polyfit(wc_vector, xc_vector, adr_index_fit) 
-    pp=np.poly1d(x_peaks_fit)
+    fit_x, pp, x_peaks_fit, fxx, wc_vector_c, xc_vector_c = fit_clip(wc_vector,xc_vector, 
+                                        clip = adr_clip_fit,
+                                        index_fit = adr_index_fit,
+                                        kernel = kernel_tracing,
+                                        plot=False, verbose = False)
+    
     x_peaks=pp(cube.wavelength) +x0
 
-    y_peaks_fit  = np.polyfit(wc_vector, yc_vector, adr_index_fit) 
-    pp=np.poly1d(y_peaks_fit)
+    fit_y, pp, y_peaks_fit, fyy, wc_vector_c, yc_vector_c = fit_clip(wc_vector,yc_vector, 
+                                        clip = adr_clip_fit,
+                                        index_fit = adr_index_fit,
+                                        kernel = kernel_tracing,
+                                        plot=False, verbose = False)
+
     y_peaks=pp(cube.wavelength) +y0 
         
     xc_vector= (xc_vector - np.nanmedian(xc_vector)) *cube.pixel_size_arcsec
     yc_vector= (yc_vector - np.nanmedian(yc_vector)) *cube.pixel_size_arcsec
     
+    ADR_x_fit, pp, fx, fxx, wcx, xxc = fit_clip(wc_vector,xc_vector, 
+                                        clip = adr_clip_fit,
+                                        index_fit = adr_index_fit,
+                                        kernel = kernel_tracing,
+                                        plot=False, verbose = False)        
 
-    # We could remove outliers applying median filter        
-    if kernel_tracing  > 0 :
-        xc_vector_smooth = signal.medfilt(xc_vector, kernel_tracing)
-        yc_vector_smooth = signal.medfilt(yc_vector, kernel_tracing)
-        if verbose: print ("  Applying smooth filter with kernel {} for removing outliers".format(kernel_tracing))
-        # plot_plot(wc_vector, [xc_vector, xc_vector_smooth], psym=["+",""], xmin=cube.wavelength[0],xmax=cube.wavelength[-1],
-        #           #alpha=[1,1], 
-        #           color=["r", "g"], label=["RA", "RA_smooth", "Dec", "RA fit", "Dec fit"], markersize=[10,7], ymin = -1.2, ymax=0.6)
-    else:
-        xc_vector_smooth = xc_vector
-        yc_vector_smooth = yc_vector
-
-        
-    ADR_x_fit=np.polyfit(wc_vector, xc_vector_smooth, adr_index_fit)  
-    pp=np.poly1d(ADR_x_fit)
-    fx=pp(wc_vector)
-
-    ADR_y_fit=np.polyfit(wc_vector, yc_vector_smooth, adr_index_fit)  
-    pp=np.poly1d(ADR_y_fit)
-    fy=pp(wc_vector)
-    
+    ADR_y_fit, pp, fy, fyy, wcy, yyc = fit_clip(wc_vector,yc_vector, 
+                                        clip = adr_clip_fit,
+                                        index_fit = adr_index_fit,
+                                        kernel = kernel_tracing,
+                                        plot=False, verbose = False) 
       
     vlines = [cube.wavelength[valid_wave_min_index], cube.wavelength[valid_wave_max_index]]
     if plot: 
-        plot_plot(wc_vector, [xc_vector,yc_vector, fx,fy], psym=["+", "o", "",""], color=["r", "k", "g","b"], 
-                  alpha=[1,1,1,1], label=["RA","Dec", "RA fit", "Dec fit"],
-                  xmin=cube.wavelength[0],xmax=cube.wavelength[-1], vlines=vlines, markersize=[10,7],
+        plot_plot([wc_vector,wc_vector,  wcx,   wcy,       wc_vector,wc_vector], 
+                  [xc_vector,yc_vector,  xxc,   yyc,      fx,fy], 
+                  psym=["+", "o", "+","o", "-","-"], color=["k", "k", "r", "b",  "g","brown"], 
+                  alpha=[0.4,0.4, 1,  1, 1,1], label=["RA", "Dec", "RA clip",  "Dec clip",  "RA fit", "Dec fit"],
+                  xmin=cube.wavelength[0],xmax=cube.wavelength[-1], vlines=vlines, markersize=[10,6,10,6,0,0],
                   ylabel="$\Delta$ offset [arcsec]",ptitle=ptitle, hlines=[0], frameon=True, 
                   ymin = np.nanmin([np.nanmin(xc_vector), np.nanmin(yc_vector)]),    
                   ymax = np.nanmax([np.nanmax(xc_vector), np.nanmax(yc_vector)]))
 
-    # ADR_x_max=np.nanmax(xc_vector)-np.nanmin(xc_vector)    ##### USE FITS INSTEAD OF VECTOR FOR REMOVING OUTLIERS
-    # ADR_y_max=np.nanmax(yc_vector)-np.nanmin(yc_vector)
 
-    ADR_x_max=np.nanmax(fx)-np.nanmin(fx)                    ##### USING FITS, but this does not remove outliers ?
+    ADR_x_max=np.nanmax(fx)-np.nanmin(fx)                    ##### USING FITS
     ADR_y_max=np.nanmax(fy)-np.nanmin(fy)
-
     ADR_total = np.sqrt(ADR_x_max**2 + ADR_y_max**2)   
 
-    stat_x=basic_statistics(xc_vector_smooth-fx, verbose=False, return_data=True)
-    stat_y=basic_statistics(yc_vector_smooth-fy, verbose=False, return_data=True)
+    stat_x=basic_statistics(xxc-fxx, verbose=False, return_data=True)
+    stat_y=basic_statistics(yyc-fyy, verbose=False, return_data=True)
     stat_total = np.sqrt(stat_x[3]**2 + stat_y[3]**2)  
     
     if verbose: print('  ADR variation in valid interval using fit : RA = {:.3f}" , Dec = {:.3f}" , total = {:.3f}"  that is {:.0f}% of a spaxel'.format(ADR_x_max, ADR_y_max, ADR_total, ADR_total*100./cube.pixel_size_arcsec))
@@ -4498,7 +4811,7 @@ def centroid_of_cube(cube, x0=0,x1=-1,y0=0,y1=-1, box_x=[], box_y=[],
     if verbose: print('  Standard deviation of residua :             RA = {:.3f}" , Dec = {:.3f}" , total = {:.3f}"  that is {:.0f}% of a spaxel'.format(stat_x[3], stat_y[3], stat_total, stat_total*100./cube.pixel_size_arcsec))
     
 
-    return ADR_x_fit, ADR_y_fit, ADR_x_max, ADR_y_max, ADR_total, x_peaks, y_peaks, stat_x[3], stat_y[3], stat_total    
+    return ADR_x_fit, ADR_y_fit, ADR_x_max, ADR_y_max, ADR_total, x_peaks, y_peaks, stat_x[3], stat_y[3], stat_total, [wc_vector, xc_vector, yc_vector]  
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -4614,7 +4927,8 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
                         ADR=True, ADR_cc = False, jump =-1, pk = "", 
                         ADR_x_fit_list=[], ADR_y_fit_list=[],  force_ADR= False,
                         half_size_for_centroid = 10, box_x=[0,-1],box_y=[0,-1],  
-                        adr_index_fit = 2, g2d=False, step_tracing=100, kernel_tracing = 0,
+                        adr_index_fit = 2, g2d=False, step_tracing=50, 
+                        kernel_tracing = 19, adr_clip_fit=0.4,
                         plot_tracing_maps=[],                       
                         trim_cube = True,  trim_values =[], remove_spaxels_not_fully_covered = True,                                              
                         plot=True, plot_weight= True, plot_spectra=True, 
@@ -4857,7 +5171,7 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
     
                 combined_cube.trace_peak(box_x=box_x_centroid, box_y=box_y_centroid, edgelow=edgelow, edgehigh =edgehigh, 
                                          plot=plot,adr_index_fit=adr_index_fit, g2d=g2d, step_tracing=step_tracing, 
-                                         kernel_tracing = kernel_tracing,
+                                         kernel_tracing = kernel_tracing, adr_clip_fit=adr_clip_fit,
                                          plot_tracing_maps=plot_tracing_maps,  check_ADR=check_ADR)
                         
         # ADR correction to the combined cube    
@@ -4868,7 +5182,8 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
             if ADR:
                 combined_cube.trace_peak(box_x=box_x_centroid, box_y=box_y_centroid, 
                                          edgelow=edgelow, edgehigh =edgehigh, 
-                                         plot=plot, check_ADR=True, step_tracing=step_tracing, plot_tracing_maps=plot_tracing_maps, 
+                                         plot=plot, check_ADR=True, step_tracing=step_tracing, adr_clip_fit=adr_clip_fit,
+                                         plot_tracing_maps=plot_tracing_maps, 
                                          adr_index_fit=adr_index_fit, g2d=g2d)
                                                    
         combined_cube.get_integrated_map(box_x=box_x, box_y=box_y, fcal=fcal, plot=plot, plot_spectra=plot_spectra, 
@@ -4928,156 +5243,11 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
         return combined_cube
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------  
-def create_map(cube, line, w2 = 0., gaussian_fit = False, gf=False,
-               lowlow= 50, lowhigh=10, highlow=10, highhigh = 50, no_nans = False,
-               show_spaxels=[], verbose = True, description = "" ):
-    """
-    This function creates a map given inputs.
-
-    Parameters
-    ----------
-    cube : Cube Object
-        This is the inputted Cube Object.
-    line : TYPE
-        DESCRIPTION.
-    w2 : TYPE, Float
-        DESCRIPTION. The default is 0..
-    gaussian_fit : Boolean, optional
-        DESCRIPTION. The default is False.
-    gf : Boolean, optional
-        DESCRIPTION. The default is False.
-    lowlow : Integer, optional
-        DESCRIPTION. The default is 50.
-    lowhigh : Integer, optional
-        DESCRIPTION. The default is 10.
-    highlow : Integer, optional
-        DESCRIPTION. The default is 10.
-    highhigh : Integer, optional
-        DESCRIPTION. The default is 50.
-    no_nans : Boolean, optional
-        This is to say if there are nans or not. The default is False.
-    show_spaxels : List, optional
-        DESCRIPTION. The default is [].
-    verbose : Boolean, optional
-        Print results. The default is True.
-    description : String, optional
-        This is the description of the cube. The default is "".
-
-    Returns
-    -------
-    description : TYPE
-        This is the description of the cube.
-    interpolated_map : TYPE
-        DESCRIPTION.
-    w1 : TYPE
-        DESCRIPTION.
-    w2 : TYPE
-        DESCRIPTION.
-
-    """
-    
-    
-  
-    if gaussian_fit or gf:
-        
-        if description == "" : 
-            description = "{} - Gaussian fit to {}".format(cube.description, line)
-            description = description+" $\mathrm{\AA}$"
-    
-        map_flux = np.zeros((cube.n_rows,cube.n_cols))
-        map_vel  = np.zeros((cube.n_rows,cube.n_cols))
-        map_fwhm = np.zeros((cube.n_rows,cube.n_cols))
-        map_ew   = np.zeros((cube.n_rows,cube.n_cols))
-        
-        n_fits = cube.n_rows*cube.n_cols
-        w = cube.wavelength
-        if verbose: print("\n> Fitting emission line",line,"A in cube ( total = ",n_fits,"fits) ...")
-        
-        # For showing fits
-        show_x=[]
-        show_y=[]
-        name_list=[]
-        for i in range(len(show_spaxels)):
-            show_x.append(show_spaxels[i][0]) 
-            show_y.append(show_spaxels[i][1])
-            name_list_ = "["+np.str(show_x[i])+","+np.str(show_y[i])+"]"
-            name_list.append(name_list_)
-        
-        empty_spaxels=[]
-        fit_failed_list=[]
-        for x in range(cube.n_rows):
-            for y in range(cube.n_cols):
-                plot_fit = False
-                verbose_fit = False
-                warnings_fit = False
-
-                for i in range(len(show_spaxels)):
-                    if x == show_x[i] and y == show_y[i]:
-                        if verbose: print("\n  - Showing fit and results for spaxel",name_list[i],":")
-                        plot_fit = True
-                        if verbose: verbose_fit = True
-                        if verbose: warnings_fit = True
-                                     
-                spectrum=cube.data[:,x,y]
-                
-                if np.isnan(np.nanmedian(spectrum)):
-                    if verbose_fit: print("  SPAXEL ",x,y," is empty! Skipping Gaussian fit...")
-                    resultado = [np.nan]*10  
-                    empty_spaxel = [x,y]
-                    empty_spaxels.append(empty_spaxel)
-                                          
-                else:    
-                    resultado = fluxes(w, spectrum, line, lowlow= lowlow, lowhigh=lowhigh, highlow=highlow, highhigh = highhigh, 
-                                   plot=plot_fit, verbose=verbose_fit, warnings=warnings_fit)
-                map_flux[x][y] = resultado[3]                      # Gaussian Flux, use 7 for integrated flux
-                map_vel[x][y] = resultado[1]
-                map_fwhm[x][y] = resultado[5] * C / resultado[1]   # In km/s
-                map_ew[x][y] = resultado[9]                        # In \AA
-                # checking than resultado[3] is NOT 0 (that means the Gaussian fit has failed!)
-                if resultado[3] == 0:
-                    map_flux[x][y] = np.nan                     
-                    map_vel[x][y] = np.nan 
-                    map_fwhm[x][y] = np.nan 
-                    map_ew[x][y] = np.nan 
-                    #if verbose_fit: print "  Gaussian fit has FAILED in SPAXEL ",x,y,"..."
-                    fit_failed = [x,y]
-                    fit_failed_list.append(fit_failed)
-                    
-        
-        median_velocity= np.nanmedian(map_vel)
-        map_vel = C*(map_vel - median_velocity) / median_velocity
-        
-        if verbose: 
-            #print "\n> Summary of Gaussian fitting : "
-            print("\n> Found ",len(empty_spaxels)," the list with empty spaxels is ",empty_spaxels)
-            print("  Gaussian fit FAILED in",len(fit_failed_list)," spaxels = ",fit_failed_list)
-            print("\n> Returning [map_flux, map_vel, map_fwhm, map_ew, description] ")
-        return description, map_flux, map_vel, map_fwhm, map_ew 
-
-    else:
-        w1 = line
-        if w2 == 0.:
-            if verbose: print("\n> Creating map using channel closest to ",w1)
-            interpolated_map = cube.data[np.searchsorted(cube.wavelength, w1)]
-            descr = "{} - only {} ".format(cube.description, w1)
-        
-        else:
-            if verbose: print("\n> Creating map integrating [{}-{}]".format(w1, w2))
-            interpolated_map = np.nansum(cube.data[np.searchsorted(cube.wavelength, w1):np.searchsorted(cube.wavelength, w2)],axis=0)        
-            descr ="{} - Integrating [{}-{}] ".format(cube.description, w1, w2)
-
-        if description == "" : description = descr+"$\mathrm{\AA}$"
-        if verbose: print("  Description =",description)
-        # All 0 values should be nan
-        if no_nans == False: interpolated_map[interpolated_map == 0] = np.nan
-        return description,interpolated_map, w1, w2
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def read_cube(filename, description="", half_size_for_centroid = 10, 
               valid_wave_min = 0, valid_wave_max = 0, edgelow=50,edgehigh=50, 
-              g2d=False, step_tracing=100, adr_index_fit=2, kernel_tracing = 0,
+              g2d=False, step_tracing=50, adr_index_fit=2, 
+              kernel_tracing = 19, adr_clip_fit=0.4,
               plot = False, verbose = True, plot_spectra = False,
               print_summary = True,
               text_intro ="\n> Reading datacube from fits file:" ):
@@ -5232,7 +5402,7 @@ def read_cube(filename, description="", half_size_for_centroid = 10,
         box_y = [0,-1]
     cube.trace_peak(box_x=box_x, box_y=box_y, plot=plot, edgelow=edgelow,edgehigh=edgehigh, 
                     adr_index_fit=adr_index_fit, g2d=g2d, 
-                    step_tracing = step_tracing, kernel_tracing = kernel_tracing,
+                    step_tracing = step_tracing, kernel_tracing = kernel_tracing, adr_clip_fit=adr_clip_fit,
                     verbose =False)
     cube.get_integrated_map(plot=plot, plot_spectra=plot_spectra, verbose=verbose, plot_centroid=True, g2d=g2d) #,fcal=fcal, box_x=box_x, box_y=box_y)
     # For calibration stars, we get an integrated star flux and a seeing
