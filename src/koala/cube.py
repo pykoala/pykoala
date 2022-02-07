@@ -3967,7 +3967,7 @@ def estimate_offsets_comparing_cubes(cube1, cube2, line=None, line2=None,   # BO
                                      map1=None, map2=None,
                                      step=0.1, delta_RA_max=2, delta_DEC_max=2,
                                      delta_RA_values=None, 
-                                     delta_DEC_values = None, index_fit = 2,
+                                     delta_DEC_values = None, index_fit = 2, n_ite = 2,
                                      plot=True, plot_comparison=True, 
                                      verbose = True, return_values = False): 
     
@@ -4004,7 +4004,7 @@ def estimate_offsets_comparing_cubes(cube1, cube2, line=None, line2=None,   # BO
     
     
     # Iterate 2 times : one broad step*10, another small around the minimum value
-    for i in range(2):
+    for i in range(n_ite):
         if i == 0:
             best_delta_RA = 0
             best_delta_DEC = 0
@@ -4043,6 +4043,8 @@ def estimate_offsets_comparing_cubes(cube1, cube2, line=None, line2=None,   # BO
         
         best_delta_RA  = delta_RA_values[x_index]
         best_delta_DEC = delta_DEC_values[y_index]
+        
+        print(i, best_delta_RA,best_delta_DEC)
         
         if i == 0:
             delta_RA_values_plot = delta_RA_values

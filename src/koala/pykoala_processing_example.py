@@ -37,8 +37,11 @@ if __name__ == "__main__":
 
     print("\n\n> Running PyKOALA -", version)
       
+    # # VERY IMPORTANT :
     # # First, copy the input data to a local folder (not within PyKOALA)
-
+    # # The RSS data are in pykoala_path/input_data/sample_RSS/
+    # # That will be where your data are.
+    # # 
     # # Type where your data will be:
     path = "/DATA/KOALA/Python/GitHub/test_reduce/"
 

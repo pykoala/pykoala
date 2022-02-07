@@ -44,14 +44,17 @@ if __name__ == "__main__":
     # # Type where your data will be:
     path = "/DATA/KOALA/Python/GitHub/test_reduce_02_03/"
     path = "/DATA/KOALA/Python/GitHub/test_reduce_02_04/"
+    path = "/DATA/KOALA/2022_02_03_testing_2dfdr/20180227/"
 
     # # If needed, you can copy the example data using this:        
     #os.system("mkdir "+path)
     #os.system("cp -R ./input_data/sample_RSS/* "+path)
 
     # # For AAOmega, we have TWO folders per night: blue (580V) and red (385R)
-    path_red = os.path.join(path, "385R")
-    path_blue = os.path.join(path, "580V")
+    # path_red = os.path.join(path, "385R")
+    # path_blue = os.path.join(path, "580V")
+    path_red = os.path.join(path, "ccd_2")
+    path_blue = os.path.join(path, "ccd_1")
 
     # # -----------------------------------------------------------------------
     # # -----------------------------------------------------------------------
@@ -561,7 +564,7 @@ if __name__ == "__main__":
     #                                         throughput_2D_file =throughput_2D_file, kernel_throughput = 21) 
 
 
-    file_in=full_path("27feb10025red.fits", path_blue)
+    file_in=full_path("27feb10022red.fits", path_blue)
     flat_blue_file = full_path("27feb10006red.fits", path_blue) 
     # flat_blue = KOALA_RSS(flat_blue_file, plot_final_rss = True) 
     
@@ -591,9 +594,9 @@ if __name__ == "__main__":
 
 
     # test_new = KOALA_RSS(file_in,
-    #                      correct_ccd_defects = True,
-    #                      remove_5577 = True)
-    #                      #fix_wavelengths = True )
+    #                       correct_ccd_defects = True,
+    #                       remove_5577 = True)
+                          #fix_wavelengths = True )
     # x = range(test.n_spectra)    
     # plot_plot(x,test_new.integrated_fibre/1E6, ymin=0., ymax=0.2, 
     #           ptitle="Integrated flux using 2dfdr v8.00b", xlabel="Fibre", 
@@ -721,7 +724,7 @@ if __name__ == "__main__":
 
     
         
-    eocc12=estimate_offsets_comparing_cubes(cubestar,cubestar2, 
+    eocc12=estimate_offsets_comparing_cubes(cubestar2,cubestar3, n_ite= 5, 
                                             delta_RA_max = 4,
                                             delta_DEC_max = 4,
                                             #line=6400,line2=6500,
