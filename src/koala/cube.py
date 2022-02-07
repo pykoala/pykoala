@@ -3291,18 +3291,14 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def get_offsets_between_cubes(cube_list, compare_cubes = False, add_zero = False,
+def get_offsets_between_cubes(cube_list, compare_cubes = False,
                               plot=True,verbose=True):
     
     n_cubes = len(cube_list)
     
-    if add_zero:
-        xx=[0]      # This will have 0, x12, x23, x34, ... xn1
-        yy=[0]      # This will have 0, y12, y23, y34, ... yn1
-    else:
-        xx=[]
-        yy=[]
-    
+    xx=[0]      # This will have 0, x12, x23, x34, ... xn1
+    yy=[0]      # This will have 0, y12, y23, y34, ... yn1
+
     if compare_cubes:    # New method included 7 Feb 2022
         if verbose and n_cubes > 1: print("\n  Using comparison of cubes to align cubes...")
         for i in range(n_cubes-1):
@@ -3334,16 +3330,11 @@ def get_offsets_between_cubes(cube_list, compare_cubes = False, add_zero = False
             yy.append(cube_list[i+1].offset_from_center_y_arcsec_tracing - cube_list[i].offset_from_center_y_arcsec_tracing)  
         xx.append(cube_list[0].offset_from_center_x_arcsec_tracing - cube_list[-1].offset_from_center_x_arcsec_tracing)
         yy.append(cube_list[0].offset_from_center_y_arcsec_tracing - cube_list[-1].offset_from_center_y_arcsec_tracing)
-
     
     return xx,yy
-
-
-
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-
 def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]], 
                   reference_rss = "",  compare_cubes = False,
                   pixel_size_arcsec=0.7, kernel_size_arcsec=1.1, 
@@ -3452,7 +3443,7 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
                 print("\n\n\n ERROR: number of cubes and number of rss files don't match!")
                 print("\n\n THIS IS GOING TO FAIL ! \n\n\n")
                 
-        xx,yy = get_offsets_between_cubes (cube_list, compare_cubes=compare_cubes, add_zero = True, plot=plot, verbose=verbose)
+        xx,yy = get_offsets_between_cubes (cube_list, compare_cubes=compare_cubes, plot=plot, verbose=verbose)
     
     else:
         if verbose and n_rss > 1: print("\n  Using offsets provided!")   
@@ -3569,11 +3560,11 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
     
     if verbose and n_rss > 1:
         print("\n> Checking offsets of ALIGNED cubes (in arcsec, everything should be close to 0):")
-        print("  Offsets (in arcsec):        x             y                          ( EAST- / WEST+   NORTH- / SOUTH+) ")
+        print("  Offsets (in arcsec):        x             y                          ( EAST+ / WEST-   NORTH- / SOUTH+) ")
 
-        for i in range(1,len(xx)-1):
+        for i in range(1,len(xxx)-1):
             print("         {:2.0f} -> {:2.0f}           {:+5.3f}         {:+5.3f}".format(i,i+1,xxx[i-1],yyy[i-1]))      
-        print("         {:2.0f} ->  1           {:+5.3f}         {:+5.3f}".format(len(xxx),xxx[-1],yyy[-1]))      
+        print("         {:2.0f} ->  1           {:+5.3f}         {:+5.3f}".format(len(xxx)-1,xxx[-1],yyy[-1]))      
         print("           TOTAL:            {:5.3f}          {:5.3f}".format(np.nansum(xxx),np.nansum(yyy))) 
     
         print("\n> Alignment of n = {} cubes COMPLETED !".format(n_rss))
