@@ -2079,4 +2079,4 @@ def fit_clip(x, y, clip=0.4, index_fit = 2, kernel = 19,
         fit  = np.polyfit(x, y, index_fit) 
         pp=np.poly1d(fit)
         y_fit=pp(x)
-        return fit, pp, y_fit, y_fit, x, y             
+        return fit, pp, y_fit, y_fit, x, y
