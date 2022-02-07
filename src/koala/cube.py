@@ -4001,39 +4001,63 @@ def estimate_offsets_comparing_cubes(cube1, cube2, line=None, line2=None,   # BO
         else:
             map2=cube2.integrated_map
     
-    # Get offsets values
-    if delta_RA_values is None:
-        delta_RA_values = np.arange(-delta_RA_max*100,delta_RA_max*100,step*100)/100
-
-    if delta_DEC_values is None:
-        delta_DEC_values = np.arange(-delta_DEC_max*100,delta_DEC_max*100,step*100)/100
     
-    # Iterate    
     
-    scatter_x =[]    
-    for delta_RA in delta_RA_values:
-        scatter_x.append(compare_cubes(cube1, cube2, map1=map1, map2=map2, 
-                                       line=line, delta_RA=delta_RA, 
-                                       plot=False, verbose =False))
+    # Iterate 2 times : one broad step*10, another small around the minimum value
+    for i in range(2):
+        if i == 0:
+            best_delta_RA = 0
+            best_delta_DEC = 0
+            # Get offsets values
+            if delta_RA_values is None:
+                delta_RA_values = np.arange(-delta_RA_max*100,delta_RA_max*100,step*1000)/100
         
-    scatter_x_min = np.nanmin(scatter_x)
-    v = np.abs(scatter_x-scatter_x_min)
-    x_index = v.tolist().index(np.nanmin(v))
-
-    scatter_y =[]    
-    for delta_DEC in delta_DEC_values:
-        scatter_y.append(compare_cubes(cube1, cube2, map1=map1, map2=map2, 
-                                       line=line, delta_DEC=delta_DEC, 
-                                       plot=False, verbose =False))
-
-    scatter_y_min = np.nanmin(scatter_y)
-    v = np.abs(scatter_y-scatter_y_min)
-    y_index = v.tolist().index(np.nanmin(v))
+            if delta_DEC_values is None:
+                delta_DEC_values = np.arange(-delta_DEC_max*100,delta_DEC_max*100,step*1000)/100
+        else:
+            delta_RA_values = np.arange((best_delta_RA -1)*100,(best_delta_RA +1)*100,step*100)/100
+            delta_DEC_values = np.arange((best_delta_DEC -1)*100,(best_delta_DEC +1)*100,step*100)/100
     
-    # Compute
+        # Iterate      
+        scatter_x =[]    
+        for delta_RA in delta_RA_values:
+            scatter_x.append(compare_cubes(cube1, cube2, map1=map1, map2=map2, 
+                                           line=line, delta_RA=delta_RA, delta_DEC=best_delta_DEC ,
+                                           plot=False, verbose =False))
+            
+        scatter_x_min = np.nanmin(scatter_x)
+        v = np.abs(scatter_x-scatter_x_min)
+        x_index = v.tolist().index(np.nanmin(v))
     
-    best_delta_RA  = delta_RA_values[x_index]
-    best_delta_DEC = delta_DEC_values[y_index]
+        scatter_y =[]    
+        for delta_DEC in delta_DEC_values:
+            scatter_y.append(compare_cubes(cube1, cube2, map1=map1, map2=map2, 
+                                           line=line, delta_DEC=delta_DEC, delta_RA=best_delta_RA,
+                                           plot=False, verbose =False))
+    
+        scatter_y_min = np.nanmin(scatter_y)
+        v = np.abs(scatter_y-scatter_y_min)
+        y_index = v.tolist().index(np.nanmin(v))
+        
+        # Compute
+        
+        best_delta_RA  = delta_RA_values[x_index]
+        best_delta_DEC = delta_DEC_values[y_index]
+        
+        if i == 0:
+            delta_RA_values_plot = delta_RA_values
+            delta_DEC_values_plot = delta_DEC_values
+            scatter_x_plot = scatter_x
+            scatter_y_plot = scatter_y
+            ymin_ = np.nanmin([scatter_x_min,scatter_y_min])   
+            ymax_ = np.nanmax([np.nanmax(scatter_x),np.nanmax(scatter_y)])                  
+            rango = ymax_ - ymin_
+            ymin = ymin_ -rango/15.
+            ymax = ymax_ + rango/15. 
+            
+            
+    
+    # BOBA
     
     if index_fit > 0:
         fit_RA = np.polyfit(delta_RA_values,scatter_x, index_fit)
@@ -4045,11 +4069,11 @@ def estimate_offsets_comparing_cubes(cube1, cube2, line=None, line2=None,   # BO
         
     if plot:
         # Determine max and min for plotting
-        ymin_ = np.nanmin([scatter_x_min,scatter_y_min])   
-        ymax_ = np.nanmax([np.nanmax(scatter_x),np.nanmax(scatter_y)])                  
-        rango = ymax_ - ymin_
-        ymin = ymin_ -rango/15.
-        ymax = ymax_ + rango/15.        
+        # ymin_ = np.nanmin([scatter_x_min,scatter_y_min])   
+        # ymax_ = np.nanmax([np.nanmax(scatter_x),np.nanmax(scatter_y)])                  
+        # rango = ymax_ - ymin_
+        # ymin = ymin_ -rango/15.
+        # ymax = ymax_ + rango/15.        
 
         if index_fit > 0:
             x=[delta_RA_values, delta_DEC_values, delta_RA_values, delta_DEC_values]
@@ -4057,8 +4081,8 @@ def estimate_offsets_comparing_cubes(cube1, cube2, line=None, line2=None,   # BO
             label=["RA", "DEC", "RA fit", "DEC fit"]
             psym=[".","+", "-","-"]
         else:
-            x=[delta_RA_values, delta_DEC_values]
-            y=[scatter_x, scatter_y]
+            x=[delta_RA_values_plot, delta_DEC_values_plot]
+            y=[scatter_x_plot, scatter_y_plot]
             label=["RA", "DEC"]
             psym=[".","+"]            
               

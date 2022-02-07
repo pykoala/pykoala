@@ -42,7 +42,8 @@ if __name__ == "__main__":
     # # First, copy the input data to a local folder (not within PyKOALA)
 
     # # Type where your data will be:
-    path = "/DATA/KOALA/Python/GitHub/test_reduce_new/"
+    path = "/DATA/KOALA/Python/GitHub/test_reduce_02_03/"
+    path = "/DATA/KOALA/Python/GitHub/test_reduce_02_04/"
 
     # # If needed, you can copy the example data using this:        
     #os.system("mkdir "+path)
@@ -589,7 +590,10 @@ if __name__ == "__main__":
     #                   plot=True, warnings=False, verbose=True)
 
 
-    # test_new = KOALA_RSS(file_in)
+    # test_new = KOALA_RSS(file_in,
+    #                      correct_ccd_defects = True,
+    #                      remove_5577 = True)
+    #                      #fix_wavelengths = True )
     # x = range(test.n_spectra)    
     # plot_plot(x,test_new.integrated_fibre/1E6, ymin=0., ymax=0.2, 
     #           ptitle="Integrated flux using 2dfdr v8.00b", xlabel="Fibre", 
@@ -722,7 +726,7 @@ if __name__ == "__main__":
                                             delta_DEC_max = 4,
                                             #line=6400,line2=6500,
                                             index_fit =0,
-                                            step=0.1,
+                                            step=0.01,
                                       plot=True, plot_comparison=False,
                                       verbose=True, return_values=True)        
         

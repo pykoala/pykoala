@@ -17,7 +17,7 @@ import warnings
 from koala.constants import red_gratings, fuego_color_map
 from koala.io import read_table, spectrum_to_text_file, full_path, save_nresponse, save_rss_fits
 from koala.onedspec import fluxes, search_peaks, fit_smooth_spectrum, dfluxes, substract_given_gaussian, \
-    rebin_spec_shift, smooth_spectrum, fix_red_edge, fix_blue_edge, find_cosmics_in_cut, fix_these_features
+    rebin_spec_shift, smooth_spectrum, fix_red_edge, fix_blue_edge, find_cosmics_in_cut, fix_these_features, fit_clip
 from koala.plot_plot import plot_plot, basic_statistics
 
 warnings.simplefilter('ignore', np.RankWarning)
@@ -633,21 +633,32 @@ class RSS(object):
         if verbose: print(" ")
 
         if wave_min < 5577 and remove_5577 and fibre_p == "":
+            self.wavelength_offset_per_fibre = offset_5577
             if verbose: print("\n> Checking centroid of skyline 5577.34 obtained during removing sky...")
             fibre_vector = np.array(list(range(len(offset_5577))))
-            offset_5577_m = medfilt(offset_5577, 101)
-            a1x, a0x = np.polyfit(fibre_vector, offset_5577, 1)
-            fx = a0x + a1x * fibre_vector
-            self.wavelength_offset_per_fibre = offset_5577
+            
+            fit, pp, fx, fx_fit, x_clipped, y_clipped = fit_clip (fibre_vector, offset_5577,
+                                                                  index_fit = 1, kernel = 101,
+                                                                  clip=0.5,
+                                                                  ylabel="fit(5577.34) - 5577.34", xlabel="Fibre",
+                                                                  ptitle="Checking wavelength centroid of fitted skyline 5577.34",
+                                                                  label=["data", "data_clip", "Lineal Fit", "median k=101"])
+            
+            a1x= fit[0]
+            a0x= fit[1]
+            #offset_5577_m = medfilt(offset_5577, 101)
+            #a1x, a0x = np.polyfit(fibre_vector, offset_5577, 1)
+            #fx = a0x + a1x * fibre_vector
+            
 
-            if plot: plot_plot(fibre_vector, [offset_5577, fx, offset_5577_m], psym=["+", "-", "-"],
-                               color=["r", "b", "g"], alpha=[1, 0.7, 0.8],
-                               xmin=-20, xmax=fibre_vector[-1] + 20,
-                               percentile_min=0.5, percentile_max=99.5, hlines=[-0.5, -0.25, 0, 0.25, 0.5],
-                               ylabel="fit(5577.34) - 5577.34", xlabel="Fibre",
-                               ptitle="Checking wavelength centroid of fitted skyline 5577.34",
-                               label=["data", "Fit", "median k=101"],
-                               fig_size=fig_size)
+            # if plot: plot_plot(fibre_vector, [offset_5577, fx, offset_5577_m], psym=["+", "-", "-"],
+            #                    color=["r", "b", "g"], alpha=[1, 0.7, 0.8],
+            #                    xmin=-20, xmax=fibre_vector[-1] + 20,
+            #                    percentile_min=0.5, percentile_max=99.5, hlines=[-0.5, -0.25, 0, 0.25, 0.5],
+            #                    ylabel="fit(5577.34) - 5577.34", xlabel="Fibre",
+            #                    ptitle="Checking wavelength centroid of fitted skyline 5577.34",
+            #                    label=["data", "Fit", "median k=101"],
+            #                    fig_size=fig_size)
             if verbose:
                 print("  The median value of the fit(5577.34) - 5577.34 is ", np.nanmedian(offset_5577))
                 print("  A linear fit y = a + b * fibre provides a =", a0x, " and b =", a1x)
