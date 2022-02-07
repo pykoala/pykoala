@@ -334,7 +334,7 @@ class KOALA_RSS(RSS):
 
         # Deep copy of intensity into intensity_corrected
         self.intensity_corrected = copy.deepcopy(self.intensity)
-        self.variance = variance.copy()
+        self.variance_corrected = variance.copy()
         # ---------------------------------------------------
         # ------------- PROCESSING THE RSS FILE -------------
         # ---------------------------------------------------
@@ -837,17 +837,6 @@ class KOALA_RSS(RSS):
                               max_number_of_cosmics_per_fibre=max_number_of_cosmics_per_fibre,
                               fibre_list=fibres_to_fix, plot_cosmic_image=plot, plot_RSS_images=plot, verbose=verbose)
         # ---------------------------------------------------
-        # 8.3 Clean ccd residuals, including extreme negative, if requested    (R)
-        # if clean_ccd_residuals:
-        #     self.intensity_corrected=clean_cosmics_and_extreme_negatives(self, #fibre_list="", 
-        #                                     clean_cosmics = clean_cosmics, only_positive_cosmics= only_positive_cosmics,
-        #                                     disp_scale=disp_scale, disp_to_sqrt_scale = disp_to_sqrt_scale, ps_min = ps_min, width = width,                                            
-        #                                     clean_extreme_negatives = clean_extreme_negatives, percentile_min = percentile_min,
-        #                                     remove_negative_median_values=remove_negative_median_values,
-        #                                     show_correction_map = show_correction_map,
-        #                                     show_fibres=show_fibres, 
-        #                                     show_cosmics_identification = show_cosmics_identification,
-        #                                     plot=plot, verbose=False)
 
         # Finally, apply mask making nans 
         if rss_clean == False: self.apply_mask(make_nans=True, verbose=verbose)
