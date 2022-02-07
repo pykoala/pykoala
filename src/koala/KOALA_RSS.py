@@ -145,7 +145,7 @@ class KOALA_RSS(RSS):
         self.sky_fibres = []
 
         # --------------------------------------------------------------------
-        # ------------------------------------------------ 0. Reading the data
+        # ------------------------------------------------    Reading the data
         # --------------------------------------------------------------------
 
         # Create RSS object
@@ -302,8 +302,16 @@ class KOALA_RSS(RSS):
         self.DEC_segment = (self.DEC_max - self.DEC_min) * 3600.  # +1.25 for converting to total field of view
         self.RA_segment = (self.RA_max - self.RA_min) * 3600.  # +1.25
 
+        # Deep copy of intensity into intensity_corrected
+        self.intensity_corrected = copy.deepcopy(self.intensity)
+        self.variance_corrected = variance.copy()
+        
+        # ---------------------------------------------------
+        # ------------- PROCESSING THE RSS FILE -------------
+        # ---------------------------------------------------
+
         # --------------------------------------------------------------------
-        # ------------------------------------- 1. Reading or getting the mask
+        # ------------------------------------- 0a Reading or getting the mask
         # --------------------------------------------------------------------
 
         # Reading the mask if needed
@@ -332,15 +340,9 @@ class KOALA_RSS(RSS):
         if plot:
             self.RSS_image(image=self.intensity, cmap="binary_r")
 
-        # Deep copy of intensity into intensity_corrected
-        self.intensity_corrected = copy.deepcopy(self.intensity)
-        self.variance_corrected = variance.copy()
-        # ---------------------------------------------------
-        # ------------- PROCESSING THE RSS FILE -------------
-        # ---------------------------------------------------
 
         # ---------------------------------------------------
-        # 0. Divide by flatfield if needed
+        # 0b. Divide by flatfield if needed
         # Object "flat" has to have a normalized flat response in .intensity_corrected
         # Usually this is found .nresponse , see task "nresponse_flappyflat"
         # However, this correction is not needed is LFLATs have been used in 2dFdr

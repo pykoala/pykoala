@@ -454,7 +454,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
     def apply_flux_calibration(self, flux_calibration=None, path="",
-                               flux_calibration_file = None,  verbose=True):
+                               flux_calibration_file = "",  verbose=True):
         """
         Function for applying the flux calibration to a cube.
 
@@ -476,14 +476,15 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         -------
         self.flux_calibration
 
-        """      
-        if flux_calibration_file is not None : 
+        """
+        
+        if flux_calibration_file != "": # is not None : 
             flux_calibration_file = full_path(flux_calibration_file,path) 
             w_star,flux_calibration = read_table(flux_calibration_file, ["f", "f"] ) 
 
         if len(flux_calibration) > 0: 
             if verbose: 
-                if flux_calibration_file is not None:
+                if flux_calibration_file != "": # is not None:
                     print("\n> Applying the absolute flux calibration provided in file:\n ",flux_calibration_file," ...")
                 else:
                     print("\n> Applying the absolute flux calibration...")
@@ -495,7 +496,8 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                     self.data[:,y,x]=self.data[:,y,x] / self.flux_calibration  / 1E16 / self.total_exptime
 
             self.history.append("- Applied flux calibration")
-            if flux_calibration_file  is not None: self.history.append("  Using file "+flux_calibration_file)
+            #if flux_calibration_file  is not None: self.history.append("  Using file "+flux_calibration_file)
+            if flux_calibration_file != "": self.history.append("  Using file "+flux_calibration_file)
             
         else:
             if verbose: print("\n\n> Absolute flux calibration not provided! Nothing done!")                
@@ -3289,9 +3291,62 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
+def get_offsets_between_cubes(cube_list, compare_cubes = False, add_zero = False,
+                              plot=True,verbose=True):
+    
+    n_cubes = len(cube_list)
+    
+    if add_zero:
+        xx=[0]      # This will have 0, x12, x23, x34, ... xn1
+        yy=[0]      # This will have 0, y12, y23, y34, ... yn1
+    else:
+        xx=[]
+        yy=[]
+    
+    if compare_cubes:    # New method included 7 Feb 2022
+        if verbose and n_cubes > 1: print("\n  Using comparison of cubes to align cubes...")
+        for i in range(n_cubes-1):
+            eocc=estimate_offsets_comparing_cubes(cube_list[i],cube_list[i+1], n_ite= 1, 
+                                                  delta_RA_max = 4,
+                                                  delta_DEC_max = 4,
+                                                  #line=6400,line2=6500,
+                                                  index_fit =0,
+                                                  step=0.01,
+                                                  plot=plot, plot_comparison=False,
+                                                  verbose=verbose, return_values=True)      
+            xx.append(-eocc[0])
+            yy.append(-eocc[1])  
+        eocc=estimate_offsets_comparing_cubes(cube_list[-1],cube_list[0], n_ite= 1, 
+                                                  delta_RA_max = 4,
+                                                  delta_DEC_max = 4,
+                                                  #line=6400,line2=6500,
+                                                  index_fit =0,
+                                                  step=0.01,
+                                                  plot=plot, plot_comparison=False,
+                                                  verbose=verbose, return_values=True)      
+        xx.append(-eocc[0])
+        yy.append(-eocc[1])
+    else:
+        if verbose and n_cubes > 1: print("\n  Using peak of the emission tracing all wavelengths to align cubes...")
+            
+        for i in range(n_cubes-1):
+            xx.append(cube_list[i+1].offset_from_center_x_arcsec_tracing - cube_list[i].offset_from_center_x_arcsec_tracing) 
+            yy.append(cube_list[i+1].offset_from_center_y_arcsec_tracing - cube_list[i].offset_from_center_y_arcsec_tracing)  
+        xx.append(cube_list[0].offset_from_center_x_arcsec_tracing - cube_list[-1].offset_from_center_x_arcsec_tracing)
+        yy.append(cube_list[0].offset_from_center_y_arcsec_tracing - cube_list[-1].offset_from_center_y_arcsec_tracing)
+
+    
+    return xx,yy
+
+
+
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]], 
-                  reference_rss = "",
-                  pixel_size_arcsec=0.3, kernel_size_arcsec=1.5, 
+                  reference_rss = "",  compare_cubes = False,
+                  pixel_size_arcsec=0.7, kernel_size_arcsec=1.1, 
                   edgelow=-1, edgehigh=-1, size_arcsec=[], centre_deg=[], 
                   offsets=[], 
                   ADR=False, jump=-1, ADR_x_fit_list=[0], ADR_y_fit_list=[0], force_ADR = False,
@@ -3390,18 +3445,14 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
         for i in range(1,n_rss): flux_calibration_list.append([])
 
     if len(offsets) == 0:  
-        if verbose and n_rss > 1: print("\n  Using peak of the emission tracing all wavelengths to align cubes:") 
+        #if verbose and n_rss > 1: print("\n  Using peak of the emission tracing all wavelengths to align cubes:") 
         n_cubes = len(cube_list)
         if n_cubes != n_rss:
             if verbose:
                 print("\n\n\n ERROR: number of cubes and number of rss files don't match!")
                 print("\n\n THIS IS GOING TO FAIL ! \n\n\n")
-
-        for i in range(n_rss-1):
-            xx.append(cube_list[i+1].offset_from_center_x_arcsec_tracing - cube_list[i].offset_from_center_x_arcsec_tracing) 
-            yy.append(cube_list[i+1].offset_from_center_y_arcsec_tracing - cube_list[i].offset_from_center_y_arcsec_tracing)  
-        xx.append(cube_list[0].offset_from_center_x_arcsec_tracing - cube_list[-1].offset_from_center_x_arcsec_tracing)
-        yy.append(cube_list[0].offset_from_center_y_arcsec_tracing - cube_list[-1].offset_from_center_y_arcsec_tracing)
+                
+        xx,yy = get_offsets_between_cubes (cube_list, compare_cubes=compare_cubes, add_zero = True, plot=plot, verbose=verbose)
     
     else:
         if verbose and n_rss > 1: print("\n  Using offsets provided!")   
@@ -3453,8 +3504,7 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
             print("         {:2.0f} -> {:2.0f}           {:+5.3f}         {:+5.3f}".format(i,i+1,xx[i],yy[i]))      
         print("         {:2.0f} ->  1           {:+5.3f}         {:+5.3f}".format(len(xx)-1,xx[-1],yy[-1]))      
         print("           TOTAL:            {:5.3f}          {:5.3f}".format(np.nansum(xx),np.nansum(yy))) 
-    
-          
+       
         print("\n         New_RA_centre_deg       New_DEC_centre_deg      Diff with respect Cube 1 [arcsec]")  
        
         for i in range (0,n_rss):
@@ -3500,7 +3550,7 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
         if n_rss > 1 or np.nanmedian(ADR_x_fit_list) != 0:
 
             if verbose: print("\n> Creating aligned cube",i+1,"of a total of",n_rss,"...")
-
+            
             cube_aligned_list[i]=Interpolated_cube(rss_list[i], pixel_size_arcsec=pixel_size_arcsec, kernel_size_arcsec=kernel_size_arcsec, 
                                                    centre_deg=[RA_centre_deg, DEC_centre_deg], size_arcsec=size_arcsec, 
                                                    aligned_coor=True, flux_calibration=flux_calibration_list[i],  offsets_files = offsets_files, offsets_files_position =i+1, 
@@ -3515,21 +3565,11 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
             cube_aligned_list[i] = cube_list[i]
             if verbose: print("\n> Only one file provided and no ADR correction given, the aligned cube is the same than the original cube...")
 
-
+    xxx,yyy = get_offsets_between_cubes (cube_aligned_list, compare_cubes=compare_cubes, plot=plot, verbose=verbose)
+    
     if verbose and n_rss > 1:
         print("\n> Checking offsets of ALIGNED cubes (in arcsec, everything should be close to 0):")
         print("  Offsets (in arcsec):        x             y                          ( EAST- / WEST+   NORTH- / SOUTH+) ")
-
-    xxx=[]
-    yyy=[]
-    
-    for i in range(1,n_rss):
-        xxx.append(cube_aligned_list[i-1].offset_from_center_x_arcsec_tracing - cube_aligned_list[i].offset_from_center_x_arcsec_tracing)
-        yyy.append(cube_aligned_list[i-1].offset_from_center_y_arcsec_tracing - cube_aligned_list[i].offset_from_center_y_arcsec_tracing)
-    xxx.append(cube_aligned_list[-1].offset_from_center_x_arcsec_tracing - cube_aligned_list[0].offset_from_center_x_arcsec_tracing)
-    yyy.append(cube_aligned_list[-1].offset_from_center_y_arcsec_tracing - cube_aligned_list[0].offset_from_center_y_arcsec_tracing)
-
-    if verbose and n_rss > 1:
 
         for i in range(1,len(xx)-1):
             print("         {:2.0f} -> {:2.0f}           {:+5.3f}         {:+5.3f}".format(i,i+1,xxx[i-1],yyy[i-1]))      
@@ -3967,12 +4007,10 @@ def estimate_offsets_comparing_cubes(cube1, cube2, line=None, line2=None,   # BO
                                      map1=None, map2=None,
                                      step=0.1, delta_RA_max=2, delta_DEC_max=2,
                                      delta_RA_values=None, 
-                                     delta_DEC_values = None, index_fit = 2, n_ite = 2,
+                                     delta_DEC_values = None, index_fit = 2, n_ite = 1,  # Iterations do not properly work...
                                      plot=True, plot_comparison=True, 
                                      verbose = True, return_values = False): 
-    
-    if verbose: print("\n> Estimating offsets comparing two cubes...")
-    
+        
     # Get maps
     if map1 is None:
         if line is not None:
@@ -3982,15 +4020,15 @@ def estimate_offsets_comparing_cubes(cube1, cube2, line=None, line2=None,   # BO
             map1 = map1_[1]
             
             if line2 is not None:
-                if verbose: print("  - Comparing 2 cubes using the integrated map between {:.2f} and {:.2f} A ...".format(line,line2))
+                if verbose: print("\n> Estimating offsets comparing two cubes using the integrated map between {:.2f} and {:.2f} A ...".format(line,line2))
             else:
-                if verbose: print("  - Comparing 2 cubes using the map closest to {:.2f} A ...".format(line))
+                if verbose: print("\n> Estimating offsets comparing two cubes using the map closest to {:.2f} A ...".format(line))
         else:
-            if verbose: print("  - Comparing 2 cubes using their integrated map... ")
+            if verbose: print("\n> Estimating offsets comparing two cubes using their integrated map...")
             
     else:
         map1=cube1.integrated_map
-        if verbose: print("  - Comparing 2 cubes using the maps provided ...")
+        if verbose: print("\n> Estimating offsets comparing two cubes using the maps provided ...")
         
     if map2 is None:
         if line is not None:
@@ -4001,19 +4039,23 @@ def estimate_offsets_comparing_cubes(cube1, cube2, line=None, line2=None,   # BO
         else:
             map2=cube2.integrated_map
     
-    
-    
-    # Iterate 2 times : one broad step*10, another small around the minimum value
+
+    # Iterate at least 2 times : one broad step*10, another small around the minimum value
+    if n_ite > 1 and verbose: print(" ")
     for i in range(n_ite):
         if i == 0:
             best_delta_RA = 0
             best_delta_DEC = 0
+            if n_ite == 1:
+                step_here = step*100
+            else:
+                step_here = step*1000
             # Get offsets values
             if delta_RA_values is None:
-                delta_RA_values = np.arange(-delta_RA_max*100,delta_RA_max*100,step*1000)/100
+                delta_RA_values = np.arange(-delta_RA_max*100,delta_RA_max*100,step_here)/100
         
             if delta_DEC_values is None:
-                delta_DEC_values = np.arange(-delta_DEC_max*100,delta_DEC_max*100,step*1000)/100
+                delta_DEC_values = np.arange(-delta_DEC_max*100,delta_DEC_max*100,step_here)/100
         else:
             delta_RA_values = np.arange((best_delta_RA -1)*100,(best_delta_RA +1)*100,step*100)/100
             delta_DEC_values = np.arange((best_delta_DEC -1)*100,(best_delta_DEC +1)*100,step*100)/100
@@ -4044,57 +4086,46 @@ def estimate_offsets_comparing_cubes(cube1, cube2, line=None, line2=None,   # BO
         best_delta_RA  = delta_RA_values[x_index]
         best_delta_DEC = delta_DEC_values[y_index]
         
-        print(i, best_delta_RA,best_delta_DEC)
-        
-        if i == 0:
-            delta_RA_values_plot = delta_RA_values
-            delta_DEC_values_plot = delta_DEC_values
-            scatter_x_plot = scatter_x
-            scatter_y_plot = scatter_y
+        if index_fit > 0:
+            fit_RA = np.polyfit(delta_RA_values,scatter_x, index_fit)
+            yfit = np.poly1d(fit_RA)
+            scatter_x_fit = yfit(delta_RA_values)
+            fit_DEC = np.polyfit(delta_DEC_values,scatter_y, index_fit)
+            yfit = np.poly1d(fit_DEC)
+            scatter_y_fit = yfit(delta_DEC_values)
+
+        if plot:
+            #Determine max and min for plotting
             ymin_ = np.nanmin([scatter_x_min,scatter_y_min])   
             ymax_ = np.nanmax([np.nanmax(scatter_x),np.nanmax(scatter_y)])                  
             rango = ymax_ - ymin_
             ymin = ymin_ -rango/15.
-            ymax = ymax_ + rango/15. 
-            
-            
+            ymax = ymax_ + rango/15.        
     
-    # BOBA
-    
-    if index_fit > 0:
-        fit_RA = np.polyfit(delta_RA_values,scatter_x, index_fit)
-        yfit = np.poly1d(fit_RA)
-        scatter_x_fit = yfit(delta_RA_values)
-        fit_DEC = np.polyfit(delta_DEC_values,scatter_y, index_fit)
-        yfit = np.poly1d(fit_DEC)
-        scatter_y_fit = yfit(delta_DEC_values)        
+            if index_fit > 0:
+                x=[delta_RA_values, delta_DEC_values, delta_RA_values, delta_DEC_values]
+                y=[scatter_x, scatter_y, scatter_x_fit, scatter_y_fit]
+                label=["RA", "DEC", "RA fit", "DEC fit"]
+                psym=[".","+", "-","-"]
+            else:
+                x=[delta_RA_values, delta_DEC_values]
+                y=[scatter_x, scatter_y]
+                label=["RA", "DEC"]
+                psym=[".","+"]            
+                  
+            plot_plot(x,y,label=label, psym=psym,
+                      xlabel = "Offset [ arcsec ]", 
+                      ylabel="Scatter [ counts / spaxels ]",
+                      ymax=ymax, ymin = ymin, 
+                      vlines=[0, best_delta_RA, best_delta_DEC],
+                      cvlines=["k", "r", "b"],
+                      ptitle="Estimating offsets comparing cubes")
         
-    if plot:
-        # Determine max and min for plotting
-        # ymin_ = np.nanmin([scatter_x_min,scatter_y_min])   
-        # ymax_ = np.nanmax([np.nanmax(scatter_x),np.nanmax(scatter_y)])                  
-        # rango = ymax_ - ymin_
-        # ymin = ymin_ -rango/15.
-        # ymax = ymax_ + rango/15.        
+        
+        if verbose and n_ite > 1: print('  - Iteration {:}: best_delta_RA = {:6.2f}", best_delta_DEC = {:6.2f}"'.format(i+1, best_delta_RA,best_delta_DEC))
+        
 
-        if index_fit > 0:
-            x=[delta_RA_values, delta_DEC_values, delta_RA_values, delta_DEC_values]
-            y=[scatter_x, scatter_y, scatter_x_fit, scatter_y_fit]
-            label=["RA", "DEC", "RA fit", "DEC fit"]
-            psym=[".","+", "-","-"]
-        else:
-            x=[delta_RA_values_plot, delta_DEC_values_plot]
-            y=[scatter_x_plot, scatter_y_plot]
-            label=["RA", "DEC"]
-            psym=[".","+"]            
-              
-        plot_plot(x,y,label=label, psym=psym,
-                  xlabel = "Offset [ arcsec ]", 
-                  ylabel="Scatter [ counts / spaxels ]",
-                  ymax=ymax, ymin = ymin, 
-                  vlines=[0, best_delta_RA, best_delta_DEC],
-                  cvlines=["k", "r", "b"],
-                  ptitle="Estimating offsets comparing cubes")
+    
         
     if plot_comparison:
         compare_cubes(cube1, cube2, line=line, line2=line2, map1=map1,map2=map2,
@@ -4106,8 +4137,6 @@ def estimate_offsets_comparing_cubes(cube1, cube2, line=None, line2=None,   # BO
 
     if return_values:
         return best_delta_RA, best_delta_DEC
-
-
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def plot_response(calibration_star_cubes, scale=[], use_median=False):
@@ -4614,10 +4643,6 @@ def telluric_correction_using_bright_continuum_source(objeto, save_telluric_file
 
 
     return telluric_correction 
-
-
-
-
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------

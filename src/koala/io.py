@@ -647,7 +647,7 @@ def list_fits_files_in_folder(path, verbose = True, use2=True, use3=False, ignor
         try:
             date_ = hdulist[0].header['UTDATE']
         except Exception:
-            check_file = False          
+            check_file = False 
         hdulist.close()
         
         if check_file:

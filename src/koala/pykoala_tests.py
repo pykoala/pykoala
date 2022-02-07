@@ -724,16 +724,27 @@ if __name__ == "__main__":
 
     
         
-    eocc12=estimate_offsets_comparing_cubes(cubestar2,cubestar3, n_ite= 5, 
-                                            delta_RA_max = 4,
-                                            delta_DEC_max = 4,
-                                            #line=6400,line2=6500,
-                                            index_fit =0,
-                                            step=0.01,
-                                      plot=True, plot_comparison=False,
-                                      verbose=True, return_values=True)        
+    # eocc12=estimate_offsets_comparing_cubes(cubestar,cubestar2, n_ite= 1, 
+    #                                         delta_RA_max = 4,
+    #                                         delta_DEC_max = 4,
+    #                                         #line=6400,line2=6500,
+    #                                         index_fit =0,
+    #                                         step=0.01,
+    #                                   plot=True, plot_comparison=False,
+    #                                   verbose=True, return_values=True)        
         
-        
+    #star_rss = KOALA_RSS(file_star, path = path_red_old)
+    # star2_rss = KOALA_RSS(file_star2, path = path_red_old)
+    # star3_rss = KOALA_RSS(file_star3, path = path_red_old)
+    
+    rss_star_list=[star_rss,star2_rss,star3_rss]
+    cube_star_list=[cubestar,cubestar2,cubestar3]
+    
+    
+    #w_star,flux_calibration = read_table(flux_calibration_file, ["f", "f"] )
+    align_test = align_n_cubes(rss_star_list,cube_list=cube_star_list, 
+                               ADR=True, plot=True, plot_spectra=False, compare_cubes = False,
+                               flux_calibration_list=[flux_calibration,flux_calibration,flux_calibration])
   
  
     # # -----------------------------------------------------------------------
