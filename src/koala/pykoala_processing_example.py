@@ -29,7 +29,6 @@ pykoala_path = os.getcwd()
 
 exec(compile(open(os.path.join(pykoala_path, "load_PyKOALA.py"), "rb").read(),
              os.path.join(pykoala_path, "load_PyKOALA.py"), 'exec'))   # This just reads the file.
-
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 
@@ -40,7 +39,10 @@ if __name__ == "__main__":
     # # First, copy the input data to a local folder (not within PyKOALA)
 
     # # Type where your data will be:
-    path = "/DATA/KOALA/Python/GitHub/test_reduce/"
+    #path = "/DATA/KOALA/Python/GitHub/test_reduce/"
+    path = os.path.join('..', '..', 'tests', 'reduced_data')
+    if not os.path.isdir(path):
+        os.mkdir('../../tests/reduced_data')
 
     # # If needed, you can copy the example data using this:        
     #os.system("mkdir "+path)
