@@ -5,6 +5,7 @@ from synphot import observation   ########from pysynphot import observation
 #from synphot import spectrum      ########from pysynphot import spectrum
 from synphot import SourceSpectrum, SpectralElement
 from synphot.models import Empirical1D
+from scipy.signal import medfilt
 
 
 
@@ -135,7 +136,7 @@ def apply_z(lambdas, z=0, v_rad=0, ref_line="Ha", l_ref=6562.82, l_obs = 6562.82
 # -----------------------------------------------------------------------------
 def substract_given_gaussian(wavelength, spectrum, centre, peak=0, sigma=0,  flux=0, search_peak=False, allow_absorptions = False,
                              lowlow= 20, lowhigh=10, highlow=10, highhigh = 20, 
-                             lmin=0, lmax=0, fmin=0, fmax=0, plot=True, fcal=False, verbose = True):
+                             lmin=0, lmax=0, fmin=0, fmax=0, plot=True, fcal=False, verbose = True, warnings=True):
     """
     Substract a give Gaussian to a spectrum after fitting the continuum.
     """    
@@ -193,9 +194,9 @@ def substract_given_gaussian(wavelength, spectrum, centre, peak=0, sigma=0,  flu
         except Exception:
             bb = np.nanmedian(spectrum)
             mm = 0.
-            if verbose: 
-                print("      Impossible to get the continuum!")
-                print("      Scaling the continuum to the median value") 
+            if verbose or warnings: 
+                print("      WARNING! Impossible to get the continuum!")
+                print("               Scaling the continuum to the median value") 
         continuum =   mm*np.array(w_spec)+bb  
         # c_cont = mm*np.array(w_cont)+bb  
         # rms continuum
@@ -210,14 +211,15 @@ def substract_given_gaussian(wavelength, spectrum, centre, peak=0, sigma=0,  flu
                 flux = peak * sigma * np.sqrt(2*np.pi)   
                 if verbose: print("    Using peak as f[",np.round(centre,2),"] = ",np.round(peak,2)," and sigma = ", np.round(sigma,2), "    flux = ",np.round(flux,2))
             except Exception:
-                if verbose: print("    Error trying to get the peak as requested wavelength is ",np.round(centre,2),"! Ignoring this fit!")
+                if verbose or warnings: print("    Error trying to get the peak as requested wavelength is ",np.round(centre,2),"! Ignoring this fit!")
                 peak = 0.
                 flux = -0.0001
     
         no_substract = False
         if flux < 0:
             if allow_absorptions == False:
-                if verbose and np.isnan(centre) == False : print("    WARNING! This is an ABSORPTION Gaussian! As requested, this Gaussian is NOT substracted!")
+                if np.isnan(centre) == False:
+                    if verbose or warnings : print("    WARNING! This is an ABSORPTION Gaussian! As requested, this Gaussian is NOT substracted!")
                 no_substract = True
         if no_substract == False:     
             if verbose: print("    Substracting Gaussian at {:7.1f}  with peak ={:10.4f}   sigma ={:6.2f}  and flux ={:9.4f}".format(centre, peak,sigma,flux))
@@ -360,7 +362,7 @@ def fluxes(wavelength, s, line, lowlow= 14, lowhigh=6, highlow=6, highhigh = 14,
  
     if np.isnan(np.nanmedian(f_spec)): 
         # The data are NAN!! Nothing to do
-        if verbose: print("    There is no valid data in the wavelength range [{},{}] !!".format(lmin,lmax))
+        if verbose or warnings: print("    There is no valid data in the wavelength range [{},{}] !!".format(lmin,lmax))
         
         resultado = [0, line, 0, 0, 0, 0, 0, 0, 0, 0, 0, s  ]  
 
@@ -410,8 +412,8 @@ def fluxes(wavelength, s, line, lowlow= 14, lowhigh=6, highlow=6, highhigh = 14,
                 bb = np.nanmedian(f_cont_filtered)
                 mm = 0.
                 if warnings: 
-                    print("    Impossible to get the continuum!")
-                    print("    Scaling the continuum to the median value b = ",bb,":  cont =  0 * w_spec  + ", bb)
+                    print("    WARNING: Impossible to get the continuum!")
+                    print("             Scaling the continuum to the median value b = ",bb,":  cont =  0 * w_spec  + ", bb)
             continuum =   mm*np.array(w_spec)+bb  
             c_cont = mm*np.array(w_cont)+bb  
     
@@ -804,8 +806,8 @@ def dfluxes(wavelength, s, line1, line2, lowlow= 25, lowhigh=15, highlow=15, hig
             bb = np.nanmedian(f_cont_filtered)
             mm = 0.
             if warnings: 
-                print("  Impossible to get the continuum!")
-                print("  Scaling the continuum to the median value")          
+                print("  WARNING: Impossible to get the continuum!")
+                print("           Scaling the continuum to the median value")          
         continuum =   mm*np.array(w_spec)+bb  
         c_cont = mm*np.array(w_cont)+bb  
 
@@ -1367,7 +1369,7 @@ def fit_smooth_spectrum(wl,x, edgelow=20,edgehigh=20, order= 9, kernel=11, verbo
     wlm = signal.medfilt(valid_wl, kernel)
     wx = signal.medfilt(valid_x, kernel) 
     
-    #iteratively clip and refit
+    #iteratively clip and refit   # BOBA quitar nans
     maxit=10
     niter=0
     stop=0
@@ -2004,8 +2006,10 @@ def find_cosmics_in_cut(x, cut_wave, cut_brightest_line, line_wavelength = 0.,
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def fit_clip(x, y, clip=0.4, index_fit = 2, kernel = 19,
-              ptitle=None, xlabel=None, ylabel = None, label=None,
-              plot=True, verbose=True):
+             xmin="",xmax="",ymin="",ymax="",percentile_min=2, percentile_max=98,
+             ptitle=None, xlabel=None, ylabel = None, label="", 
+             hlines=[], vlines=[],chlines=[], cvlines=[], axvspan=[[0,0]], hwidth =1, vwidth =1,
+             plot=True, verbose=True):
     """
     
 
@@ -2072,7 +2076,10 @@ def fit_clip(x, y, clip=0.4, index_fit = 2, kernel = 19,
                 ptitle = "Polyfit of degree "+np.str(index_fit)+" using clip = "+np.str(clip)+" * std"
             plot_plot(x, [y,y_smooth, y_clipped, y_fit], psym=["+","-", "+","-"],
                       alpha=[0.5,0.5,0.8,1], color=["r","b","g","k"], label=label,
-                      xlabel=xlabel, ylabel=ylabel, ptitle=ptitle)
+                      xlabel=xlabel, ylabel=ylabel, ptitle=ptitle, 
+                      xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax,percentile_min=percentile_min, percentile_max=percentile_max,
+                      hlines=hlines, vlines=vlines,chlines=chlines, cvlines=cvlines, 
+                      axvspan=axvspan, hwidth =hwidth, vwidth =vwidth)
 
         return fit, pp, y_fit, y_fit_clipped, x[idx], y_clipped[idx]   
     else:
@@ -2080,3 +2087,28 @@ def fit_clip(x, y, clip=0.4, index_fit = 2, kernel = 19,
         pp=np.poly1d(fit)
         y_fit=pp(x)
         return fit, pp, y_fit, y_fit, x, y
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+def correct_defects(spectrum, w=[], only_nans = True, 
+                    kernel_correct_defects = 51,
+                    plot=False, verbose=False):
+    
+    s = copy.deepcopy(spectrum)
+    if only_nans:
+        s = [0 if np.isnan(x) or np.isinf(x) else x for x in s]  # Fix nans & inf
+    else:
+        s = [0 if np.isnan(x) or x < 0. or np.isinf(x) else x for x in
+             s]  # Fix nans, inf & negative values = 0
+    s_m = medfilt(s, kernel_correct_defects)
+
+    fit_median = medfilt(s, kernel_correct_defects)
+    bad_indices = [i for i, x in enumerate(s) if x == 0]
+    for index in bad_indices:
+        s[index] = s_m[index]  # Replace 0s for median value
+    
+    if plot and len(w) > 0:
+        plot_plot(w, [spectrum,fit_median,s], ptitle="Comparison between old (red) and corrected (green) spectrum.\n Smoothed spectrum in blue.")
+    return s
+    
+    

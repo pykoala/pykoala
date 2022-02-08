@@ -160,7 +160,15 @@ def plot_plot(x, y,  xmin="",xmax="",ymin="",ymax="",percentile_min=2, percentil
            if psym[i] == "":
                plt.plot(xx[i],y[i], color=color[i], alpha=alpha[i], label=label[i], linewidth=linewidth[i], linestyle=linestyle[i])
            else:
-               #print(len(xx),len(y), len(psym), len(color), len(alpha), len(label), len(linewidth), len(markersize))
+               #print(xx)
+               #print(y)
+               # print(psym)
+               # print(color) 
+               # print(alpha)
+               # print(label)
+               # print(linewidth)
+               # print(markersize)
+               # print(len(xx),len(y), len(psym), len(color), len(alpha), len(label), len(linewidth), len(markersize))
                plt.plot(xx[i],y[i], psym[i], color=color[i], alpha=alpha[i], label=label[i], mew=linewidth[i], markersize=markersize[i])
            if ymax == "":
                     y_max_ = []                

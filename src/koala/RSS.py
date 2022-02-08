@@ -15,9 +15,9 @@ import copy
 import warnings
 
 from koala.constants import red_gratings, fuego_color_map
-from koala.io import read_table, spectrum_to_text_file, full_path, save_nresponse, save_rss_fits
+from koala.io import read_table, spectrum_to_text_file, full_path, save_nresponse, save_rss_fits, name_keys
 from koala.onedspec import fluxes, search_peaks, fit_smooth_spectrum, dfluxes, substract_given_gaussian, \
-    rebin_spec_shift, smooth_spectrum, fix_red_edge, fix_blue_edge, find_cosmics_in_cut, fix_these_features, fit_clip
+    rebin_spec, rebin_spec_shift, smooth_spectrum, fix_red_edge, fix_blue_edge, find_cosmics_in_cut, fix_these_features, fit_clip, correct_defects
 from koala.plot_plot import plot_plot, basic_statistics
 
 warnings.simplefilter('ignore', np.RankWarning)
@@ -65,7 +65,9 @@ class RSS(object):
         self.intensity_corrected = self.intensity
         self.variance = np.zeros_like(self.intensity)
         self.variance_corrected = np.zeros_like(self.intensity)
-        self.corrections = []
+        self.history = []
+        self.history_RSS =[]
+        self.mask =[]
         self.RA_centre_deg = 0.
         self.DEC_centre_deg = 0.
         self.offset_RA_arcsec = np.zeros(0)
@@ -73,9 +75,6 @@ class RSS(object):
         self.ALIGNED_RA_centre_deg = 0.
         self.ALIGNED_DEC_centre_deg = 0.
         self.integrated_fibre = 0
-        # self.throughput = np.ones((0))
-
-
 
 
 
@@ -84,48 +83,562 @@ class RSS(object):
     # =============================================================================
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
-
-    # def process_rss():
+    def process_rss(self, save_rss_to_fits_file="", rss_clean=False,
+                 path ="", flat=None,  
+                 no_nans=False, mask="", mask_file="", plot_mask=False,  # Mask if given
+                 valid_wave_min=0, valid_wave_max=0,  # These two are not needed if Mask is given
+                 apply_throughput=False,
+                 throughput_2D=[], throughput_2D_file="", throughput_2D_wavecor=False,
+                 correct_ccd_defects=False, remove_5577=False, kernel_correct_ccd_defects=51, fibre_p=-1,
+                 plot_suspicious_fibres=False,
+                 fix_wavelengths=False, sol=[0, 0, 0],
+                 do_extinction=False,
+                 telluric_correction=[0], telluric_correction_file="",
+                 sky_method="none", n_sky=50, sky_fibres=[],  # do_sky=True
+                 sky_spectrum=[], sky_rss=[0], scale_sky_rss=0, scale_sky_1D=0.,
+                 maxima_sigma=3.,
+                 sky_spectrum_file="",
+                 brightest_line="Ha", brightest_line_wavelength=0, 
+                 sky_lines_file="", exclude_wlm=[[0, 0]], emission_line_file = "",
+                 is_sky=False, win_sky=0, auto_scale_sky=False, ranges_with_emission_lines=[0], cut_red_end=0,
+                 correct_negative_sky=False,
+                 order_fit_negative_sky=3, kernel_negative_sky=51, individual_check=True,
+                 use_fit_for_negative_sky=False,
+                 force_sky_fibres_to_zero=True,
+                 high_fibres=20, low_fibres=10,
+                 sky_wave_min=0, sky_wave_max=0, cut_sky=5., fmin=1, fmax=10,
+                 individual_sky_substraction=False,  # fibre_list=[100,200,300,400,500,600,700,800,900],
+                 id_el=False, cut=1.5, broad=1.0, plot_id_el=False, id_list=[0],
+                 fibres_to_fix=[],
+                 clean_sky_residuals=False, features_to_fix=[], sky_fibres_for_residuals=[],
+                 remove_negative_median_values=False,
+                 fix_edges=False,
+                 clean_extreme_negatives=False, percentile_min=0.5,
+                 clean_cosmics=False,
+                 width_bl=20., kernel_median_cosmics=5, cosmic_higher_than=100., extra_factor=1.,
+                 max_number_of_cosmics_per_fibre=12,
+                 warnings=True, verbose=True, print_summary=False,
+                 plot=True, plot_final_rss=True,
+                 log= True, gamma = 0.,fig_size=12):
         
-    #     if rss_clean:  # Just read file if rss_clean = True
-    #         apply_throughput = False
-    #         correct_ccd_defects = False
-    #         fix_wavelengths = False
-    #         sol = [0, 0, 0]
-    #         sky_method = "none"
-    #         do_extinction = False
-    #         telluric_correction = [0]
-    #         telluric_correction_file = ""
-    #         id_el = False
-    #         clean_sky_residuals = False
-    #         fix_edges = False
-    #         # plot_final_rss = plot
-    #         plot = False
-    #         correct_negative_sky = False
-    #         clean_cosmics = False
-    #         clean_extreme_negatives = False
-    #         remove_negative_median_values = False
-    #         verbose = False
+        if rss_clean:  # Just read file if rss_clean = True
+            apply_throughput = False
+            correct_ccd_defects = False
+            fix_wavelengths = False
+            sol = [0, 0, 0]
+            sky_method = "none"
+            do_extinction = False
+            telluric_correction = [0]
+            telluric_correction_file = ""
+            id_el = False
+            clean_sky_residuals = False
+            fix_edges = False
+            # plot_final_rss = plot
+            plot = False
+            correct_negative_sky = False
+            clean_cosmics = False
+            clean_extreme_negatives = False
+            remove_negative_median_values = False
+            verbose = False
+        else:
+            if verbose: print("\n> Processing file {} as requested... ".format(self.filename)) 
 
-    #     if len(telluric_correction_file) > 0 or telluric_correction[0] != 0:
-    #         do_telluric_correction = True
-    #     else:
-    #         do_telluric_correction = False
+        if len(telluric_correction_file) > 0 or telluric_correction[0] != 0:
+            do_telluric_correction = True
+        else:
+            do_telluric_correction = False
 
-    #     if (apply_throughput == False and correct_ccd_defects == False and fix_wavelengths == False
-    #             and sky_method == "none" and do_extinction == False and telluric_correction == [0]
-    #             and clean_sky_residuals == False and correct_negative_sky == False and clean_cosmics == False
-    #             and fix_edges == False and clean_extreme_negatives == False and remove_negative_median_values == False
-    #             and do_telluric_correction == False and is_sky == False):
-    #         # If nothing is selected to do, we assume that the RSS file is CLEAN
-    #         rss_clean = True
-    #         # plot_final_rss = plot
-    #         plot = False
-    #         verbose = False
+        if (apply_throughput == False and correct_ccd_defects == False and fix_wavelengths == False
+                and sky_method == "none" and do_extinction == False and telluric_correction == [0]
+                and clean_sky_residuals == False and correct_negative_sky == False and clean_cosmics == False
+                and fix_edges == False and clean_extreme_negatives == False and remove_negative_median_values == False
+                and do_telluric_correction == False and is_sky == False):
+            # If nothing is selected to do, we assume that the RSS file is CLEAN
+            rss_clean = True
+            # plot_final_rss = plot
+            plot = False
+            verbose = False
 
-    #     if sky_method not in ["self", "selffit"]:
-    #         force_sky_fibres_to_zero = False  # We don't have sky fibres, sky spectrum is given        
+        if sky_method not in ["self", "selffit"]:
+            force_sky_fibres_to_zero = False  # We don't have sky fibres, sky spectrum is given        
         
+        if sol[0] in [0, -1]:
+            self.sol = [0, 0, 0]
+        else:
+            self.sol = sol
+        
+        # --------------------------------------------------------------------
+        # ------------------------------------- 0a Reading or getting the mask
+        # --------------------------------------------------------------------
+
+        
+
+        #TODO: Check if mask is already defined in RSS    
+
+
+        # Reading the mask if needed
+        if valid_wave_min == 0 and valid_wave_max == 0:        
+            if mask == "" and mask_file == "":
+                # print "\n> No mask is given, obtaining it from the RSS file ..." #
+                # Only write it on history the first time, when apply_throughput = True
+                if len(self.mask) == 0 :    
+                    self.get_mask(include_history=True, plot=plot_mask, verbose=verbose)
+            else:
+                # Include it in the history ONLY if it is the first time (i.e. applying throughput)
+                self.read_mask_from_fits_file(mask=mask, mask_file=mask_file, no_nans=no_nans, plot=plot_mask,
+                                              verbose=verbose, include_history=True)
+
+            
+            self.valid_wave_min = self.mask_good_wavelength_range[0]
+            self.valid_wave_max = self.mask_good_wavelength_range[1]
+            if verbose:
+                print(
+                    "\n> Using the values provided by the mask for establishing the good wavelenth range:  [ {:.2f} , {:.2f} ]".format(
+                        self.valid_wave_min, self.valid_wave_max))
+        else:
+            self.valid_wave_min = valid_wave_min
+            self.valid_wave_max = valid_wave_max
+            if verbose:
+                print("  As specified, we use the [", self.valid_wave_min, " , ", self.valid_wave_max, "] range as that having the good values in all fibres.")
+
+        # Plot RSS_image
+        if plot:
+            self.RSS_image(image=self.intensity, cmap="binary_r")
+
+
+        # ---------------------------------------------------
+        # 0b. Divide by flatfield if needed
+        # Object "flat" has to have a normalized flat response in .intensity_corrected
+        # Usually this is found .nresponse , see task "nresponse_flappyflat"
+        # However, this correction is not needed is LFLATs have been used in 2dFdr
+        # and using a skyflat to get .nresponse (small wavelength variations to throughput)
+        if flat is not None:  self.apply_flat(flat, path=path, plot=plot, verbose=verbose)
+        # ---------------------------------------------------
+        # 1. Check if apply throughput & apply it if requested    (T)
+        text_for_integrated_fibre = "..."
+        title_for_integrated_fibre = ""
+        plot_this = False
+        if apply_throughput:
+            # Check if throughput_2D[0][0] = 1., that means the throughput has been computed AFTER  fixing small wavelength variations            
+            if len(throughput_2D) > 0:
+                if throughput_2D[0][0] == 1.:
+                    throughput_2D_wavecor = True
+                else:
+                    throughput_2D_wavecor = False
+            else:
+                ftf = fits.open(throughput_2D_file)
+                self.throughput_2D = ftf[0].data
+                if self.throughput_2D[0][0] == 1.:
+                    throughput_2D_wavecor = True
+                    # throughput_2D_file has in the header the values for sol
+                    sol = [0, 0, 0]
+                    sol[0] = ftf[0].header["SOL0"]
+                    sol[1] = ftf[0].header["SOL1"]
+                    sol[2] = ftf[0].header["SOL2"]
+                else:
+                    throughput_2D_wavecor = False
+                ftf.close()
+
+            if throughput_2D_wavecor:
+                if verbose:
+                    print(
+                        "\n> The provided throughput 2D information has been computed AFTER fixing small wavelength variations.")
+                    print(
+                        "  Therefore, the throughput 2D will be applied AFTER correcting for ccd defects and small wavelength variations")
+                    if len(throughput_2D) == 0:
+                        print(
+                            "  The fits file with the throughput 2D has the solution for fixing small wavelength shifts.")
+                if self.grating == "580V": remove_5577 = True
+            else:
+                self.apply_throughput_2D(throughput_2D=throughput_2D, throughput_2D_file=throughput_2D_file, plot=plot)
+                text_for_integrated_fibre = "after throughput correction..."
+                title_for_integrated_fibre = " - Throughput corrected"
+        else:
+            if rss_clean == False and verbose: print("\n> Intensities NOT corrected for 2D throughput")
+
+        plot_integrated_fibre_again = 0  # Check if we need to plot it again
+
+        # ---------------------------------------------------
+        # 2. Correcting for CCD defects                          (C)    
+        if correct_ccd_defects:
+            if plot: plot_integrated_fibre_again = 1
+
+            remove_5577_here = remove_5577
+            if sky_method == "1D" and scale_sky_1D == 0: remove_5577_here = False
+
+            self.correct_ccd_defects(kernel_correct_ccd_defects=kernel_correct_ccd_defects,
+                                     remove_5577=remove_5577_here,
+                                     fibre_p=fibre_p, apply_throughput=apply_throughput, verbose=verbose, plot=plot)
+            # TODO: THIS FUNCTION SHOULD ALSO BE APPLIED TO THE VARIANCE
+            # Compare corrected vs uncorrected spectrum
+            if plot:
+                self.plot_corrected_vs_uncorrected_spectrum(high_fibres=high_fibres, fig_size=fig_size)
+
+            # If removing_5577_here, use the linear fit to the 5577 Gaussian fits in "fix_wavelengths"
+            if fix_wavelengths and sol[0] == 0: sol = self.sol
+
+        # --------------------------------------------------- 
+        # 3. Fixing small wavelength shifts                  (W)        
+        if fix_wavelengths:
+            if sol[0] == -1.0:
+                self.fix_wavelengths_edges(verbose=verbose, plot=plot)
+            else:
+                self.fix_wavelengths(verbose=verbose, plot=plot, sol=sol)
+
+        # Apply throughput 2D corrected for small wavelength shifts if needed
+        if apply_throughput and throughput_2D_wavecor:
+            self.apply_throughput_2D(throughput_2D=throughput_2D, throughput_2D_file=throughput_2D_file, plot=plot)
+            text_for_integrated_fibre = "after throughput correction..."
+            title_for_integrated_fibre = " - Throughput corrected"
+
+        # Compute integrated map after throughput correction & plot if requested/needed
+        if rss_clean == False:
+            if plot == True and plot_integrated_fibre_again != 1:  # correct_ccd_defects == False:
+                plot_this = True
+
+            self.compute_integrated_fibre(plot=plot_this, title=title_for_integrated_fibre,
+                                          text=text_for_integrated_fibre, warnings=warnings, verbose=verbose,
+                                          correct_negative_sky=False)
+
+        # ---------------------------------------------------
+        # 4. Get airmass and correct for extinction         (X)
+        # DO THIS BEFORE TELLURIC CORRECTION (that is extinction-corrected) OR SKY SUBTRACTION
+        if do_extinction: self.do_extinction_curve(plot=plot, verbose=verbose, fig_size=fig_size)
+        # ---------------------------------------------------                            
+        # 5. Check if telluric correction is needed & apply    (U)   
+        telluric_correction_applied = False
+        if do_telluric_correction:
+            plot_integrated_fibre_again = plot_integrated_fibre_again + 1
+            self.apply_telluric_correction(telluric_correction=telluric_correction,
+                                           telluric_correction_file=telluric_correction_file, verbose=verbose)
+            if np.nanmax(self.telluric_correction) != 1: telluric_correction_applied = True
+        elif self.grating in red_gratings and rss_clean == False and verbose:
+            print("\n> Telluric correction will NOT be applied in this RED rss file...")
+
+        # 6. ---------------------------------------------------            
+        # SKY SUBSTRACTION      sky_method                      (S)
+        #          
+        # Several options here: (1) "1D"      : Consider a single sky spectrum, scale it and substract it
+        #                       (2) "2D"      : Consider a 2D sky. i.e., a sky image, scale it and substract it fibre by fibre
+        #                       (3) "self"    : Obtain the sky spectrum using the n_sky lowest fibres in the RSS file (DEFAULT)
+        #                       (4) "none"    : No sky substraction is performed (DEFAULT)
+        #                       (5) "1Dfit"   : Using an external 1D sky spectrum, fits sky lines in both sky spectrum AND all the fibres 
+        #                       (6) "selffit" : Using the n_sky lowest fibres, obtain an sky spectrum, then fits sky lines in both sky spectrum AND all the fibres.
+
+        if sky_spectrum_file != "":            
+            sky_spectrum = self.read_sky_spectrum(sky_spectrum_file, path=path, verbose = verbose)
+
+        if sky_method != "none" and is_sky == False:
+            plot_integrated_fibre_again = plot_integrated_fibre_again + 1
+
+            if sky_method in ["1Dfit", "selffit"]: self.apply_mask(verbose=verbose)
+
+            # (5) 1Dfit
+            if sky_method == "1Dfit":
+                self.apply_1Dfit_sky(sky_spectrum=sky_spectrum, n_sky=n_sky, sky_fibres=sky_fibres,
+                                     sky_spectrum_file=sky_spectrum_file,
+                                     sky_wave_min=sky_wave_min, sky_wave_max=sky_wave_max, win_sky=win_sky,
+                                     scale_sky_1D=scale_sky_1D,
+                                     sky_lines_file=sky_lines_file, brightest_line_wavelength=brightest_line_wavelength,
+                                     brightest_line=brightest_line, maxima_sigma=maxima_sigma,
+                                     auto_scale_sky=auto_scale_sky,
+                                     plot=plot, verbose=verbose, fig_size=fig_size, fibre_p=fibre_p,
+                                     kernel_correct_ccd_defects=kernel_correct_ccd_defects)
+
+            # (1) If a single sky_spectrum is provided:
+            if sky_method == "1D":
+                if len(sky_spectrum) > 0:
+                    self.apply_1D_sky(sky_fibres=sky_fibres, sky_wave_min=sky_wave_min, sky_wave_max=sky_wave_max,
+                                      win_sky=win_sky, include_history=True, sky_spectrum=sky_spectrum,
+                                      scale_sky_1D=scale_sky_1D, remove_5577=remove_5577,
+                                      # sky_spectrum_file = sky_spectrum_file,
+                                      plot=plot, verbose=verbose)
+
+                else:
+                    if verbose or warnings: print(
+                        "\n\n WARNING > Sustracting the sky using a sky spectrum requested but any sky spectrum provided !\n\n")
+                    sky_method = "self"
+                    n_sky = 50
+
+            # (2) If a 2D sky, sky_rss, is provided
+            if sky_method == "2D": 
+                #TODO: this method needs to be checked
+                self.apply_2D_sky(sky_rss, scale_sky_rss=scale_sky_rss, 
+                                  plot=plot, verbose=verbose, fig_size=fig_size)
+ 
+            # (6) "selffit"            
+            if sky_method == "selffit":
+                self.apply_selffit_sky(self, sky_spectrum=sky_spectrum, n_sky=n_sky,  sky_fibres=sky_fibres, 
+                                       sky_spectrum_file=sky_spectrum_file,
+                                       sky_wave_min=sky_wave_min, sky_wave_max=sky_wave_max, win_sky=win_sky, scale_sky_1D=scale_sky_1D,
+                                       sky_lines_file=sky_lines_file, brightest_line_wavelength=brightest_line_wavelength,
+                                       ranges_with_emission_lines = ranges_with_emission_lines,
+                                       cut_red_end = cut_red_end,
+                                       brightest_line=brightest_line, maxima_sigma=maxima_sigma, auto_scale_sky=auto_scale_sky,
+                                       fibre_p=fibre_p, kernel_correct_ccd_defects=kernel_correct_ccd_defects,
+                                       plot=plot, verbose=verbose, fig_size=fig_size)
+
+            # (3) "self": Obtain the sky using the n_sky lowest fibres
+            #             If a 1D spectrum is provided, use it for replacing regions with bright emission lines   #DIANA
+            if sky_method == "self":
+                self.sky_fibres = sky_fibres
+                if n_sky == 0: n_sky = len(sky_fibres)
+                self.apply_self_sky(sky_fibres=self.sky_fibres, sky_spectrum=sky_spectrum, n_sky=n_sky,
+                                    sky_wave_min=sky_wave_min, sky_wave_max=sky_wave_max, win_sky=win_sky,
+                                    scale_sky_1D=scale_sky_1D,
+                                    brightest_line=brightest_line, brightest_line_wavelength=brightest_line_wavelength,
+                                    ranges_with_emission_lines=[0],
+                                    cut_red_end=cut_red_end, low_fibres=low_fibres,
+                                    use_fit_for_negative_sky=use_fit_for_negative_sky,
+                                    kernel_negative_sky=kernel_negative_sky,
+                                    order_fit_negative_sky=order_fit_negative_sky,
+                                    plot=plot, verbose=verbose)
+
+        # Correct negative sky if requested 
+        if is_sky == False and correct_negative_sky == True:
+            text_for_integrated_fibre = "after correcting negative sky"
+            self.correcting_negative_sky(plot=plot, low_fibres=low_fibres, kernel_negative_sky=kernel_negative_sky,
+                                         order_fit_negative_sky=order_fit_negative_sky,
+                                         individual_check=individual_check,
+                                         use_fit_for_negative_sky=use_fit_for_negative_sky,
+                                         force_sky_fibres_to_zero=force_sky_fibres_to_zero)  # exclude_wlm=exclude_wlm
+
+        # Check Median spectrum of the sky fibres AFTER subtracting the sky emission
+        if plot == True and len(self.sky_fibres) > 0:
+            sky_emission = sky_spectrum_from_fibres(self, self.sky_fibres, win_sky=0, plot=False, include_history=False,
+                                                    verbose=False)
+            plot_plot(self.wavelength, sky_emission, hlines=[0],
+                      ptitle="Median spectrum of the sky fibres AFTER subtracting the sky emission")
+            # plot_plot(self.wavelength,self.sky_emission,hlines=[0],ptitle = "Median spectrum using self.sky_emission")
+
+        # If this RSS is an offset sky, perform a median filter to increase S/N
+        if is_sky:
+            self.is_sky(n_sky=n_sky, win_sky=win_sky, sky_fibres=sky_fibres, sky_wave_min=sky_wave_min,
+                        sky_wave_max=sky_wave_max, plot=plot, verbose=verbose)
+            if win_sky == 0: win_sky = 151  # Default value in is_sky, it changes it running is_sky
+
+        # ---------------------------------------------------
+        # 7. Check if identify emission lines is requested & do      (E)
+        # TODO: NEEDS TO BE CHECKED  !!!!
+        if id_el:
+            if brightest_line_wavelength == 0:
+                self.el = self.identify_el(high_fibres=high_fibres, brightest_line=brightest_line,
+                                           cut=cut, verbose=True, plot=plot_id_el, fibre=0, broad=broad)
+                if verbose: print("\n  Emission lines identified saved in self.el !!")
+            else:
+                brightest_line_rest_wave = 6562.82
+                if verbose: print("\n  As given, line ", brightest_line, " at rest wavelength = ",
+                                  brightest_line_rest_wave, " is at ", brightest_line_wavelength)
+                self.el = [[brightest_line], [brightest_line_rest_wave], [brightest_line_wavelength], [7.2]]
+                #  sel.el=[peaks_name,peaks_rest, p_peaks_l, p_peaks_fwhm]      
+        else:
+            self.el = [[0], [0], [0], [0]]
+
+        # Check if emission lines in id_list derived or provided are found
+        if id_list[0] != 0:
+            if id_el:
+                self.check_el_identification(emission_line_file = emission_line_file, id_list=id_list, 
+                                brightest_line = brightest_line, broad = broad, verbose = verbose)
+            else:
+                if rss_clean == False and verbose: print(
+                    "\n> List of emission lines provided but no identification was requested")
+        # ---------------------------------------------------
+        # 8.1. Clean sky residuals if requested           (R)      
+        if clean_sky_residuals:
+            # plot_integrated_fibre_again = plot_integrated_fibre_again + 1
+            # self.clean_sky_residuals(extra_w=extra_w, step=step_csr, dclip=dclip, verbose=verbose, fibre=fibre, wave_min=valid_wave_min,  wave_max=valid_wave_max)
+
+            if len(features_to_fix) == 0:  # Add features that are known to be problematic
+
+                if self.wavelength[0] < 6250 and self.wavelength[-1] > 6350:
+                    features_to_fix.append(["r", 6250, 6292, 6308, 6350, 2, 98, 2, False, False])  # 6301
+                if self.wavelength[0] < 7550 and self.wavelength[-1] > 7660:
+                    features_to_fix.append(
+                        ["r", 7558, 7595, 7615, 7652, 2, 98, 2, False, False])  # Big telluric absorption
+                # if self.wavelength[0] < 8550 and  self.wavelength[-1] >  8770:
+                #    features_to_fix.append(["s", 8560, 8610, 8685, 8767, 2, 98, 2, False,False])
+
+            elif features_to_fix == "big_telluric" or features_to_fix == "big_telluric_absorption":
+                features_to_fix = [["r", 7558, 7595, 7615, 7652, 2, 98, 2, False, False]]
+
+            if len(features_to_fix) > 0:
+
+                if verbose:
+                    print("\n> Features to fix: ")
+                    for feature in features_to_fix:
+                        print("  -", feature)
+
+                if len(sky_fibres_for_residuals) == 0:
+                    self.find_sky_fibres(sky_wave_min=sky_wave_min, sky_wave_max=sky_wave_max, n_sky=np.int(n_sky / 2),
+                                         plot=plot, warnings=False)
+                    sky_fibres_for_residuals = self.sky_fibres
+                fix_these_features_in_all_spectra(self, features=features_to_fix,
+                                                  fibre_list=fibres_to_fix,  # range(83,test.n_spectra),
+                                                  sky_fibres=sky_fibres_for_residuals,
+                                                  replace=True, plot=plot)
+                # check functions for documentation
+        # ---------------------------------------------------
+        # 8.2. Clean edges if requested           (R)  
+        if fix_edges: self.fix_edges(verbose=verbose)
+        # ---------------------------------------------------
+        # 8.3. Remove negative median values      (R)
+        if remove_negative_median_values:  # it was remove_negative_pixels_in_sky:
+            self.intensity_corrected = remove_negative_pixels(self.intensity_corrected, verbose=verbose)
+            self.history.append("- Spectra with negative median values corrected to median = 0")
+        # ---------------------------------------------------
+        # 8.4. Clean extreme negatives      (R)        
+        if clean_extreme_negatives:
+            self.clean_extreme_negatives(fibre_list=fibres_to_fix, 
+                                         percentile_min=percentile_min, 
+                                         plot=plot, verbose=verbose)
+        # ---------------------------------------------------
+        # 8.5. Clean cosmics    (R)
+        if clean_cosmics:
+            self.kill_cosmics(brightest_line_wavelength, width_bl=width_bl, kernel_median_cosmics=kernel_median_cosmics,
+                              cosmic_higher_than=cosmic_higher_than, extra_factor=extra_factor,
+                              max_number_of_cosmics_per_fibre=max_number_of_cosmics_per_fibre,
+                              fibre_list=fibres_to_fix, plot_cosmic_image=plot, plot_RSS_images=plot, verbose=verbose)
+        # ---------------------------------------------------
+
+        # Finally, apply mask making nans 
+        if rss_clean == False: self.apply_mask(make_nans=True, verbose=verbose)
+
+        # ---------------------------------------------------
+        # LAST CHECKS and PLOTS
+
+        # if fibre_p != 0: plot_integrated_fibre_again = 0
+
+        if plot_integrated_fibre_again > 0:
+            # Plot corrected values
+            if rss_clean:
+                text = "..."
+            else:
+                text = "after all corrections have been applied..."
+            self.compute_integrated_fibre(plot=plot, title=" - Intensities Corrected", warnings=warnings, text=text,
+                                          verbose=verbose,
+                                          valid_wave_min=valid_wave_min, valid_wave_max=valid_wave_max, last_check=True,
+                                          low_fibres=low_fibres, correct_negative_sky=False,
+                                          individual_check=False, order_fit_negative_sky=order_fit_negative_sky,
+                                          kernel_negative_sky=kernel_negative_sky,
+                                          use_fit_for_negative_sky=use_fit_for_negative_sky)
+
+        # Plot correct vs uncorrected spectra
+        if plot == True:
+            self.plot_corrected_vs_uncorrected_spectrum(high_fibres=high_fibres, fig_size=fig_size)
+            self.plot_corrected_vs_uncorrected_spectrum(low_fibres=low_fibres, fig_size=fig_size)
+
+        # Plot RSS_image
+        if plot or plot_final_rss: self.RSS_image()
+
+        # If this is a CLEAN RSS, be sure self.integrated_fibre is obtained
+        if rss_clean: self.compute_integrated_fibre(plot=False, warnings=False, verbose=False)
+
+        # Print summary and information from header
+        if verbose or print_summary:
+            print("\n> Summary of reading rss file", '"' + self.filename + '"', ":\n")
+            print("  This is a {} {} file,".format(self.instrument[0], self.instrument[1]), \
+                  "using the {} grating in AAOmega, ".format(self.grating), \
+                  "exposition time = {} s.".format(self.exptime))
+            print("  Object:", self.object)
+            print("  Field of view:", self.instrument[2], \
+                  "(spaxel size =", self.spaxel_size, "arcsec)")
+            print("  Center position: (RA, DEC) = ({:.3f}, {:.3f}) degrees" \
+                  .format(self.RA_centre_deg, self.DEC_centre_deg))
+            print("  Field covered [arcsec] = {:.1f} x {:.1f}".format(self.RA_segment + self.spaxel_size,
+                                                                      self.DEC_segment + self.spaxel_size))
+            print("  Position angle (PA) = {:.1f} degrees".format(self.PA))
+            print(" ")
+
+            if rss_clean == True and is_sky == False:
+                print("  This was considered a CLEAN RSS file, no correction was applied!")
+                print("  Values stored in self.intensity_corrected are the same that those in self.intensity")
+            else:
+                if flat is not None:
+                    print("  Intensities divided by the given flatfield")
+                if apply_throughput:
+                    if len(throughput_2D) > 0:
+                        print("  Intensities corrected for throughput 2D using provided variable !")
+                    else:
+                        print("  Intensities corrected for throughput 2D using provided file !")
+                        # print " ",throughput_2D_file
+                else:
+                    print("  Intensities NOT corrected for throughput 2D")
+                if correct_ccd_defects:
+                    print("  Intensities corrected for CCD defects !")
+                else:
+                    print("  Intensities NOT corrected for CCD defects")
+
+                if sol[0] != 0 and fix_wavelengths:
+                    print("  All fibres corrected for small wavelength shifts using wavelength solution provided!")
+                else:
+                    if fix_wavelengths:
+                        print(
+                            "  Wavelengths corrected for small shifts using Gaussian fit to selected bright skylines in all fibres!")
+                    else:
+                        print("  Wavelengths NOT corrected for small shifts")
+
+                if do_extinction:
+                    print("  Intensities corrected for extinction !")
+                else:
+                    print("  Intensities NOT corrected for extinction")
+
+                if telluric_correction_applied:
+                    print("  Intensities corrected for telluric absorptions !")
+                else:
+                    if self.grating in red_gratings: print("  Intensities NOT corrected for telluric absorptions")
+
+                if is_sky:
+                    print("  This is a SKY IMAGE, median filter with window", win_sky, "applied !")
+                    print("  The median 1D sky spectrum combining", n_sky,
+                          "lowest fibres is stored in self.sky_emission")
+                else:
+                    if sky_method == "none": print("  Intensities NOT corrected for sky emission")
+                    if sky_method == "self": print("  Intensities corrected for sky emission using", n_sky,
+                                                   "spaxels with lowest values !")
+                    if sky_method == "selffit": print("  Intensities corrected for sky emission using", n_sky,
+                                                      "spaxels with lowest values !")
+                    if sky_method == "1D": print(
+                        "  Intensities corrected for sky emission using (scaled) spectrum provided ! ")
+                    if sky_method == "1Dfit": print(
+                        "  Intensities corrected for sky emission fitting Gaussians to both 1D sky spectrum and each fibre ! ")
+                    if sky_method == "2D": print(
+                        "  Intensities corrected for sky emission using sky image provided scaled by", scale_sky_rss,
+                        "!")
+
+                if correct_negative_sky: print(
+                    "  Intensities corrected to make the integrated value of the lowest fibres = 0 !")
+
+                if id_el:
+                    print(" ", len(self.el[0]), "emission lines identified and stored in self.el !")
+                    print(" ", self.el[0])
+
+                if clean_sky_residuals:
+                    print("  Sky residuals CLEANED !")
+                else:
+                    print("  Sky residuals have NOT been cleaned")
+
+                if fix_edges: print("  The edges of the RSS have been fixed")
+                if remove_negative_median_values: print("  Negative median values have been corrected")
+                if clean_extreme_negatives: print("  Extreme negative values have been removed!")
+                if clean_cosmics: print("  Cosmics have been removed!")
+
+                print("\n  All applied corrections are stored in self.intensity_corrected !")
+
+                if save_rss_to_fits_file != "":
+                    if save_rss_to_fits_file == "auto":
+                        clean_residuals = False
+                        if clean_cosmics == True or clean_extreme_negatives == True or remove_negative_median_values == True or fix_edges == True or clean_sky_residuals == True: clean_residuals = True
+                        save_rss_to_fits_file = name_keys(self.filename, apply_throughput=apply_throughput,
+                                                          correct_ccd_defects=correct_ccd_defects,
+                                                          fix_wavelengths=fix_wavelengths, do_extinction=do_extinction,
+                                                          sky_method=sky_method,
+                                                          do_telluric_correction=telluric_correction_applied,
+                                                          id_el=id_el,
+                                                          correct_negative_sky=correct_negative_sky,
+                                                          clean_residuals=clean_residuals)
+
+                    save_rss_fits(self, fits_file=save_rss_to_fits_file)
+
         
 
     # %% =============================================================================
@@ -623,7 +1136,7 @@ class RSS(object):
 
         wave_min = self.valid_wave_min
         wave_max = self.valid_wave_max
-        wlm = self.wavelength
+        w = self.wavelength
         if wave_min < 5577 and remove_5577:
             flux_5577 = []  # For correcting sky line 5577 if requested
             offset_5577 = []
@@ -649,29 +1162,37 @@ class RSS(object):
                 sys.stdout.flush()
                 next_output = fibre + output_every_few
 
-            s = self.intensity_corrected[fibre]
-            if only_nans:
-                s = [0 if np.isnan(x) or np.isinf(x) else x for x in s]  # Fix nans & inf
-            else:
-                s = [0 if np.isnan(x) or x < 0. or np.isinf(x) else x for x in
-                     s]  # Fix nans, inf & negative values = 0
-            s_m = medfilt(s, kernel_correct_ccd_defects)
+            if fibre == fibre_p: espectro_old = copy.copy(self.intensity_corrected[fibre, :])
 
-            fit_median = medfilt(s, kernel_correct_ccd_defects)
-            bad_indices = [i for i, x in enumerate(s) if x == 0]
-            for index in bad_indices:
-                s[index] = s_m[index]  # Replace 0s for median value
+            self.intensity_corrected[fibre]=correct_defects(self.intensity_corrected[fibre], 
+                                                            only_nans = only_nans,  
+                                                            kernel_correct_defects = kernel_correct_ccd_defects)
+
+
+            # s = self.intensity_corrected[fibre]
+            # if only_nans:
+            #     s = [0 if np.isnan(x) or np.isinf(x) else x for x in s]  # Fix nans & inf
+            # else:
+            #     s = [0 if np.isnan(x) or x < 0. or np.isinf(x) else x for x in
+            #          s]  # Fix nans, inf & negative values = 0
+            # s_m = medfilt(s, kernel_correct_ccd_defects)
+
+            # fit_median = medfilt(s, kernel_correct_ccd_defects)
+            # bad_indices = [i for i, x in enumerate(s) if x == 0]
+            # for index in bad_indices:
+            #     s[index] = s_m[index]  # Replace 0s for median value
+            # self.intensity_corrected[fibre, :] = s
 
             if fibre == fibre_p:
-                espectro_old = copy.copy(self.intensity_corrected[fibre, :])
-                espectro_fit_median = fit_median
-                espectro_new = copy.copy(s)
+                #espectro_old = copy.copy(self.intensity_corrected[fibre, :])
+                espectro_new = self.intensity_corrected[fibre]
+                espectro_fit_median = medfilt(self.intensity_corrected[fibre], kernel_correct_ccd_defects)
 
-            self.intensity_corrected[fibre, :] = s
 
             # Removing Skyline 5577 using Gaussian fit if requested
             if wave_min < 5577 and remove_5577:
-                resultado = fluxes(wlm, s, 5577.34, lowlow=30, lowhigh=10, highlow=10, highhigh=30,
+                resultado = fluxes(w, self.intensity_corrected[fibre], 5577.34, 
+                                   lowlow=40, lowhigh=15, highlow=15, highhigh=40,
                                    plot=False, verbose=False, fcal=False,
                                    plot_sus=False)  # fmin=-5.0E-17, fmax=2.0E-16,
                 # resultado = [rms_cont, fit[0], fit_error[0], gaussian_flux, gaussian_flux_error, fwhm, fwhm_error, flux, flux_error, ew, ew_error, spectrum  ]
@@ -752,7 +1273,7 @@ class RSS(object):
             yy = [espectro_old / espectro_fit_median, espectro_new / espectro_fit_median,
                   (const + espectro_new - espectro_old) / espectro_fit_median]
             ptitle = "Checking correction in fibre " + str(fibre_p)
-            plot_plot(wlm, yy,
+            plot_plot(w, yy,
                       color=["r", "b", "k"], alpha=[0.5, 0.5, 0.5],
                       percentile_min=0.5, percentile_max=98,
                       ylabel="Flux / Continuum",
@@ -2615,7 +3136,6 @@ class RSS(object):
 
         self.intensity_corrected *= extinction_correction[np.newaxis, :]
         self.variance_corrected *= extinction_correction[np.newaxis, :]**2
-        # self.corrections.append('Extinction correction')
         self.history.append("- Data corrected for extinction using file :")
         self.history.append("  " + observatory_extinction_file)
         self.history.append("  Average airmass = " + np.str(self.airmass))
@@ -3334,21 +3854,6 @@ class RSS(object):
         if plot:
             print("  Plotting map AFTER correcting throughput:")
             self.RSS_image()
-        # %% =============================================================================
-
-    # Flatfield
-    # =============================================================================
-    # -----------------------------------------------------------------------------
-    def apply_flatfield(self, flatfield):  # TODO: New function
-        # TODO: Add description
-        if flatfield.shape != self.intensity_corrected.shape:
-            raise NameError('ERROR: Flatfield dim: {}, RSS dim: {}' \
-                            .format(flatfield.shape,
-                                    self.intensity_corrected.shape))
-        else:
-            self.intensity_corrected /= flatfield
-            self.variance_corrected /= flatfield
-        self.corrections.append('Flatfield correction')
 
     # %% =============================================================================
     # Cleaning residuals
@@ -3620,8 +4125,9 @@ class RSS(object):
 
         self.intensity_corrected = g
     # -----------------------------------------------------------------------------
-    # -----------------------------------------------------------------------------
-    # -----------------------------------------------------------------------------
+    # %% =============================================================================
+    # Flatfield
+    # =============================================================================
     def apply_flat(self, flat, path="", plot=False, verbose=True):
         """
         Apply a normalized flatfield to all spectra in RSS.        
@@ -3635,8 +4141,7 @@ class RSS(object):
         plot : Boolean, optional
             Plot
         verbose : Boolean, optional
-            DESCRIPTION. The default is True.
-
+            Print. The default is True.
         """
         flat_filename=None
         if type(flat) == "str":
@@ -3652,21 +4157,575 @@ class RSS(object):
             if verbose: print("  Plotting the RSS BEFORE correcting...")
             self.RSS_image()
 
-        self.intensity_corrected = self.intensity_corrected / flat.intensity_corrected
-        self.variance_corrected = self.variance_corrected / (flat.intensity_corrected)**2
+        if flat.intensity_corrected.shape != self.intensity_corrected.shape:
+            raise NameError('ERROR: Flatfield dim: {}, RSS dim: {}' \
+                            .format(flat.intensity_corrected.shape,
+                                    self.intensity_corrected.shape))
+        else:
+            self.intensity_corrected = self.intensity_corrected / flat.intensity_corrected
+            self.variance_corrected = self.variance_corrected / (flat.intensity_corrected)**2
         
+            if plot:
+                if verbose: print("  Plotting the RSS AFTER flatfield correction...")
+                self.RSS_image()      
+            
+            self.history.append("- Data divided by flatfield:")
+            self.history.append("  "+flat.filename)
+            if flat_filename is not None: self.history.append("   Using file "+flat_filename)
+# %% ==========================================================================
+    def fix_wavelengths_edges(self,  # sky_lines =[6300.309, 7316.290, 8430.147, 8465.374],
+                                    sky_lines=[6300.309, 8430.147, 8465.374],
+                                    # valid_ranges=[[-0.25,0.25],[-0.5,0.5],[-0.5,0.5]],
+                                    # valid_ranges=[[-0.4,0.3],[-0.4,0.45],[-0.5,0.5],[-0.5,0.5]], # ORIGINAL
+                                    valid_ranges=[[-1.2, 0.6], [-1.2, 0.6], [-1.2, 0.6]],
+                                    fit_order=2, apply_median_filter=True, kernel_median=51,
+                                    fibres_to_plot=[0, 100, 300, 500, 700, 850, 985],
+                                    show_fibres=[0, 500, 985],
+                                    plot_fits=False,
+                                    xmin=8450, xmax=8475, ymin=-10, ymax=250,
+                                    check_throughput=False,
+                                    plot=True, verbose=True, warnings=True, fig_size=12):
+        """
+        Using bright skylines, performs small wavelength corrections to each fibre
+        
+        Parameters:
+        ----------
+        sky_lines : list of floats (default = [6300.309, 8430.147, 8465.374])
+            Chooses the sky lines to run calibration for
+        valid_ranges : list of lists of floats (default = [[-1.2,0.6],[-1.2,0.6],[-1.2,0.6]])
+            Ranges of flux offsets for each sky line
+        fit_order : integer (default = 2)
+            Order of polynomial for fitting
+        apply_median_filter : boolean (default = True)
+            Choose if we want to apply median filter to the image
+        kernel_median : odd integer (default = 51)
+            Length of the median filter interval
+        fibres_to_plot : list of integers (default = [0,100,300,500,700,850,985])
+            Choose specific fibres to visualise fitted offsets per wavelength using plots
+        show_fibres : list of integers (default = [0,500,985])
+            Plot the comparission between uncorrected and corrected flux per wavelength for specific fibres
+        plot_fits : boolean (default = False)
+            Plot the Gaussian fits for each iteration of fitting
+        xmin, xmax, ymin, ymax : integers (default = 8450, 8475, -10, 250)
+            Plot ranges for Gaussian fit plots, x = wavelength in Angstroms, y is flux in counts
+        plot : boolean (default = True)
+            Plot the resulting KOALA RSS image
+        verbose : boolean (default = True)
+            Print detailed description of steps being done on the image in the console as code runs
+        warnings : boolean (default = True)
+            Print the warnings in the console if something works incorrectly or might require attention 
+        fig_size : integer (default = 12)
+            Size of the image plotted          
+        """
+
+        print("\n> Fixing wavelengths using skylines in edges")
+        print("\n  Using skylines: ", sky_lines, "\n")
+
+        # Find offsets using 6300.309 in the blue end and average of 8430.147, 8465.374 in red end
+        w = self.wavelength
+        nspec = self.n_spectra
+
+        # fibres_to_plot = [544,545,546,547,555]
+        # plot_fits = True
+
+        self.sol_edges = []
+
+        offset_sky_lines = []
+        fitted_offset_sky_lines = []
+        gauss_fluxes_sky_lines = []
+        for sky_line in sky_lines:
+            gauss_fluxes = []
+            x = []
+            offset_ = []
+            for i in range(nspec):
+                x.append(i * 1.)
+                f = self.intensity_corrected[i]
+                if i in fibres_to_plot and plot_fits:
+                    plot_fit = True
+                else:
+                    plot_fit = False
+                if i == 0: plot_fit = True
+                if plot_fit: print(" - Plotting Gaussian fitting for skyline", sky_line, "in fibre", i, ":")
+                resultado = fluxes(w, f, sky_line, lowlow=80, lowhigh=20, highlow=20, highhigh=80, broad=2.0,
+                                   fcal=False, plot=plot_fit, verbose=False)
+                offset_.append(resultado[1])
+                gauss_fluxes.append(resultado[3])
+            offset = np.array(offset_) - sky_line  # offset_[500]
+            offset_sky_lines.append(offset)
+
+            offset_in_range = []
+            x_in_range = []
+            valid_range = valid_ranges[sky_lines.index(sky_line)]
+            offset_m = medfilt(offset, kernel_median)
+            text = ""
+            if apply_median_filter:
+                # xm = medfilt(x, odd_number)
+                text = " applying a " + np.str(kernel_median) + " median filter"
+                for i in range(len(offset_m)):
+                    if offset_m[i] > valid_range[0] and offset_m[i] < valid_range[1]:
+                        offset_in_range.append(offset_m[i])
+                        x_in_range.append(x[i])
+            else:
+                for i in range(len(offset)):
+                    if offset[i] > valid_range[0] and offset[i] < valid_range[1]:
+                        offset_in_range.append(offset[i])
+                        x_in_range.append(i)
+
+            fit = np.polyfit(x_in_range, offset_in_range, fit_order)
+            if fit_order == 2:
+                ptitle = "Fitting to skyline " + np.str(sky_line) + " : {:.3e} x$^2$  +  {:.3e} x  +  {:.3e} ".format(
+                    fit[0], fit[1], fit[2]) + text
+            if fit_order == 1:
+                ptitle = "Fitting to skyline " + np.str(sky_line) + " : {:.3e} x  +  {:.3e} ".format(fit[0],
+                                                                                                     fit[1]) + text
+            if fit_order > 2:
+                ptitle = "Fitting an order " + np.str(fit_order) + " polinomium to skyline " + np.str(sky_line) + text
+
+            y = np.poly1d(fit)
+            fity = y(list(range(nspec)))
+            fitted_offset_sky_lines.append(fity)
+            self.sol_edges.append(fit)  # GAFAS
+
+            if plot:
+                plot_plot(x, [offset, offset_m, fity], ymin=valid_range[0], ymax=valid_range[1],
+                          xlabel="Fibre", ylabel="$\Delta$ Offset", ptitle=ptitle)
+
+            gauss_fluxes_sky_lines.append(gauss_fluxes)
+        sky_lines_edges = [sky_lines[0], (sky_lines[-1] + sky_lines[-2]) / 2]
+
+        nspec_vector = list(range(nspec))
+        fitted_offset_sl_median = np.nanmedian(fitted_offset_sky_lines, axis=0)
+
+        fitted_solutions = np.nanmedian(self.sol_edges, axis=0)
+        y = np.poly1d(fitted_solutions)
+        fitsol = y(list(range(nspec)))
+        self.sol = [fitted_solutions[2], fitted_solutions[1], fitted_solutions[0]]
+        print("\n> sol = [" + np.str(fitted_solutions[2]) + "," + np.str(fitted_solutions[1]) + "," + np.str(
+            fitted_solutions[0]) + "]")
+
+        plot_plot(nspec_vector, [fitted_offset_sky_lines[0], fitted_offset_sky_lines[1], fitted_offset_sky_lines[2],
+                                 fitted_offset_sl_median, fitsol], color=["r", "orange", "b", "k", "g"],
+                  alpha=[0.3, 0.3, 0.3, 0.5, 0.8],
+                  hlines=[-0.75, -0.5, -0.25, 0, 0.25, 0.5],
+                  label=[np.str(sky_lines[0]), np.str(sky_lines[1]), np.str(sky_lines[2]), "median", "median sol"],
+                  ptitle="Checking fitting solutions",
+                  ymin=-1, ymax=0.6, xlabel="Fibre", ylabel="Fitted offset")
+
+        # Plot corrections
         if plot:
-            if verbose: print("  Plotting the RSS AFTER flatfield correction...")
-            self.RSS_image()      
-        
-        self.history.append("- Data divided by flatfield:")
-        self.history.append("  "+flat.filename)
-        if flat_filename is not None: self.history.append("   Using file "+flat_filename)
-        
+            plt.figure(figsize=(fig_size, fig_size / 2.5))
+            for show_fibre in fibres_to_plot:
+                offsets_fibre = [fitted_offset_sky_lines[0][show_fibre],
+                                 (fitted_offset_sky_lines[1][show_fibre] + fitted_offset_sky_lines[2][show_fibre]) / 2]
+                plt.plot(sky_lines_edges, offsets_fibre, "+")
+                plt.plot(sky_lines_edges, offsets_fibre, "--", label=np.str(show_fibre))
+            plt.minorticks_on()
+            plt.legend(frameon=False, ncol=9)
+            plt.title("Small wavelength offsets per fibre")
+            plt.xlabel("Wavelength [$\mathrm{\AA}$]")
+            plt.ylabel("Fitted offset")
+            plt.show()
+            plt.close()
 
-    # %% =============================================================================
+        # Apply corrections to all fibres
+        # show_fibres=[0,500,985]  # plot only the spectrum of these fibres
+        intensity = copy.deepcopy(self.intensity_corrected)
+        # intensity_wave_fixed = np.zeros_like(intensity)
 
+        for fibre in range(nspec):  # show_fibres:
+            offsets_fibre = [fitted_offset_sky_lines[0][fibre],
+                             (fitted_offset_sky_lines[-1][fibre] + fitted_offset_sky_lines[-2][fibre]) / 2]
+            fit_edges_offset = np.polyfit(sky_lines_edges, offsets_fibre, 1)
+            y = np.poly1d(fit_edges_offset)
+            w_offset = y(w)
+            w_fixed = w - w_offset
 
+            # Apply correction to fibre
+            # intensity_wave_fixed[fibre] =rebin_spec(w_fixed, intensity[fibre], w)
+            self.intensity_corrected[fibre] = rebin_spec(w_fixed, intensity[fibre],
+                                                         w)  # =copy.deepcopy(intensity_wave_fixed)
+
+            if fibre in show_fibres:
+                plt.figure(figsize=(fig_size, fig_size / 4.5))
+                plt.plot(w, intensity[fibre], "r-", alpha=0.2, label="No corrected")
+                plt.plot(w_fixed, intensity[fibre], "b-", alpha=0.2, label="No corrected - Shifted")
+                plt.plot(w, self.intensity_corrected[fibre], "g-", label="Corrected after rebinning", alpha=0.6,
+                         linewidth=2.)
+                for line in sky_lines:
+                    plt.axvline(x=line, color="k", linestyle="--", alpha=0.3)
+                # plt.xlim(6280,6320)
+                plt.xlim(xmin, xmax)
+                plt.ylim(ymin, ymax)
+                plt.minorticks_on()
+                ptitle = "Fibre " + np.str(fibre)
+                plt.title(ptitle)
+                plt.legend(frameon=False, ncol=3)
+                plt.xlabel("Wavelength [$\mathrm{\AA}$]")
+                plt.ylabel("Flux")
+                plt.show()
+                plt.close()
+
+        print("\n> Small fixing of the wavelengths considering only the edges done!")
+        self.history.append("- Fixing wavelengths using skylines in the edges")
+        self.history.append("  sol (found) = " + np.str(self.sol))
+
+        if check_throughput:
+            print("\n> As an extra, checking the Gaussian flux of the fitted skylines in all fibres:")
+
+            vector_x = np.arange(nspec)
+            vector_y = []
+            label_skylines = []
+            alpha = []
+            for i in range(len(sky_lines)):
+                med_gaussian_flux = np.nanmedian(gauss_fluxes_sky_lines[i])
+                vector_y.append(gauss_fluxes_sky_lines[i] / med_gaussian_flux)
+                label_skylines.append(np.str(sky_lines[i]))
+                alpha.append(0.3)
+                # print "  - For line ",sky_lines[i],"the median flux is",med_gaussian_flux
+
+            vector_y.append(np.nanmedian(vector_y, axis=0))
+            label_skylines.append("Median")
+            alpha.append(0.5)
+
+            for i in range(len(sky_lines)):
+                ptitle = "Checking Gaussian flux of skyline " + label_skylines[i]
+                plot_plot(vector_x, vector_y[i],
+                          label=label_skylines[i],
+                          hlines=[0.8, 0.9, 1.0, 1.1, 1.2], ylabel="Flux / Median flux", xlabel="Fibre",
+                          ymin=0.7, ymax=1.3, ptitle=ptitle)
+
+            ptitle = "Checking Gaussian flux of the fitted skylines (this should be all 1.0 in skies)"
+            #        plot_plot(vector_x,vector_y,label=label_skylines,hlines=[0.9,1.0,1.1],ylabel="Flux / Median flux", xlabel="Fibre",
+            #                  ymin=0.7,ymax=1.3, alpha=alpha,ptitle=ptitle)
+            plot_plot(vector_x, vector_y[:-1], label=label_skylines[:-1], alpha=alpha[:-1],
+                      hlines=[0.8, 0.9, 1.0, 1.1, 1.2], ylabel="Flux / Median flux", xlabel="Fibre",
+                      ymin=0.7, ymax=1.3, ptitle=ptitle)
+
+            vlines = []
+            for j in vector_x:
+                if vector_y[-1][j] > 1.1 or vector_y[-1][j] < 0.9:
+                    # print "  Fibre ",j,"  ratio value = ", vector_y[-1][j]
+                    vlines.append(j)
+            print("\n  TOTAL = ", len(vlines), " fibres with flux differences > 10 % !!")
+
+            plot_plot(vector_x, vector_y[-1], label=label_skylines[-1], alpha=1, vlines=vlines,
+                      hlines=[0.8, 0.9, 1.0, 1.1, 1.2], ylabel="Flux / Median flux", xlabel="Fibre",
+                      ymin=0.7, ymax=1.3, ptitle=ptitle)
+
+            # CHECKING SOMETHING...
+            self.throughput_extra_checking_skylines = vector_y[-1]
+
+    #        for i in range(self.n_spectra):
+    #            if i != 546 or i != 547:
+    #                self.intensity_corrected[i] = self.intensity_corrected[i] / vector_y[-1][i]
+
+    # -----------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # Idea: take a RSS dominated by skylines. Read it (only throughput correction). For each fibre, fit Gaussians to ~10 skylines. 
+    # Compare with REST wavelengths. Get a median value per fibre. Perform a second-order fit to all median values.
+    # Correct for that using a reference fibre (1). Save results to be applied to the rest of files of the night (assuming same configuration).
+
+    def fix_wavelengths(self, sol=[0, 0, 0], fibre=-1, edges=False,
+                              maxima_sigma=2.5, maxima_offset=1.5,
+                              sky_lines_file="", index_fit = 2, kernel_fit= 19, clip_fit =0.4,
+                              # xmin=7740,xmax=7770, ymin="", ymax="",
+                              xmin=[6270, 8315], xmax=[6330, 8375], ymax="",
+                              fibres_to_plot=[0, 100, 400, 600, 950],
+                              plot=True, plot_all=False, verbose=True, warnings=True):
+        """
+        Using bright skylines, performs small wavelength corrections to each fibre
+                
+        Parameters:
+        ----------
+        sol : list of floats (default = [0,0,0])
+            Specify the parameters of the second degree polynomial fit
+        fibre : integer (default = -1)
+            Choose a specific fibre to run correction for. If not specified, all fibres will be corrected
+        maxima_sigma : float (default = 2.5)
+            Maximum allowed standard deviation for Gaussian fit
+        maxima_offset : float (default 1.5)
+            Maximum allowed wavelength offset in Angstroms      
+        xmin : list of integer (default = [6270, 8315])
+            Minimum wavelength values in Angstrom for plots before and after correction
+        xmax : list of integer (default = [6330, 8375])
+            Maximum wavelength values in Angstrom for plots before and after correction                
+        ymax : float (default = none)
+            Maximum y value to be plot, if not given, will estimate it automatically
+        fibres_to_plot : list of integers (default = [0,100,400,600,950])
+            Plot the comparission between uncorrected and corrected flux per wavelength for specific 
+        plot : boolean (default = True)
+            Plot the plots
+        plot_all : boolean (default = False)
+            Plot the Gaussian fits for each iteration of fitting
+        verbose : boolean (default = True)
+            Print detailed description of steps being done on the image in the console as code runs
+        warnings : boolean (default = True)
+            Print the warnings in the console if something works incorrectly or might require attention        
+        """
+        if verbose: print("\n> Fixing wavelengths using skylines...")
+        if self.grating == "580V":
+            xmin = [5555]
+            xmax = [5600]
+            if sol[0] != [0] and sol[2] == 0:
+                print("  Only using a Gaussian fit to the 5577 emission line...")
+                self.history.append("- Fixing wavelengths using Gaussian fits to skyline 5577")
+                index_fit = 1
+        else:
+            self.history.append("- Fixing wavelengths using Gaussian fits to bright skylines")
+
+        w = self.wavelength
+        xfibre = list(range(0, self.n_spectra))
+        plot_this_again = True
+
+        if sol[0] == 0:  # Solutions are not given
+            # Read file with sky emission line
+            if len(sky_lines_file) == 0: sky_lines_file = "./input_data/sky_lines/sky_lines_rest.dat"
+            sl_center_, sl_name_, sl_fnl_, sl_lowlow_, sl_lowhigh_, sl_highlow_, sl_highhigh_, sl_lmin_, sl_lmax_ = read_table(
+                sky_lines_file, ["f", "s", "f", "f", "f", "f", "f", "f", "f"])
+
+            # Be sure the lines we are using are in the requested wavelength range        
+            # if fibre != -1:
+            if verbose: print("  Checking the values of skylines in the file", sky_lines_file)
+            for i in range(len(sl_center_)):
+                if verbose: print(
+                    "  - {:.3f}  {:.0f}  {:5.1f} {:5.1f} {:5.1f} {:5.1f}    {:6.1f} {:6.1f}".format(sl_center_[i],
+                                                                                                    sl_fnl_[i],
+                                                                                                    sl_lowlow_[i],
+                                                                                                    sl_lowhigh_[i],
+                                                                                                    sl_highlow_[i],
+                                                                                                    sl_highhigh_[i],
+                                                                                                    sl_lmin_[i],
+                                                                                                    sl_lmax_[i]))
+            if verbose: print(
+                "\n  We only need skylines in the {:.2f} - {:.2f} range".format(np.round(self.valid_wave_min, 2),
+                                                                                np.round(self.valid_wave_max, 2)))
+
+            valid_skylines = np.where((sl_center_ < self.valid_wave_max) & (sl_center_ > self.valid_wave_min))
+            sl_center = sl_center_[valid_skylines]
+            sl_fnl = sl_fnl_[valid_skylines]
+            sl_lowlow = sl_lowlow_[valid_skylines]
+            sl_lowhigh = sl_lowhigh_[valid_skylines]
+            sl_highlow = sl_highlow_[valid_skylines]
+            sl_highhigh = sl_highhigh_[valid_skylines]
+            sl_lmin = sl_lmin_[valid_skylines]
+            sl_lmax = sl_lmax_[valid_skylines]
+            number_sl = len(sl_center)
+            if fibre != -1: print(" ", sl_center)
+
+            # Fitting Gaussians to skylines...         
+            self.wavelength_offset_per_fibre = []
+            wave_median_offset = []
+            if verbose: print("\n> Performing a Gaussian fit to selected, bright skylines...")
+            if verbose: print("  (this might FAIL if RSS is NOT corrected for CCD defects...)")
+
+            if fibre != -1:
+                f_i = fibre
+                f_f = fibre + 1
+                if verbose: print("  Checking fibre ", fibre,
+                                  " (only this fibre is corrected, use fibre = -1 for all)...")
+                verbose_ = True
+                warnings = True
+                plot_all = True
+            else:
+                f_i = 0
+                f_f = self.n_spectra
+                verbose_ = False
+
+            number_fibres_to_check = len(list(range(f_i, f_f)))
+            output_every_few = np.sqrt(len(list(range(f_i, f_f)))) + 1
+            next_output = -1
+            #TODO: For improving SNR and make it faster, do it in jumps of few fibres (~10 or so)
+            for fibre in range(f_i, f_f):  # (self.n_spectra):
+                spectrum = self.intensity_corrected[fibre]
+                if verbose:
+                    if fibre > next_output:
+                        sys.stdout.write("\b" * 51)
+                        sys.stdout.write("  Checking fibre {:4} ...  ({:6.2f} % completed) ...".format(fibre,
+                                                                                                       fibre * 100. / number_fibres_to_check))
+                        sys.stdout.flush()
+                        next_output = fibre + output_every_few
+
+                        # Gaussian fits to the sky spectrum
+                sl_gaussian_flux = []
+                sl_gaussian_sigma = []
+                sl_gauss_center = []
+                sl_offset = []
+                sl_offset_good = []
+
+                for i in range(number_sl):
+                    if sl_fnl[i] == 0:
+                        plot_fit = False
+                    else:
+                        plot_fit = True
+                    if plot_all: plot_fit = True
+
+                    resultado = fluxes(w, spectrum, sl_center[i], lowlow=sl_lowlow[i], lowhigh=sl_lowhigh[i],
+                                       highlow=sl_highlow[i], highhigh=sl_highhigh[i], lmin=sl_lmin[i], lmax=sl_lmax[i],
+                                       fmin=0, fmax=0,
+                                       broad=2.1 * 2.355, plot=plot_fit, verbose=False, plot_sus=False, fcal=False,
+                                       warnings=warnings)  # Broad is FWHM for Gaussian sigm a= 1,
+
+                    sl_gaussian_flux.append(resultado[3])
+                    sl_gauss_center.append(resultado[1])
+                    sl_gaussian_sigma.append(resultado[5] / 2.355)
+                    sl_offset.append(sl_gauss_center[i] - sl_center[i])
+
+                    if sl_gaussian_flux[i] < 0 or np.abs(sl_center[i] - sl_gauss_center[i]) > maxima_offset or \
+                            sl_gaussian_sigma[i] > maxima_sigma:
+                        if verbose_: print("  Bad fitting for ", sl_center[i], "... ignoring this fit...")
+                    else:
+                        sl_offset_good.append(sl_offset[i])
+                        if verbose_: print(
+                            "    Fitted wavelength for sky line {:8.3f}:    center = {:8.3f}     sigma = {:6.3f}    offset = {:7.3f} ".format(
+                                sl_center[i], sl_gauss_center[i], sl_gaussian_sigma[i], sl_offset[i]))
+
+                median_offset_fibre = np.nanmedian(sl_offset_good)
+                wave_median_offset.append(median_offset_fibre)
+                if verbose_: print("\n> Median offset for fibre {:3} = {:7.3f}".format(fibre, median_offset_fibre))
+
+            if verbose:
+                sys.stdout.write("\b" * 51)
+                sys.stdout.write("  Checking fibres completed!                  ")
+                sys.stdout.flush()
+                print(" ")
+
+            # Second-order fit ...         
+            bad_numbers = 0
+            try:
+                xfibre_ = []
+                wave_median_offset_ = []
+                for i in xfibre:
+                    if np.isnan(wave_median_offset[i]) == True:
+                        bad_numbers = bad_numbers + 1
+                    else:
+                        if wave_median_offset[i] == 0:
+                            bad_numbers = bad_numbers + 1
+                        else:
+                            xfibre_.append(i)
+                            wave_median_offset_.append(wave_median_offset[i])
+                if bad_numbers > 0 and verbose: print("\n> Skipping {} bad points for the fit...".format(bad_numbers))
+                
+                fit, pp, fx_, y_fit_c, x_c, y_c  = fit_clip(xfibre_, wave_median_offset_, clip=clip_fit, plot=plot, 
+                                                            xlabel="Fibre",ylabel="offset",xmin=xfibre_[0]-20,xmax=xfibre_[-1]+20,
+                                                            percentile_max = 99.2, percentile_min=0.8,
+                                                            index_fit = index_fit, kernel = kernel_fit, hlines=[0])
+              
+                if index_fit == 1:
+                    sol = [fit[1], fit[0], 0]
+                    ptitle = "Linear fit to individual offsets"
+                    if verbose: print("\n> Fitting a linear polynomy a0x +  a1x * fibre:")
+                else:
+                    sol = [fit[2], fit[1], fit[0]]
+                    ptitle = "Second-order fit to individual offsets"
+                    if verbose: 
+                        if index_fit != 2 and verbose : print("  A fit of order", index_fit,"was requested, but this tasks only runs with orders 1 or 2.")
+                        print("\n> Fitting a second-order polynomy a0x +  a1x * fibre + a2x * fibre**2:")
+                        
+                if plot: plot_this_again = False
+                    
+                self.history.append("  sol (found) = " + np.str(sol))
+            except Exception:
+                if warnings:
+                    print("\n> Something failed doing the fit...")
+                    print("  These are the data:")
+                    print(" - xfibre =", xfibre_)
+                    print(" - wave_median_offset = ", wave_median_offset_)
+                    plot_plot(xfibre_, wave_median_offset_)
+                    ptitle = "This plot may don't have any sense..."
+        else:
+            if verbose: print(
+                "\n> Solution to the second-order polynomy a0x +  a1x * fibre + a2x * fibre**2 has been provided:")
+            # a0x = sol[0]
+            # a1x = sol[1]
+            # a2x = sol[2]
+            ptitle = "Second-order polynomy provided"
+            self.history.append("  sol (provided) = " + np.str(sol))
+
+        if verbose:
+            print("  a0x =", sol[0], "   a1x =", sol[1], "     a2x =", sol[2])
+            print("\n> sol = [{},{},{}]".format(sol[0], sol[1], sol[2]))
+        self.sol = sol # Save solution
+        fx = sol[0] + sol[1] * np.array(xfibre) + sol[2] * np.array(xfibre) ** 2
+
+        if plot:
+            if sol[0] == 0:
+                pf = wave_median_offset
+            else:
+                pf = fx
+            if plot_this_again:
+                if index_fit == 1: 
+                    ptitle = "Linear fit to individual offsets"
+                else:
+                    ptitle = "Second-order fit to individual offsets"         
+                plot_plot(xfibre, [fx, pf], ptitle=ptitle, color=['red', 'blue'], xmin=-20, xmax=1000, xlabel="Fibre",
+                          ylabel="offset", hlines=[0])
+
+        # Applying results
+        if verbose: print("\n> Applying results to all fibres...")
+        for fibre in xfibre:
+            f = self.intensity_corrected[fibre]
+            w_shift = fx[fibre]
+            self.intensity_corrected[fibre] = rebin_spec_shift(w, f, w_shift)
+
+            # Check results
+        if plot:
+            if verbose: print("\n> Plotting some results after fixing wavelengths: ")
+
+            for line in range(len(xmin)):
+
+                xmin_ = xmin[line]
+                xmax_ = xmax[line]
+
+                plot_y = []
+                plot_y_corrected = []
+                ptitle = "Before corrections, fibres "
+                ptitle_corrected = "After wavelength correction, fibres "
+                if ymax == "": y_max_list = []
+                for fibre in fibres_to_plot:
+                    plot_y.append(self.intensity[fibre])
+                    plot_y_corrected.append(self.intensity_corrected[fibre])
+                    ptitle = ptitle + np.str(fibre) + " "
+                    ptitle_corrected = ptitle_corrected + np.str(fibre) + " "
+                    if ymax == "":
+                        y_max_ = []
+                        y_max_.extend(
+                            (self.intensity[fibre, i]) for i in range(len(w)) if (w[i] > xmin_ and w[i] < xmax_))
+                        y_max_list.append(np.nanmax(y_max_))
+                if ymax == "": ymax = np.nanmax(y_max_list) + 20  # TIGRE
+                plot_plot(w, plot_y, ptitle=ptitle, xmin=xmin_, xmax=xmax_, percentile_min=0.1,
+                          ymax=ymax)  # ymin=ymin, ymax=ymax)
+                plot_plot(w, plot_y_corrected, ptitle=ptitle_corrected, xmin=xmin_, xmax=xmax_, percentile_min=0.1,
+                          ymax=ymax)  # ymin=ymin, ymax=ymax)
+                y_max_list = []
+                ymax = ""
+
+        if verbose: print("\n> Small fixing of the wavelengths done!")
+        # return
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+def compare_fix_wavelengths(rss1, rss2):
+    print("\n> Comparing small fixing of wavelengths between two rss...")
+
+    xfibre = list(range(0, rss1.n_spectra))
+    rss1.wavelength_parameters[0]
+
+    a0x, a1x, a2x = rss1.wavelength_parameters[0], rss1.wavelength_parameters[1], rss1.wavelength_parameters[2]
+    aa0x, aa1x, aa2x = rss2.wavelength_parameters[0], rss2.wavelength_parameters[1], rss2.wavelength_parameters[2]
+
+    fx = a0x + a1x * np.array(xfibre) + a2x * np.array(xfibre) ** 2
+    fx2 = aa0x + aa1x * np.array(xfibre) + aa2x * np.array(xfibre) ** 2
+    dif = fx - fx2
+
+    plot_plot(xfibre, dif, ptitle="Fit 1 - Fit 2", xmin=-20, xmax=1000, xlabel="Fibre", ylabel="Dif")
+
+    resolution = rss1.wavelength[1] - rss1.wavelength[0]
+    error = np.nanmedian(dif) / resolution * 100.
+    print("\n> The median rms is {:8.6f} A,  resolution = {:5.2f} A,  error = {:5.3} %".format(np.nanmedian(dif),
+                                                                                               resolution, error))
+
+# %% ==========================================================================
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------

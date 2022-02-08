@@ -566,7 +566,7 @@ if __name__ == "__main__":
 
     file_in=full_path("27feb10022red.fits", path_blue)
     flat_blue_file = full_path("27feb10006red.fits", path_blue) 
-    # flat_blue = KOALA_RSS(flat_blue_file, plot_final_rss = True) 
+    #flat_blue = KOALA_RSS(flat_blue_file, plot_final_rss = True) 
     
     
     # test_new = KOALA_RSS(file_in, 
@@ -593,10 +593,14 @@ if __name__ == "__main__":
     #                   plot=True, warnings=False, verbose=True)
 
 
-    # test_new = KOALA_RSS(file_in,
-    #                       correct_ccd_defects = True,
-    #                       remove_5577 = True)
+    #test_new = KOALA_RSS(file_in, print_summary=True)
+    
+    # test_new.process_rss(apply_throughput=True, throughput_2D=throughput_2D_blue_new)
+                          #correct_ccd_defects = True,
+                          #remove_5577 = True)
                           #fix_wavelengths = True )
+                          
+    # print(test_new.history)                      
     # x = range(test.n_spectra)    
     # plot_plot(x,test_new.integrated_fibre/1E6, ymin=0., ymax=0.2, 
     #           ptitle="Integrated flux using 2dfdr v8.00b", xlabel="Fibre", 
@@ -614,8 +618,7 @@ if __name__ == "__main__":
  
  
    
- 
-    
+
  
     
     # # PREVIOUS
@@ -625,8 +628,8 @@ if __name__ == "__main__":
     path_red_old  = os.path.join(path_old, "385R")
  
     
-    # file_in_old=full_path("27feb10025red.fits", path_blue_old)
-    # test_old = KOALA_RSS(file_in_old)
+    file_in_old=full_path("27feb10028red.fits", path_blue_old)
+    test_old = KOALA_RSS(file_in_old)
     # plot_plot(x,test_old.integrated_fibre/1E6, ymin=-0.02, ymax=0.2, 
     #           ptitle="Integrated flux using 2dfdr v7.1", xlabel="Fibre", 
     #           ylabel="Flux [ 10$^6$ counts ]", fig_size="big",
@@ -737,14 +740,14 @@ if __name__ == "__main__":
     # star2_rss = KOALA_RSS(file_star2, path = path_red_old)
     # star3_rss = KOALA_RSS(file_star3, path = path_red_old)
     
-    rss_star_list=[star_rss,star2_rss,star3_rss]
-    cube_star_list=[cubestar,cubestar2,cubestar3]
+    # rss_star_list=[star_rss,star2_rss,star3_rss]
+    # cube_star_list=[cubestar,cubestar2,cubestar3]
     
     
-    #w_star,flux_calibration = read_table(flux_calibration_file, ["f", "f"] )
-    align_test = align_n_cubes(rss_star_list,cube_list=cube_star_list, 
-                               ADR=True, plot=True, plot_spectra=False, compare_cubes = False,
-                               flux_calibration_list=[flux_calibration,flux_calibration,flux_calibration])
+    # #w_star,flux_calibration = read_table(flux_calibration_file, ["f", "f"] )
+    # align_test = align_n_cubes(rss_star_list,cube_list=cube_star_list, 
+    #                            ADR=True, plot=True, plot_spectra=False, compare_cubes = False,
+    #                            flux_calibration_list=[flux_calibration,flux_calibration,flux_calibration])
   
  
     # # -----------------------------------------------------------------------
