@@ -794,6 +794,7 @@ class RSS(object):
         self.el=self.identify_el(high_fibres=10, brightest_line = "Ha",
                                  cut=2., verbose=True, plot=True, fibre=0, broad=1.5)
         """
+        
         if fibre == 0:
             integrated_intensity_sorted = np.argsort(self.integrated_fibre)
             region = []
@@ -835,6 +836,75 @@ class RSS(object):
                                                                                       p_peaks_fwhm[eline]))
 
         return [peaks_name, peaks_rest, p_peaks_l, p_peaks_fwhm]
+    # -----------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    def check_el_identification(self, emission_line_file = "", id_list=[], 
+                                brightest_line = 0, broad = 1.0,
+                                verbose = True):
+        """
+        Check emission line list. IT NEEDS TO BE CHECKED
+
+        Parameters
+        ----------
+        emission_line_file : TYPE, optional
+            DESCRIPTION. The default is "".
+        id_list : TYPE, optional
+            DESCRIPTION. The default is [].
+        brightest_line : TYPE, optional
+            DESCRIPTION. The default is 0.
+        broad : TYPE, optional
+            DESCRIPTION. The default is 1.0.
+        verbose : TYPE, optional
+            DESCRIPTION. The default is True.
+
+        Returns
+        -------
+        None.
+
+        """
+                
+        if emission_line_file == "":
+            emission_line_file = "./input_data/emission_line_list.dat"
+        
+        if verbose: print("\n> Checking if identified emission lines agree using file", emission_line_file)
+        
+        # Read list with all emission lines to get the name of emission lines    
+        el_center, el_name = read_table(emission_line_file, ["f", "s"])
+
+        # Find brightest line to get redshift
+        for i in range(len(self.el[0])):
+            if self.el[0][i] == brightest_line:
+                obs_wave = self.el[2][i]
+                redshift = (self.el[2][i] - self.el[1][i]) / self.el[1][i]
+        if verbose: print("  Brightest emission line", brightest_line, "found at ", obs_wave, ", redshift = ",
+                          redshift)
+
+        el_identified = [[], [], [], []]
+        n_identified = 0
+        for line in id_list:
+            id_check = 0
+            for i in range(len(self.el[1])):
+                if line == self.el[1][i]:
+                    if verbose: print("  Emission line ", self.el[0][i], self.el[1][i], "has been identified")
+                    n_identified = n_identified + 1
+                    id_check = 1
+                    el_identified[0].append(self.el[0][i])  # Name
+                    el_identified[1].append(self.el[1][i])  # Central wavelength
+                    el_identified[2].append(self.el[2][i])  # Observed wavelength
+                    el_identified[3].append(self.el[3][i])  # "FWHM"
+            if id_check == 0:
+                for i in range(len(el_center)):
+                    if line == el_center[i]:
+                        el_identified[0].append(el_name[i])
+                        if verbose: print("  Emission line", el_name[i], line,
+                                          "has NOT been identified, adding...")
+                el_identified[1].append(line)
+                el_identified[2].append(line * (redshift + 1))
+                el_identified[3].append(4 * broad)
+
+        self.el = el_identified
+        if verbose: print("  Number of emission lines identified = ", n_identified, "of a total of",
+                          len(id_list), "provided. self.el updated accordingly")
 
     # %% ===========================================================================
     # Sky substraction
@@ -1765,16 +1835,57 @@ class RSS(object):
 
         if verbose: print("  Intensities corrected for sky emission and stored in self.intensity_corrected !")
         self.history.append("  Intensities corrected for the sky emission")
+    # -----------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    def read_sky_spectrum(self, sky_spectrum_file, path="", verbose = True):
+        """
+        Reads a TXT file with a 1D spectrum 
+
+        Parameters
+        ----------
+        sky_spectrum_file : string (default = None)
+            Specify the name of sky spectrum file (including or not the path)
+        path: string (default = "")
+            path to the sky spectrum file
+        verbose : Boolean (optional)
+            Print what is doing. The default is True.
+
+        Returns
+        -------
+        sky_spectrum : array
+            1D sky spectrum
+            
+        It also adds the 1D sky spectrum to self.sky_spectrum
+        """
+        
+        if path != "" : sky_spectrum_file=full_path(sky_spectrum_file,path)
+        
+        if verbose:
+            print("\n> Reading file with a 1D sky spectrum :")
+            print(" ", sky_spectrum_file)
+
+        w_sky, sky_spectrum = read_table(sky_spectrum_file, ["f", "f"])
+        
+        self.sky_spectrum = sky_spectrum
+
+        self.history.append('- 1D sky spectrum provided in file :')
+        self.history.append('  ' + sky_spectrum_file)
+
+        if np.nanmedian(self.wavelength - w_sky) != 0:
+            if verbose or warnings: print("\n\n  WARNING !!!! The wavelengths provided on the sky file do not match the wavelengths on this RSS !!\n\n")
+            self.history.append('  WARNING: The wavelengths provided on the sky file do not match the wavelengths on this RSS')
+        return sky_spectrum
 
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
-    def apply_self_sky(self, sky_fibres=[], sky_spectrum=[], plot=True,
+    def apply_self_sky(self, sky_fibres=[], sky_spectrum=[],  sky_spectrum_file="", path="",   
                        sky_wave_min=0, sky_wave_max=0, win_sky=0, scale_sky_1D=0,
                        brightest_line="Ha", brightest_line_wavelength=0, ranges_with_emission_lines=[0],
                        cut_red_end=0, low_fibres=10, use_fit_for_negative_sky=False, kernel_negative_sky=51,
-                       order_fit_negative_sky=3, verbose=True, n_sky=50, correct_negative_sky=False,
-                       individual_check=False):
+                       order_fit_negative_sky=3, n_sky=50, correct_negative_sky=False,
+                       individual_check=False, verbose=True, plot=True):
         """
 
         Apply sky correction using the specified number of lowest fibres in the RSS file to obtain the sky spectrum
@@ -1785,6 +1896,10 @@ class RSS(object):
             Specify the fibres to use to obtain sky spectrum. Will automatically determine the best fibres if not specified
         sky_spectrum : list of floats (default = none)
             Specify the sky spectrum to be used for correction. If not specified, will derive it automatically
+        sky_spectrum_file : string (default = None)
+            Specify the name of sky spectrum file (including or not the path)
+        path: string (default = "")
+            path to the sky spectrum file    
         plot : boolean (default = True)
             Show the plots in the console
         sky_wave_min : float (default = 0)
@@ -1833,6 +1948,9 @@ class RSS(object):
             print("\n> 'sky_method = self', hence using", n_sky, "lowest intensity fibres to create a sky spectrum ...")
             self.history.append(
                 '  The ' + np.str(n_sky) + ' lowest intensity fibres were used to create the sky spectrum')
+            
+        if sky_spectrum_file != "":            
+            sky_spectrum = self.read_sky_spectrum(sky_spectrum_file, path=path, verbose = verbose)
 
         if len(sky_spectrum) == 0:
             self.find_sky_emission(n_sky=n_sky, plot=plot, sky_fibres=sky_fibres,
@@ -1862,13 +1980,12 @@ class RSS(object):
                            individual_check=individual_check)
 
         self.apply_mask(verbose=verbose, make_nans=True)
-
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
     def apply_1D_sky(self, sky_fibres=[], sky_spectrum=[], sky_wave_min=0, sky_wave_max=0,
                      win_sky=0, include_history=True,
-                     scale_sky_1D=0, remove_5577=True, sky_spectrum_file="",
+                     scale_sky_1D=0, remove_5577=True, sky_spectrum_file="", path="",
                      plot=True, verbose=True, n_sky=50):
         """
 
@@ -1876,7 +1993,7 @@ class RSS(object):
 
         Parameters
         ----------
-         sky_fibres : list of integers (default = none)
+        sky_fibres : list of integers (default = none)
             Specify the fibres to use to obtain sky spectrum. Will automatically determine the best fibres if not specified
         sky_spectrum : list of floats (default = none)
             Specify the sky spectrum to be used for correction. If not specified, will derive it automatically
@@ -1893,7 +2010,9 @@ class RSS(object):
         remove_5577 : boolean (default = True)
             Remove the line 5577 from the data
         sky_spectrum_file : string (default = None)
-            Specify the path and name of sky spectrum file
+            Specify the name of sky spectrum file (including or not the path)
+        path: string (default = "")
+            path to the sky spectrum file
         plot : boolean (default = True)
             Show the plots in the console
         verbose : boolean (default = True)
@@ -1903,23 +2022,10 @@ class RSS(object):
         """
 
         self.history.append('- Sky sustraction using the 1D method')
-
-        if sky_spectrum_file != "":
-
-            if verbose:
-                print("\n> Reading file with a 1D sky spectrum :")
-                print(" ", sky_spectrum_file)
-
-            w_sky, sky_spectrum = read_table(sky_spectrum_file, ["f", "f"])
-
-            if np.nanmedian(self.wavelength - w_sky) != 0:
-                if verbose or warnings:
-                    print(
-                        "\n\n  WARNING !!!! The wavelengths provided on this file do not match the wavelengths on this RSS !!\n\n")
-
-            self.history.append('- 1D sky spectrum provided in file :')
-            self.history.append('  ' + sky_spectrum_file)
-
+        
+        if sky_spectrum_file != "":            
+            sky_spectrum = self.read_sky_spectrum(sky_spectrum_file, path=path, verbose = verbose)
+  
         if verbose:
             print("\n> Sustracting the sky using the sky spectrum provided, checking the scale OBJ/SKY...")
         if scale_sky_1D == 0:
@@ -1942,7 +2048,6 @@ class RSS(object):
             scale_sky_1D = auto_scale_two_spectra(self, sky_r_self, sky_spectrum, scale=[0.1, 1.01, 0.025],
                                                   w_scale_min=self.valid_wave_min, w_scale_max=self.valid_wave_max,
                                                   plot=plot, verbose=True)
-
 
         elif verbose:
             print("  As requested, we scale the given 1D sky spectrum by", scale_sky_1D)
@@ -2000,7 +2105,7 @@ class RSS(object):
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
-    def apply_1Dfit_sky(self, sky_spectrum=[], n_sky=50, sky_fibres=[], sky_spectrum_file="",
+    def apply_1Dfit_sky(self, sky_spectrum=[], n_sky=50, sky_fibres=[], sky_spectrum_file="", path="",
                         sky_wave_min=0, sky_wave_max=0, win_sky=0, scale_sky_1D=0,
                         sky_lines_file="", brightest_line_wavelength=0,
                         brightest_line="Ha", maxima_sigma=3, auto_scale_sky=False,
@@ -2010,14 +2115,16 @@ class RSS(object):
 
         Parameters
         ----------
-        sky_spectrum : list of floats (default = none)
+        sky_spectrum : array or list of floats (default = none)
             Specify the sky spectrum to be used for correction. If not specified, will derive it automatically
         n_sky : integer (default = 50)
             Number of fibres to use for finding sky spectrum
-         sky_fibres : list of integers (default = none)
+        sky_fibres : list of integers (default = none)
             Specify the fibres to use to obtain sky spectrum. Will automatically determine the best fibres if not specified
         sky_spectrum_file : string (default = None)
-            Specify the path and name of sky spectrum file
+            Specify the name of sky spectrum file (including or not the path)
+        path: string (default = "")
+            path to the sky spectrum file
         sky_wave_min : float (default = 0)
             Specify the lower bound on wavelength range. If 0, it is set to self.valid_wave_min
         sky_wave_max : float (default = 0)
@@ -2035,7 +2142,7 @@ class RSS(object):
             Options: “O3”: [OIII] 5007, “O3b”: [OIII] 4959, “Ha”: H-alpha 6563, “Hb”: H-beta 4861.
         maxima_sigma : float (default = 3)
             Maximum allowed standard deviation for Gaussian fit
-       auto_scale_sky : boolean (default = False)
+        auto_scale_sky : boolean (default = False)
             Scales sky spectrum for subtraction if True
         plot : boolean (default = True)
             Show the plots in the console
@@ -2050,20 +2157,9 @@ class RSS(object):
         """
         self.history.append('- Sky sustraction using the 1Dfit method')
 
-        if sky_spectrum_file != "":
-            if verbose:
-                print("\n> Reading file with a 1D sky spectrum :")
-                print(" ", sky_spectrum_file)
-
-            w_sky, sky_spectrum = read_table(sky_spectrum_file, ["f", "f"])
-
-            if np.nanmedian(self.wavelength - w_sky) != 0:
-                if verbose:
-                    print(
-                        "\n\n  WARNING !!!! The wavelengths provided on this file do not match the wavelengths on this RSS !!\n\n")
-
-            self.history.append('- 1D sky spectrum provided in file :')
-            self.history.append('  ' + sky_spectrum_file)
+        if sky_spectrum_file != "":            
+            sky_spectrum = self.read_sky_spectrum(sky_spectrum_file, path=path, verbose = verbose)
+            
         if verbose:
             print("\n> Fitting sky lines in both a provided sky spectrum AND all the fibres")
             print("  This process takes ~20 minutes for 385R if all skylines are considered!\n")
@@ -2108,7 +2204,247 @@ class RSS(object):
                 print("\n> 1Dfit sky_method usually generates some nans, correcting ccd defects again...")
             self.correct_ccd_defects(kernel_correct_ccd_defects=kernel_correct_ccd_defects, verbose=verbose, plot=plot,
                                      only_nans=True)  # Not replacing values <0
+    # -----------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    def apply_selffit_sky(self, sky_spectrum=[], n_sky=50,  sky_fibres=[] , sky_spectrum_file="", path ="",
+                          sky_wave_min=0, sky_wave_max=0, win_sky=0, scale_sky_1D=0,
+                          sky_lines_file="", brightest_line_wavelength=0,
+                          ranges_with_emission_lines = [0],
+                          cut_red_end = 0,
+                          brightest_line="Ha", maxima_sigma=3, auto_scale_sky=False,
+                          fibre_p=-1, kernel_correct_ccd_defects=51,
+                          plot=True, verbose=True, fig_size=12):
+        """
+        Subtract sky using the selffit method.
 
+        Parameters
+        ----------
+        sky_spectrum : TYPE, optional
+            DESCRIPTION. The default is [].
+        n_sky : TYPE, optional
+            DESCRIPTION. The default is 50.
+        sky_fibres : TYPE, optional
+            DESCRIPTION. The default is [].
+        sky_spectrum_file : TYPE, optional
+            DESCRIPTION. The default is "".
+        path : TYPE, optional
+            DESCRIPTION. The default is "".
+        sky_wave_min : TYPE, optional
+            DESCRIPTION. The default is 0.
+        sky_wave_max : TYPE, optional
+            DESCRIPTION. The default is 0.
+        win_sky : TYPE, optional
+            DESCRIPTION. The default is 0.
+        scale_sky_1D : TYPE, optional
+            DESCRIPTION. The default is 0.
+        sky_lines_file : TYPE, optional
+            DESCRIPTION. The default is "".
+        brightest_line_wavelength : TYPE, optional
+            DESCRIPTION. The default is 0.
+        ranges_with_emission_lines : TYPE, optional
+            DESCRIPTION. The default is [0].
+        cut_red_end : TYPE, optional
+            DESCRIPTION. The default is 0.
+        brightest_line : TYPE, optional
+            DESCRIPTION. The default is "Ha".
+        maxima_sigma : TYPE, optional
+            DESCRIPTION. The default is 3.
+        auto_scale_sky : TYPE, optional
+            DESCRIPTION. The default is False.
+        fibre_p : TYPE, optional
+            DESCRIPTION. The default is -1.
+        kernel_correct_ccd_defects : TYPE, optional
+            DESCRIPTION. The default is 51.
+        plot : TYPE, optional
+            DESCRIPTION. The default is True.
+        verbose : TYPE, optional
+            DESCRIPTION. The default is True.
+        fig_size : TYPE, optional
+            DESCRIPTION. The default is 12.
+
+
+        """
+
+        self.history.append('- Sky sustraction using the selffit method')
+
+        if verbose: print("\n> 'sky_method = selffit', hence using", n_sky,
+                          "lowest intensity fibres to create a sky spectrum ...")
+
+        self.find_sky_emission(n_sky=n_sky, plot=plot, sky_fibres=sky_fibres,
+                               sky_wave_min=sky_wave_min, sky_wave_max=sky_wave_max,
+                               win_sky=win_sky, include_history=True)
+        
+        if sky_spectrum_file != "":            
+            sky_spectrum = self.read_sky_spectrum(sky_spectrum_file, path=path, verbose = verbose)
+        
+        if sky_spectrum[0] != -1 and np.nanmedian(sky_spectrum) != 0:
+            if verbose: print(
+                "\n> Additional sky spectrum provided. Using this for replacing regions with bright emission lines...")
+
+            sky_r_self = self.sky_emission
+
+            self.sky_emission = replace_el_in_sky_spectrum(self, sky_r_self, sky_spectrum,
+                                                           scale_sky_1D=scale_sky_1D,
+                                                           brightest_line=brightest_line,
+                                                           brightest_line_wavelength=brightest_line_wavelength,
+                                                           ranges_with_emission_lines=ranges_with_emission_lines,
+                                                           cut_red_end=cut_red_end,
+                                                           plot=plot)
+            self.history.append('  Using sky spectrum provided for replacing regions with emission lines')
+
+        self.fit_and_substract_sky_spectrum(self.sky_emission, sky_lines_file=sky_lines_file,
+                                            brightest_line_wavelength=brightest_line_wavelength,
+                                            brightest_line=brightest_line,
+                                            maxima_sigma=maxima_sigma, ymin=-50, ymax=600, wmin=0, wmax=0,
+                                            auto_scale_sky=auto_scale_sky,
+                                            warnings=False, verbose=False, plot=False, fig_size=fig_size,
+                                            fibre=fibre_p)
+
+        if fibre_p == -1:
+            if verbose: print("\n> 'selffit' sky_method usually generates some nans, correcting ccd defects again...")
+            self.correct_ccd_defects(kernel_correct_ccd_defects=kernel_correct_ccd_defects, verbose=verbose,
+                                     plot=plot, only_nans=True)  # not replacing values < 0
+    # -----------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    def apply_2D_sky(self, sky_rss, scale_sky_rss=0,
+                     plot=True, verbose=True, fig_size=12):
+        """
+        Task that uses a RSS file with a sky, scale and sustract it.
+        #TODO: this method needs to be checked and use plot_plot in plots
+
+        Parameters
+        ----------
+        sky_rss : OBJECT #TODO This needs to be also a file
+            A RSS file with offset sky.
+        scale_sky_rss : float, optional
+            scale applied to the SKY RSS before sustracting
+        plot : TYPE, optional
+            DESCRIPTION. The default is True.
+        verbose : TYPE, optional
+            DESCRIPTION. The default is True.
+        fig_size : TYPE, optional
+            DESCRIPTION. The default is 12.
+        """
+        self.history.append('- Sky sustraction using the 2D method')
+
+        if scale_sky_rss != 0:
+            if verbose: print("\n> Using sky image provided to substract sky, considering a scale of",
+                              scale_sky_rss, "...")
+            self.sky_emission = scale_sky_rss * sky_rss.intensity_corrected
+            self.intensity_corrected = self.intensity_corrected - self.sky_emission
+        else:
+            if verbose: print(
+                "\n> Using sky image provided to substract sky, computing the scale using sky lines")
+            # check scale fibre by fibre
+            self.sky_emission = copy.deepcopy(sky_rss.intensity_corrected)
+            scale_per_fibre = np.ones((self.n_spectra))
+            scale_per_fibre_2 = np.ones((self.n_spectra))
+            lowlow = 15
+            lowhigh = 5
+            highlow = 5
+            highhigh = 15
+            if self.grating == "580V":
+                if verbose: print("  For 580V we use bright skyline at 5577 AA ...")
+                sky_line = 5577
+                sky_line_2 = 0
+            if self.grating == "1000R":
+                # print "  For 1000R we use skylines at 6300.5 and 6949.0 AA ..."   ### TWO LINES GIVE WORSE RESULTS THAN USING ONLY 1...
+                if verbose: print("  For 1000R we use skyline at 6949.0 AA ...")
+                sky_line = 6949.0  # 6300.5
+                lowlow = 22  # for getting a good continuuem in 6949.0
+                lowhigh = 12
+                highlow = 36
+                highhigh = 52
+                sky_line_2 = 0  # 6949.0  #7276.5 fails
+                lowlow_2 = 22  # for getting a good continuuem in 6949.0
+                lowhigh_2 = 12
+                highlow_2 = 36
+                highhigh_2 = 52
+            if sky_line_2 != 0 and verbose: print("  ... first checking", sky_line, "...")
+            for fibre_sky in range(self.n_spectra):
+                skyline_spec = fluxes(self.wavelength, self.intensity_corrected[fibre_sky], sky_line,
+                                      plot=False, verbose=False, lowlow=lowlow, lowhigh=lowhigh,
+                                      highlow=highlow, highhigh=highhigh)  # fmin=-5.0E-17, fmax=2.0E-16,
+                # resultado = [rms_cont, fit[0], fit_error[0], gaussian_flux, gaussian_flux_error, fwhm, fwhm_error, flux, flux_error, ew, ew_error, spectrum  ]
+                self.intensity_corrected[fibre_sky] = skyline_spec[11]
+
+                skyline_sky = fluxes(self.wavelength, self.sky_emission[fibre_sky], sky_line, plot=False,
+                                     verbose=False, lowlow=lowlow, lowhigh=lowhigh, highlow=highlow,
+                                     highhigh=highhigh)  # fmin=-5.0E-17, fmax=2.0E-16,
+
+                scale_per_fibre[fibre_sky] = skyline_spec[3] / skyline_sky[3]
+                self.sky_emission[fibre_sky] = skyline_sky[11]
+
+            if sky_line_2 != 0:
+                if verbose: print("  ... now checking", sky_line_2, "...")
+                for fibre_sky in range(self.n_spectra):
+                    skyline_spec = fluxes(self.wavelength, self.intensity_corrected[fibre_sky], sky_line_2,
+                                          plot=False, verbose=False, lowlow=lowlow_2, lowhigh=lowhigh_2,
+                                          highlow=highlow_2,
+                                          highhigh=highhigh_2)  # fmin=-5.0E-17, fmax=2.0E-16,
+                    # resultado = [rms_cont, fit[0], fit_error[0], gaussian_flux, gaussian_flux_error, fwhm, fwhm_error, flux, flux_error, ew, ew_error, spectrum  ]
+                    self.intensity_corrected[fibre_sky] = skyline_spec[11]
+
+                    skyline_sky = fluxes(self.wavelength, self.sky_emission[fibre_sky], sky_line_2, plot=False,
+                                         verbose=False, lowlow=lowlow_2, lowhigh=lowhigh_2, highlow=highlow_2,
+                                         highhigh=highhigh_2)  # fmin=-5.0E-17, fmax=2.0E-16,
+
+                    scale_per_fibre_2[fibre_sky] = skyline_spec[3] / skyline_sky[3]
+                    self.sky_emission[fibre_sky] = skyline_sky[11]
+
+                    # Median value of scale_per_fibre, and apply that value to all fibres
+            if sky_line_2 == 0:
+                scale_sky_rss = np.nanmedian(scale_per_fibre)
+                self.sky_emission = self.sky_emission * scale_sky_rss
+            else:
+                scale_sky_rss = np.nanmedian((scale_per_fibre + scale_per_fibre_2) / 2)
+                # Make linear fit
+                scale_sky_rss_1 = np.nanmedian(scale_per_fibre)
+                scale_sky_rss_2 = np.nanmedian(scale_per_fibre_2)
+                if verbose:
+                    print("  Median scale for line 1 :", scale_sky_rss_1, "range [", np.nanmin(scale_per_fibre),
+                          ",", np.nanmax(scale_per_fibre), "]")
+                    print("  Median scale for line 2 :", scale_sky_rss_2, "range [",
+                          np.nanmin(scale_per_fibre_2), ",", np.nanmax(scale_per_fibre_2), "]")
+
+                b = (scale_sky_rss_1 - scale_sky_rss_2) / (sky_line - sky_line_2)
+                a = scale_sky_rss_1 - b * sky_line
+                if verbose: print("  Appling linear fit with a =", a, "b =", b,
+                                  "to all fibres in sky image...")  # ,a+b*sky_line,a+b*sky_line_2
+
+                for i in range(self.n_wave):
+                    self.sky_emission[:, i] = self.sky_emission[:, i] * (a + b * self.wavelength[i])
+
+            if plot:
+                plt.figure(figsize=(fig_size, fig_size / 2.5))
+                label1 = "$\lambda$" + np.str(sky_line)
+                plt.plot(scale_per_fibre, alpha=0.5, label=label1)
+                plt.minorticks_on()
+                plt.ylim(np.nanmin(scale_per_fibre), np.nanmax(scale_per_fibre))
+                plt.axhline(y=scale_sky_rss, color='k', linestyle='--')
+                if sky_line_2 == 0:
+                    text = "Scale OBJECT / SKY using sky line $\lambda$" + np.str(sky_line)
+                    if verbose:
+                        print("  Scale per fibre in the range [", np.nanmin(scale_per_fibre), ",",
+                              np.nanmax(scale_per_fibre), "], median value is", scale_sky_rss)
+                        print("  Using median value to scale sky emission provided...")
+                if sky_line_2 != 0:
+                    text = "Scale OBJECT / SKY using sky lines $\lambda$" + np.str(
+                        sky_line) + " and $\lambda$" + np.str(sky_line_2)
+                    label2 = "$\lambda$" + np.str(sky_line_2)
+                    plt.plot(scale_per_fibre_2, alpha=0.5, label=label2)
+                    plt.axhline(y=scale_sky_rss_1, color='k', linestyle=':')
+                    plt.axhline(y=scale_sky_rss_2, color='k', linestyle=':')
+                    plt.legend(frameon=False, loc=1, ncol=2)
+                plt.title(text)
+                plt.xlabel("Fibre")
+                plt.show()
+                plt.close()
+            self.intensity_corrected = self.intensity_corrected - self.sky_emission
+        self.apply_mask(verbose=verbose)
+        self.history(" - 2D sky subtraction performed")
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
@@ -3230,8 +3566,6 @@ class RSS(object):
             self.RSS_image(image=correction_map, cmap="binary_r", title=" - Correction map")
 
         self.intensity_corrected = g
-
-
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
@@ -3275,8 +3609,6 @@ class RSS(object):
         self.history.append("- Data divided by flatfield:")
         self.history.append("  "+flat.filename)
         if flat_filename is not None: self.history.append("   Using file "+flat_filename)
-        
-            
         
 
     # %% =============================================================================

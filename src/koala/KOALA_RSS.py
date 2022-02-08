@@ -78,7 +78,8 @@ class KOALA_RSS(RSS):
                  sky_spectrum=[], sky_rss=[0], scale_sky_rss=0, scale_sky_1D=0.,
                  maxima_sigma=3.,
                  sky_spectrum_file="",
-                 brightest_line="Ha", brightest_line_wavelength=0, sky_lines_file="", exclude_wlm=[[0, 0]],
+                 brightest_line="Ha", brightest_line_wavelength=0, 
+                 sky_lines_file="", exclude_wlm=[[0, 0]], emission_line_file = "",
                  is_sky=False, win_sky=0, auto_scale_sky=False, ranges_with_emission_lines=[0], cut_red_end=0,
                  correct_negative_sky=False,
                  order_fit_negative_sky=3, kernel_negative_sky=51, individual_check=True,
@@ -375,6 +376,7 @@ class KOALA_RSS(RSS):
                     sol[2] = ftf[0].header["SOL2"]
                 else:
                     throughput_2D_wavecor = False
+                ftf.close()
 
             if throughput_2D_wavecor:
                 if verbose:
@@ -428,7 +430,7 @@ class KOALA_RSS(RSS):
             text_for_integrated_fibre = "after throughput correction..."
             title_for_integrated_fibre = " - Throughput corrected"
 
-            # Compute integrated map after throughput correction & plot if requested/needed
+        # Compute integrated map after throughput correction & plot if requested/needed
         if rss_clean == False:
             if plot == True and plot_integrated_fibre_again != 1:  # correct_ccd_defects == False:
                 plot_this = True
@@ -437,7 +439,7 @@ class KOALA_RSS(RSS):
                                           text=text_for_integrated_fibre, warnings=warnings, verbose=verbose,
                                           correct_negative_sky=False)
 
-            # ---------------------------------------------------
+        # ---------------------------------------------------
         # 4. Get airmass and correct for extinction         (X)
         # DO THIS BEFORE TELLURIC CORRECTION (that is extinction-corrected) OR SKY SUBTRACTION
         if do_extinction: self.do_extinction_curve(plot=plot, verbose=verbose, fig_size=fig_size)
@@ -458,23 +460,12 @@ class KOALA_RSS(RSS):
         # Several options here: (1) "1D"      : Consider a single sky spectrum, scale it and substract it
         #                       (2) "2D"      : Consider a 2D sky. i.e., a sky image, scale it and substract it fibre by fibre
         #                       (3) "self"    : Obtain the sky spectrum using the n_sky lowest fibres in the RSS file (DEFAULT)
-        #                       (4) "none"    : No sky substraction is performed
+        #                       (4) "none"    : No sky substraction is performed (DEFAULT)
         #                       (5) "1Dfit"   : Using an external 1D sky spectrum, fits sky lines in both sky spectrum AND all the fibres 
         #                       (6) "selffit" : Using the n_sky lowest fibres, obtain an sky spectrum, then fits sky lines in both sky spectrum AND all the fibres.
 
-        if sky_spectrum_file != "":
-            if verbose:
-                print("\n> Reading file with a 1D sky spectrum :")
-                print(" ", sky_spectrum_file)
-
-            w_sky, sky_spectrum = read_table(sky_spectrum_file, ["f", "f"])
-
-            if np.nanmedian(self.wavelength - w_sky) != 0:
-                if verbose or warnings: print(
-                    "\n\n  WARNING !!!! The wavelengths provided on this file do not match the wavelengths on this RSS !!\n\n")
-
-            self.history.append('- 1D sky spectrum provided in file :')
-            self.history.append('  ' + sky_spectrum_file)
+        if sky_spectrum_file != "":            
+            sky_spectrum = self.read_sky_spectrum(sky_spectrum_file, path=path, verbose = verbose)
 
         if sky_method != "none" and is_sky == False:
             plot_integrated_fibre_again = plot_integrated_fibre_again + 1
@@ -503,178 +494,32 @@ class KOALA_RSS(RSS):
                                       plot=plot, verbose=verbose)
 
                 else:
-                    if verbose: print(
-                        "\n> Sustracting the sky using a sky spectrum requested but any sky spectrum provided !")
+                    if verbose or warnings: print(
+                        "\n\n WARNING > Sustracting the sky using a sky spectrum requested but any sky spectrum provided !\n\n")
                     sky_method = "self"
                     n_sky = 50
 
-                    # (2) If a 2D sky, sky_rss, is provided
-            if sky_method == "2D":  # if np.nanmedian(sky_rss.intensity_corrected) != 0:
+            # (2) If a 2D sky, sky_rss, is provided
+            if sky_method == "2D": 
                 #TODO: this method needs to be checked
-                self.history.append('- Sky sustraction using the 2D method')
-
-                if scale_sky_rss != 0:
-                    if verbose: print("\n> Using sky image provided to substract sky, considering a scale of",
-                                      scale_sky_rss, "...")
-                    self.sky_emission = scale_sky_rss * sky_rss.intensity_corrected
-                    self.intensity_corrected = self.intensity_corrected - self.sky_emission
-                else:
-                    if verbose: print(
-                        "\n> Using sky image provided to substract sky, computing the scale using sky lines")
-                    # check scale fibre by fibre
-                    self.sky_emission = copy.deepcopy(sky_rss.intensity_corrected)
-                    scale_per_fibre = np.ones((self.n_spectra))
-                    scale_per_fibre_2 = np.ones((self.n_spectra))
-                    lowlow = 15
-                    lowhigh = 5
-                    highlow = 5
-                    highhigh = 15
-                    if self.grating == "580V":
-                        if verbose: print("  For 580V we use bright skyline at 5577 AA ...")
-                        sky_line = 5577
-                        sky_line_2 = 0
-                    if self.grating == "1000R":
-                        # print "  For 1000R we use skylines at 6300.5 and 6949.0 AA ..."   ### TWO LINES GIVE WORSE RESULTS THAN USING ONLY 1...
-                        if verbose: print("  For 1000R we use skyline at 6949.0 AA ...")
-                        sky_line = 6949.0  # 6300.5
-                        lowlow = 22  # for getting a good continuuem in 6949.0
-                        lowhigh = 12
-                        highlow = 36
-                        highhigh = 52
-                        sky_line_2 = 0  # 6949.0  #7276.5 fails
-                        lowlow_2 = 22  # for getting a good continuuem in 6949.0
-                        lowhigh_2 = 12
-                        highlow_2 = 36
-                        highhigh_2 = 52
-                    if sky_line_2 != 0 and verbose: print("  ... first checking", sky_line, "...")
-                    for fibre_sky in range(self.n_spectra):
-                        skyline_spec = fluxes(self.wavelength, self.intensity_corrected[fibre_sky], sky_line,
-                                              plot=False, verbose=False, lowlow=lowlow, lowhigh=lowhigh,
-                                              highlow=highlow, highhigh=highhigh)  # fmin=-5.0E-17, fmax=2.0E-16,
-                        # resultado = [rms_cont, fit[0], fit_error[0], gaussian_flux, gaussian_flux_error, fwhm, fwhm_error, flux, flux_error, ew, ew_error, spectrum  ]
-                        self.intensity_corrected[fibre_sky] = skyline_spec[11]
-
-                        skyline_sky = fluxes(self.wavelength, self.sky_emission[fibre_sky], sky_line, plot=False,
-                                             verbose=False, lowlow=lowlow, lowhigh=lowhigh, highlow=highlow,
-                                             highhigh=highhigh)  # fmin=-5.0E-17, fmax=2.0E-16,
-
-                        scale_per_fibre[fibre_sky] = skyline_spec[3] / skyline_sky[3]
-                        self.sky_emission[fibre_sky] = skyline_sky[11]
-
-                    if sky_line_2 != 0:
-                        if verbose: print("  ... now checking", sky_line_2, "...")
-                        for fibre_sky in range(self.n_spectra):
-                            skyline_spec = fluxes(self.wavelength, self.intensity_corrected[fibre_sky], sky_line_2,
-                                                  plot=False, verbose=False, lowlow=lowlow_2, lowhigh=lowhigh_2,
-                                                  highlow=highlow_2,
-                                                  highhigh=highhigh_2)  # fmin=-5.0E-17, fmax=2.0E-16,
-                            # resultado = [rms_cont, fit[0], fit_error[0], gaussian_flux, gaussian_flux_error, fwhm, fwhm_error, flux, flux_error, ew, ew_error, spectrum  ]
-                            self.intensity_corrected[fibre_sky] = skyline_spec[11]
-
-                            skyline_sky = fluxes(self.wavelength, self.sky_emission[fibre_sky], sky_line_2, plot=False,
-                                                 verbose=False, lowlow=lowlow_2, lowhigh=lowhigh_2, highlow=highlow_2,
-                                                 highhigh=highhigh_2)  # fmin=-5.0E-17, fmax=2.0E-16,
-
-                            scale_per_fibre_2[fibre_sky] = skyline_spec[3] / skyline_sky[3]
-                            self.sky_emission[fibre_sky] = skyline_sky[11]
-
-                            # Median value of scale_per_fibre, and apply that value to all fibres
-                    if sky_line_2 == 0:
-                        scale_sky_rss = np.nanmedian(scale_per_fibre)
-                        self.sky_emission = self.sky_emission * scale_sky_rss
-                    else:
-                        scale_sky_rss = np.nanmedian((scale_per_fibre + scale_per_fibre_2) / 2)
-                        # Make linear fit
-                        scale_sky_rss_1 = np.nanmedian(scale_per_fibre)
-                        scale_sky_rss_2 = np.nanmedian(scale_per_fibre_2)
-                        if verbose:
-                            print("  Median scale for line 1 :", scale_sky_rss_1, "range [", np.nanmin(scale_per_fibre),
-                                  ",", np.nanmax(scale_per_fibre), "]")
-                            print("  Median scale for line 2 :", scale_sky_rss_2, "range [",
-                                  np.nanmin(scale_per_fibre_2), ",", np.nanmax(scale_per_fibre_2), "]")
-
-                        b = (scale_sky_rss_1 - scale_sky_rss_2) / (sky_line - sky_line_2)
-                        a = scale_sky_rss_1 - b * sky_line
-                        if verbose: print("  Appling linear fit with a =", a, "b =", b,
-                                          "to all fibres in sky image...")  # ,a+b*sky_line,a+b*sky_line_2
-
-                        for i in range(self.n_wave):
-                            self.sky_emission[:, i] = self.sky_emission[:, i] * (a + b * self.wavelength[i])
-
-                    if plot:
-                        plt.figure(figsize=(fig_size, fig_size / 2.5))
-                        label1 = "$\lambda$" + np.str(sky_line)
-                        plt.plot(scale_per_fibre, alpha=0.5, label=label1)
-                        plt.minorticks_on()
-                        plt.ylim(np.nanmin(scale_per_fibre), np.nanmax(scale_per_fibre))
-                        plt.axhline(y=scale_sky_rss, color='k', linestyle='--')
-                        if sky_line_2 == 0:
-                            text = "Scale OBJECT / SKY using sky line $\lambda$" + np.str(sky_line)
-                            if verbose:
-                                print("  Scale per fibre in the range [", np.nanmin(scale_per_fibre), ",",
-                                      np.nanmax(scale_per_fibre), "], median value is", scale_sky_rss)
-                                print("  Using median value to scale sky emission provided...")
-                        if sky_line_2 != 0:
-                            text = "Scale OBJECT / SKY using sky lines $\lambda$" + np.str(
-                                sky_line) + " and $\lambda$" + np.str(sky_line_2)
-                            label2 = "$\lambda$" + np.str(sky_line_2)
-                            plt.plot(scale_per_fibre_2, alpha=0.5, label=label2)
-                            plt.axhline(y=scale_sky_rss_1, color='k', linestyle=':')
-                            plt.axhline(y=scale_sky_rss_2, color='k', linestyle=':')
-                            plt.legend(frameon=False, loc=1, ncol=2)
-                        plt.title(text)
-                        plt.xlabel("Fibre")
-                        plt.show()
-                        plt.close()
-                    self.intensity_corrected = self.intensity_corrected - self.sky_emission
-                self.apply_mask(verbose=verbose)
-                self.history(" - 2D sky subtraction performed")
-
+                self.apply_2D_sky(sky_rss, scale_sky_rss=scale_sky_rss, 
+                                  plot=plot, verbose=verbose, fig_size=fig_size)
+ 
             # (6) "selffit"            
             if sky_method == "selffit":
-                # TODO : Needs to be an independent task : apply_selffit_sky !!!
-                self.history.append('- Sky sustraction using the selffit method')
-
-                if verbose: print("\n> 'sky_method = selffit', hence using", n_sky,
-                                  "lowest intensity fibres to create a sky spectrum ...")
-
-                self.find_sky_emission(n_sky=n_sky, plot=plot, sky_fibres=sky_fibres,
-                                       sky_wave_min=sky_wave_min, sky_wave_max=sky_wave_max,
-                                       win_sky=win_sky, include_history=True)
-
-                if sky_spectrum[0] != -1 and np.nanmedian(sky_spectrum) != 0:
-                    if verbose: print(
-                        "\n> Additional sky spectrum provided. Using this for replacing regions with bright emission lines...")
-
-                    sky_r_self = self.sky_emission
-
-                    self.sky_emission = replace_el_in_sky_spectrum(self, sky_r_self, sky_spectrum,
-                                                                   scale_sky_1D=scale_sky_1D,
-                                                                   brightest_line=brightest_line,
-                                                                   brightest_line_wavelength=brightest_line_wavelength,
-                                                                   ranges_with_emission_lines=ranges_with_emission_lines,
-                                                                   cut_red_end=cut_red_end,
-                                                                   plot=plot)
-                    self.history.append('  Using sky spectrum provided for replacing regions with emission lines')
-
-                self.fit_and_substract_sky_spectrum(self.sky_emission, sky_lines_file=sky_lines_file,
-                                                    brightest_line_wavelength=brightest_line_wavelength,
-                                                    brightest_line=brightest_line,
-                                                    maxima_sigma=maxima_sigma, ymin=-50, ymax=600, wmin=0, wmax=0,
-                                                    auto_scale_sky=auto_scale_sky,
-                                                    warnings=False, verbose=False, plot=False, fig_size=fig_size,
-                                                    fibre=fibre_p)
-
-                if fibre_p == -1:
-                    if verbose: print(
-                        "\n> 'selffit' sky_method usually generates some nans, correcting ccd defects again...")
-                    self.correct_ccd_defects(kernel_correct_ccd_defects=kernel_correct_ccd_defects, verbose=verbose,
-                                             plot=plot, only_nans=True)  # not replacing values < 0
+                self.apply_selffit_sky(self, sky_spectrum=sky_spectrum, n_sky=n_sky,  sky_fibres=sky_fibres, 
+                                       sky_spectrum_file=sky_spectrum_file,
+                                       sky_wave_min=sky_wave_min, sky_wave_max=sky_wave_max, win_sky=win_sky, scale_sky_1D=scale_sky_1D,
+                                       sky_lines_file=sky_lines_file, brightest_line_wavelength=brightest_line_wavelength,
+                                       ranges_with_emission_lines = ranges_with_emission_lines,
+                                       cut_red_end = cut_red_end,
+                                       brightest_line=brightest_line, maxima_sigma=maxima_sigma, auto_scale_sky=auto_scale_sky,
+                                       fibre_p=fibre_p, kernel_correct_ccd_defects=kernel_correct_ccd_defects,
+                                       plot=plot, verbose=verbose, fig_size=fig_size)
 
             # (3) "self": Obtain the sky using the n_sky lowest fibres
             #             If a 1D spectrum is provided, use it for replacing regions with bright emission lines   #DIANA
             if sky_method == "self":
-
                 self.sky_fibres = sky_fibres
                 if n_sky == 0: n_sky = len(sky_fibres)
                 self.apply_self_sky(sky_fibres=self.sky_fibres, sky_spectrum=sky_spectrum, n_sky=n_sky,
@@ -686,7 +531,7 @@ class KOALA_RSS(RSS):
                                     use_fit_for_negative_sky=use_fit_for_negative_sky,
                                     kernel_negative_sky=kernel_negative_sky,
                                     order_fit_negative_sky=order_fit_negative_sky,
-                                    plot=True, verbose=verbose)
+                                    plot=plot, verbose=verbose)
 
         # Correct negative sky if requested 
         if is_sky == False and correct_negative_sky == True:
@@ -709,11 +554,11 @@ class KOALA_RSS(RSS):
         if is_sky:
             self.is_sky(n_sky=n_sky, win_sky=win_sky, sky_fibres=sky_fibres, sky_wave_min=sky_wave_min,
                         sky_wave_max=sky_wave_max, plot=plot, verbose=verbose)
-            if win_sky == 0: win_sky = 151  # Default value in is_sky
+            if win_sky == 0: win_sky = 151  # Default value in is_sky, it changes it running is_sky
 
         # ---------------------------------------------------
         # 7. Check if identify emission lines is requested & do      (E)
-        # TODO: NEEDS TO BE CHECKED AND MOVE TO INDEPENDENT TASK !!!!
+        # TODO: NEEDS TO BE CHECKED  !!!!
         if id_el:
             if brightest_line_wavelength == 0:
                 self.el = self.identify_el(high_fibres=high_fibres, brightest_line=brightest_line,
@@ -728,52 +573,14 @@ class KOALA_RSS(RSS):
         else:
             self.el = [[0], [0], [0], [0]]
 
-        # Check if id_list provided
+        # Check if emission lines in id_list derived or provided are found
         if id_list[0] != 0:
             if id_el:
-                if verbose: print("\n> Checking if identified emission lines agree with list provided")
-                # Read list with all emission lines to get the name of emission lines
-                emission_line_file = "lineas_c89_python.dat"
-                el_center, el_name = read_table(emission_line_file, ["f", "s"])
-
-                # Find brightest line to get redshift
-                for i in range(len(self.el[0])):
-                    if self.el[0][i] == brightest_line:
-                        obs_wave = self.el[2][i]
-                        redshift = (self.el[2][i] - self.el[1][i]) / self.el[1][i]
-                if verbose: print("  Brightest emission line", brightest_line, "found at ", obs_wave, ", redshift = ",
-                                  redshift)
-
-                el_identified = [[], [], [], []]
-                n_identified = 0
-                for line in id_list:
-                    id_check = 0
-                    for i in range(len(self.el[1])):
-                        if line == self.el[1][i]:
-                            if verbose: print("  Emission line ", self.el[0][i], self.el[1][i], "has been identified")
-                            n_identified = n_identified + 1
-                            id_check = 1
-                            el_identified[0].append(self.el[0][i])  # Name
-                            el_identified[1].append(self.el[1][i])  # Central wavelength
-                            el_identified[2].append(self.el[2][i])  # Observed wavelength
-                            el_identified[3].append(self.el[3][i])  # "FWHM"
-                    if id_check == 0:
-                        for i in range(len(el_center)):
-                            if line == el_center[i]:
-                                el_identified[0].append(el_name[i])
-                                if verbose: print("  Emission line", el_name[i], line,
-                                                  "has NOT been identified, adding...")
-                        el_identified[1].append(line)
-                        el_identified[2].append(line * (redshift + 1))
-                        el_identified[3].append(4 * broad)
-
-                self.el = el_identified
-                if verbose: print("  Number of emission lines identified = ", n_identified, "of a total of",
-                                  len(id_list), "provided. self.el updated accordingly")
+                self.check_el_identification(emission_line_file = emission_line_file, id_list=id_list, 
+                                brightest_line = brightest_line, broad = broad, verbose = verbose)
             else:
                 if rss_clean == False and verbose: print(
                     "\n> List of emission lines provided but no identification was requested")
-
         # ---------------------------------------------------
         # 8.1. Clean sky residuals if requested           (R)      
         if clean_sky_residuals:
