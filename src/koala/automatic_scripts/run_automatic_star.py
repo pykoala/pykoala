@@ -1,3 +1,5 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
 
 from koala.constants import red_gratings, blue_gratings, fibres_best_sky_100
 from koala.io import full_path, read_table, spectrum_to_text_file
@@ -6,9 +8,6 @@ from koala.automatic_scripts.koala_reduce import KOALA_reduce
 from koala.cube import read_cube, telluric_correction_from_star
 
 import numpy as np
-
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------

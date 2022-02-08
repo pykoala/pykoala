@@ -68,7 +68,6 @@ class KOALA_RSS(RSS):
                  valid_wave_min=0, valid_wave_max=0,  # These two are not needed if Mask is given
                  apply_throughput=False,
                  throughput_2D=[], throughput_2D_file="", throughput_2D_wavecor=False,
-                 # nskyflat=True, skyflat="", throughput_file ="", nskyflat_file="", plot_skyflat=False,
                  correct_ccd_defects=False, remove_5577=False, kernel_correct_ccd_defects=51, fibre_p=-1,
                  plot_suspicious_fibres=False,
                  fix_wavelengths=False, sol=[0, 0, 0],
@@ -95,15 +94,15 @@ class KOALA_RSS(RSS):
                  fix_edges=False,
                  clean_extreme_negatives=False, percentile_min=0.5,
                  clean_cosmics=False,
-                 # show_cosmics_identification = True,
                  width_bl=20., kernel_median_cosmics=5, cosmic_higher_than=100., extra_factor=1.,
                  max_number_of_cosmics_per_fibre=12,
                  warnings=True, verbose=True, print_summary=False,
                  plot=True, plot_final_rss=True,
-                 norm=colors.LogNorm(),  # TODO: this has to be replaced by log and gamma
+                 log= True, gamma = 0.,
                  fig_size=12):
 
         # ---------------------------------------------- Checking some details 
+        #TODO: Move this at the beginning of new a task in RSS:  self.process_rss()
 
         if rss_clean:  # Just read file if rss_clean = True
             apply_throughput = False
@@ -143,11 +142,12 @@ class KOALA_RSS(RSS):
 
         if sky_method not in ["self", "selffit"]:
             force_sky_fibres_to_zero = False  # We don't have sky fibres, sky spectrum is given
-        self.sky_fibres = []
 
         # --------------------------------------------------------------------
         # Reading KOALA data using the products of 2dFdr...
         # --------------------------------------------------------------------
+
+        self.sky_fibres = []
 
         # Create RSS object
         super(KOALA_RSS, self).__init__()
@@ -313,6 +313,8 @@ class KOALA_RSS(RSS):
         # ---------------------------------------------------
         # ------------- PROCESSING THE RSS FILE -------------
         # ---------------------------------------------------
+
+        #TODO: Move all from here to a task in RSS:         self.process_rss()
 
         # --------------------------------------------------------------------
         # ------------------------------------- 0a Reading or getting the mask

@@ -104,7 +104,7 @@ class KOALA_reduce(RSS,Interpolated_cube):                                      
                  log = True	,		# If True and gamma = 0, use colors.LogNorm() [LOG], if False colors.Normalize() [LINEAL] 
                  gamma	= 0,
                  plot= True, plot_rss=True, plot_weight=False, plot_spectra = True, fig_size=12,
-                 warnings=False, verbose = False): # norm
+                 warnings=False, verbose = False):
         """
         Example
         -------

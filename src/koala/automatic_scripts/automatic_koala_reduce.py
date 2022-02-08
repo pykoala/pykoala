@@ -880,7 +880,6 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
     print("  plot                     = ",plot)
     if do_cubing or make_combined_cube:    
         if plot_weight: print("  plot weights             = ",plot_weight)
-    #if norm != "colors.LogNorm()" :  print("  norm                     = ",norm)
     if fig_size != 12. : print("  fig_size                 = ",fig_size)
     print("  warnings                 = ",warnings)
     if verbose == False: print("  verbose                  = ",verbose)    
@@ -915,12 +914,11 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
                 ADR_x_fit_list.append([0])
                 ADR_y_fit_list.append([0])
             
-      # Values for improving alignment:   # TODO: CHECK THIS!!! Now I think it is wrong!!!
+      # Values for improving alignment:   # TODO: CHECK THIS!!! 
         if delta_RA+delta_DEC != 0:          
             for i in range(len(ADR_x_fit_list)):
-                ADR_x_fit_list[i][2] = ADR_x_fit_list[i][2] + (delta_RA)
-                ADR_y_fit_list[i][2] = ADR_y_fit_list[i][2] + (delta_DEC)
-       
+                ADR_x_fit_list[i][2] = ADR_x_fit_list[i][2] + delta_RA
+                ADR_y_fit_list[i][2] = ADR_y_fit_list[i][2] + delta_DEC
                 
      # Now run KOALA_reduce      
         hikids = KOALA_reduce(rss_list,  
@@ -1022,7 +1020,6 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
                               
                               valid_wave_min = valid_wave_min, valid_wave_max = valid_wave_max,
                               fig_size = fig_size,
-                              #norm = norm,
                               log = log, gamma = gamma,
                               plot=plot, plot_rss = plot_rss, plot_weight=plot_weight, plot_spectra =plot_spectra,
                               warnings=warnings, verbose=verbose) 

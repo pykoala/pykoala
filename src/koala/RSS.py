@@ -75,6 +75,59 @@ class RSS(object):
         self.integrated_fibre = 0
         # self.throughput = np.ones((0))
 
+
+
+
+
+    # %% =============================================================================
+    # STANDARD PROCESS of a RSS FILE (originally in KOALA_RSS class)
+    # =============================================================================
+    # -----------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+
+    # def process_rss():
+        
+    #     if rss_clean:  # Just read file if rss_clean = True
+    #         apply_throughput = False
+    #         correct_ccd_defects = False
+    #         fix_wavelengths = False
+    #         sol = [0, 0, 0]
+    #         sky_method = "none"
+    #         do_extinction = False
+    #         telluric_correction = [0]
+    #         telluric_correction_file = ""
+    #         id_el = False
+    #         clean_sky_residuals = False
+    #         fix_edges = False
+    #         # plot_final_rss = plot
+    #         plot = False
+    #         correct_negative_sky = False
+    #         clean_cosmics = False
+    #         clean_extreme_negatives = False
+    #         remove_negative_median_values = False
+    #         verbose = False
+
+    #     if len(telluric_correction_file) > 0 or telluric_correction[0] != 0:
+    #         do_telluric_correction = True
+    #     else:
+    #         do_telluric_correction = False
+
+    #     if (apply_throughput == False and correct_ccd_defects == False and fix_wavelengths == False
+    #             and sky_method == "none" and do_extinction == False and telluric_correction == [0]
+    #             and clean_sky_residuals == False and correct_negative_sky == False and clean_cosmics == False
+    #             and fix_edges == False and clean_extreme_negatives == False and remove_negative_median_values == False
+    #             and do_telluric_correction == False and is_sky == False):
+    #         # If nothing is selected to do, we assume that the RSS file is CLEAN
+    #         rss_clean = True
+    #         # plot_final_rss = plot
+    #         plot = False
+    #         verbose = False
+
+    #     if sky_method not in ["self", "selffit"]:
+    #         force_sky_fibres_to_zero = False  # We don't have sky fibres, sky spectrum is given        
+        
+        
+
     # %% =============================================================================
     # Basic methods
     # =============================================================================
@@ -414,7 +467,7 @@ class RSS(object):
     # -----------------------------------------------------------------------------
     def compute_integrated_fibre(self, list_spectra="all", valid_wave_min=0,
                                  valid_wave_max=0, min_value=0.01,
-                                 norm=colors.PowerNorm(gamma=1. / 4.),
+                                 log = True, gamma =0,
                                  title=" - Integrated values",
                                  text="...",
                                  correct_negative_sky=False,
@@ -520,7 +573,7 @@ class RSS(object):
                 if warnings or verbose: print("\n> There are no fibres with integrated flux < 0 !")
 
         self.integrated_fibre_sorted = np.argsort(self.integrated_fibre)
-        if plot: self.RSS_map(self.integrated_fibre, norm=norm, title=title)
+        if plot: self.RSS_map(self.integrated_fibre, log=log, gamma=gamma, title=title)
 
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
@@ -1697,10 +1750,10 @@ class RSS(object):
 
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
-    def find_sky_emission(self, intensidad=[0, 0], plot=True, n_sky=200,
+    def find_sky_emission(self, intensidad=[0, 0],  n_sky=200,
                           sky_fibres=[], sky_wave_min=0, sky_wave_max=0,
-                          # substract_sky=True, correct_negative_sky= False,
-                          norm=colors.LogNorm(), win_sky=0, include_history=True):
+                          win_sky=0, include_history=True,
+                          log=True, gamma=0, plot=True):
         """
         Find the sky emission given fibre list or taking n_sky fibres with lowest integrated value.
 
@@ -1721,14 +1774,11 @@ class RSS(object):
             Only used when sky_fibres is [1000]
             Consider the integrated flux in the range [sky_wave_min, sky_wave_max]
             If 0, they are set to self.valid_wave_min or self.valid_wave_max
-        norm=colors.LogNorm :
-            normalises values from 0 to 1 range on a log scale for colour plotting
-            //
-            norm:
+        log, gamma:
             Normalization scale, default is lineal scale.
-            Lineal scale: norm=colors.Normalize().
-            Log scale:    norm=colors.LogNorm()
-            Power law:    norm=colors.PowerNorm(gamma=1./4.)
+            Lineal scale: norm=colors.Normalize().   log = False, gamma = 0
+            Log scale:    norm=colors.LogNorm()      log = True, gamma = 0
+            Power law:    norm=colors.PowerNorm(gamma=1./4.) when gamma != 0
             //
         win_sky : odd integer (default = 0)
             Width in fibres of a median filter applied to obtain sky spectrum
@@ -1745,7 +1795,7 @@ class RSS(object):
             print("  sky_fibres = ", sky_fibres)
             self.sky_fibres = np.array(sky_fibres)
 
-        if plot: self.RSS_map(self.integrated_fibre, None, self.sky_fibres, title=" - Sky Spaxels")
+        if plot: self.RSS_map(self.integrated_fibre, list_spectra=self.sky_fibres, log=log, gamma=gamma, title=" - Sky Spaxels")
         print("  List of fibres used for sky saved in self.sky_fibres")
 
         if include_history: self.history.append("- Obtaining the sky emission using " + np.str(n_sky) + " fibres")
@@ -3046,7 +3096,7 @@ class RSS(object):
 
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
-    def RSS_map(self, variable=[0], norm=colors.LogNorm(), list_spectra=[], log="",
+    def RSS_map(self, variable=[0], list_spectra=[], log=False, gamma=0,
                 title=" - RSS map", clow="", chigh="",
                 color_bar_text="Integrated Flux [Arbitrary units]"):
         """
@@ -3068,7 +3118,9 @@ class RSS(object):
         """
         if variable[0] == 0: variable = self.integrated_fibre
 
+        norm=colors.LogNorm()
         if log == False: norm = colors.Normalize()
+        if gamma > 0: norm=colors.PowerNorm(gamma=gamma)
 
         if len(list_spectra) == 0:
             list_spectra = list(range(self.n_spectra))
@@ -3096,10 +3148,10 @@ class RSS(object):
 
         plt.show()
         plt.close()
-
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
-    def RSS_image(self, image="", norm=colors.Normalize(), cmap="seismic_r", clow="", chigh="", labelpad=10, log=False,
+    def RSS_image(self, image="", log=False, gamma=0,
+                  cmap="seismic_r", clow="", chigh="", labelpad=10, 
                   title=" - RSS image", color_bar_text="Integrated Flux [Arbitrary units]", fig_size=13.5):
         """
         Plot RSS image coloured by variable.
@@ -3109,12 +3161,11 @@ class RSS(object):
         ----------
         image : string (default = none)
             Specify the name of saved RSS image
-        norm:
+        log and gamma:
             Normalization scale, default is lineal scale.
             Lineal scale: norm=colors.Normalize().
             Log scale:    norm=colors.LogNorm()
-            Power law:    norm=colors.PowerNorm(gamma=1./4.)
-        log:
+            Power law:    norm=colors.PowerNorm(gamma=1./4.)  if gamma given
         cmap : string (default = "seismic_r")
             Colour map for the plot
         clow : float (default = none)
@@ -3132,7 +3183,9 @@ class RSS(object):
 
         """
 
-        if log: norm = colors.LogNorm()
+        norm=colors.LogNorm()
+        if log == False: norm = colors.Normalize()
+        if gamma > 0: norm=colors.PowerNorm(gamma=gamma)
 
         if image == "":
             image = self.intensity_corrected
