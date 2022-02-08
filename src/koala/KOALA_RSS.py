@@ -145,7 +145,7 @@ class KOALA_RSS(RSS):
         self.sky_fibres = []
 
         # --------------------------------------------------------------------
-        # ------------------------------------------------    Reading the data
+        # Reading KOALA data using the products of 2dFdr...
         # --------------------------------------------------------------------
 
         # Create RSS object
@@ -223,6 +223,9 @@ class KOALA_RSS(RSS):
 
         self.ZDSTART = rss_fits_file[0].header['ZDSTART']
         self.ZDEND = rss_fits_file[0].header['ZDEND']
+        ZD = (self.ZDSTART + self.ZDEND) / 2
+        self.airmass = 1 / np.cos(np.radians(ZD))
+        self.extinction_correction = np.ones(self.n_wave)
 
         # KOALA-specific stuff
         self.PA = rss_fits_file[0].header['TEL_PA']
@@ -347,14 +350,7 @@ class KOALA_RSS(RSS):
         # Usually this is found .nresponse , see task "nresponse_flappyflat"
         # However, this correction is not needed is LFLATs have been used in 2dFdr
         # and using a skyflat to get .nresponse (small wavelength variations to throughput)
-        if flat is not None:
-            if verbose:
-                print("\n> Dividing the data by the flatfield provided...")
-            self.intensity_corrected = self.intensity_corrected / flat.intensity_corrected
-            self.variance_corrected = self.variance_corrected / (flat.intensity_corrected)**2
-            self.history.append("- Data divided by flatfield:")
-            self.history.append(flat.filename)
-
+        if flat is not None:  self.apply_flat(flat, path=path, plot=plot, verbose=verbose)
         # ---------------------------------------------------
         # 1. Check if apply throughput & apply it if requested    (T)
         text_for_integrated_fibre = "..."
@@ -444,12 +440,7 @@ class KOALA_RSS(RSS):
             # ---------------------------------------------------
         # 4. Get airmass and correct for extinction         (X)
         # DO THIS BEFORE TELLURIC CORRECTION (that is extinction-corrected) OR SKY SUBTRACTION
-        ZD = (self.ZDSTART + self.ZDEND) / 2
-        self.airmass = 1 / np.cos(np.radians(ZD))
-        self.extinction_correction = np.ones(self.n_wave)
-        if do_extinction:
-            self.do_extinction_curve(plot=plot, verbose=verbose, fig_size=fig_size)
-
+        if do_extinction: self.do_extinction_curve(plot=plot, verbose=verbose, fig_size=fig_size)
         # ---------------------------------------------------                            
         # 5. Check if telluric correction is needed & apply    (U)   
         telluric_correction_applied = False
@@ -519,6 +510,7 @@ class KOALA_RSS(RSS):
 
                     # (2) If a 2D sky, sky_rss, is provided
             if sky_method == "2D":  # if np.nanmedian(sky_rss.intensity_corrected) != 0:
+                #TODO: this method needs to be checked
                 self.history.append('- Sky sustraction using the 2D method')
 
                 if scale_sky_rss != 0:
@@ -721,7 +713,7 @@ class KOALA_RSS(RSS):
 
         # ---------------------------------------------------
         # 7. Check if identify emission lines is requested & do      (E)
-        # TODO: NEEDS TO BE CHECKED !!!!
+        # TODO: NEEDS TO BE CHECKED AND MOVE TO INDEPENDENT TASK !!!!
         if id_el:
             if brightest_line_wavelength == 0:
                 self.el = self.identify_el(high_fibres=high_fibres, brightest_line=brightest_line,
@@ -819,8 +811,7 @@ class KOALA_RSS(RSS):
                 # check functions for documentation
         # ---------------------------------------------------
         # 8.2. Clean edges if requested           (R)  
-        if fix_edges:
-            self.fix_edges(verbose=verbose)
+        if fix_edges: self.fix_edges(verbose=verbose)
         # ---------------------------------------------------
         # 8.3. Remove negative median values      (R)
         if remove_negative_median_values:  # it was remove_negative_pixels_in_sky:
@@ -829,8 +820,9 @@ class KOALA_RSS(RSS):
         # ---------------------------------------------------
         # 8.4. Clean extreme negatives      (R)        
         if clean_extreme_negatives:
-            self.clean_extreme_negatives(fibre_list=fibres_to_fix, percentile_min=percentile_min, plot=plot,
-                                         verbose=verbose)
+            self.clean_extreme_negatives(fibre_list=fibres_to_fix, 
+                                         percentile_min=percentile_min, 
+                                         plot=plot, verbose=verbose)
         # ---------------------------------------------------
         # 8.5. Clean cosmics    (R)
         if clean_cosmics:

@@ -3231,6 +3231,54 @@ class RSS(object):
 
         self.intensity_corrected = g
 
+
+    # -----------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    def apply_flat(self, flat, path="", plot=False, verbose=True):
+        """
+        Apply a normalized flatfield to all spectra in RSS.        
+
+        Parameters
+        ----------
+        flat : Object or string
+            Normalized flatfield.
+        path : TYPE, optional
+            DESCRIPTION. The default is "".
+        plot : Boolean, optional
+            Plot
+        verbose : Boolean, optional
+            DESCRIPTION. The default is True.
+
+        """
+        flat_filename=None
+        if type(flat) == "str":
+            flat_filename = flat
+            if verbose: print("\n> Dividing the data by the flatfield provided in file:", flat_filename)
+            flat_ = KOALA_RSS(flat, path =path)
+            flat = flat_.intensity_corrected
+        elif verbose: print("\n> Dividing the data by the flatfield provided...")
+        
+        if plot: 
+            if verbose: print("  Plotting the flatfield...")
+            flat.RSS_image()
+            if verbose: print("  Plotting the RSS BEFORE correcting...")
+            self.RSS_image()
+
+        self.intensity_corrected = self.intensity_corrected / flat.intensity_corrected
+        self.variance_corrected = self.variance_corrected / (flat.intensity_corrected)**2
+        
+        if plot:
+            if verbose: print("  Plotting the RSS AFTER flatfield correction...")
+            self.RSS_image()      
+        
+        self.history.append("- Data divided by flatfield:")
+        self.history.append("  "+flat.filename)
+        if flat_filename is not None: self.history.append("   Using file "+flat_filename)
+        
+            
+        
+
     # %% =============================================================================
 
 
@@ -3306,8 +3354,6 @@ def get_minimum_spectra(rss_file_list, percentile=0,
     if plot:
         rss.RSS_image(image=ic_min, cmap="binary_r")
     return ic_min
-
-
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -3349,8 +3395,6 @@ def create_fits_with_mask(list_files_for_mask, filename="", plot=True, no_nans=T
 
     print("\n> Mask created!")
     return mask
-
-
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -3377,8 +3421,6 @@ def merge_extracted_flappyflats(flappyflat_list, write_file="", path="", verbose
         ftf.writeto(path + write_file, overwrite=True)
 
     return merged
-
-
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -3436,36 +3478,6 @@ def nresponse_flappyflat(file_f, flappyflat="", nresponse_file="",
         print(" ", nresponse_file)
         save_nresponse(flappyflat, filename=nresponse_file, flappyflat=True)
     return nresponse
-
-
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-def merge_extracted_flappyflats(flappyflat_list, write_file="", path="", verbose=True):
-    print("\n> Merging flappy flats...")
-    if verbose: print("  - path : ", path)
-    data_list = []
-    for flappyflat in flappyflat_list:
-        file_to_fix = path + flappyflat
-        ftf = fits.open(file_to_fix)
-        data_ = ftf[0].data
-        exptime = ftf[0].header['EXPOSED']
-        data_list.append(data_ / exptime)
-        if verbose: print("  - File", flappyflat, "   exptime =", exptime)
-
-    merged = np.nanmedian(data_list, axis=0)
-
-    # Save file
-    if write_file != "":
-        ftf[0].data = merged
-        ftf[0].header['EXPOSED'] = 1.0
-        ftf[0].header['HISTORY'] = "Median flappyflat using Python - A.L-S"
-        print("\n  Saving merged flappyflat to file ", write_file, "...")
-        ftf.writeto(path + write_file, overwrite=True)
-
-    return merged
-
-
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -3554,8 +3566,6 @@ def get_throughput_2D(file_skyflat, throughput_2D_file="", plot=True, also_retur
         return throughput_2D, skyflat
     else:
         return throughput_2D
-
-
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -3593,8 +3603,6 @@ def obtain_telluric_correction(w, telluric_correction_list, plot=True, label_sta
     if np.nanmean(scale) != 1.: print("  Telluric correction scale provided : ", scale)
     print("\n  Telluric correction obtained!")
     return telluric_correction
-
-
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -3625,8 +3633,6 @@ def obtain_sky_spectrum(sky, low_fibres=200, plot=True, fig_size=12, fcal=False,
         plot_plot(sky.wavelength, sky_spectrum, ptitle=ptitle, fcal=fcal)
 
     return sky_spectrum
-
-
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -3901,8 +3907,6 @@ def fix_these_features_in_all_spectra(objeto, features=[], sky_fibres=[], sky_sp
         objeto.history.append("  " + np.str(feature))
 
     return fix
-
-
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -4032,8 +4036,6 @@ def replace_el_in_sky_spectrum(rss, sky_r_self, sky_r_star, cut_red_end=0,
                           axvspan=rango_plot)
 
     return good_sky_red
-
-
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -4044,15 +4046,13 @@ def remove_negative_pixels(spectra, verbose=True):
 
     Parameters
     ----------
-    spectra : TYPE
-        DESCRIPTION.
-    verbose : TYPE, optional
-        DESCRIPTION. The default is True.
+    spectra : list or array of spectra (it can be only one)
+    verbose : boolean 
+        Print a message. The default is True.
 
     Returns
     -------
-    output : TYPE
-        DESCRIPTION.
+    output : list of spectra
 
     """
     cuenta = 0
@@ -4070,8 +4070,6 @@ def remove_negative_pixels(spectra, verbose=True):
     if verbose: print(
         "\n> Found {} spectra for which the median value is negative, they have been corrected".format(cuenta))
     return output
-
-
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
