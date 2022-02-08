@@ -4163,7 +4163,7 @@ class RSS(object):
                                     self.intensity_corrected.shape))
         else:
             self.intensity_corrected = self.intensity_corrected / flat.intensity_corrected
-            self.variance_corrected = self.variance_corrected / (flat.intensity_corrected)**2
+            self.variance_corrected = self.variance_corrected / flat.intensity_corrected**2
         
             if plot:
                 if verbose: print("  Plotting the RSS AFTER flatfield correction...")
