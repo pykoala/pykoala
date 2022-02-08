@@ -607,8 +607,11 @@ def list_fits_files_in_folder(path, verbose = True, use2=True, use3=False, ignor
     if verbose: print("\n> Listing fits files in folder",path,":\n")
     
     if path[-1] != "/" : path=path+"/"
-   
-    for fitsName in sorted(glob.glob(path+'*.fits')):
+    date_ = ''  # TODO: This must be filled somehow. It is just for printing data
+    files = glob.glob(path + '*.fits')
+    if len(files) == 0:
+        raise NameError('No files found within folder '+path)
+    for fitsName in sorted(files):
         check_file = True
         if fitsName[-8:] != "red.fits" : 
             check_file = False
@@ -622,7 +625,7 @@ def list_fits_files_in_folder(path, verbose = True, use2=True, use3=False, ignor
         object_fits = hdulist[0].header['OBJECT'].split(" ")
         if object_fits[0] in ["HD", "NGC", "IC"] or use2:
             try:
-                if ignore_offsets == False:
+                if not ignore_offsets:
                     object_fits[0]=object_fits[0]+object_fits[1]
                 elif object_fits[1] not in ignore_list:
                     object_fits[0]=object_fits[0]+object_fits[1]
@@ -630,7 +633,7 @@ def list_fits_files_in_folder(path, verbose = True, use2=True, use3=False, ignor
                 nothing=0
         if use3:
             try:
-                if ignore_offsets == False:
+                if not ignore_offsets:
                     object_fits[0]=object_fits[0]+object_fits[2]
                 elif object_fits[2] not in ignore_list:
                     object_fits[0]=object_fits[0]+object_fits[2]
@@ -656,7 +659,7 @@ def list_fits_files_in_folder(path, verbose = True, use2=True, use3=False, ignor
                     found=True
                     list_of_files[i].append(fitsName)               
                     list_of_exptimes[i].append(exptime)
-            if found == False:
+            if not found:
                 list_of_objetos.append(object_fits[0])
                 list_of_files.append([fitsName])
                 list_of_exptimes.append([exptime])
@@ -671,10 +674,12 @@ def list_fits_files_in_folder(path, verbose = True, use2=True, use3=False, ignor
                 else:
                     print("                   {}          {:.1f} s".format(list_of_files[i][j], list_of_exptimes[i][j]))
                         
-        print("\n  They were obtained on {} using the grating {}".format(date,grating))
+        print("\n  They were obtained on {} using the grating {}".format(date, grating))
 
-    if return_list: return list_of_objetos,list_of_files, list_of_exptimes, date,grating
-    if nothing > 10 : print(nothing)  # Stupid thing for controling Exceptions
+    if return_list:
+        return list_of_objetos, list_of_files, list_of_exptimes, date, grating
+    if nothing > 10:
+        print(nothing)  # Stupid thing for controlling Exceptions
 
 
 # -----------------------------------------------------------------------------
