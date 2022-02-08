@@ -42,10 +42,11 @@ if __name__ == "__main__":
     # # That will be where your data are.
     # # 
     # # Type where your data will be:
-    path = "/DATA/KOALA/Python/GitHub/test_reduce/"
-    #path = os.path.join('..', '..', 'tests', 'reduced_data')
-    #if not os.path.isdir(path):
-    #    os.mkdir('../../tests/reduced_data')
+    #path = "/DATA/KOALA/Python/GitHub/test_reduce/"
+
+    path = os.path.join('..', '..', 'tests', 'reduced_data')
+    if not os.path.isdir(path):
+        os.mkdir('../../tests/reduced_data')
 
     # # If needed, you can copy the example data using this:        
     #os.system("mkdir "+path)
