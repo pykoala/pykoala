@@ -6,12 +6,12 @@ import numpy as np
 from koala.io import full_path
 
 def plot_plot(x, y,  xmin="",xmax="",ymin="",ymax="",percentile_min=2, percentile_max=98,
-              ptitle = None, xlabel = None, ylabel = None,
+              ptitle = None, xlabel = None, ylabel = None, label="",
               #ptitle="Pretty plot", xlabel="Wavelength [$\mathrm{\AA}$]", ylabel="", 
               fcal="", 
               psym="", color="blue", alpha="", linewidth=1,  linestyle="-", markersize = 10,
               vlines=[], hlines=[], chlines=[], cvlines=[], axvspan=[[0,0]], hwidth =1, vwidth =1,
-              frameon = False, loc = 0, ncol = 6, label="",  text=[],
+              frameon = False, loc = 0, ncol = 6,   text=[],
               title_fontsize=12, label_axes_fontsize=10, axes_fontsize=10, tick_size=[5,1,2,1], axes_thickness =0,
               save_file="", path="", fig_size=12, warnings = True, show=True, statistics=""):
     
@@ -160,7 +160,15 @@ def plot_plot(x, y,  xmin="",xmax="",ymin="",ymax="",percentile_min=2, percentil
            if psym[i] == "":
                plt.plot(xx[i],y[i], color=color[i], alpha=alpha[i], label=label[i], linewidth=linewidth[i], linestyle=linestyle[i])
            else:
-               #print(len(xx),len(y), len(psym), len(color), len(alpha), len(label), len(linewidth), len(markersize))
+               #print(xx)
+               #print(y)
+               # print(psym)
+               # print(color) 
+               # print(alpha)
+               # print(label)
+               # print(linewidth)
+               # print(markersize)
+               # print(len(xx),len(y), len(psym), len(color), len(alpha), len(label), len(linewidth), len(markersize))
                plt.plot(xx[i],y[i], psym[i], color=color[i], alpha=alpha[i], label=label[i], mew=linewidth[i], markersize=markersize[i])
            if ymax == "":
                     y_max_ = []                

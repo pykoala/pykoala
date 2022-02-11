@@ -42,15 +42,19 @@ if __name__ == "__main__":
     # # First, copy the input data to a local folder (not within PyKOALA)
 
     # # Type where your data will be:
-    path = "/DATA/KOALA/Python/GitHub/test_reduce_new/"
+    path = "/DATA/KOALA/Python/GitHub/test_reduce_02_03/"
+    path = "/DATA/KOALA/Python/GitHub/test_reduce_02_04/"
+    path = "/DATA/KOALA/2022_02_03_testing_2dfdr/20180227/"
 
     # # If needed, you can copy the example data using this:        
     #os.system("mkdir "+path)
     #os.system("cp -R ./input_data/sample_RSS/* "+path)
 
     # # For AAOmega, we have TWO folders per night: blue (580V) and red (385R)
-    path_red = os.path.join(path, "385R")
-    path_blue = os.path.join(path, "580V")
+    # path_red = os.path.join(path, "385R")
+    # path_blue = os.path.join(path, "580V")
+    path_red = os.path.join(path, "ccd_2")
+    path_blue = os.path.join(path, "ccd_1")
 
     # # -----------------------------------------------------------------------
     # # -----------------------------------------------------------------------
@@ -560,9 +564,9 @@ if __name__ == "__main__":
     #                                         throughput_2D_file =throughput_2D_file, kernel_throughput = 21) 
 
 
-    file_in=full_path("27feb10025red.fits", path_blue)
+    file_in=full_path("27feb10022red.fits", path_blue)
     flat_blue_file = full_path("27feb10006red.fits", path_blue) 
-    # flat_blue = KOALA_RSS(flat_blue_file, plot_final_rss = True) 
+    #flat_blue = KOALA_RSS(flat_blue_file, plot_final_rss = True) 
     
     
     # test_new = KOALA_RSS(file_in, 
@@ -589,7 +593,14 @@ if __name__ == "__main__":
     #                   plot=True, warnings=False, verbose=True)
 
 
-    # test_new = KOALA_RSS(file_in)
+    #test_new = KOALA_RSS(file_in, print_summary=True)
+    
+    # test_new.process_rss(apply_throughput=True, throughput_2D=throughput_2D_blue_new)
+                          #correct_ccd_defects = True,
+                          #remove_5577 = True)
+                          #fix_wavelengths = True )
+                          
+    # print(test_new.history)                      
     # x = range(test.n_spectra)    
     # plot_plot(x,test_new.integrated_fibre/1E6, ymin=0., ymax=0.2, 
     #           ptitle="Integrated flux using 2dfdr v8.00b", xlabel="Fibre", 
@@ -607,8 +618,7 @@ if __name__ == "__main__":
  
  
    
- 
-    
+
  
     
     # # PREVIOUS
@@ -618,8 +628,8 @@ if __name__ == "__main__":
     path_red_old  = os.path.join(path_old, "385R")
  
     
-    # file_in_old=full_path("27feb10025red.fits", path_blue_old)
-    # test_old = KOALA_RSS(file_in_old)
+    file_in_old=full_path("27feb10028red.fits", path_blue_old)
+    test_old = KOALA_RSS(file_in_old)
     # plot_plot(x,test_old.integrated_fibre/1E6, ymin=-0.02, ymax=0.2, 
     #           ptitle="Integrated flux using 2dfdr v7.1", xlabel="Fibre", 
     #           ylabel="Flux [ 10$^6$ counts ]", fig_size="big",
@@ -717,16 +727,27 @@ if __name__ == "__main__":
 
     
         
-    eocc12=estimate_offsets_comparing_cubes(cubestar,cubestar2, 
-                                            delta_RA_max = 4,
-                                            delta_DEC_max = 4,
-                                            #line=6400,line2=6500,
-                                            index_fit =0,
-                                            step=0.1,
-                                      plot=True, plot_comparison=False,
-                                      verbose=True, return_values=True)        
+    # eocc12=estimate_offsets_comparing_cubes(cubestar,cubestar2, n_ite= 1, 
+    #                                         delta_RA_max = 4,
+    #                                         delta_DEC_max = 4,
+    #                                         #line=6400,line2=6500,
+    #                                         index_fit =0,
+    #                                         step=0.01,
+    #                                   plot=True, plot_comparison=False,
+    #                                   verbose=True, return_values=True)        
         
-        
+    #star_rss = KOALA_RSS(file_star, path = path_red_old)
+    # star2_rss = KOALA_RSS(file_star2, path = path_red_old)
+    # star3_rss = KOALA_RSS(file_star3, path = path_red_old)
+    
+    # rss_star_list=[star_rss,star2_rss,star3_rss]
+    # cube_star_list=[cubestar,cubestar2,cubestar3]
+    
+    
+    # #w_star,flux_calibration = read_table(flux_calibration_file, ["f", "f"] )
+    # align_test = align_n_cubes(rss_star_list,cube_list=cube_star_list, 
+    #                            ADR=True, plot=True, plot_spectra=False, compare_cubes = False,
+    #                            flux_calibration_list=[flux_calibration,flux_calibration,flux_calibration])
   
  
     # # -----------------------------------------------------------------------

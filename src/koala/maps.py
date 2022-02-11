@@ -29,25 +29,13 @@ from koala.constants import red_gratings, blue_gratings, C
 from koala.io import full_path, version, developers
 from koala.onedspec import fluxes
 
-
 # Disable some annoying warnings
+import logging
 import warnings
 warnings.simplefilter('ignore', np.RankWarning)
 warnings.simplefilter(action='ignore',category=FutureWarning)
 warnings.filterwarnings('ignore')
-import logging
 logging.basicConfig(level=logging.CRITICAL)
-
-current = os.path.dirname(os.path.realpath(__file__))
-parent = os.path.dirname(current)
-sys.path.append(parent)
-  
-sys.path.append(os.path.join(parent, 'RSS'))
-sys.path.append(os.path.join(parent, 'cube'))
-sys.path.append(os.path.join(parent, 'automatic_scripts'))
-
-
-
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------

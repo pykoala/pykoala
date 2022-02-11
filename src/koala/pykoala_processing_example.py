@@ -29,7 +29,6 @@ pykoala_path = os.getcwd()
 
 exec(compile(open(os.path.join(pykoala_path, "load_PyKOALA.py"), "rb").read(),
              os.path.join(pykoala_path, "load_PyKOALA.py"), 'exec'))   # This just reads the file.
-
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 
@@ -37,11 +36,22 @@ if __name__ == "__main__":
 
     print("\n\n> Running PyKOALA -", version)
       
+    # # VERY IMPORTANT :
     # # First, copy the input data to a local folder (not within PyKOALA)
-
+    # # The RSS data are in pykoala_path/input_data/sample_RSS/
+    # # That will be where your data are.
+    # # 
     # # Type where your data will be:
+
         #check folder is correct for Barr -> /Users/barrp/KOALA/DATA/original_data_not_in_GIT/data_worked_on/
     path = "/Users/barrp/KOALA/DATA/original_data_not_in_GIT/data_worked_on/"
+
+    #path = "/DATA/KOALA/Python/GitHub/test_reduce/"
+
+    path = os.path.join('..', '..', 'tests', 'reduced_data')
+    if not os.path.isdir(path):
+        os.mkdir('../../tests/reduced_data')
+
 
     # # If needed, you can copy the example data using this:        
     #os.system("mkdir "+path)
