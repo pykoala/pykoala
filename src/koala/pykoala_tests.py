@@ -19,6 +19,8 @@
 # Start timer
 # -----------------------------------------------------------------------------
 import os
+import sys
+
 from timeit import default_timer as timer
 
 start = timer()
@@ -26,11 +28,57 @@ start = timer()
 # Load all PyKOALA tasks   / Import PyKOALA 
 # -----------------------------------------------------------------------------
 
-#pykoala_path = "/DATA/KOALA/Python/GitHub/koala/src/koala/"
+# pykoala_path = "/DATA/KOALA/Python/GitHub/koala/src/koala/"  # Angel local folder
 pykoala_path = os.getcwd()
 
-exec(compile(open(os.path.join(pykoala_path, "load_PyKOALA.py"), "rb").read(),
-             os.path.join(pykoala_path, "load_PyKOALA.py"), 'exec'))   # This just reads the file.
+# Execute load_PyKOALA.py
+#exec(compile(open(os.path.join(pykoala_path, "load_PyKOALA.py"), "rb").read(),
+#              os.path.join(pykoala_path, "load_PyKOALA.py"), 'exec'))   # This just reads the file.
+
+# -----------------------------------------------------------------------------
+
+# This is what load_PyKOALA.py does:
+
+original_system_path =[]
+for item in sys.path:
+    #print("Original",item)
+    original_system_path.append(item)
+
+# # This is from where Python will look for "koala"
+sys.path.append(pykoala_path[:-6])
+
+# # 1. Load file with constant data
+from koala.constants import * 
+# # 2. Load file with I/O tasks and version and developers
+from koala.io import * 
+# 3. Load file with plot_plot and basic_statistics (task included in plot_plot.py)
+from koala.plot_plot import *
+# 4. Load file with 1D spectrum tasks
+from koala.onedspec import * 
+# 5. Load file with RSS class & RSS tasks
+from koala.RSS import *
+# 6. Load file with KOALA_RSS class & KOALA_RSS specific tasks
+from koala.KOALA_RSS import *
+# 7. Load file with Interpolated_cube class & cube specific tasks
+from koala.cube import *
+# 8. Load file with map tasks
+from koala.maps import *
+# 9. Load the 4 AUTOMATIC SCRIPTS 
+from koala.automatic_scripts.run_automatic_star import *
+from koala.automatic_scripts.koala_reduce import *
+from koala.automatic_scripts.automatic_koala_reduce import *
+from koala.automatic_scripts.automatic_calibration_night import *
+
+# Clean the path and leave only what matters
+
+sys.path = []
+for item in original_system_path:
+    sys.path.append(item)
+sys.path.append(pykoala_path[:-6])
+
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------

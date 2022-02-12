@@ -1,16 +1,16 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-from astropy.io import fits
-from astropy.wcs import WCS
+#from astropy.io import fits
+#from astropy.wcs import WCS
 import numpy as np
-import copy
+#import copy
 # from scipy import signal
 # Disable some annoying warnings
 import warnings
 
-from koala.RSS import RSS, coord_range
-from koala.io import full_path
+from koala.RSS import RSS #, coord_range
+#from koala.io import full_path
 
 warnings.simplefilter('ignore', np.RankWarning)
 warnings.simplefilter(action='ignore', category=FutureWarning)

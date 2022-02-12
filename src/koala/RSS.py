@@ -322,9 +322,7 @@ class RSS(object):
             clean_cosmics = False
             clean_extreme_negatives = False
             remove_negative_median_values = False
-            verbose = False
-        else:
-            if verbose: print("\n> Processing file {} as requested... ".format(self.filename)) 
+            verbose = False 
 
         if len(telluric_correction_file) > 0 or telluric_correction[0] != 0:
             do_telluric_correction = True
@@ -341,6 +339,10 @@ class RSS(object):
             # plot_final_rss = plot
             plot = False
             verbose = False
+        elif verbose:
+            print("\n> Processing file {} as requested... ".format(self.filename))
+            
+            
 
         if sky_method not in ["self", "selffit"]:
             force_sky_fibres_to_zero = False  # We don't have sky fibres, sky spectrum is given        
