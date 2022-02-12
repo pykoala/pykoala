@@ -592,8 +592,12 @@ if __name__ == "__main__":
     #                   plot_final_rss = True,
     #                   plot=True, warnings=False, verbose=True)
 
-
-    #test_new = KOALA_RSS(file_in, print_summary=True)
+    # file_in=full_path("27feb10022red.fits", path_blue)
+    # test_new = KOALA_RSS(file_in, print_summary=True)
+    # test_new.correct_ccd_defects()
+    # test_new.apply_self_sky()
+    
+    # test_new.correcting_negative_sky(show_fibres=[0, 450, 600, 601,602,985], order_fit_negative_sky=11, kernel_negative_sky=101)
     
     # test_new.process_rss(apply_throughput=True, throughput_2D=throughput_2D_blue_new)
                           #correct_ccd_defects = True,
@@ -618,6 +622,15 @@ if __name__ == "__main__":
  
  
    
+    rss = KOALA_RSS(filename=file_in)
+
+    
+   # # Testing rss
+    # rss = RSS()
+    # rss.read_rss_file(filename=file_in, instrument="KOALA")
+    
+    #rss.apply_flat(flat_filename=file_in, plot=True)
+    #rss.process_rss(do_extinction=True, correct_ccd_defects=True)
 
  
     
@@ -628,8 +641,8 @@ if __name__ == "__main__":
     path_red_old  = os.path.join(path_old, "385R")
  
     
-    file_in_old=full_path("27feb10028red.fits", path_blue_old)
-    test_old = KOALA_RSS(file_in_old)
+    #file_in_old=full_path("27feb10028red.fits", path_blue_old)
+    #test_old = KOALA_RSS(file_in_old)
     # plot_plot(x,test_old.integrated_fibre/1E6, ymin=-0.02, ymax=0.2, 
     #           ptitle="Integrated flux using 2dfdr v7.1", xlabel="Fibre", 
     #           ylabel="Flux [ 10$^6$ counts ]", fig_size="big",

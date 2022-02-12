@@ -3,6 +3,8 @@
 import os.path
 
 from astropy.io import fits
+from astropy.wcs import WCS
+
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import numpy as np
@@ -56,7 +58,9 @@ class RSS(object):
 
     # -----------------------------------------------------------------------------
 
-    def __init__(self):
+    def __init__(self, filename=None, path="", rss_clean=False,
+                 instrument="", warnings=True, verbose=True):
+        
         self.description = "Undefined row-stacked spectra (RSS)"
         self.n_spectra = 0
         self.n_wave = 0
@@ -75,16 +79,195 @@ class RSS(object):
         self.ALIGNED_RA_centre_deg = 0.
         self.ALIGNED_DEC_centre_deg = 0.
         self.integrated_fibre = 0
-
-
-
+        self.instrument={}
+        self.sky_fibres = []
+        
+        if filename is not None:
+            self.read_rss_file(filename=filename, path=path, rss_clean=rss_clean,
+                               instrument=instrument,
+                               warnings=warnings, verbose=verbose)
+        
+    # %% =============================================================================
+    def read_rss_file(self, filename, path= "", rss_clean=False,
+                      instrument="",
+                      warnings=True, verbose=True):
+        
+        if path != "": filename = full_path(filename, path)
+        print("\n> Reading RSS file",filename,"created with",instrument,"...")
+        
+        self.filename = filename
+                
+        if instrument in ["KOALA + AAOmega", "KOALA + AAOMEGA", "KOALA"]:   # ALL OF THIS IS ONLY VALID FOR KOALA 
+            
+            if len(self.instrument) == 0: 
+                #self.instrument=["KOALA + AAOmega"]
+                self.instrument={"instrument": "KOALA + AAOmega"}
+        
+            #  Open fits file
+            rss_fits_file = fits.open(filename)
+        
+            #  General info:
+            self.object = rss_fits_file[0].header['OBJECT']
+            self.description = self.object + ' \n ' + filename
+            self.RA_centre_deg = rss_fits_file[2].header['CENRA'] * 180 / np.pi
+            self.DEC_centre_deg = rss_fits_file[2].header['CENDEC'] * 180 / np.pi
+            self.exptime = rss_fits_file[0].header['EXPOSED']
+            self.history_RSS = rss_fits_file[0].header['HISTORY']
+    
+            # Read good/bad spaxels
+            all_spaxels = list(range(len(rss_fits_file[2].data)))
+            quality_flag = [rss_fits_file[2].data[i][1] for i in all_spaxels]
+            good_spaxels = [i for i in all_spaxels if quality_flag[i] == 1]
+            bad_spaxels = [i for i in all_spaxels if quality_flag[i] == 0]
+    
+            # Create wavelength
+            wcsKOALA = WCS(rss_fits_file[0].header)
+            index_wave = np.arange(rss_fits_file[0].header['NAXIS1'])
+            wavelength = wcsKOALA.dropaxis(1).wcs_pix2world(index_wave, 0)[0]
+            self.wavelength = wavelength
+            self.n_wave = len(wavelength)
+            
+            # For WCS
+            self.CRVAL1_CDELT1_CRPIX1 = []
+            self.CRVAL1_CDELT1_CRPIX1.append(rss_fits_file[0].header['CRVAL1'])
+            self.CRVAL1_CDELT1_CRPIX1.append(rss_fits_file[0].header['CDELT1'])
+            self.CRVAL1_CDELT1_CRPIX1.append(rss_fits_file[0].header['CRPIX1'])
+            
+            # Read intensity using rss_fits_file[0]
+            intensity = rss_fits_file[0].data[good_spaxels]
+            
+            # Read errors using rss_fits_file[1]
+            try:
+                variance = rss_fits_file[1].data[good_spaxels]
+            except Exception:
+                variance = copy.deepcopy(intensity)
+                if warnings or verbose: print("\n  WARNING! Variance extension not found in fits file!")
+    
+            if not rss_clean and verbose:
+                print("\n  Number of spectra in this RSS =", len(rss_fits_file[0].data), ",  number of good spectra =",
+                      len(good_spaxels), " ,  number of bad spectra =", len(bad_spaxels))
+                if len(bad_spaxels) > 0: print("  Bad fibres =", bad_spaxels)
+    
+            # Read spaxel positions on sky using rss_fits_file[2]
+            self.header2_data = rss_fits_file[2].data
+    
+            # But only keep the GOOD data!
+            # CAREFUL !! header 2 has the info of BAD fibres, if we are reading 
+            # from our created RSS files we have to do it in a different way...
+    
+            if len(bad_spaxels) == 0:
+                offset_RA_arcsec_ = []
+                offset_DEC_arcsec_ = []
+                for i in range(len(good_spaxels)):
+                    offset_RA_arcsec_.append(self.header2_data[i][5])
+                    offset_DEC_arcsec_.append(self.header2_data[i][6])
+                offset_RA_arcsec = np.array(offset_RA_arcsec_)
+                offset_DEC_arcsec = np.array(offset_DEC_arcsec_)
+    
+            else:
+                offset_RA_arcsec = np.array([rss_fits_file[2].data[i][5]
+                                             for i in good_spaxels])
+                offset_DEC_arcsec = np.array([rss_fits_file[2].data[i][6]
+                                              for i in good_spaxels])
+    
+                #self.ID = np.array([rss_fits_file[2].data[i][0] for i in good_spaxels])  # These are the good fibres
+    
+            # Get ZD, airmass
+            self.ZDSTART = rss_fits_file[0].header['ZDSTART']
+            self.ZDEND = rss_fits_file[0].header['ZDEND']
+            ZD = (self.ZDSTART + self.ZDEND) / 2
+            self.airmass = 1 / np.cos(np.radians(ZD))
+            self.extinction_correction = np.ones(self.n_wave)
+    
+            # KOALA-specific stuff
+            self.PA = rss_fits_file[0].header['TEL_PA']
+            self.grating = rss_fits_file[0].header['GRATID']
+            # Check RED / BLUE arm for AAOmega
+            if (rss_fits_file[0].header['SPECTID'] == "RD"):
+                AAOmega_Arm = "RED"
+            if (rss_fits_file[0].header['SPECTID'] == "BL"):  
+                AAOmega_Arm = "BLUE"
+            self.instrument["arm"]=AAOmega_Arm
+    
+            # Close fits file
+            rss_fits_file.close()
+            
+            # Check that dimensions match KOALA numbers
+            if self.n_wave != 2048 and len(all_spaxels) != 1000:
+                if warnings or verbose:
+                    print("\n *** WARNING *** : These numbers are NOT the standard ones for KOALA")
+    
+            if verbose: print("\n> Setting the data for this file:")
+    
+            if variance.shape != intensity.shape:
+                if warnings or verbose:
+                    print("\n* ERROR: * the intensity and variance arrays are",
+                          intensity.shape, "and", variance.shape, "respectively\n")
+                raise ValueError
+            n_dim = len(intensity.shape)
+            if n_dim == 2:
+                self.intensity = intensity
+                self.variance = variance
+            elif n_dim == 1:
+                self.intensity = intensity.reshape((1, self.n_wave))
+                self.variance = variance.reshape((1, self.n_wave))
+            else:
+                if warnings or verbose:
+                    print("\n* ERROR: * the intensity matrix supplied has", n_dim, "dimensions\n")
+                raise ValueError
+    
+            self.n_spectra = self.intensity.shape[0]
+    
+            if verbose:
+                print("  Found {} spectra with {} wavelengths".format(self.n_spectra, self.n_wave),
+                      "between {:.2f} and {:.2f} Angstrom".format(self.wavelength[0], self.wavelength[-1]))
+            if self.intensity.shape[1] != self.n_wave:
+                if warnings or verbose:
+                    print("\n* ERROR: * spectra have", self.intensity.shape[1], "wavelengths rather than", self.n_wave)
+                raise ValueError
+            if (len(offset_RA_arcsec) != self.n_spectra) |(len(offset_DEC_arcsec) != self.n_spectra):
+                if warnings | verbose:
+                    print("\n* ERROR: * offsets (RA, DEC) = ({},{})".format(len(self.offset_RA_arcsec),
+                                                                            len(self.offset_DEC_arcsec)),
+                          "rather than", self.n_spectra)
+                raise ValueError
+            else:
+                self.offset_RA_arcsec = offset_RA_arcsec
+                self.offset_DEC_arcsec = offset_DEC_arcsec
+    
+            # Check if NARROW (spaxel_size = 0.7 arcsec)
+            # or WIDE (spaxel_size=1.25) field of view
+            # (if offset_max - offset_min > 31 arcsec in both directions)
+            if np.max(offset_RA_arcsec) - np.min(offset_RA_arcsec) > 31 or \
+                    np.max(offset_DEC_arcsec) - np.min(offset_DEC_arcsec) > 31:
+                self.spaxel_size = 1.25
+                field = "WIDE"
+            else:
+                self.spaxel_size = 0.7
+                field = "NARROW"
+                
+            self.instrument["fov"]=field
+            self.instrument["spaxel size"]=self.spaxel_size
+    
+            # Get min and max for rss
+            self.RA_min, self.RA_max, self.DEC_min, self.DEC_max = coord_range([self])
+            self.DEC_segment = (self.DEC_max - self.DEC_min) * 3600.  # +1.25 for converting to total field of view
+            self.RA_segment = (self.RA_max - self.RA_min) * 3600.  # +1.25
+    
+            # Deep copy of intensity into intensity_corrected
+            self.intensity_corrected = copy.deepcopy(self.intensity)
+            self.variance_corrected = variance.copy()     
+        elif instrument in ["TAIPAN", "Taipan", "taipan"]:
+            print("\n> This is a TAIPAN RSS")
+        else:
+            print('\n\n\n> WARNING !! Instrument "'+instrument+'" has not been defined!!!\n\n\n')
     # %% =============================================================================
     # STANDARD PROCESS of a RSS FILE (originally in KOALA_RSS class)
     # =============================================================================
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
     def process_rss(self, save_rss_to_fits_file="", rss_clean=False,
-                 path ="", flat=None,  
+                 path ="", flat=None,  flat_filename = None,
                  no_nans=False, mask="", mask_file="", plot_mask=False,  # Mask if given
                  valid_wave_min=0, valid_wave_max=0,  # These two are not needed if Mask is given
                  apply_throughput=False,
@@ -212,7 +395,8 @@ class RSS(object):
         # Usually this is found .nresponse , see task "nresponse_flappyflat"
         # However, this correction is not needed is LFLATs have been used in 2dFdr
         # and using a skyflat to get .nresponse (small wavelength variations to throughput)
-        if flat is not None:  self.apply_flat(flat, path=path, plot=plot, verbose=verbose)
+        if flat is not None or flat_filename is not None:  self.apply_flat(flat=flat, flat_filename=flat_filename,
+                                                                           path=path, plot=plot, verbose=verbose)
         # ---------------------------------------------------
         # 1. Check if apply throughput & apply it if requested    (T)
         text_for_integrated_fibre = "..."
@@ -536,11 +720,11 @@ class RSS(object):
         # Print summary and information from header
         if verbose or print_summary:
             print("\n> Summary of reading rss file", '"' + self.filename + '"', ":\n")
-            print("  This is a {} {} file,".format(self.instrument[0], self.instrument[1]), \
-                  "using the {} grating in AAOmega, ".format(self.grating), \
+            print("  This is a {} {} file,".format(self.instrument["instrument"], self.instrument["arm"]), \
+                  "using the {} grating, ".format(self.grating), \
                   "exposition time = {} s.".format(self.exptime))
             print("  Object:", self.object)
-            print("  Field of view:", self.instrument[2], \
+            print("  Field of view:", self.instrument["fov"], \
                   "(spaxel size =", self.spaxel_size, "arcsec)")
             print("  Center position: (RA, DEC) = ({:.3f}, {:.3f}) degrees" \
                   .format(self.RA_centre_deg, self.DEC_centre_deg))
@@ -1484,6 +1668,7 @@ class RSS(object):
     # Sky substraction
     # =============================================================================
     def correcting_negative_sky(self, low_fibres=10, kernel_negative_sky=51, order_fit_negative_sky=3, edgelow=0,
+                                clip_fit_negative_sky = 0.8,
                                 edgehigh=0,  # step=11, weight_fit_median = 1, scale = 1.0,
                                 use_fit_for_negative_sky=False, individual_check=True, force_sky_fibres_to_zero=True,
                                 exclude_wlm=[[0, 0]],
@@ -1541,9 +1726,12 @@ class RSS(object):
                     plot_this = True
                 else:
                     plot_this = False
-                smooth, fit = fit_smooth_spectrum(w, self.intensity_corrected[fibre], kernel=kernel_negative_sky,
-                                                  edgelow=edgelow, edgehigh=edgehigh, verbose=False,
-                                                  order=order_fit_negative_sky, plot=plot_this, hlines=[0.], ptitle="",
+                smooth, fit = fit_smooth_spectrum(w, self.intensity_corrected[fibre], 
+                                                  mask = [self.mask[0][fibre],self.mask[1][fibre]],
+                                                  edgelow=edgelow, edgehigh=edgehigh, #remove_nans=False,
+                                                  kernel_fit=kernel_negative_sky, 
+                                                  index_fit=order_fit_negative_sky, clip_fit = clip_fit_negative_sky,
+                                                  plot=plot_this, verbose=False, hlines=[0.], ptitle="",
                                                   fcal=False)
                 if np.nanpercentile(fit, 5) < 0:
                     if fibre not in self.sky_fibres: corrected_not_sky_fibres = corrected_not_sky_fibres + 1
@@ -1600,7 +1788,7 @@ class RSS(object):
                 order_fit_negative_sky) + " polynomium to spectrum smoothed with a " + str(
                 kernel_negative_sky) + " kernel window"
             smooth, fit = fit_smooth_spectrum(self.wavelength, Ic, kernel=kernel_negative_sky, edgelow=edgelow,
-                                              edgehigh=edgehigh, verbose=False,
+                                              edgehigh=edgehigh, verbose=False, #mask=self.mask[],
                                               order=order_fit_negative_sky, plot=plot, hlines=[0.], ptitle=ptitle,
                                               fcal=False)
             if use_fit_for_negative_sky:
@@ -1908,7 +2096,7 @@ class RSS(object):
 
             skip_el_fit = copy.deepcopy(skip_sl_fit)
 
-            # Gaussian fit to object spectrum
+            # Gaussian fit to object spectrum                       #BOBA
             object_sl_gaussian_flux = []
             object_sl_gaussian_sigma = []
             ratio_object_sky_sl_gaussian = []
@@ -3052,7 +3240,7 @@ class RSS(object):
             win_sky = 151
         print("\n  ... applying median filter with window", win_sky, "...\n")
 
-        medfilt_sky = median_filter(self.intensity_corrected, self.n_spectra, self.n_wave, win_sky=win_sky)
+        medfilt_sky = median_2D_filter(self.intensity_corrected, self.n_spectra, self.n_wave, win_sky=win_sky)
         self.intensity_corrected = copy.deepcopy(medfilt_sky)
         print("  Median filter applied, results stored in self.intensity_corrected !")
         self.history.append('  Median filter ' + np.str(win_sky) + ' applied to all fibres')
@@ -3736,7 +3924,7 @@ class RSS(object):
 
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
-    def plot_corrected_vs_uncorrected_spectrum(self, high_fibres=20, low_fibres=0, kernel=51,
+    def plot_corrected_vs_uncorrected_spectrum(self, high_fibres=20, low_fibres=0, kernel=51, index_fit=11,
                                                fig_size=12, fcal=False, verbose=True):
         """
 
@@ -3781,8 +3969,8 @@ class RSS(object):
             Ic = np.nanmedian(self.intensity_corrected[region], axis=0)
         if verbose: print("  which are :", region)
 
-        Ic_m, fit = fit_smooth_spectrum(self.wavelength, Ic, kernel=kernel, verbose=False,  # edgelow=0, edgehigh=0,
-                                        order=3, plot=False, hlines=[0.], fcal=False)  # ptitle= ptitle,
+        Ic_m, fit = fit_smooth_spectrum(self.wavelength, Ic, kernel_fit=kernel, verbose=False,  # edgelow=0, edgehigh=0,
+                                        index_fit=index_fit, plot=False, hlines=[0.], fcal=False)  # ptitle= ptitle,
 
         I_ymin = np.nanmin(Ic_m)
         I_ymax = np.nanmax(Ic_m)
@@ -4128,7 +4316,7 @@ class RSS(object):
     # %% =============================================================================
     # Flatfield
     # =============================================================================
-    def apply_flat(self, flat, path="", plot=False, verbose=True):
+    def apply_flat(self, flat=None, flat_filename=None, path="", plot=False, verbose=True):
         """
         Apply a normalized flatfield to all spectra in RSS.        
 
@@ -4143,35 +4331,35 @@ class RSS(object):
         verbose : Boolean, optional
             Print. The default is True.
         """
-        flat_filename=None
-        if type(flat) == "str":
-            flat_filename = flat
+        
+        if flat_filename is not None:
             if verbose: print("\n> Dividing the data by the flatfield provided in file:", flat_filename)
-            flat_ = KOALA_RSS(flat, path =path)
+            #flat_ = KOALA_RSS(flat, path =path)
+            flat_ = RSS(filename=flat_filename, path =path, instrument=self.instrument["instrument"], verbose=verbose, rss_clean=True)
             flat = flat_.intensity_corrected
         elif verbose: print("\n> Dividing the data by the flatfield provided...")
         
         if plot: 
             if verbose: print("  Plotting the flatfield...")
-            flat.RSS_image()
+            self.RSS_image(image=flat)
             if verbose: print("  Plotting the RSS BEFORE correcting...")
             self.RSS_image()
 
-        if flat.intensity_corrected.shape != self.intensity_corrected.shape:
+        if flat.shape != self.intensity_corrected.shape:
             raise NameError('ERROR: Flatfield dim: {}, RSS dim: {}' \
-                            .format(flat.intensity_corrected.shape,
+                            .format(flat.shape,
                                     self.intensity_corrected.shape))
         else:
-            self.intensity_corrected = self.intensity_corrected / flat.intensity_corrected
-            self.variance_corrected = self.variance_corrected / flat.intensity_corrected**2
+            self.intensity_corrected = self.intensity_corrected / flat
+            self.variance_corrected = self.variance_corrected / flat**2
         
             if plot:
                 if verbose: print("  Plotting the RSS AFTER flatfield correction...")
                 self.RSS_image()      
             
-            self.history.append("- Data divided by flatfield:")
-            self.history.append("  "+flat.filename)
-            if flat_filename is not None: self.history.append("   Using file "+flat_filename)
+            self.history.append("- Data divided by a flatfield")
+            #self.history.append("  "+flat_filename)
+            if flat_filename is not None: self.history.append("   provided in file "+flat_filename)
 # %% ==========================================================================
     def fix_wavelengths_edges(self,  # sky_lines =[6300.309, 7316.290, 8430.147, 8465.374],
                                     sky_lines=[6300.309, 8430.147, 8465.374],
@@ -4746,14 +4934,12 @@ def coord_range(rss_list):
     DEC_min = np.nanmin(DEC)
     DEC_max = np.nanmax(DEC)
     return RA_min, RA_max, DEC_min, DEC_max
-
-
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def median_filter(intensity_corrected, n_spectra, n_wave, win_sky=151):
+def median_2D_filter(intensity_corrected, n_spectra, n_wave, win_sky=151):
     """
     Matt's code to get a median filter of all fibres in a RSS
     This is useful when having 2D sky
@@ -4772,18 +4958,17 @@ def median_filter(intensity_corrected, n_spectra, n_wave, win_sky=151):
             j = int(np.rint(n_spectra - np.rint(0.5 * win_sky)))
             medfilt_sky[fibre_sky,] = copy.deepcopy(medfilt_sky[j,])
     return medfilt_sky
-
-
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def get_minimum_spectra(rss_file_list, percentile=0,
+def get_minimum_spectra(rss_file_list, percentile=0, instrument="",
                         apply_throughput=False,
                         throughput_2D=[], throughput_2D_file="",
                         correct_ccd_defects=False, plot=True):
     ic_list = []
     for name in rss_file_list:
-        rss = KOALA_RSS(name, apply_throughput=apply_throughput,
+        rss = RSS(name, instrument=instrument)
+        rss.process_rss(apply_throughput=apply_throughput,
                         throughput_2D=throughput_2D, throughput_2D_file=throughput_2D_file,
                         correct_ccd_defects=correct_ccd_defects, plot=False)
 
@@ -4801,7 +4986,8 @@ def get_minimum_spectra(rss_file_list, percentile=0,
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def create_fits_with_mask(list_files_for_mask, filename="", plot=True, no_nans=True):
+def create_fits_with_mask(list_files_for_mask, filename="",  instrument="",
+                          plot=True, no_nans=True):
     """
     Creates a mask using list_files_for_mask
     """
@@ -4810,7 +4996,8 @@ def create_fits_with_mask(list_files_for_mask, filename="", plot=True, no_nans=T
     # First, read the rss files
     intensities_for_mask = []
     for i in range(len(list_files_for_mask)):
-        rss = KOALA_RSS(list_files_for_mask[i], plot_final_rss=False, verbose=False)
+        rss = RSS(list_files_for_mask[i], instrument=instrument)
+        rss.process_rss(list_files_for_mask[i], plot_final_rss=False, verbose=False)
         intensities_for_mask.append(rss.intensity)
 
     # Combine intensities to eliminate nans because of cosmic rays
@@ -4868,8 +5055,8 @@ def merge_extracted_flappyflats(flappyflat_list, write_file="", path="", verbose
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def nresponse_flappyflat(file_f, flappyflat="", nresponse_file="",
-                         correct_ccd_defects=True,
+def nresponse_flappyflat(file_f, path="",flappyflat="", nresponse_file="",
+                         correct_ccd_defects=True, instrument = "",
                          kernel=51, ymin=0.75, ymax=1.25, plot_fibres=[], plot=True):
     # order=13,  edgelow=20, edgehigh=20,
     """
@@ -4881,9 +5068,9 @@ def nresponse_flappyflat(file_f, flappyflat="", nresponse_file="",
         if correct_ccd_defects:
             print("\n> Reading the flappyflat only correcting for CCD defects...")
         else:
-            print("\n> Just reading the flappyflat correcting anything...")
-        flappyflat = KOALA_RSS(file_f,
-                               apply_throughput=False,
+            print("\n> Just reading the flappyflat correcting everything...")
+        flappyflat = RSS(file_f, path=path,instrument=instrument)
+        flappyflat.process_rss(apply_throughput=False,
                                correct_ccd_defects=correct_ccd_defects,
                                remove_5577=False,
                                do_extinction=False,
@@ -4928,7 +5115,8 @@ def nresponse_flappyflat(file_f, flappyflat="", nresponse_file="",
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def get_throughput_2D(file_skyflat, throughput_2D_file="", plot=True, also_return_skyflat=True,
+def get_throughput_2D(file_skyflat, path="", instrument="",
+                      throughput_2D_file="", plot=True, also_return_skyflat=True,
                       correct_ccd_defects=True, fix_wavelengths=False, sol=[0], kernel_throughput=0):
     """
     Get a 2D array with the throughput 2D using a COMBINED skyflat / domeflat.
@@ -4960,7 +5148,8 @@ def get_throughput_2D(file_skyflat, throughput_2D_file="", plot=True, also_retur
     # else:
     #    if len(sol) == 3 : fix_wavelengths = True
 
-    skyflat = KOALA_RSS(file_skyflat, correct_ccd_defects=correct_ccd_defects,
+    skyflat = RSS(file_skyflat,path=path,instrument=instrument)
+    skyflat.process_rss(correct_ccd_defects=correct_ccd_defects,
                         fix_wavelengths=fix_wavelengths, sol=sol, plot=plot)
 
     skyflat.apply_mask(make_nans=True)
@@ -5198,7 +5387,7 @@ def sky_spectrum_from_fibres(rss, list_spectra, win_sky=0, wave_to_fit=300, fit_
 
     if win_sky > 0:
         if verbose: print("  after applying a median filter with kernel ", win_sky, "...")
-        _rss_.intensity_corrected = median_filter(_rss_.intensity_corrected, _rss_.n_spectra, _rss_.n_wave,
+        _rss_.intensity_corrected = median_2D_filter(_rss_.intensity_corrected, _rss_.n_spectra, _rss_.n_wave,
                                                   win_sky=win_sky)
     sky = _rss_.plot_combined_spectrum(list_spectra=list_spectra, median=True, plot=plot)
 
@@ -5252,7 +5441,8 @@ def sky_spectrum_from_fibres(rss, list_spectra, win_sky=0, wave_to_fit=300, fit_
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def sky_spectrum_from_fibres_using_file(rss_file, fibre_list=[], win_sky=151, n_sky=0,
+def sky_spectrum_from_fibres_using_file(rss_file, path="", instrument="",
+                                        fibre_list=[], win_sky=151, n_sky=0,
                                         skyflat="", apply_throughput=True, correct_ccd_defects=False,
                                         fix_wavelengths=False, sol=[0, 0, 0], xmin=0, xmax=0, ymin=0, ymax=0,
                                         verbose=True, plot=True):
@@ -5271,8 +5461,9 @@ def sky_spectrum_from_fibres_using_file(rss_file, fibre_list=[], win_sky=151, n_
         sky_method = "none"
         is_sky = True
         if verbose: print("\n> Obtaining 1D sky spectrum using fibre list = ", fibre_list, " ...")
-
-    _test_rss_ = KOALA_RSS(rss_file, apply_throughput=apply_throughput, skyflat=skyflat,
+        
+    _test_rss_ = RSS(rss_file, path=path, instrument=instrument)
+    _test_rss_.process_rss(apply_throughput=apply_throughput, skyflat=skyflat,
                            correct_ccd_defects=correct_ccd_defects,
                            fix_wavelengths=fix_wavelengths, sol=sol,
                            sky_method=sky_method, n_sky=n_sky, is_sky=is_sky, win_sky=win_sky,

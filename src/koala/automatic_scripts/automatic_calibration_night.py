@@ -2,7 +2,7 @@ from koala.constants import red_gratings
 from koala.io import full_path, read_table, spectrum_to_text_file, list_fits_files_in_folder
 from astropy.io import fits
 
-from koala.KOALA_RSS import KOALA_RSS
+#from koala.KOALA_RSS import KOALA_RSS
 from koala.RSS import get_throughput_2D
 from koala.cube import plot_response,obtain_flux_calibration,obtain_telluric_correction
 import numpy as np
@@ -38,6 +38,7 @@ def automatic_calibration_night(CALIBRATION_NIGHT_FILE="",
                                 disable_stars=[],                      # stars in this list will not be used
                                 skyflat_names=[],
                                 list_of_objects = [],
+                                instrument="KOALA"
                                 ):
     """
     Use: 
@@ -354,19 +355,21 @@ def automatic_calibration_night(CALIBRATION_NIGHT_FILE="",
             print("\n> Getting the small wavelength solution, sol, using star RSS file")
             print(" ",rss_star_file_for_sol,"...")                                  
             if grating in red_gratings :
-                _rss_star_ = KOALA_RSS(rss_star_file_for_sol, 
-                                       correct_ccd_defects = False, 
+                _rss_star_ = RSS(rss_star_file_for_sol, instrument=instrument)
+                _rss_star_.process_rss(correct_ccd_defects = False, 
                                        fix_wavelengths=True, sol = [0],
                                        plot= plot)
             if grating in ["580V"] :
-                _rss_star_ = KOALA_RSS(rss_star_file_for_sol, 
+                _rss_star_ = RSS(rss_star_file_for_sol, instrument=instrument)
+                _rss_star_.process_rss(rss_star_file_for_sol, 
                                        correct_ccd_defects = True, remove_5577 = True,
                                        plot= plot)               
             sol = _rss_star_.sol
             print("\n> Solution for the small wavelength variations:")
             print(" ",sol)
         
-        throughput_2D_, skyflat_ =  get_throughput_2D(file_skyflat, plot = plot, also_return_skyflat = True,
+        throughput_2D_, skyflat_ =  get_throughput_2D(file_skyflat, instrument =instrument,
+                                            plot = plot, also_return_skyflat = True,
                                             correct_ccd_defects = correct_ccd_defects,
                                             fix_wavelengths = fix_wavelengths, sol = sol,
                                             throughput_2D_file =throughput_2D_file, kernel_throughput = kernel_throughput)      

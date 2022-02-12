@@ -3,7 +3,8 @@
 
 from koala.constants import red_gratings, blue_gratings, fibres_best_sky_100
 from koala.io import full_path, read_table, spectrum_to_text_file
-from koala.KOALA_RSS import KOALA_RSS
+#from koala.KOALA_RSS import KOALA_RSS
+from koala.RSS import RSS
 from koala.automatic_scripts.koala_reduce import KOALA_reduce
 from koala.cube import read_cube, telluric_correction_from_star
 
@@ -96,7 +97,8 @@ def get_calibration_star_data(star, path_star, grating, pk):
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def run_automatic_star(CONFIG_FILE="", 
+def run_automatic_star(CONFIG_FILE="",
+                       instrument="KOALA",
                        star="",
                        description ="",
                        obj_name ="",
@@ -212,7 +214,8 @@ def run_automatic_star(CONFIG_FILE="",
 
     if grating == "" :
         print("\n> No grating provided! Checking... ")
-        _test_ = KOALA_RSS(rss_list[0], plot_final_rss=False, verbose = False)
+        _test_ = RSS(rss_list[0], instrument=instrument, verbose = False)
+        #_test_ = KOALA_RSS(rss_list[0], plot_final_rss=False, verbose = False)
         grating = _test_.grating
         print("\n> Reading file",rss_list[0], "the grating is",grating)
 
@@ -707,6 +710,7 @@ def run_automatic_star(CONFIG_FILE="",
             print("> Running KOALA_reduce ONLY for processing the RSS files provided...") 
     
         star_object=KOALA_reduce(rss_list,
+                           #instrument=instrument,
                            path=path,
                            fits_file=fits_file, 
                            obj_name=star,  
