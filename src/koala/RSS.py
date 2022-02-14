@@ -97,10 +97,9 @@ class RSS(object):
         
         self.filename = filename
                 
-        if instrument in ["KOALA + AAOmega", "KOALA + AAOMEGA", "KOALA"]:   # ALL OF THIS IS ONLY VALID FOR KOALA 
+        if instrument in ["KOALA + AAOmega", "KOALA + AAOMEGA", "KOALA", "koala", "Koala"]:   # ALL OF THIS IS ONLY VALID FOR KOALA 
             
             if len(self.instrument) == 0: 
-                #self.instrument=["KOALA + AAOmega"]
                 self.instrument={"instrument": "KOALA + AAOmega"}
         
             #  Open fits file
@@ -467,7 +466,7 @@ class RSS(object):
         # 3. Fixing small wavelength shifts                  (W)        
         if fix_wavelengths:
             if sol[0] == -1.0:
-                self.fix_wavelengths_edges(verbose=verbose, plot=plot)
+                self.fix_wavelengths_edges(verbose=verbose, plot=plot, plot_fits=plot)
             else:
                 self.fix_wavelengths(verbose=verbose, plot=plot, sol=sol)
 
@@ -665,7 +664,7 @@ class RSS(object):
                 # check functions for documentation
         # ---------------------------------------------------
         # 8.2. Clean edges if requested           (R)  
-        if fix_edges: self.fix_edges(verbose=verbose)
+        if fix_edges: self.fix_edges(verbose=verbose, plot=plot)
         # ---------------------------------------------------
         # 8.3. Remove negative median values      (R)
         if remove_negative_median_values:  # it was remove_negative_pixels_in_sky:
@@ -1723,7 +1722,7 @@ class RSS(object):
             sky_fibres_to_zero = 0
             for fibre in range(self.n_spectra):
                 corregir = False
-                if fibre in show_fibres:
+                if fibre in show_fibres and plot:
                     print("\n - Checking fibre", fibre, "...")
                     plot_this = True
                 else:
@@ -1746,17 +1745,17 @@ class RSS(object):
                 if corregir == True:
                     total_corrected = total_corrected + 1
                     if use_fit_for_negative_sky:
-                        if fibre in show_fibres and verbose: print(
-                            "   Using fit to smooth spectrum for correcting the negative sky in fibre", fibre, " ...")
+                        if fibre in show_fibres and verbose and plot: print(
+                            "      Using fit to smooth spectrum for correcting the negative sky in fibre", fibre, " ...")
                         self.intensity_corrected[fibre] -= fit
                         # self.variance_corrected[fibre] -= fit
                     else:
-                        if fibre in show_fibres and verbose: print(
-                            "   Using smooth spectrum for correcting the negative sky in fibre", fibre, " ...")
+                        if fibre in show_fibres and verbose and plot: print(
+                            "      Using smooth spectrum for correcting the negative sky in fibre", fibre, " ...")
                         self.intensity_corrected[fibre] -= smooth
                         # self.variance_corrected[fibre] -= smooth
                 else:
-                    if fibre in show_fibres and verbose: print("   Fibre", fibre,
+                    if fibre in show_fibres and verbose and plot: print("      Fibre", fibre,
                                                                "does not need to be corrected for negative sky ...")
 
             corrected_sky_fibres = total_corrected - corrected_not_sky_fibres
@@ -4053,7 +4052,8 @@ class RSS(object):
     # -----------------------------------------------------------------------------
     # -----------------------------------------------------------------------------
     def fix_edges(self, kernel_size=101, disp=1.5, fix_from=0, median_from=0, fix_to=0, median_to=0,
-                  only_red_edge=False, only_blue_edge=False, do_blue_edge=True, do_red_edge=True, verbose=True):
+                  only_red_edge=False, only_blue_edge=False, do_blue_edge=True, do_red_edge=True, 
+                  plot=True, verbose=True):
         """
         Fixing edges of a RSS file
 
@@ -4087,7 +4087,7 @@ class RSS(object):
         if only_blue_edge == True: do_red_edge = False
         if verbose: print("\n> Fixing the BLUE and RED edges of the RSS file...")
         w = self.wavelength
-        self.RSS_image(title=" - Before correcting edges")
+        if plot:self.RSS_image(title=" - Before correcting edges")
         if fix_from == 0: fix_from = self.valid_wave_max
         if median_from == 0: median_from = self.valid_wave_max - 300.
         if fix_to == 0: fix_to = self.valid_wave_min
@@ -4101,7 +4101,8 @@ class RSS(object):
                                                                          kernel_size=kernel_size, disp=disp,
                                                                          fix_to=fix_to, median_to=median_to)
 
-        self.RSS_image(title=" - After correcting edges")
+        if plot:
+            self.RSS_image(title=" - After correcting edges")
         if do_blue_edge: self.history.append("- Blue edge has been corrected to " + np.str(fix_to))
         if do_red_edge: self.history.append("- Red edge has been corrected from " + np.str(fix_from))
 
@@ -4434,7 +4435,7 @@ class RSS(object):
                     plot_fit = True
                 else:
                     plot_fit = False
-                if i == 0: plot_fit = True
+                #if i == 0: plot_fit = True
                 if plot_fit: print(" - Plotting Gaussian fitting for skyline", sky_line, "in fibre", i, ":")
                 resultado = fluxes(w, f, sky_line, lowlow=80, lowhigh=20, highlow=20, highhigh=80, broad=2.0,
                                    fcal=False, plot=plot_fit, verbose=False)
@@ -4494,13 +4495,14 @@ class RSS(object):
         print("\n> sol = [" + np.str(fitted_solutions[2]) + "," + np.str(fitted_solutions[1]) + "," + np.str(
             fitted_solutions[0]) + "]")
 
-        plot_plot(nspec_vector, [fitted_offset_sky_lines[0], fitted_offset_sky_lines[1], fitted_offset_sky_lines[2],
-                                 fitted_offset_sl_median, fitsol], color=["r", "orange", "b", "k", "g"],
-                  alpha=[0.3, 0.3, 0.3, 0.5, 0.8],
-                  hlines=[-0.75, -0.5, -0.25, 0, 0.25, 0.5],
-                  label=[np.str(sky_lines[0]), np.str(sky_lines[1]), np.str(sky_lines[2]), "median", "median sol"],
-                  ptitle="Checking fitting solutions",
-                  ymin=-1, ymax=0.6, xlabel="Fibre", ylabel="Fitted offset")
+        if plot:
+            plot_plot(nspec_vector, [fitted_offset_sky_lines[0], fitted_offset_sky_lines[1], fitted_offset_sky_lines[2],
+                      fitted_offset_sl_median, fitsol], color=["r", "orange", "b", "k", "g"],
+                      alpha=[0.3, 0.3, 0.3, 0.5, 0.8],
+                      hlines=[-0.75, -0.5, -0.25, 0, 0.25, 0.5],
+                      label=[np.str(sky_lines[0]), np.str(sky_lines[1]), np.str(sky_lines[2]), "median", "median sol"],
+                      ptitle="Checking fitting solutions",
+                      ymin=-1, ymax=0.6, xlabel="Fibre", ylabel="Fitted offset")
 
         # Plot corrections
         if plot:
@@ -4536,7 +4538,7 @@ class RSS(object):
             self.intensity_corrected[fibre] = rebin_spec(w_fixed, intensity[fibre],
                                                          w)  # =copy.deepcopy(intensity_wave_fixed)
 
-            if fibre in show_fibres:
+            if fibre in show_fibres and plot:
                 plt.figure(figsize=(fig_size, fig_size / 4.5))
                 plt.plot(w, intensity[fibre], "r-", alpha=0.2, label="No corrected")
                 plt.plot(w_fixed, intensity[fibre], "b-", alpha=0.2, label="No corrected - Shifted")
@@ -5119,7 +5121,8 @@ def nresponse_flappyflat(file_f, path="",flappyflat="", nresponse_file="",
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def get_throughput_2D(file_skyflat, path="", instrument="",
-                      throughput_2D_file="", plot=True, also_return_skyflat=True,
+                      throughput_2D_file="", plot=True,  plot_final_rss = True,
+                      also_return_skyflat=True,
                       correct_ccd_defects=True, fix_wavelengths=False, sol=[0], kernel_throughput=0):
     """
     Get a 2D array with the throughput 2D using a COMBINED skyflat / domeflat.
@@ -5153,7 +5156,8 @@ def get_throughput_2D(file_skyflat, path="", instrument="",
 
     skyflat = RSS(file_skyflat,path=path,instrument=instrument)
     skyflat.process_rss(correct_ccd_defects=correct_ccd_defects,
-                        fix_wavelengths=fix_wavelengths, sol=sol, plot=plot)
+                        fix_wavelengths=fix_wavelengths, sol=sol, plot=plot, 
+                        plot_final_rss = plot_final_rss)
 
     skyflat.apply_mask(make_nans=True)
     throughput_2D_ = np.zeros_like(skyflat.intensity_corrected)

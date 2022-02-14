@@ -9,6 +9,7 @@ from koala.automatic_scripts.koala_reduce import KOALA_reduce
 from koala.cube import read_cube, telluric_correction_from_star
 
 import numpy as np
+import copy
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -184,12 +185,19 @@ def run_automatic_star(CONFIG_FILE="",
                        
                        log = True, gamma = 0,   
                        fig_size = 12,                                     
-                       plot = True, warnings = True, verbose = True  ): 
+                       plot = True, plot_rss = True, 
+                       plot_weight=False, plot_spectra=False,
+                       warnings = True, verbose = True  ): 
     """
     Use: 
         CONFIG_FILE_H600 = "./configuration_files/calibration_star1.config"
         H600auto=run_automatic_star(CONFIG_FILE_H600)
     """
+    if plot == False:
+        plot_rss = False 
+        plot_weight=False
+        plot_spectra=False
+        
 
     global star_object   
     sky_fibres_print ="" 
@@ -270,8 +278,6 @@ def run_automatic_star(CONFIG_FILE="",
         if  config_property[i] == "star" : 
             star = config_value[i]
             _CONFIG_FILE_, description, fits_file, response_file, absolute_flux_file, list_of_telluric_ranges =  get_calibration_star_data (star, path_star, grating, pk)
-
-            
 
         if  config_property[i] == "description" :  description = config_value[i]
         if  config_property[i] == "fits_file"   :  fits_file = full_path(config_value[i],path_star)
@@ -492,7 +498,12 @@ def run_automatic_star(CONFIG_FILE="",
         if  config_property[i] == "plot" : 
             if config_value[i] == "True" : 
                 plot = True 
-            else: plot = False 
+            else: 
+                plot = False 
+                plot_rss = False 
+                plot_weight=False
+                plot_spectra=False
+                
         if  config_property[i] == "plot_rss" : 
             if config_value[i] == "True" : 
                 plot_rss = True 
@@ -501,7 +512,10 @@ def run_automatic_star(CONFIG_FILE="",
             if config_value[i] == "True" : 
                 plot_weight = True 
             else: plot_weight = False             
-                           
+        if  config_property[i] == "plot_spectra" : 
+            if config_value[i] == "True" : 
+                plot_spectra = True 
+            else: plot_spectra = False                            
         if  config_property[i] == "warnings" : 
             if config_value[i] == "True" : 
                 warnings = True 
@@ -767,6 +781,7 @@ def run_automatic_star(CONFIG_FILE="",
                            gamma = gamma,
                            plot= plot, 
                            plot_rss=plot_rss,
+                           plot_spectra = plot_spectra,
                            plot_weight=plot_weight,
                            fig_size=fig_size,
                            verbose = verbose,

@@ -226,6 +226,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         self.kernel_size_arcsec = kernel_size_arcsec
         self.kernel_size_pixels = kernel_size_arcsec/pixel_size_arcsec  # must be a float number!
         self.integrated_map = []
+        self.rss_file =[]
         
         self.history=[]
         fcal=False
@@ -251,12 +252,11 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
  
         else:    
             #self.RSS = RSS
-
             if rss_file != "" or type(RSS) == str:
                 if  type(RSS) == str: rss_file=RSS
                 rss_file =full_path(rss_file,path)  #RSS
                 RSS=KOALA_RSS(rss_file, rss_clean=True, plot=plot, plot_final_rss = plot_rss,  verbose=verbose)
-
+                
             self.n_spectra = RSS.n_spectra
             self.n_wave = RSS.n_wave        
             self.wavelength = RSS.wavelength                   
@@ -270,7 +270,8 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
             self.offset_RA_arcsec = RSS.offset_RA_arcsec
             self.offset_DEC_arcsec = RSS.offset_DEC_arcsec
         
-            self.rss_file_list = RSS.filename  
+            self.rss_file=RSS.filename
+            self.rss_file_list = [RSS.filename]
             self.valid_wave_min = RSS.valid_wave_min        
             self.valid_wave_max = RSS.valid_wave_max
             self.valid_wave_min_index = RSS.valid_wave_min_index        
@@ -338,7 +339,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
             self.n_cols = n_cols
             self.n_rows = n_rows
     
-        self.spaxel_RA0= self.n_cols/2  - 1  
+        self.spaxel_RA0= self.n_cols/2  - 1    #TODO: check if these -1 are correct
         self.spaxel_DEC0= self.n_rows/2 - 1
 
         # Define zeros
@@ -3335,7 +3336,7 @@ def get_offsets_between_cubes(cube_list, compare_cubes = False,
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]], 
+def align_n_cubes(rss_file_list, cube_list=[0], flux_calibration_list=[[]], 
                   reference_rss = "",  compare_cubes = False,
                   pixel_size_arcsec=0.7, kernel_size_arcsec=1.1, 
                   edgelow=-1, edgehigh=-1, size_arcsec=[], centre_deg=[], 
@@ -3346,11 +3347,11 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
                   plot= False, plot_weight=False, plot_tracing_maps=[], plot_spectra=True,
                   warnings=False, verbose= True):
     """
-    Routine to align n cubes
+    Routine to align n cubes. CAREFUL : rss_file_list HAS TO BE a list of RSS objects #TODO change to RSS files if needed
 
     Parameters #TODO
     ----------
-    rss_list : List of RSS objects
+    rss_file_list : List of RSS objects
         This is a list of RSS objects.
     cube_list : List of Cube Objects, optional
         DESCRIPTION. The default is [0].
@@ -3418,7 +3419,7 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
 
     """
        
-    n_rss = len(rss_list)
+    n_rss = len(rss_file_list)
 
     if verbose: 
         if n_rss > 1:
@@ -3458,8 +3459,8 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
     list_DEC_centre_deg=[]
     
     for i in range(n_rss):
-        list_RA_centre_deg.append(rss_list[i].RA_centre_deg)
-        list_DEC_centre_deg.append(rss_list[i].DEC_centre_deg)        
+        list_RA_centre_deg.append(rss_file_list[i].RA_centre_deg)
+        list_DEC_centre_deg.append(rss_file_list[i].DEC_centre_deg)        
     
     median_RA_centre_deg = np.nanmedian (list_RA_centre_deg)
     median_DEC_centre_deg = np.nanmedian (list_DEC_centre_deg)
@@ -3467,20 +3468,20 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
     distance_from_median  = []
     
     for i in range(n_rss):
-        rss_list[i].ALIGNED_RA_centre_deg = median_RA_centre_deg + np.nansum(xx[1:i+1])/3600.    # CHANGE SIGN 26 Apr 2019    # ERA cube_list[0]
-        rss_list[i].ALIGNED_DEC_centre_deg = median_DEC_centre_deg  - np.nansum(yy[1:i+1])/3600.        # rss_list[0].DEC_centre_deg
+        rss_file_list[i].ALIGNED_RA_centre_deg = median_RA_centre_deg + np.nansum(xx[1:i+1])/3600.    # CHANGE SIGN 26 Apr 2019    # ERA cube_list[0]
+        rss_file_list[i].ALIGNED_DEC_centre_deg = median_DEC_centre_deg  - np.nansum(yy[1:i+1])/3600.        # rss_file_list[0].DEC_centre_deg
     
         distance_from_median.append(np.sqrt( 
-                (rss_list[i].RA_centre_deg - median_RA_centre_deg)**2 +
-                (rss_list[i].DEC_centre_deg - median_DEC_centre_deg)**2) )
+                (rss_file_list[i].RA_centre_deg - median_RA_centre_deg)**2 +
+                (rss_file_list[i].DEC_centre_deg - median_DEC_centre_deg)**2) )
         
     if reference_rss == "":
         reference_rss = distance_from_median.index(np.nanmin(distance_from_median))
     
     if len(centre_deg) == 0:    
         if verbose and n_rss > 1: print("  No central coordenates given, using RSS {} for getting the central coordenates:".format(reference_rss+1))   
-        RA_centre_deg = rss_list[reference_rss].ALIGNED_RA_centre_deg
-        DEC_centre_deg = rss_list[reference_rss].ALIGNED_DEC_centre_deg  
+        RA_centre_deg = rss_file_list[reference_rss].ALIGNED_RA_centre_deg
+        DEC_centre_deg = rss_file_list[reference_rss].ALIGNED_DEC_centre_deg  
     else:
         if verbose and n_rss > 1: print("  Central coordenates provided: ")   
         RA_centre_deg = centre_deg[0]
@@ -3499,7 +3500,7 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
         print("\n         New_RA_centre_deg       New_DEC_centre_deg      Diff with respect Cube 1 [arcsec]")  
        
         for i in range (0,n_rss):
-            print("  Cube {:2.0f}:     {:5.8f}          {:5.8f}           {:+5.3f}   ,  {:+5.3f}   ".format(i+1,rss_list[i].ALIGNED_RA_centre_deg, rss_list[i].ALIGNED_DEC_centre_deg, (rss_list[i].ALIGNED_RA_centre_deg-rss_list[0].ALIGNED_RA_centre_deg)*3600.,(rss_list[i].ALIGNED_DEC_centre_deg-rss_list[0].ALIGNED_DEC_centre_deg)*3600.))  
+            print("  Cube {:2.0f}:     {:5.8f}          {:5.8f}           {:+5.3f}   ,  {:+5.3f}   ".format(i+1,rss_file_list[i].ALIGNED_RA_centre_deg, rss_file_list[i].ALIGNED_DEC_centre_deg, (rss_file_list[i].ALIGNED_RA_centre_deg-rss_file_list[0].ALIGNED_RA_centre_deg)*3600.,(rss_file_list[i].ALIGNED_DEC_centre_deg-rss_file_list[0].ALIGNED_DEC_centre_deg)*3600.))  
     
     offsets_files=[]
     for i in range(1,n_rss):           # For keeping in the files with self.offsets_files
@@ -3512,8 +3513,8 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
     if verbose and n_rss > 1: print('\n  Accumulative difference of offsets: {:.2f}" x {:.2f}" '.format(xx_dif, yy_dif))
        
     if len(size_arcsec) == 0:
-        RA_size_arcsec = rss_list[0].RA_segment + np.abs(xx_dif) + 3*kernel_size_arcsec
-        DEC_size_arcsec =rss_list[0].DEC_segment + np.abs(yy_dif) + 3*kernel_size_arcsec 
+        RA_size_arcsec = rss_file_list[0].RA_segment + np.abs(xx_dif) + 3*kernel_size_arcsec
+        DEC_size_arcsec =rss_file_list[0].DEC_segment + np.abs(yy_dif) + 3*kernel_size_arcsec 
         size_arcsec=[RA_size_arcsec,DEC_size_arcsec]
 
     if verbose and n_rss > 1: print('\n  RA_size x DEC_size  = {:.2f}" x {:.2f}" '.format(size_arcsec[0], size_arcsec[1]))
@@ -3524,9 +3525,10 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
         #escribe="cube"+np.str(i)+"_aligned"
         cube_aligned_list.append("cube"+np.str(i)+"_aligned")
 
+    ADR_x_fit_list = []
+    ADR_y_fit_list = []
+
     if np.nanmedian(ADR_x_fit_list) == 0 and ADR:   # Check if ADR info is provided and ADR is requested
-        ADR_x_fit_list = []
-        ADR_y_fit_list = []
         for i in range(n_rss): 
             _x_ = []
             _y_ = []
@@ -3535,6 +3537,11 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
                 _y_.append(cube_list[i].ADR_y_fit[j])   
             ADR_x_fit_list.append(_x_)
             ADR_y_fit_list.append(_y_)
+    else:
+        for rss in rss_file_list:
+            ADR_x_fit_list.append([0])
+            ADR_y_fit_list.append([0])
+            
 
     for i in range(n_rss):
         
@@ -3542,7 +3549,7 @@ def align_n_cubes(rss_list, cube_list=[0], flux_calibration_list=[[]],
 
             if verbose: print("\n> Creating aligned cube",i+1,"of a total of",n_rss,"...")
             
-            cube_aligned_list[i]=Interpolated_cube(rss_list[i], pixel_size_arcsec=pixel_size_arcsec, kernel_size_arcsec=kernel_size_arcsec, 
+            cube_aligned_list[i]=Interpolated_cube(rss_file_list[i], pixel_size_arcsec=pixel_size_arcsec, kernel_size_arcsec=kernel_size_arcsec, 
                                                    centre_deg=[RA_centre_deg, DEC_centre_deg], size_arcsec=size_arcsec, 
                                                    aligned_coor=True, flux_calibration=flux_calibration_list[i],  offsets_files = offsets_files, offsets_files_position =i+1, 
                                                    ADR=ADR, jump=jump, ADR_x_fit = ADR_x_fit_list[i], ADR_y_fit = ADR_y_fit_list[i], check_ADR=True,
@@ -4130,7 +4137,7 @@ def estimate_offsets_comparing_cubes(cube1, cube2, line=None, line2=None,   # BO
         return best_delta_RA, best_delta_DEC
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def plot_response(calibration_star_cubes, scale=[], use_median=False):
+def plot_response(calibration_star_cubes, scale=[], use_median=False, verbose = True, plot=True):
     """
     #TODO
 
@@ -4157,7 +4164,7 @@ def plot_response(calibration_star_cubes, scale=[], use_median=False):
 
     wavelength = calibration_star_cubes[0].wavelength
 
-    print("\n> Comparing response curve of standard stars...\n")
+    if verbose: print("\n> Comparing response curve of standard stars...\n")
     for i in range(n_cubes):
         ci = calibration_star_cubes[i].response_curve * scale[i]
         ci_name=calibration_star_cubes[i].object
@@ -4168,10 +4175,9 @@ def plot_response(calibration_star_cubes, scale=[], use_median=False):
             ylabel = ci_name+" / "+cj_name
             plot_plot(wavelength,ci/cj, hlines=[0.85, 0.9,0.95,1,1,1,1,1.05,1.1,1.15], ymin=0.8, ymax=1.2, 
                       ylabel=ylabel, ptitle=ptitle)
-    print("\n> Plotting response curve (absolute flux calibration) of standard stars...\n")
+    if verbose: print("\n> Plotting response curve (absolute flux calibration) of standard stars...\n")
     
     
-    plt.figure(figsize=(11, 8))
     mean_curve = np.zeros_like(wavelength)
     mean_values=[]
     list_of_scaled_curves=[]
@@ -4179,12 +4185,13 @@ def plot_response(calibration_star_cubes, scale=[], use_median=False):
     for star in calibration_star_cubes:    
         list_of_scaled_curves.append(star.response_curve * scale[i])
         mean_curve = mean_curve + star.response_curve * scale[i]
-        plt.plot(star.wavelength, star.response_curve * scale[i],
-                 label=star.description, alpha=0.2, linewidth=2)
+        if plot:
+            plt.plot(star.wavelength, star.response_curve * scale[i],
+                     label=star.description, alpha=0.2, linewidth=2)
         if use_median:
-            print("  Median value for ",star.object," = ",np.nanmedian(star.response_curve * scale[i]),"      scale = ",scale[i])
+            if verbose: print("  Median value for ",star.object," = ",np.nanmedian(star.response_curve * scale[i]),"      scale = ",scale[i])
         else:
-            print("  Mean value for ",star.object," = ",np.nanmean(star.response_curve * scale[i]),"      scale = ",scale[i])
+            if verbose: print("  Mean value for ",star.object," = ",np.nanmean(star.response_curve * scale[i]),"      scale = ",scale[i])
         mean_values.append(np.nanmean(star.response_curve)* scale[i])
         i=i+1
 
@@ -4205,24 +4212,26 @@ def plot_response(calibration_star_cubes, scale=[], use_median=False):
     else:
         dispersion = np.nansum(response_rms)/np.nansum(mean_curve)
 
-    if len(calibration_star_cubes) > 1 : print("  Variation in flux calibrations =  {:.2f} %".format(dispersion*100.))
+    if len(calibration_star_cubes) > 1 and verbose: print("  Variation in flux calibrations =  {:.2f} %".format(dispersion*100.))
 
     #dispersion=np.nanmax(mean_values)-np.nanmin(mean_values)
     #print "  Variation in flux calibrations =  {:.2f} %".format(dispersion/np.nanmedian(mean_values)*100.)
 
-    if use_median:
-        plt.plot(wavelength, median_curve, "k", label='Median response curve', alpha=0.2, linewidth=10)
-    else:
-        plt.plot(wavelength, mean_curve, "k", label='mean response curve', alpha=0.2, linewidth=10)
-    plt.legend(frameon=False, loc=2)
-    plt.ylabel("Flux calibration [ counts /s equivalent to 10$^{-16}$ erg cm$^{-2}$ s$^{-1}$ $\mathrm{\AA}^{-1}$ ]")
-    plt.xlabel("Wavelength [$\mathrm{\AA}$]")
-    plt.title("Response curve for calibration stars")
-    plt.minorticks_on()
-    plt.show()   
+    if plot: 
+        plt.figure(figsize=(11, 8))
+        if use_median:
+            plt.plot(wavelength, median_curve, "k", label='Median response curve', alpha=0.2, linewidth=10)
+        else:
+            plt.plot(wavelength, mean_curve, "k", label='mean response curve', alpha=0.2, linewidth=10)
+        plt.legend(frameon=False, loc=2)
+        plt.ylabel("Flux calibration [ counts /s equivalent to 10$^{-16}$ erg cm$^{-2}$ s$^{-1}$ $\mathrm{\AA}^{-1}$ ]")
+        plt.xlabel("Wavelength [$\mathrm{\AA}$]")
+        plt.title("Response curve for calibration stars")
+        plt.minorticks_on()
+        plt.show()   
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def obtain_flux_calibration(calibration_star_cubes):
+def obtain_flux_calibration(calibration_star_cubes, verbose = True):
     """
     This function obtains the flux calibration of the star cubes
 
@@ -4252,13 +4261,14 @@ def obtain_flux_calibration(calibration_star_cubes):
     interpolated_response = interpolate.splrep(vector_wave, vector_response, s=0)
     flux_calibration = interpolate.splev(cube_star.wavelength, interpolated_response, der=0)
 #    flux_correction = flux_calibration
-    
-    print("\n> Flux calibration for all wavelengths = ",flux_calibration)
-    print("\n  Flux calibration obtained!")
+    if verbose:
+        print("\n> Flux calibration for all wavelengths = ",flux_calibration)
+        print("\n  Flux calibration obtained!")
     return flux_calibration
 # -----------------------------------------------------------------------------   
 # -----------------------------------------------------------------------------
-def obtain_telluric_correction(w, telluric_correction_list, plot=True, label_stars=[], scale=[]):
+def obtain_telluric_correction(w, telluric_correction_list, plot=True, verbose = True,
+                               label_stars=[], scale=[]):
     """
     This function obtains the telluric correction.
 
@@ -4308,9 +4318,10 @@ def obtain_telluric_correction(w, telluric_correction_list, plot=True, label_sta
         plt.show()
         plt.close()    
 
-    print("\n> Telluric correction = ",telluric_correction)
-    if np.nanmean(scale) != 1. : print("  Telluric correction scale provided : ",scale)
-    print("\n  Telluric correction obtained!")
+    if verbose: 
+        print("\n> Telluric correction = ",telluric_correction)
+        if np.nanmean(scale) != 1. : print("  Telluric correction scale provided : ",scale)
+        print("\n  Telluric correction obtained!")
     return telluric_correction
 # -----------------------------------------------------------------------------   
 # -----------------------------------------------------------------------------
@@ -5247,11 +5258,11 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
         # Computing total exposition time of combined cube  
         combined_cube.total_exptime = 0.
         combined_cube.exptimes=[]
-        combined_cube.rss_list=[]
+        combined_cube.rss_file_list=[]
         for i in range(n_files):
             combined_cube.total_exptime = combined_cube.total_exptime + cube_aligned_object[i].total_exptime
             combined_cube.exptimes.append(cube_aligned_object[i].total_exptime)
-            combined_cube.rss_list.append(cube_aligned_object[i].rss_list)
+            combined_cube.rss_file_list.append(cube_aligned_object[i].rss_file)
         
         print("\n> Total exposition time = ",combined_cube.total_exptime,"seconds adding the", n_files,"files")
         
@@ -5259,6 +5270,7 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
             print("  All {} cubes have the same exposition time, {} s".format(n_files, combined_cube.exptimes[0]))
         else:
             print("  The individual cubes have different exposition times.")
+                
         
         if np.nanmedian(combined_cube.offsets_files) != 0:      
             offsets_print="[ "
@@ -5290,7 +5302,7 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def read_cube(filename, description="", half_size_for_centroid = 10, 
+def read_cube(filename, path="", description="", half_size_for_centroid = 10, 
               valid_wave_min = 0, valid_wave_max = 0, edgelow=50,edgehigh=50, 
               g2d=False, step_tracing=25, adr_index_fit=2, 
               kernel_tracing = 5, adr_clip_fit=0.3,
@@ -5346,6 +5358,8 @@ def read_cube(filename, description="", half_size_for_centroid = 10,
     errors = 0
     
     if verbose: print(text_intro)
+    
+    if path != "": filename =full_path(filename,path)
     if verbose: print('  "'+filename+'"', "...")
     cube_fits_file = fits.open(filename)  # Open file
     
@@ -5418,6 +5432,8 @@ def read_cube(filename, description="", half_size_for_centroid = 10,
             else:
                 head = "RSS_"+np.str(i+1)
             rss_file_list.append(cube_fits_file[0].header[head])
+    else: 
+        rss_file_list.append(cube_fits_file[0].header["RSS_01"])
            
     wavelength = np.array([0.] * n_wave)    
     wavelength[np.int(CRPIX3)-1] = CRVAL3
@@ -5455,9 +5471,9 @@ def read_cube(filename, description="", half_size_for_centroid = 10,
     cube.integrated_star_flux = np.zeros_like(cube.wavelength) 
     cube.offsets_files = offsets_files
     cube.offsets_files_position = offsets_files_position
-    cube.rss_file_list = rss_file_list    
     cube.adrcor = adrcor
-    cube.rss_list = filename
+    cube.rss_file = filename
+    cube.rss_file_list = [filename]    
     
     if number_of_combined_files > 1 and verbose:
         print("\n> This cube was created using the following rss files:")

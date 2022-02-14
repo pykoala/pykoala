@@ -5,6 +5,7 @@ from koala.constants import red_gratings
 from koala.io import full_path, read_table, save_cube_to_fits_file
 from koala.cube import Interpolated_cube,build_combined_cube, align_n_cubes
 from koala.RSS import RSS
+from koala.KOALA_RSS import KOALA_RSS
 
 import numpy as np
 

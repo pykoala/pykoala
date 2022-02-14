@@ -3,8 +3,9 @@ from koala.io import full_path, read_table, spectrum_to_text_file, list_fits_fil
 from astropy.io import fits
 
 #from koala.KOALA_RSS import KOALA_RSS
-from koala.RSS import get_throughput_2D
+from koala.RSS import RSS,get_throughput_2D
 from koala.cube import plot_response,obtain_flux_calibration,obtain_telluric_correction
+from koala.automatic_scripts.run_automatic_star import run_automatic_star
 import numpy as np
 
 def automatic_calibration_night(CALIBRATION_NIGHT_FILE="",
@@ -21,7 +22,7 @@ def automatic_calibration_night(CALIBRATION_NIGHT_FILE="",
                                 kernel_throughput =0,
                                 correct_ccd_defects=True,
                                 fix_wavelengths = False,
-                                sol=[0],
+                                sol=[-1],
                                 rss_star_file_for_sol = "",
                                 plot=True,
                                 CONFIG_FILE_path="",
@@ -304,7 +305,7 @@ def automatic_calibration_night(CALIBRATION_NIGHT_FILE="",
                         print("    ---> However, no solution given! Setting fix_wavelength = False !")
                         fix_wavelengths = False
                     else:
-                        print("    Star RSS file for getting small wavelength solution:",rss_star_file_for_sol)
+                        print("    Star RSS file for getting small wavelength solution:\n   ",rss_star_file_for_sol)
         else:
             print("  throughput_2D_file         = ",throughput_2D_file)
             if throughput_2D_variable != "" : print("  throughput_2D variable     = ",throughput_2D_variable)
@@ -351,25 +352,26 @@ def automatic_calibration_night(CALIBRATION_NIGHT_FILE="",
     print("\n===================================================================================")
                
     if do_skyflat:      
-        if rss_star_file_for_sol != "" and sol[0] == 0 :
+        if rss_star_file_for_sol != "" and sol[0] in [0,-1] :
             print("\n> Getting the small wavelength solution, sol, using star RSS file")
             print(" ",rss_star_file_for_sol,"...")                                  
             if grating in red_gratings :
                 _rss_star_ = RSS(rss_star_file_for_sol, instrument=instrument)
                 _rss_star_.process_rss(correct_ccd_defects = False, 
-                                       fix_wavelengths=True, sol = [0],
-                                       plot= plot)
+                                       fix_wavelengths=True, sol = sol,
+                                       plot= plot, plot_final_rss = plot)
             if grating in ["580V"] :
                 _rss_star_ = RSS(rss_star_file_for_sol, instrument=instrument)
                 _rss_star_.process_rss(rss_star_file_for_sol, 
                                        correct_ccd_defects = True, remove_5577 = True,
-                                       plot= plot)               
+                                       plot= plot, plot_final_rss = plot)               
             sol = _rss_star_.sol
             print("\n> Solution for the small wavelength variations:")
             print(" ",sol)
         
         throughput_2D_, skyflat_ =  get_throughput_2D(file_skyflat, instrument =instrument,
-                                            plot = plot, also_return_skyflat = True,
+                                            plot = plot, plot_final_rss = plot,
+                                            also_return_skyflat = True,
                                             correct_ccd_defects = correct_ccd_defects,
                                             fix_wavelengths = fix_wavelengths, sol = sol,
                                             throughput_2D_file =throughput_2D_file, kernel_throughput = kernel_throughput)      
@@ -414,14 +416,7 @@ def automatic_calibration_night(CALIBRATION_NIGHT_FILE="",
                         run_star = False
                 else:
                     running_star = star_list[i]
-                    #print(running_star)
                     
-                    
-                #    if i < len(objects_auto) :
-                #        objects_auto[i] = running_star
-                #    else:    
-                #        objects_auto.append(running_star)   
-                
 
                 if run_star:
                     pepe=0
@@ -435,7 +430,19 @@ def automatic_calibration_night(CALIBRATION_NIGHT_FILE="",
                             print("\n> Running automatically calibration star",running_star, "in CONFIG_FILE:")
                             print(" ",CONFIG_FILE_list[i],"\n")
                         psol="["+np.str(sol[0])+","+np.str(sol[1])+","+np.str(sol[2])+"]"
-                        exec('run_automatic_star(CONFIG_FILE_list[i], object_auto="'+objects_auto[i]+'", star=star_list[i], sol ='+psol+', throughput_2D_file = "'+throughput_2D_file+'", rss_list = list_of_files_of_stars[i], path_star=path, date=date, grating=grating,pixel_size=pixel_size,kernel_size=kernel_size, rss_clean=rss_clean)')
+                        plist = "["
+                        
+                        
+                        for j in range(len(list_of_files_of_stars[i])):
+                            plist = plist +"'"+np.str(list_of_files_of_stars[i][j])+"'"
+                            if j == len(list_of_files_of_stars[i]) -1 : 
+                                plist = plist+"]"
+                            else:
+                                plist=plist+", "
+                        print(plist)
+                        
+                        exec(objects_auto[i]+'= run_automatic_star(CONFIG_FILE="'+CONFIG_FILE_list[i]+'", object_auto="'+objects_auto[i]+'", star="'+star_list[i]+'", sol ='+psol+', throughput_2D_file = "'+throughput_2D_file+'", rss_list ='+plist+', path_star="'+path+'", date="'+date+'", grating="'+grating+'",pixel_size='+np.str(pixel_size)+',kernel_size='+np.str(kernel_size)+', rss_clean='+np.str(rss_clean)+', plot='+np.str(plot)+')', globals())
+                        #exec("objects_auto[i]= run_automatic_star(CONFIG_FILE_list[i], object_auto=objects_auto[i], star=star_list[i], sol =psol, throughput_2D_file = throughput_2D_file, rss_list = list_of_files_of_stars[i], path_star=path, date=date, grating=grating,pixel_size=pixel_size,kernel_size=kernel_size, rss_clean=rss_clean, plot=plot)", globals())
                         
                         
                         if CONFIG_FILE_list[i] == "":
@@ -445,14 +452,21 @@ def automatic_calibration_night(CALIBRATION_NIGHT_FILE="",
                             print("  ",CONFIG_FILE_list[i]," SUCCESSFUL !!\n")
                         good_CONFIG_FILE_list.append(CONFIG_FILE_list[i])
                         good_star_names.append(running_star)
+
+
                         try: # This is for a combined cube
+                            #stars.append(objects_auto[i]+".combined_cube)")
                             exec("stars.append("+objects_auto[i]+".combined_cube)")      
                             if grating in red_gratings:
+                                #telluric_correction_list.append(objects_auto[i]+".combined_cube.telluric_correction")
                                 exec("telluric_correction_list.append("+objects_auto[i]+".combined_cube.telluric_correction)")
                         except Exception: # This is when we read a cube from fits file
+                            #stars.append(objects_auto[i])
                             exec("stars.append("+objects_auto[i]+")")      
                             if grating in red_gratings:
-                                exec("telluric_correction_list.append("+objects_auto[i]+".telluric_correction)")                                
+                                telluric_correction_list.append(objects_auto[i]+".telluric_correction")
+                                exec("telluric_correction_list.append("+objects_auto[i]+".telluric_correction)")
+                                
                     # except Exception:   
                     #     print("===================================================================================")
                     #     print("\n> ERROR! something wrong happened running config file {} !\n".format(CONFIG_FILE_list[i]))
@@ -480,8 +494,15 @@ def automatic_calibration_night(CALIBRATION_NIGHT_FILE="",
  # CHECK AND GET THE FLUX CALIBRATION FOR THE NIGHT
 
     if len(good_CONFIG_FILE_list) > 0:        
+        
+        print("===================================================================================")  
+        if grating in red_gratings:
+            print("\n> Obtaining the flux calibration and the telluric correction...")  
+        else:
+            print("\n> Obtaining the flux calibration...")  
+        
         # Define in "stars" the cubes we are using, and plotting their responses to check  
-        plot_response(stars, scale=abs_flux_scale)
+        plot_response(stars, scale=abs_flux_scale, plot=plot)
 
         # We obtain the flux calibration applying:    
         flux_calibration_night = obtain_flux_calibration(stars)
@@ -494,7 +515,7 @@ def automatic_calibration_night(CALIBRATION_NIGHT_FILE="",
 
         # Similarly, provide a list with the telluric corrections and apply:            
         if grating in red_gratings:
-            telluric_correction_night = obtain_telluric_correction(w,telluric_correction_list, label_stars=good_star_names, scale=abs_flux_scale)            
+            telluric_correction_night = obtain_telluric_correction(w,telluric_correction_list, label_stars=good_star_names, scale=abs_flux_scale, plot=plot)            
             exec(telluric_correction_name + '= telluric_correction_night', globals())
             print("  Telluric calibration saved in variable:", telluric_correction_name)
     

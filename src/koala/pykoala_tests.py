@@ -111,7 +111,7 @@ if __name__ == "__main__":
     # # -----------------------------------------------------------------------
 
     # # List the files in the folder
-    # list_fits_files_in_folder(path_red)
+    #list_fits_files_in_folder(path_red)
     
     # PyKOALA finds 4 objects: HD60753, HILT600 (calibration stars),
     #                          He2-10 (the galaxy),
@@ -122,26 +122,48 @@ if __name__ == "__main__":
     
     # Testing wavelength correction in red
     
-    file_in   = os.path.join(path_red, "27feb20028red.fits")
-    test_red = KOALA_RSS(file_in,
-                         save_rss_to_fits_file="auto",  
-    #                  apply_throughput=True, 
-    #                  throughput_2D_file=throughput_2D_file,       # if throughput_2D_file given, use SOL in fits file for fixing wave
-    #                  #throughput_2D=throughput_2D_20180227_385R,
-                         correct_ccd_defects = True, 
-                         fix_wavelengths = True, sol=[-1]
-    #                  #sol=[0.0853325247121367,-0.0009925545410042428,1.582994591921196e-07],
-    #                  do_extinction=True,
-    #                  telluric_correction_file=telluric_correction_file)
-                         )
+    # file_in   = os.path.join(path_red, "27feb20028red.fits")
+    # test_red = KOALA_RSS(file_in,
+    #                       save_rss_to_fits_file="auto",  
+    # #                  apply_throughput=True, 
+    # #                  throughput_2D_file=throughput_2D_file,       # if throughput_2D_file given, use SOL in fits file for fixing wave
+    # #                  #throughput_2D=throughput_2D_20180227_385R,
+    #                       correct_ccd_defects = True, 
+    #                       fix_wavelengths = True, sol=[-1]
+    # #                  #sol=[0.0853325247121367,-0.0009925545410042428,1.582994591921196e-07],
+    # #                  do_extinction=True,
+    # #                  telluric_correction_file=telluric_correction_file)
+    #                       )
     
     
     
     # # -----------------------------------------------------------------------
 
     # # Next, run this for AUTOMATICALLY processing calibration of the night
-    # automatic_calibration_night(path=path_red, auto=True)
+    
+    throughput_2D_file='/DATA/KOALA/2022_02_03_testing_2dfdr/20180227/ccd_2/throughput_2D_20180227_385R.fits'
+    automatic_calibration_night(path=path_red, auto=True, sol=[-1], throughput_2D_file=throughput_2D_file,
+                                plot=False)
                                 #, kernel_throughput = 21)
+ 
+    
+ 
+    # Hilt600_385R_20180227= run_automatic_star(CONFIG_FILE="", 
+    #                                           object_auto="Hilt600_385R_20180227", 
+    #                                           star="Hilt600", sol =[0.0505776814126877,-0.00105147023653121,2.73069219300114e-07], 
+    #                                           throughput_2D_file = "/DATA/KOALA/2022_02_03_testing_2dfdr/20180227/ccd_2/throughput_2D_20180227_385R.fits", 
+    #                                           rss_list =['/DATA/KOALA/2022_02_03_testing_2dfdr/20180227/ccd_2/27feb20028red.fits', '/DATA/KOALA/2022_02_03_testing_2dfdr/20180227/ccd_2/27feb20029red.fits', '/DATA/KOALA/2022_02_03_testing_2dfdr/20180227/ccd_2/27feb20030red.fits'], 
+    #                                           path_star=/DATA/KOALA/2022_02_03_testing_2dfdr/20180227/ccd_2/, date=20180227, grating=385R,pixel_size=0.7,kernel_size=1.1, rss_clean=False, plot=False)   
+ 
+    #cube_red =  Interpolated_cube("27feb20028red_TCWX_S_NR.fits", path=path_red) 
+    
+    
+    #rss_red = KOALA_RSS("27feb20028red_TCWX_S_NR.fits", path=path_red)
+    #rss_red2 = KOALA_RSS("27feb20029red_TCWX_S_NR.fits", path=path_red)
+    
+    #cube_align1,cube_align_2 = align_n_cubes([rss_red, rss_red2], [cube_red, cube_red2])
+    
+    #cube_combined = build_combined_cube([cube_align1,cube_align_2], path=path_red, fits_file="kk.fits")
  
     
     # # This will create 2 (3 for red) files needed for the calibration:
