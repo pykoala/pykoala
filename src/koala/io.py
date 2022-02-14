@@ -608,10 +608,28 @@ def list_fits_files_in_folder(path, verbose = True, use2=True, use3=False, ignor
     
     if path[-1] != "/" : path=path+"/"
     date_ = ''  # TODO: This must be filled somehow. It is just for printing data
-    files = glob.glob(path + '*.fits')
-    if len(files) == 0:
+    files_ = glob.glob(path + '*.fits')
+    if len(files_) == 0:
         raise NameError('No files found within folder '+path)
+ 
+    # Ignore fits products from 2dFdr, darks, flats, arcs...
+    files=[]
+    for fitsName in sorted(files_):
+        include_this = True
+        if fitsName[-8:] == "tlm.fits" : include_this = False
+        if fitsName[-7:] == "im.fits" : include_this = False
+        if fitsName[-7:] == "ex.fits" : include_this = False  
+        
+        if include_this: 
+            hdulist = fits.open(fitsName)
+            object_class = hdulist[0].header['NDFCLASS']
+            if object_class ==  "MFOBJECT": 
+                files.append(fitsName) 
+            #else: print(object_class, fitsName)
+
+    
     for fitsName in sorted(files):
+                
         check_file = True
         if fitsName[-8:] != "red.fits" : 
             check_file = False
@@ -623,6 +641,7 @@ def list_fits_files_in_folder(path, verbose = True, use2=True, use3=False, ignor
         hdulist = fits.open(fitsName)   # it was pyfits
 
         object_fits = hdulist[0].header['OBJECT'].split(" ")
+    
         if object_fits[0] in ["HD", "NGC", "IC"] or use2:
             try:
                 if not ignore_offsets:
