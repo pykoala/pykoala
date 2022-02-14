@@ -117,6 +117,26 @@ if __name__ == "__main__":
     #                          He2-10 (the galaxy),
     #                          SKYFLAT
     
+
+    # # -----------------------------------------------------------------------
+    
+    # Testing wavelength correction in red
+    
+    file_in   = os.path.join(path_red, "27feb20028red.fits")
+    test_red = KOALA_RSS(file_in,
+                         save_rss_to_fits_file="auto",  
+    #                  apply_throughput=True, 
+    #                  throughput_2D_file=throughput_2D_file,       # if throughput_2D_file given, use SOL in fits file for fixing wave
+    #                  #throughput_2D=throughput_2D_20180227_385R,
+                         correct_ccd_defects = True, 
+                         fix_wavelengths = True, sol=[-1]
+    #                  #sol=[0.0853325247121367,-0.0009925545410042428,1.582994591921196e-07],
+    #                  do_extinction=True,
+    #                  telluric_correction_file=telluric_correction_file)
+                         )
+    
+    
+    
     # # -----------------------------------------------------------------------
 
     # # Next, run this for AUTOMATICALLY processing calibration of the night
@@ -670,7 +690,7 @@ if __name__ == "__main__":
  
  
    
-    rss = KOALA_RSS(filename=file_in)
+    # rss = KOALA_RSS(filename=file_in)
 
     
    # # Testing rss
@@ -704,7 +724,7 @@ if __name__ == "__main__":
     # # -----------------------------------------------------------------------
     # # -----------------------------------------------------------------------
 
-    flux_calibration_file = os.path.join(path_red_old, "flux_calibration_20180227_385R_0p7_1k10.dat")
+    # flux_calibration_file = os.path.join(path_red_old, "flux_calibration_20180227_385R_0p7_1k10.dat")
     
     # file1 =  "27feb20031red_TCWXUS_NR.fits"
     # cube1 = Interpolated_cube(file1, path = path_red_old,
@@ -819,9 +839,9 @@ if __name__ == "__main__":
     # # This will create the 2 files needed for the calibration:
     
     # # 1. The throughput_2D_file:
-    throughput_2D_file = path_blue+"throughput_2D_20180227_580V.fits"
+    # throughput_2D_file = path_blue+"throughput_2D_20180227_580V.fits"
     # # 2. The flux calibration file:
-    flux_calibration_file = path_blue+"flux_calibration_20180227_580V_0p7_1k10.dat"
+    # flux_calibration_file = path_blue+"flux_calibration_20180227_580V_0p7_1k10.dat"
 
     # # It will also create 2 Python objects:
     # # HD60753_580V_20180227 : Python object with calibration star HD60753
