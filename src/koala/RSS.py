@@ -4462,6 +4462,7 @@ class RSS(object):
                         x_in_range.append(i)
 
             fit = np.polyfit(x_in_range, offset_in_range, fit_order)
+            #fit, pp_, y_fit_, y_fit_, x_, y_ = fit_clip(x_in_range, offset_in_range, index_fit=fit_order, clip=0.4, kernel=1)
             if fit_order == 2:
                 ptitle = "Fitting to skyline " + np.str(sky_line) + " : {:.3e} x$^2$  +  {:.3e} x  +  {:.3e} ".format(
                     fit[0], fit[1], fit[2]) + text
@@ -4474,7 +4475,7 @@ class RSS(object):
             y = np.poly1d(fit)
             fity = y(list(range(nspec)))
             fitted_offset_sky_lines.append(fity)
-            self.sol_edges.append(fit)  # GAFAS
+            self.sol_edges.append(fit)  
 
             if plot:
                 plot_plot(x, [offset, offset_m, fity], ymin=valid_range[0], ymax=valid_range[1],
