@@ -217,9 +217,7 @@ def run_automatic_star(CONFIG_FILE="",
         for i in range(len(rss_list)):
             rss_list[i]=full_path(rss_list[i],path)
 
-
 # # If grating is not given, we can check reading a RSS file  
-
     if grating == "" :
         print("\n> No grating provided! Checking... ")
         _test_ = RSS(rss_list[0], instrument=instrument, verbose = False)
@@ -227,14 +225,12 @@ def run_automatic_star(CONFIG_FILE="",
         grating = _test_.grating
         print("\n> Reading file",rss_list[0], "the grating is",grating)
 
-    if CONFIG_FILE == "":
-        
+    if CONFIG_FILE == "":    
         # If no configuration file is given, check if name of the star provided
         if star == "":
             print("  - No name for calibration star given, asuming name = star")
             star="star"
-        
-                
+                    
         CONFIG_FILE, description_, fits_file_, response_file_, absolute_flux_file_, telluric_file_, list_of_telluric_ranges_ =  get_calibration_star_data (star, path_star, grating, pk)
 
         if description == "" : description = description_
@@ -244,7 +240,6 @@ def run_automatic_star(CONFIG_FILE="",
         if telluric_file == "" : telluric_file = telluric_file_
         if len(list_of_telluric_ranges[0]) == 0 : list_of_telluric_ranges = list_of_telluric_ranges_
                 
-
         # Check if folder has throughput if not given
         if throughput_2D_file == "":
             print("\n> No throughout file provided, using default file:")

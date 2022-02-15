@@ -1458,19 +1458,19 @@ def trim_spectrum(w,s, edgelow=None,edgehigh=None, mask=None, auto_trim = True,
             if np.isnan(s[i]) == False: found = 1
             if i == 0 : found =1
         edgehigh = len(w)-i
-        if verbose: print("  Automatically trimming the edges [0:{}] and [{}:{}] ...".format(edgelow,len(w)-edgehigh+1, len(w)))          
+        if verbose: print("  Automatically trimming the edges [0:{}] and [{}:{}] ...".format(edgelow,len(w)-edgehigh, len(w)))          
     else:
     # If mask is given, use values of mask instead of edgelow edghigh
         if mask is not None:   # Mask is given as [edgelow,edgehigh]
             edgelow = mask[0]
             edgehigh = len(w)-mask[1]+1
-            if verbose: print("  Trimming the edges using the mask: [0:{}] and [{}:{}] ...".format(edgelow,len(w)-edgehigh+1, len(w)))  
+            if verbose: print("  Trimming the edges using the mask: [0:{}] and [{}:{}] ...".format(edgelow,len(w)-edgehigh, len(w)))  
         else:
-            if verbose: print("  Trimming the edges [0:{}] and [{}:{}] ...".format(edgelow,len(w)-edgehigh+1, len(w)))  
+            if verbose: print("  Trimming the edges [0:{}] and [{}:{}] ...".format(edgelow,len(w)-edgehigh, len(w)))  
         
-    vlines=[w[edgelow], w[len(w)-edgehigh+1]]
+    vlines=[w[edgelow], w[len(w)-edgehigh]]
     index=np.arange(len(w))
-    valid_ind=np.where((index >= edgelow) & (index <= len(w)-edgehigh+1) & (~np.isnan(s)))[0]
+    valid_ind=np.where((index >= edgelow) & (index <= len(w)-edgehigh) & (~np.isnan(s)))[0]
     valid_w = w[valid_ind]
     valid_s = s[valid_ind] 
     
