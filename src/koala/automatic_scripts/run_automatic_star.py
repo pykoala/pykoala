@@ -3,11 +3,13 @@
 
 from koala.constants import red_gratings, blue_gratings, fibres_best_sky_100
 from koala.io import full_path, read_table, spectrum_to_text_file
-from koala.KOALA_RSS import KOALA_RSS
+#from koala.KOALA_RSS import KOALA_RSS
+from koala.RSS import RSS
 from koala.automatic_scripts.koala_reduce import KOALA_reduce
 from koala.cube import read_cube, telluric_correction_from_star
 
 import numpy as np
+import copy
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -96,7 +98,8 @@ def get_calibration_star_data(star, path_star, grating, pk):
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def run_automatic_star(CONFIG_FILE="", 
+def run_automatic_star(CONFIG_FILE="",
+                       instrument="KOALA",
                        star="",
                        description ="",
                        obj_name ="",
@@ -182,12 +185,19 @@ def run_automatic_star(CONFIG_FILE="",
                        
                        log = True, gamma = 0,   
                        fig_size = 12,                                     
-                       plot = True, warnings = True, verbose = True  ): 
+                       plot = True, plot_rss = True, 
+                       plot_weight=False, plot_spectra=False,
+                       warnings = True, verbose = True  ): 
     """
     Use: 
         CONFIG_FILE_H600 = "./configuration_files/calibration_star1.config"
         H600auto=run_automatic_star(CONFIG_FILE_H600)
     """
+    if plot == False:
+        plot_rss = False 
+        plot_weight=False
+        plot_spectra=False
+        
 
     global star_object   
     sky_fibres_print ="" 
@@ -212,7 +222,8 @@ def run_automatic_star(CONFIG_FILE="",
 
     if grating == "" :
         print("\n> No grating provided! Checking... ")
-        _test_ = KOALA_RSS(rss_list[0], plot_final_rss=False, verbose = False)
+        _test_ = RSS(rss_list[0], instrument=instrument, verbose = False)
+        #_test_ = KOALA_RSS(rss_list[0], plot_final_rss=False, verbose = False)
         grating = _test_.grating
         print("\n> Reading file",rss_list[0], "the grating is",grating)
 
@@ -267,8 +278,6 @@ def run_automatic_star(CONFIG_FILE="",
         if  config_property[i] == "star" : 
             star = config_value[i]
             _CONFIG_FILE_, description, fits_file, response_file, absolute_flux_file, list_of_telluric_ranges =  get_calibration_star_data (star, path_star, grating, pk)
-
-            
 
         if  config_property[i] == "description" :  description = config_value[i]
         if  config_property[i] == "fits_file"   :  fits_file = full_path(config_value[i],path_star)
@@ -489,7 +498,12 @@ def run_automatic_star(CONFIG_FILE="",
         if  config_property[i] == "plot" : 
             if config_value[i] == "True" : 
                 plot = True 
-            else: plot = False 
+            else: 
+                plot = False 
+                plot_rss = False 
+                plot_weight=False
+                plot_spectra=False
+                
         if  config_property[i] == "plot_rss" : 
             if config_value[i] == "True" : 
                 plot_rss = True 
@@ -498,7 +512,10 @@ def run_automatic_star(CONFIG_FILE="",
             if config_value[i] == "True" : 
                 plot_weight = True 
             else: plot_weight = False             
-                           
+        if  config_property[i] == "plot_spectra" : 
+            if config_value[i] == "True" : 
+                plot_spectra = True 
+            else: plot_spectra = False                            
         if  config_property[i] == "warnings" : 
             if config_value[i] == "True" : 
                 warnings = True 
@@ -707,6 +724,7 @@ def run_automatic_star(CONFIG_FILE="",
             print("> Running KOALA_reduce ONLY for processing the RSS files provided...") 
     
         star_object=KOALA_reduce(rss_list,
+                           #instrument=instrument,
                            path=path,
                            fits_file=fits_file, 
                            obj_name=star,  
@@ -763,6 +781,7 @@ def run_automatic_star(CONFIG_FILE="",
                            gamma = gamma,
                            plot= plot, 
                            plot_rss=plot_rss,
+                           plot_spectra = plot_spectra,
                            plot_weight=plot_weight,
                            fig_size=fig_size,
                            verbose = verbose,

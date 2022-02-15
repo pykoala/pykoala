@@ -19,6 +19,8 @@
 # Start timer
 # -----------------------------------------------------------------------------
 import os
+import sys
+
 from timeit import default_timer as timer
 
 start = timer()
@@ -26,11 +28,57 @@ start = timer()
 # Load all PyKOALA tasks   / Import PyKOALA 
 # -----------------------------------------------------------------------------
 
-#pykoala_path = "/DATA/KOALA/Python/GitHub/koala/src/koala/"
+# pykoala_path = "/DATA/KOALA/Python/GitHub/koala/src/koala/"  # Angel local folder
 pykoala_path = os.getcwd()
 
-exec(compile(open(os.path.join(pykoala_path, "load_PyKOALA.py"), "rb").read(),
-             os.path.join(pykoala_path, "load_PyKOALA.py"), 'exec'))   # This just reads the file.
+# Execute load_PyKOALA.py
+#exec(compile(open(os.path.join(pykoala_path, "load_PyKOALA.py"), "rb").read(),
+#              os.path.join(pykoala_path, "load_PyKOALA.py"), 'exec'))   # This just reads the file.
+
+# -----------------------------------------------------------------------------
+
+# This is what load_PyKOALA.py does:
+
+original_system_path =[]
+for item in sys.path:
+    #print("Original",item)
+    original_system_path.append(item)
+
+# # This is from where Python will look for "koala"
+sys.path.append(pykoala_path[:-6])
+
+# # 1. Load file with constant data
+from koala.constants import * 
+# # 2. Load file with I/O tasks and version and developers
+from koala.io import * 
+# 3. Load file with plot_plot and basic_statistics (task included in plot_plot.py)
+from koala.plot_plot import *
+# 4. Load file with 1D spectrum tasks
+from koala.onedspec import * 
+# 5. Load file with RSS class & RSS tasks
+from koala.RSS import *
+# 6. Load file with KOALA_RSS class & KOALA_RSS specific tasks
+from koala.KOALA_RSS import *
+# 7. Load file with Interpolated_cube class & cube specific tasks
+from koala.cube import *
+# 8. Load file with map tasks
+from koala.maps import *
+# 9. Load the 4 AUTOMATIC SCRIPTS 
+from koala.automatic_scripts.run_automatic_star import *
+from koala.automatic_scripts.koala_reduce import *
+from koala.automatic_scripts.automatic_koala_reduce import *
+from koala.automatic_scripts.automatic_calibration_night import *
+
+# Clean the path and leave only what matters
+
+sys.path = []
+for item in original_system_path:
+    sys.path.append(item)
+sys.path.append(pykoala_path[:-6])
+
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -63,17 +111,59 @@ if __name__ == "__main__":
     # # -----------------------------------------------------------------------
 
     # # List the files in the folder
-    # list_fits_files_in_folder(path_red)
+    #list_fits_files_in_folder(path_red)
     
     # PyKOALA finds 4 objects: HD60753, HILT600 (calibration stars),
     #                          He2-10 (the galaxy),
     #                          SKYFLAT
     
+
+    # # -----------------------------------------------------------------------
+    
+    # Testing wavelength correction in red
+    
+    # file_in   = os.path.join(path_red, "27feb20028red.fits")
+    # test_red = KOALA_RSS(file_in,
+    #                       save_rss_to_fits_file="auto",  
+    # #                  apply_throughput=True, 
+    # #                  throughput_2D_file=throughput_2D_file,       # if throughput_2D_file given, use SOL in fits file for fixing wave
+    # #                  #throughput_2D=throughput_2D_20180227_385R,
+    #                       correct_ccd_defects = True, 
+    #                       fix_wavelengths = True, sol=[-1]
+    # #                  #sol=[0.0853325247121367,-0.0009925545410042428,1.582994591921196e-07],
+    # #                  do_extinction=True,
+    # #                  telluric_correction_file=telluric_correction_file)
+    #                       )
+    
+    
+    
     # # -----------------------------------------------------------------------
 
     # # Next, run this for AUTOMATICALLY processing calibration of the night
-    # automatic_calibration_night(path=path_red, auto=True)
+    
+    throughput_2D_file='/DATA/KOALA/2022_02_03_testing_2dfdr/20180227/ccd_2/throughput_2D_20180227_385R.fits'
+    automatic_calibration_night(path=path_red, auto=True, sol=[-1], throughput_2D_file=throughput_2D_file,
+                                plot=False)
                                 #, kernel_throughput = 21)
+ 
+    
+ 
+    # Hilt600_385R_20180227= run_automatic_star(CONFIG_FILE="", 
+    #                                           object_auto="Hilt600_385R_20180227", 
+    #                                           star="Hilt600", sol =[0.0505776814126877,-0.00105147023653121,2.73069219300114e-07], 
+    #                                           throughput_2D_file = "/DATA/KOALA/2022_02_03_testing_2dfdr/20180227/ccd_2/throughput_2D_20180227_385R.fits", 
+    #                                           rss_list =['/DATA/KOALA/2022_02_03_testing_2dfdr/20180227/ccd_2/27feb20028red.fits', '/DATA/KOALA/2022_02_03_testing_2dfdr/20180227/ccd_2/27feb20029red.fits', '/DATA/KOALA/2022_02_03_testing_2dfdr/20180227/ccd_2/27feb20030red.fits'], 
+    #                                           path_star=/DATA/KOALA/2022_02_03_testing_2dfdr/20180227/ccd_2/, date=20180227, grating=385R,pixel_size=0.7,kernel_size=1.1, rss_clean=False, plot=False)   
+ 
+    #cube_red =  Interpolated_cube("27feb20028red_TCWX_S_NR.fits", path=path_red) 
+    
+    
+    #rss_red = KOALA_RSS("27feb20028red_TCWX_S_NR.fits", path=path_red)
+    #rss_red2 = KOALA_RSS("27feb20029red_TCWX_S_NR.fits", path=path_red)
+    
+    #cube_align1,cube_align_2 = align_n_cubes([rss_red, rss_red2], [cube_red, cube_red2])
+    
+    #cube_combined = build_combined_cube([cube_align1,cube_align_2], path=path_red, fits_file="kk.fits")
  
     
     # # This will create 2 (3 for red) files needed for the calibration:
@@ -592,8 +682,12 @@ if __name__ == "__main__":
     #                   plot_final_rss = True,
     #                   plot=True, warnings=False, verbose=True)
 
-
-    #test_new = KOALA_RSS(file_in, print_summary=True)
+    # file_in=full_path("27feb10022red.fits", path_blue)
+    # test_new = KOALA_RSS(file_in, print_summary=True)
+    # test_new.correct_ccd_defects()
+    # test_new.apply_self_sky()
+    
+    # test_new.correcting_negative_sky(show_fibres=[0, 450, 600, 601,602,985], order_fit_negative_sky=11, kernel_negative_sky=101)
     
     # test_new.process_rss(apply_throughput=True, throughput_2D=throughput_2D_blue_new)
                           #correct_ccd_defects = True,
@@ -618,6 +712,15 @@ if __name__ == "__main__":
  
  
    
+    # rss = KOALA_RSS(filename=file_in)
+
+    
+   # # Testing rss
+    # rss = RSS()
+    # rss.read_rss_file(filename=file_in, instrument="KOALA")
+    
+    #rss.apply_flat(flat_filename=file_in, plot=True)
+    #rss.process_rss(do_extinction=True, correct_ccd_defects=True)
 
  
     
@@ -628,8 +731,8 @@ if __name__ == "__main__":
     path_red_old  = os.path.join(path_old, "385R")
  
     
-    file_in_old=full_path("27feb10028red.fits", path_blue_old)
-    test_old = KOALA_RSS(file_in_old)
+    #file_in_old=full_path("27feb10028red.fits", path_blue_old)
+    #test_old = KOALA_RSS(file_in_old)
     # plot_plot(x,test_old.integrated_fibre/1E6, ymin=-0.02, ymax=0.2, 
     #           ptitle="Integrated flux using 2dfdr v7.1", xlabel="Fibre", 
     #           ylabel="Flux [ 10$^6$ counts ]", fig_size="big",
@@ -643,7 +746,7 @@ if __name__ == "__main__":
     # # -----------------------------------------------------------------------
     # # -----------------------------------------------------------------------
 
-    flux_calibration_file = os.path.join(path_red_old, "flux_calibration_20180227_385R_0p7_1k10.dat")
+    # flux_calibration_file = os.path.join(path_red_old, "flux_calibration_20180227_385R_0p7_1k10.dat")
     
     # file1 =  "27feb20031red_TCWXUS_NR.fits"
     # cube1 = Interpolated_cube(file1, path = path_red_old,
@@ -758,9 +861,9 @@ if __name__ == "__main__":
     # # This will create the 2 files needed for the calibration:
     
     # # 1. The throughput_2D_file:
-    throughput_2D_file = path_blue+"throughput_2D_20180227_580V.fits"
+    # throughput_2D_file = path_blue+"throughput_2D_20180227_580V.fits"
     # # 2. The flux calibration file:
-    flux_calibration_file = path_blue+"flux_calibration_20180227_580V_0p7_1k10.dat"
+    # flux_calibration_file = path_blue+"flux_calibration_20180227_580V_0p7_1k10.dat"
 
     # # It will also create 2 Python objects:
     # # HD60753_580V_20180227 : Python object with calibration star HD60753

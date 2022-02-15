@@ -533,7 +533,8 @@ def name_keys(filename, apply_throughput=False, correct_ccd_defects = False,
     """
     Task for automatically naming output rss files.
     """    
-    if apply_throughput:
+    
+    if filename[-8:] == "red.fits" :
         clave = "__________" 
     else:
         clave = filename[-15:-5]
@@ -577,7 +578,7 @@ def name_keys(filename, apply_throughput=False, correct_ccd_defects = False,
 
     clave="_"+T+C+W+X+U+S+E+N+R
             
-    if apply_throughput:       
+    if filename[-8:] == "red.fits" :       
         return filename[0:-5]+clave+".fits"
     else:
         return filename[0:-15]+clave+".fits"
@@ -604,14 +605,35 @@ def list_fits_files_in_folder(path, verbose = True, use2=True, use3=False, ignor
                        "POS1", "POS2","POS3","POS4","POS5","POS6"] 
         
     
-    if verbose: print("\n> Listing fits files in folder",path,":\n")
+    if verbose: print("\n> Listing 2dFdr fits files in folder",path,":\n")
     
     if path[-1] != "/" : path=path+"/"
     date_ = ''  # TODO: This must be filled somehow. It is just for printing data
-    files = glob.glob(path + '*.fits')
-    if len(files) == 0:
+    files_ = glob.glob(path + '*.fits')
+    if len(files_) == 0:
         raise NameError('No files found within folder '+path)
+ 
+    # Ignore fits products from 2dFdr, darks, flats, arcs...
+    files=[]
+    for fitsName in sorted(files_):
+        include_this = True
+        if fitsName[-8:] == "tlm.fits" : include_this = False
+        if fitsName[-7:] == "im.fits" : include_this = False
+        if fitsName[-7:] == "ex.fits" : include_this = False  
+        
+        if include_this: 
+            hdulist = fits.open(fitsName)
+            try:
+                object_class = hdulist[0].header['NDFCLASS']
+                if object_class ==  "MFOBJECT": 
+                    files.append(fitsName) 
+                #else: print(object_class, fitsName)
+            except Exception:
+                nothing=0
+
+    
     for fitsName in sorted(files):
+                
         check_file = True
         if fitsName[-8:] != "red.fits" : 
             check_file = False
@@ -623,6 +645,7 @@ def list_fits_files_in_folder(path, verbose = True, use2=True, use3=False, ignor
         hdulist = fits.open(fitsName)   # it was pyfits
 
         object_fits = hdulist[0].header['OBJECT'].split(" ")
+    
         if object_fits[0] in ["HD", "NGC", "IC"] or use2:
             try:
                 if not ignore_offsets:
@@ -810,19 +833,21 @@ def save_cube_to_fits_file(cube, fits_file, description="", obj_name = "", path=
         fits_image_hdu.header["COMCUBE"] = True 
         is_combined_cube = True
         cofiles = len(cube.offsets_files) + 1 
-        fits_image_hdu.header['COFILES'] =  cofiles # Number of combined files        
+        fits_image_hdu.header['COFILES'] =  cofiles # Number of combined files    
+                
         if cofiles > 1:
             for i in (list(range(cofiles))):
                 if i < 9:
                     text = "RSS_0"+np.str(i+1)
                 else:
                     text = "RSS_"+np.str(i+1)
-                fits_image_hdu.header[text] = cube.rss_list[i]    
+                fits_image_hdu.header[text] = cube.rss_file_list[i]    
     else: 
         #print(" THIS IS NOT A COMBINED CUBE")
         fits_image_hdu.header["COMCUBE"] = False 
         is_combined_cube = False
         fits_image_hdu.header['COFILES'] = 1
+        fits_image_hdu.header["RSS_01"] = cube.rss_file_list[0] 
 
     offsets_text=" "
     if len(cube.offsets_files) != 0 :  # If offsets provided/obtained, this will not be 0 

@@ -1,16 +1,16 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-from astropy.io import fits
-from astropy.wcs import WCS
+#from astropy.io import fits
+#from astropy.wcs import WCS
 import numpy as np
-import copy
+#import copy
 # from scipy import signal
 # Disable some annoying warnings
 import warnings
 
-from koala.RSS import RSS, coord_range
-from koala.io import full_path
+from koala.RSS import RSS #, coord_range
+#from koala.io import full_path
 
 warnings.simplefilter('ignore', np.RankWarning)
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -86,220 +86,173 @@ class KOALA_RSS(RSS):
                  plot=True, plot_final_rss=True,
                  log= True, gamma = 0.,fig_size=12):
 
-        # ---------------------------------------------- Checking some details 
-        #TODO: Move this at the beginning of new a task in RSS:  self.process_rss()
-
-        # if rss_clean:  # Just read file if rss_clean = True
-        #     apply_throughput = False
-        #     correct_ccd_defects = False
-        #     fix_wavelengths = False
-        #     sol = [0, 0, 0]
-        #     sky_method = "none"
-        #     do_extinction = False
-        #     telluric_correction = [0]
-        #     telluric_correction_file = ""
-        #     id_el = False
-        #     clean_sky_residuals = False
-        #     fix_edges = False
-        #     # plot_final_rss = plot
-        #     plot = False
-        #     correct_negative_sky = False
-        #     clean_cosmics = False
-        #     clean_extreme_negatives = False
-        #     remove_negative_median_values = False
-        #     verbose = False
-
-        # if len(telluric_correction_file) > 0 or telluric_correction[0] != 0:
-        #     do_telluric_correction = True
-        # else:
-        #     do_telluric_correction = False
-
-        # if (apply_throughput == False and correct_ccd_defects == False and fix_wavelengths == False
-        #         and sky_method == "none" and do_extinction == False and telluric_correction == [0]
-        #         and clean_sky_residuals == False and correct_negative_sky == False and clean_cosmics == False
-        #         and fix_edges == False and clean_extreme_negatives == False and remove_negative_median_values == False
-        #         and do_telluric_correction == False and is_sky == False):
-        #     # If nothing is selected to do, we assume that the RSS file is CLEAN
-        #     rss_clean = True
-        #     # plot_final_rss = plot
-        #     plot = False
-        #     verbose = False
-
-        # if sky_method not in ["self", "selffit"]:
-        #     force_sky_fibres_to_zero = False  # We don't have sky fibres, sky spectrum is given
-
-        # if sol[0] in [0, -1]:
-        #     self.sol = [0, 0, 0]
-        # else:
-        #     self.sol = sol
-
-
         # --------------------------------------------------------------------
         # Reading KOALA data using the products of 2dFdr...
         # --------------------------------------------------------------------
 
-        self.instrument =["KOALA + AAOmega"]
-        self.sky_fibres = []
-
         # Create RSS object
         super(KOALA_RSS, self).__init__()
-        if path != "":
-            filename = full_path(filename, path)
+        #if path != "": filename = full_path(filename, path)
 
-        if verbose:
-            print("\n> Reading file", '"' + filename + '"', "...")
-        rss_fits_file = fits.open(filename)  # Open file
-        # self.rss_list = []
-
-        #  General info:
-        self.object = rss_fits_file[0].header['OBJECT']
-        self.filename = filename
-        self.description = self.object + ' \n ' + filename
-        self.RA_centre_deg = rss_fits_file[2].header['CENRA'] * 180 / np.pi
-        self.DEC_centre_deg = rss_fits_file[2].header['CENDEC'] * 180 / np.pi
-        self.exptime = rss_fits_file[0].header['EXPOSED']
-        self.history_RSS = rss_fits_file[0].header['HISTORY']
-        #self.history = []
-
-        # Read good/bad spaxels
-        all_spaxels = list(range(len(rss_fits_file[2].data)))
-        quality_flag = [rss_fits_file[2].data[i][1] for i in all_spaxels]
-        good_spaxels = [i for i in all_spaxels if quality_flag[i] == 1]
-        bad_spaxels = [i for i in all_spaxels if quality_flag[i] == 0]
-
-        # Create wavelength, intensity, and variance arrays only for good spaxels
-        wcsKOALA = WCS(rss_fits_file[0].header)
-        index_wave = np.arange(rss_fits_file[0].header['NAXIS1'])
-        wavelength = wcsKOALA.dropaxis(1).wcs_pix2world(index_wave, 0)[0]
-        intensity = rss_fits_file[0].data[good_spaxels]
+        self.instrument["instrument"] ="KOALA + AAOmega"
         
-        # Read errors using rss_fits_file[1]
-        try:
-            variance = rss_fits_file[1].data[good_spaxels]
-        except Exception:
-            variance = copy.deepcopy(intensity)
-            if warnings or verbose: print("\n  WARNING! Variance extension not found in fits file!")
+        self.read_rss_file(filename, path, rss_clean=rss_clean, instrument = self.instrument["instrument"],
+                           warnings=warnings, verbose=verbose)
+                
+        # if verbose: print("\n> Reading file", '"' + filename + '"', "...")
+        # rss_fits_file = fits.open(filename)  # Open file
 
-        if not rss_clean and verbose:
-            print("\n  Number of spectra in this RSS =", len(rss_fits_file[0].data), ",  number of good spectra =",
-                  len(good_spaxels), " ,  number of bad spectra =", len(bad_spaxels))
-            if len(bad_spaxels) > 0: print("  Bad fibres =", bad_spaxels)
+        # #  General info:
+        # self.object = rss_fits_file[0].header['OBJECT']
+        # self.filename = filename
+        # self.description = self.object + ' \n ' + filename
+        # self.RA_centre_deg = rss_fits_file[2].header['CENRA'] * 180 / np.pi
+        # self.DEC_centre_deg = rss_fits_file[2].header['CENDEC'] * 180 / np.pi
+        # self.exptime = rss_fits_file[0].header['EXPOSED']
+        # self.history_RSS = rss_fits_file[0].header['HISTORY']
 
-        # Read spaxel positions on sky using rss_fits_file[2]
-        self.header2_data = rss_fits_file[2].data
-        # print rss_fits_file[2].data
+        # # Read good/bad spaxels
+        # all_spaxels = list(range(len(rss_fits_file[2].data)))
+        # quality_flag = [rss_fits_file[2].data[i][1] for i in all_spaxels]
+        # good_spaxels = [i for i in all_spaxels if quality_flag[i] == 1]
+        # bad_spaxels = [i for i in all_spaxels if quality_flag[i] == 0]
 
-        # CAREFUL !! header 2 has the info of BAD fibres, if we are reading from our created RSS files we have to do
-        # it in a different way...
-
-        if len(bad_spaxels) == 0:
-            offset_RA_arcsec_ = []
-            offset_DEC_arcsec_ = []
-            for i in range(len(good_spaxels)):
-                offset_RA_arcsec_.append(self.header2_data[i][5])
-                offset_DEC_arcsec_.append(self.header2_data[i][6])
-            offset_RA_arcsec = np.array(offset_RA_arcsec_)
-            offset_DEC_arcsec = np.array(offset_DEC_arcsec_)
-
-        else:
-            offset_RA_arcsec = np.array([rss_fits_file[2].data[i][5]
-                                         for i in good_spaxels])
-            offset_DEC_arcsec = np.array([rss_fits_file[2].data[i][6]
-                                          for i in good_spaxels])
-
-            #self.ID = np.array([rss_fits_file[2].data[i][0] for i in good_spaxels])  # These are the good fibres
-
-        self.ZDSTART = rss_fits_file[0].header['ZDSTART']
-        self.ZDEND = rss_fits_file[0].header['ZDEND']
-        ZD = (self.ZDSTART + self.ZDEND) / 2
-        self.airmass = 1 / np.cos(np.radians(ZD))
-        self.extinction_correction = np.ones(self.n_wave)
-
-        # KOALA-specific stuff
-        self.PA = rss_fits_file[0].header['TEL_PA']
-        self.grating = rss_fits_file[0].header['GRATID']
-        # Check RED / BLUE arm for AAOmega
-        if (rss_fits_file[0].header['SPECTID'] == "RD"):
-            AAOmega_Arm = "RED"
-        if (rss_fits_file[0].header['SPECTID'] == "BL"):  
-            AAOmega_Arm = "BLUE"
-        self.instrument.append(AAOmega_Arm)
-
-        # For WCS
-        self.CRVAL1_CDELT1_CRPIX1 = []
-        self.CRVAL1_CDELT1_CRPIX1.append(rss_fits_file[0].header['CRVAL1'])
-        self.CRVAL1_CDELT1_CRPIX1.append(rss_fits_file[0].header['CDELT1'])
-        self.CRVAL1_CDELT1_CRPIX1.append(rss_fits_file[0].header['CRPIX1'])
-        rss_fits_file.close()
-
-        self.wavelength = wavelength
-        self.n_wave = len(wavelength)
+        # # Create wavelength
+        # wcsKOALA = WCS(rss_fits_file[0].header)
+        # index_wave = np.arange(rss_fits_file[0].header['NAXIS1'])
+        # wavelength = wcsKOALA.dropaxis(1).wcs_pix2world(index_wave, 0)[0]
+        # self.wavelength = wavelength
+        # self.n_wave = len(wavelength)
         
-        # Check that dimensions match KOALA numbers
-        if self.n_wave != 2048 and len(all_spaxels) != 1000:
-            if warnings or verbose:
-                print("\n *** WARNING *** : These numbers are NOT the standard ones for KOALA")
+        # # For WCS
+        # self.CRVAL1_CDELT1_CRPIX1 = []
+        # self.CRVAL1_CDELT1_CRPIX1.append(rss_fits_file[0].header['CRVAL1'])
+        # self.CRVAL1_CDELT1_CRPIX1.append(rss_fits_file[0].header['CDELT1'])
+        # self.CRVAL1_CDELT1_CRPIX1.append(rss_fits_file[0].header['CRPIX1'])
+        
+        # # Read intensity using rss_fits_file[0]
+        # intensity = rss_fits_file[0].data[good_spaxels]
+        
+        # # Read errors using rss_fits_file[1]
+        # try:
+        #     variance = rss_fits_file[1].data[good_spaxels]
+        # except Exception:
+        #     variance = copy.deepcopy(intensity)
+        #     if warnings or verbose: print("\n  WARNING! Variance extension not found in fits file!")
 
-        if verbose: print("\n> Setting the data for this file:")
+        # if not rss_clean and verbose:
+        #     print("\n  Number of spectra in this RSS =", len(rss_fits_file[0].data), ",  number of good spectra =",
+        #           len(good_spaxels), " ,  number of bad spectra =", len(bad_spaxels))
+        #     if len(bad_spaxels) > 0: print("  Bad fibres =", bad_spaxels)
 
-        if variance.shape != intensity.shape:
-            if warnings or verbose:
-                print("\n* ERROR: * the intensity and variance arrays are",
-                      intensity.shape, "and", variance.shape, "respectively\n")
-            raise ValueError
-        n_dim = len(intensity.shape)
-        if n_dim == 2:
-            self.intensity = intensity
-            self.variance = variance
-        elif n_dim == 1:
-            self.intensity = intensity.reshape((1, self.n_wave))
-            self.variance = variance.reshape((1, self.n_wave))
-        else:
-            if warnings or verbose:
-                print("\n* ERROR: * the intensity matrix supplied has", n_dim, "dimensions\n")
-            raise ValueError
+        # # Read spaxel positions on sky using rss_fits_file[2]
+        # self.header2_data = rss_fits_file[2].data
 
-        self.n_spectra = self.intensity.shape[0]
+        # # But only keep the GOOD data!
+        # # CAREFUL !! header 2 has the info of BAD fibres, if we are reading 
+        # # from our created RSS files we have to do it in a different way...
 
-        if verbose:
-            print("  Found {} spectra with {} wavelengths".format(self.n_spectra, self.n_wave),
-                  "between {:.2f} and {:.2f} Angstrom".format(self.wavelength[0], self.wavelength[-1]))
-        if self.intensity.shape[1] != self.n_wave:
-            if warnings or verbose:
-                print("\n* ERROR: * spectra have", self.intensity.shape[1], "wavelengths rather than", self.n_wave)
-            raise ValueError
-        if (len(offset_RA_arcsec) != self.n_spectra) |(len(offset_DEC_arcsec) != self.n_spectra):
-            if warnings | verbose:
-                print("\n* ERROR: * offsets (RA, DEC) = ({},{})".format(len(self.offset_RA_arcsec),
-                                                                        len(self.offset_DEC_arcsec)),
-                      "rather than", self.n_spectra)
-            raise ValueError
-        else:
-            self.offset_RA_arcsec = offset_RA_arcsec
-            self.offset_DEC_arcsec = offset_DEC_arcsec
+        # if len(bad_spaxels) == 0:
+        #     offset_RA_arcsec_ = []
+        #     offset_DEC_arcsec_ = []
+        #     for i in range(len(good_spaxels)):
+        #         offset_RA_arcsec_.append(self.header2_data[i][5])
+        #         offset_DEC_arcsec_.append(self.header2_data[i][6])
+        #     offset_RA_arcsec = np.array(offset_RA_arcsec_)
+        #     offset_DEC_arcsec = np.array(offset_DEC_arcsec_)
 
-        # Check if NARROW (spaxel_size = 0.7 arcsec)
-        # or WIDE (spaxel_size=1.25) field of view
-        # (if offset_max - offset_min > 31 arcsec in both directions)
-        if np.max(offset_RA_arcsec) - np.min(offset_RA_arcsec) > 31 or \
-                np.max(offset_DEC_arcsec) - np.min(offset_DEC_arcsec) > 31:
-            self.spaxel_size = 1.25
-            field = "WIDE"
-        else:
-            self.spaxel_size = 0.7
-            field = "NARROW"
+        # else:
+        #     offset_RA_arcsec = np.array([rss_fits_file[2].data[i][5]
+        #                                  for i in good_spaxels])
+        #     offset_DEC_arcsec = np.array([rss_fits_file[2].data[i][6]
+        #                                   for i in good_spaxels])
+
+        #     #self.ID = np.array([rss_fits_file[2].data[i][0] for i in good_spaxels])  # These are the good fibres
+
+        # # Get ZD, airmass
+        # self.ZDSTART = rss_fits_file[0].header['ZDSTART']
+        # self.ZDEND = rss_fits_file[0].header['ZDEND']
+        # ZD = (self.ZDSTART + self.ZDEND) / 2
+        # self.airmass = 1 / np.cos(np.radians(ZD))
+        # self.extinction_correction = np.ones(self.n_wave)
+
+        # # KOALA-specific stuff
+        # self.PA = rss_fits_file[0].header['TEL_PA']
+        # self.grating = rss_fits_file[0].header['GRATID']
+        # # Check RED / BLUE arm for AAOmega
+        # if (rss_fits_file[0].header['SPECTID'] == "RD"):
+        #     AAOmega_Arm = "RED"
+        # if (rss_fits_file[0].header['SPECTID'] == "BL"):  
+        #     AAOmega_Arm = "BLUE"
+        # self.instrument.append(AAOmega_Arm)
+
+        # rss_fits_file.close()
+        
+        # # Check that dimensions match KOALA numbers
+        # if self.n_wave != 2048 and len(all_spaxels) != 1000:
+        #     if warnings or verbose:
+        #         print("\n *** WARNING *** : These numbers are NOT the standard ones for KOALA")
+
+        # if verbose: print("\n> Setting the data for this file:")
+
+        # if variance.shape != intensity.shape:
+        #     if warnings or verbose:
+        #         print("\n* ERROR: * the intensity and variance arrays are",
+        #               intensity.shape, "and", variance.shape, "respectively\n")
+        #     raise ValueError
+        # n_dim = len(intensity.shape)
+        # if n_dim == 2:
+        #     self.intensity = intensity
+        #     self.variance = variance
+        # elif n_dim == 1:
+        #     self.intensity = intensity.reshape((1, self.n_wave))
+        #     self.variance = variance.reshape((1, self.n_wave))
+        # else:
+        #     if warnings or verbose:
+        #         print("\n* ERROR: * the intensity matrix supplied has", n_dim, "dimensions\n")
+        #     raise ValueError
+
+        # self.n_spectra = self.intensity.shape[0]
+
+        # if verbose:
+        #     print("  Found {} spectra with {} wavelengths".format(self.n_spectra, self.n_wave),
+        #           "between {:.2f} and {:.2f} Angstrom".format(self.wavelength[0], self.wavelength[-1]))
+        # if self.intensity.shape[1] != self.n_wave:
+        #     if warnings or verbose:
+        #         print("\n* ERROR: * spectra have", self.intensity.shape[1], "wavelengths rather than", self.n_wave)
+        #     raise ValueError
+        # if (len(offset_RA_arcsec) != self.n_spectra) |(len(offset_DEC_arcsec) != self.n_spectra):
+        #     if warnings | verbose:
+        #         print("\n* ERROR: * offsets (RA, DEC) = ({},{})".format(len(self.offset_RA_arcsec),
+        #                                                                 len(self.offset_DEC_arcsec)),
+        #               "rather than", self.n_spectra)
+        #     raise ValueError
+        # else:
+        #     self.offset_RA_arcsec = offset_RA_arcsec
+        #     self.offset_DEC_arcsec = offset_DEC_arcsec
+
+        # # Check if NARROW (spaxel_size = 0.7 arcsec)
+        # # or WIDE (spaxel_size=1.25) field of view
+        # # (if offset_max - offset_min > 31 arcsec in both directions)
+        # if np.max(offset_RA_arcsec) - np.min(offset_RA_arcsec) > 31 or \
+        #         np.max(offset_DEC_arcsec) - np.min(offset_DEC_arcsec) > 31:
+        #     self.spaxel_size = 1.25
+        #     field = "WIDE"
+        # else:
+        #     self.spaxel_size = 0.7
+        #     field = "NARROW"
             
-        self.instrument.append(field)
-        self.instrument.append(self.spaxel_size)
+        # self.instrument.append(field)
+        # self.instrument.append(self.spaxel_size)
 
-        # Get min and max for rss
-        self.RA_min, self.RA_max, self.DEC_min, self.DEC_max = coord_range([self])
-        self.DEC_segment = (self.DEC_max - self.DEC_min) * 3600.  # +1.25 for converting to total field of view
-        self.RA_segment = (self.RA_max - self.RA_min) * 3600.  # +1.25
+        # # Get min and max for rss
+        # self.RA_min, self.RA_max, self.DEC_min, self.DEC_max = coord_range([self])
+        # self.DEC_segment = (self.DEC_max - self.DEC_min) * 3600.  # +1.25 for converting to total field of view
+        # self.RA_segment = (self.RA_max - self.RA_min) * 3600.  # +1.25
 
-        # Deep copy of intensity into intensity_corrected
-        self.intensity_corrected = copy.deepcopy(self.intensity)
-        self.variance_corrected = variance.copy()
+        # # Deep copy of intensity into intensity_corrected
+        # self.intensity_corrected = copy.deepcopy(self.intensity)
+        # self.variance_corrected = variance.copy()
         
         # ---------------------------------------------------
         # ------------- PROCESSING THE RSS FILE -------------

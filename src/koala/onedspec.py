@@ -1349,84 +1349,255 @@ def search_peaks(wavelength, flux, smooth_points=20, lmin=0, lmax=0, fmin=0.5, f
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def fit_smooth_spectrum(wl,x, edgelow=20,edgehigh=20, order= 9, kernel=11, verbose=True, 
+def fit_clip(x, y, clip=0.4, index_fit = 2, kernel = 19, mask ="",                          
+             xmin="",xmax="",ymin="",ymax="",percentile_min=2, percentile_max=98,
+             ptitle=None, xlabel=None, ylabel = None, label="", 
+             hlines=[], vlines=[],chlines=[], cvlines=[], axvspan=[[0,0]], hwidth =1, vwidth =1,
+             plot=True, verbose=True):
+    """
+    This tasks performs a polynomic fits of order index_fit
+    
+
+    Parameters
+    ----------
+    x : TYPE
+        DESCRIPTION.
+    y : TYPE
+        DESCRIPTION.
+    clip : TYPE, optional
+        DESCRIPTION. The default is 0.4.
+    index_fit : TYPE, optional
+        DESCRIPTION. The default is 2.
+    kernel : TYPE, optional
+        DESCRIPTION. The default is 19.
+    ptitle : TYPE, optional
+        DESCRIPTION. The default is None.
+    xlabel : TYPE, optional
+        DESCRIPTION. The default is None.
+    ylabel : TYPE, optional
+        DESCRIPTION. The default is None.
+    plot : TYPE, optional
+        DESCRIPTION. The default is True.
+    verbose : TYPE, optional
+        DESCRIPTION. The default is True.
+
+    Returns
+    -------
+    fit, pp, y_fit, y_fit_clipped, x[idx], y_clipped[idx]: 
+    The fit, 
+    the polynomium with the fit, 
+    the values of the fit for all x
+    the values of the fit for only valid x
+    the values of the valid x
+    the values of the valid y
+    """
+     
+    # Preparing the data. Trim edges and remove nans
+    
+    
+    
+    
+    if kernel != 0:
+        x = np.array(x)
+        y = np.array(y)
+        
+        y_smooth = signal.medfilt(y, kernel)
+        residuals = y - y_smooth
+        residuals_std = np.std(residuals)
+        
+        y_nan = [np.nan if np.abs(i) > residuals_std*clip else 1. for i in residuals ] 
+        y_clipped = y * y_nan
+        
+        idx = np.isfinite(x) & np.isfinite(y_clipped)
+        
+        fit  = np.polyfit(x[idx], y_clipped[idx], index_fit) 
+        pp=np.poly1d(fit)
+        y_fit=pp(x)
+        y_fit_clipped =pp(x[idx])
+   
+        if verbose: 
+            print("\n> Fitting a polynomium of degree",index_fit,"using clip =",clip,"* std ...")
+            print("  Eliminated",len(x)-len(x[idx]),"outliers, the solution is: ",fit)
+        
+        if plot:
+            if ylabel is None: ylabel = "y (x)"
+            
+            if ptitle is None:
+                ptitle = "Polyfit of degree "+np.str(index_fit)+" using clip = "+np.str(clip)+" * std"
+            plot_plot(x, [y,y_smooth, y_clipped, y_fit], psym=["+","-", "+","-"],
+                      alpha=[0.5,0.5,0.8,1], color=["r","b","g","k"], label=label,
+                      xlabel=xlabel, ylabel=ylabel, ptitle=ptitle, 
+                      xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax,percentile_min=percentile_min, percentile_max=percentile_max,
+                      hlines=hlines, vlines=vlines,chlines=chlines, cvlines=cvlines, 
+                      axvspan=axvspan, hwidth =hwidth, vwidth =vwidth)
+
+        return fit, pp, y_fit, y_fit_clipped, x[idx], y_clipped[idx]   
+    else:
+        fit  = np.polyfit(x, y, index_fit) 
+        pp=np.poly1d(fit)
+        y_fit=pp(x)
+        return fit, pp, y_fit, y_fit, x, y
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+def trim_spectrum(w,s, edgelow=None,edgehigh=None, mask=None, auto_trim = True, 
+                  exclude_wlm=[[0,0]], verbose=True, plot=True):
+    
+    if auto_trim:
+        found = 0
+        i = -1
+        while found == 0:
+            i=i+1
+            if np.isnan(s[i]) == False: found = 1
+            if i > len(s) : found =1
+        edgelow = i
+        i = len(s)
+        found = 0
+        while found == 0:
+            i=i-1
+            if np.isnan(s[i]) == False: found = 1
+            if i == 0 : found =1
+        edgehigh = len(w)-i
+        if verbose: print("  Automatically trimming the edges [0:{}] and [{}:{}] ...".format(edgelow,len(w)-edgehigh+1, len(w)))          
+    else:
+    # If mask is given, use values of mask instead of edgelow edghigh
+        if mask is not None:   # Mask is given as [edgelow,edgehigh]
+            edgelow = mask[0]
+            edgehigh = len(w)-mask[1]+1
+            if verbose: print("  Trimming the edges using the mask: [0:{}] and [{}:{}] ...".format(edgelow,len(w)-edgehigh+1, len(w)))  
+        else:
+            if verbose: print("  Trimming the edges [0:{}] and [{}:{}] ...".format(edgelow,len(w)-edgehigh+1, len(w)))  
+        
+    vlines=[w[edgelow], w[len(w)-edgehigh+1]]
+    index=np.arange(len(w))
+    valid_ind=np.where((index >= edgelow) & (index <= len(w)-edgehigh+1) & (~np.isnan(s)))[0]
+    valid_w = w[valid_ind]
+    valid_s = s[valid_ind] 
+    
+    if exclude_wlm[0][0] != 0:    
+        for rango in exclude_wlm :
+            if verbose: print("  Trimming wavelength range [", rango[0],",", rango[1],"] ...")
+            index=np.arange(len(valid_w))
+            #not_valid_ind = np.where((valid_w[index] >= rango[0]) & (valid_w[index] <= rango[1]))[0]
+            valid_ind = np.where((valid_w[index] <= rango[0]) | (valid_w[index] >= rango[1]))[0]  # | is OR
+            valid_w = valid_w[valid_ind]
+            valid_s = valid_s[valid_ind]
+            vlines.append(rango[0])
+            vlines.append(rango[1])
+        
+    if plot:
+        ptitle ="Comparing original (red) and trimmed (blue) spectra"
+        w_distance = w[-1]-w[0]
+        
+        plot_plot([w,valid_w],[s,valid_s], ptitle=ptitle, vlines=vlines,
+                  percentile_max=99.8,percentile_min=0.2,
+                  xmin = w[0]-w_distance/50, xmax=w[-1]+w_distance/50)
+    
+    return valid_w, valid_s, valid_ind
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+def fit_smooth_spectrum(w,s, edgelow=20,edgehigh=20, mask=None, auto_trim = False,   # BOBA
+                        kernel_correct_defects = 51, exclude_wlm=[[0,0]],  #remove_nans = True,
+                        kernel_fit=11, index_fit= 9,  clip_fit = 1.0, sigma_factor = 2.5,
+                        maxit=10, verbose=True, plot_all_fits = False,
                         plot=True, hlines=[1.], ptitle= "", fcal=False):
     """
     Apply f1,f2 = fit_smooth_spectrum(wl,spectrum) and returns:
     
     f1 is the smoothed spectrum, with edges 'fixed'
     f2 is the fit to the smooth spectrum
+    Tasks that use this: correcting_negative_sky, plot_corrected_vs_uncorrected_spectrum
     """
-    
-    if verbose: 
-        print('\n> Fitting an order {} polynomium to a spectrum smoothed with medfilt window of {}'.format(order,kernel))
-        print("  trimming the edges [0:{}] and [{}:{}] ...".format(edgelow,len(wl)-edgehigh, len(wl)))  
-    # fit, trimming edges
-    index=np.arange(len(x))
-    valid_ind=np.where((index >= edgelow) & (index <= len(wl)-edgehigh) & (~np.isnan(x)))[0]
-    valid_wl = wl[valid_ind]
-    valid_x = x[valid_ind] 
-    wlm = signal.medfilt(valid_wl, kernel)
-    wx = signal.medfilt(valid_x, kernel) 
-    
-    #iteratively clip and refit   # BOBA quitar nans
-    maxit=10
-    niter=0
-    stop=0
-    fit_len=100# -100
-    resid=0
-    while stop < 1:
-        #print '  Trying iteration ', niter,"..."
-        fit_len_init=copy.deepcopy(fit_len)
-        if niter == 0:
-            fit_index=np.where(wx == wx)
-            fit_len=len(fit_index)
-            sigma_resid=0.0
-            #print fit_index, fit_len
-        if niter > 0:
-            sigma_resid=MAD(resid)
-            fit_index=np.where(np.abs(resid) < 4*sigma_resid)[0]
-            fit_len=len(fit_index)
-        try:
-            #print " Fitting between ", wlm[fit_index][0],wlm[fit_index][-1]
-            p=np.polyfit(wlm[fit_index], wx[fit_index], order)    # It was 2
-            pp=np.poly1d(p)
-            fx=pp(wl)
-            fxm=pp(wlm)
-            resid=wx-fxm
-            #print niter,wl,fx, fxm
-            #print "  Iteration {:2} results in RA: sigma_residual = {:.6f}, fit_len_init = {:5}  fit_len ={:5}".format(niter,sigma_resid,fit_len_init,fit_len)             
-        except Exception:  
-            if verbose: print('  Skipping iteration ',niter)
-        if (niter >= maxit) or (fit_len_init == fit_len): 
-            if verbose: 
-                if niter >= maxit : print("  Max iterations, {:2}, reached!".format(niter))
-                if fit_len_init == fit_len : print("  All interval fitted in iteration {} ! ".format(niter))
-            stop=2     
-        niter=niter+1
 
-    # Smoothed spectrum, adding the edges
-    f_ = signal.medfilt(valid_x, kernel)
-    f = np.zeros_like(x)
-    f[valid_ind] = f_
-    half_kernel = np.int(kernel/2)
-    if half_kernel > edgelow:
-        f[np.where(index < half_kernel)] = f_[half_kernel-edgelow]
+    if verbose: 
+        print('\n> Fitting an order {} polynomium to a spectrum smoothed with medfilt window of {}'.format(index_fit,kernel_fit))
+    
+    if mask is not None:   # Mask is given as [edgelow,edgehigh]
+        edgelow = mask[0]
+        edgehigh = len(w)-mask[1]+1
+    
+    # Trimming edges in spectrum
+    verbose_this =False
+    if verbose and exclude_wlm[0][0] == 0 : verbose_this = True
+    valid_w, valid_s, valid_ind= trim_spectrum(w,s, edgelow=edgelow,edgehigh=edgehigh, mask=mask, auto_trim = auto_trim, 
+                                               verbose=verbose_this, plot=False)
+    valid_s_smooth_all = signal.medfilt(valid_s, kernel_fit)
+    valid_ind_all = valid_ind
+    
+    # If exclude_wlm included, run it again
+    valid_w, valid_s, valid_ind= trim_spectrum(w,s, edgelow=edgelow,edgehigh=edgehigh, mask=mask, auto_trim = auto_trim, 
+                  exclude_wlm=exclude_wlm, verbose=verbose, plot=False)
+    valid_s_smooth = signal.medfilt(valid_s, kernel_fit)
+    
+    #iteratively clip and refit if requested
+    if maxit > 1:
+        niter=0
+        stop=False
+        fit_len=100# -100
+        resid=0
+        list_of_fits=[]
+        while stop is False:
+            #print '  Trying iteration ', niter,"..."
+            fit_len_init=copy.deepcopy(fit_len)
+            if niter == 0:
+                fit_index=np.where(valid_s_smooth == valid_s_smooth)[0]
+                fit_len=len(fit_index)
+                sigma_resid=0.0
+            if niter > 0:
+                sigma_resid=MAD(resid)
+                fit_index=np.where(np.abs(resid) < sigma_factor * sigma_resid)[0]  # sigma_factor was originally 4
+                fit_len=len(fit_index)
+            try:
+                #print("  - Fitting between ", valid_w[fit_index][0],valid_w[fit_index][-1], " fit_len = ",fit_len)
+                fit, pp, y_fit, y_fit_c, x_, y_c = fit_clip(valid_w[fit_index], valid_s_smooth[fit_index], index_fit=index_fit, clip = clip_fit, 
+                                                            plot=False, verbose=False, kernel=kernel_fit)
+                
+                fx=pp(w)
+                list_of_fits.append(fx)
+                valid_fx=pp(valid_w)
+                resid=valid_s_smooth-valid_fx
+                #print niter,wl,fx, fxm
+                #print "  Iteration {:2} results in RA: sigma_residual = {:.6f}, fit_len_init = {:5}  fit_len ={:5}".format(niter,sigma_resid,fit_len_init,fit_len)             
+            except Exception:  
+                if verbose: print('   - Skipping iteration ',niter)
+            if (niter >= maxit) or (fit_len_init == fit_len): 
+                if verbose: 
+                    if niter >= maxit : print("   - Max iterations, {:2}, reached!".format(niter))
+                    if fit_len_init == fit_len : print("  All interval fitted in iteration {} ! ".format(niter+1))
+                stop = True    
+            niter=niter+1
     else:
-        f[np.where(index < edgelow)] = f_[0]
-    if half_kernel > edgehigh:    
-        f[np.where(index > len(wl)-half_kernel)] = f_[-1-half_kernel+edgehigh]
-    else:
-        f[np.where(index < edgehigh)] = f_[-1]
-                    
-    if plot:
-        ymin = np.nanpercentile(x[edgelow:len(x)-edgehigh],1.2)
-        ymax=  np.nanpercentile(x[edgelow:len(x)-edgehigh],99)
+        fit, pp, y_fit, y_fit_c, x_, y_c = fit_clip(valid_w, valid_s, index_fit=index_fit, clip = clip_fit, 
+                                                            plot=False, verbose=False, kernel=kernel_fit)          
+        fx=pp(w)
+
+    # Smoothed spectrum only between edgelow and edgehigh        
+    f = np.zeros_like(s)
+    f[valid_ind_all] = valid_s_smooth_all
+
+    if plot or plot_all_fits:
+        ymin = np.nanpercentile(s[edgelow:len(s)-edgehigh],0.5)
+        ymax=  np.nanpercentile(s[edgelow:len(s)-edgehigh],99.5)
         rango = (ymax-ymin)
         ymin = ymin - rango/10.
-        ymax = ymax + rango/10.             
-        if ptitle == "" : ptitle= "Order "+np.str(order)+" polynomium fitted to a spectrum smoothed with a "+np.str(kernel)+" kernel window"
-        plot_plot(wl, [x,f,fx], ymin=ymin, ymax=ymax, color=["red","green","blue"], alpha=[0.2,0.5,0.5], label=["spectrum","smoothed","fit"], ptitle=ptitle, fcal=fcal, vlines=[wl[edgelow],wl[-1-edgehigh]], hlines=hlines)
+        ymax = ymax + rango/10.
+
+    alpha=[0.1,0.3]
+    if plot_all_fits and maxit > 1:
+        fits_to_plot=[s,f]
+        for item in list_of_fits:
+            fits_to_plot.append(item)
+            alpha.append(0.8)
+        plot_plot(w,fits_to_plot, ptitle="All fits to the smoothed spectrum", 
+                  vlines=[w[edgelow],w[-1-edgehigh]], hlines=hlines, axvspan=exclude_wlm,
+                  fcal=fcal,alpha=alpha, ymin=ymin, ymax=ymax)
+               
+    if plot:                   
+        if ptitle == "" : ptitle= "Order "+np.str(index_fit)+" polynomium fitted to a spectrum smoothed with a "+np.str(kernel_fit)+" kernel window"
+        plot_plot(w, [s,f,fx], ymin=ymin, ymax=ymax, color=["red","green","blue"], alpha=[0.2,0.5,0.5], 
+                  label=["spectrum","smoothed","fit"], ptitle=ptitle, fcal=fcal, 
+                  vlines=[w[edgelow],w[-1-edgehigh]], hlines=hlines, axvspan=exclude_wlm)
       
     return f,fx
 # -----------------------------------------------------------------------------
@@ -1437,13 +1608,13 @@ def smooth_spectrum(wlm, s, wave_min=0, wave_max=0, step=50, exclude_wlm=[[0,0]]
     """
     THIS IS NOT EXACTLY THE SAME THING THAT applying signal.medfilter()
     
-    This needs to be checked, updated, and combine with task fit_smooth_spectrum.
+    This needs to be checked, updated, and combine (if needed) with task fit_smooth_spectrum.
     The task gets the median value in steps of "step", gets an interpolated spectrum, 
     and fits a 7-order polynomy.
     
     It returns fit_median + fit_median_interpolated (each multiplied by their weights).
     
-    Tasks that use this: correcting_negative_sky, get_telluric_correction
+    Tasks that use this:  get_telluric_correction
     """
 
     if verbose: print("\n> Computing smooth spectrum...")
@@ -1534,25 +1705,6 @@ def smooth_spectrum(wlm, s, wave_min=0, wave_max=0, step=50, exclude_wlm=[[0,0]]
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def median_filter(intensity_corrected, n_spectra, n_wave, win_sky=151):
-    """
-    Matt's code to get a median filter of all fibres in a RSS
-    This is useful when having 2D sky
-    """
-    
-    medfilt_sky=np.zeros((n_spectra,n_wave))
-    for wave in range(n_wave):
-        medfilt_sky[:,wave]=sig.medfilt(intensity_corrected[:,wave],kernel_size=win_sky)
-        
-    #replace crappy edge fibres with 0.5*win'th medsky
-    for fibre_sky in range(n_spectra):
-        if fibre_sky < np.rint(0.5*win_sky):
-            j=int(np.rint(0.5*win_sky))
-            medfilt_sky[fibre_sky,]=copy.deepcopy(medfilt_sky[j,])
-        if fibre_sky > n_spectra - np.rint(0.5*win_sky):
-            j=int(np.rint(n_spectra - np.rint(0.5*win_sky)))
-            medfilt_sky[fibre_sky,]=copy.deepcopy(medfilt_sky[j,]) 
-    return medfilt_sky
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -1840,7 +1992,6 @@ def remove_negative_pixels(spectra, verbose = True):
             
     if verbose: print("\n> Found {} spectra for which the median value is negative, they have been corrected".format(cuenta))
     return output
-
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -1963,7 +2114,6 @@ def find_cosmics_in_cut(x, cut_wave, cut_brightest_line, line_wavelength = 0.,
         else:
             print("\n> Identified", len(cosmics_list),"cosmics at",np.str(line_wavelength),"A in fibres",cosmics_list)
     return cosmics_list
-
 #---------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -1999,13 +2149,13 @@ def find_cosmics_in_cut(x, cut_wave, cut_brightest_line, line_wavelength = 0.,
     
 #     if verbose:
 #         print("  min_value  = {}, median value = {}, max_value = {}".format(min_value,median_value,max_value))
-#         print("  standard deviation = {}, rms = {}, snr = {}".format(std, rms, snr))   #TIGRE
+#         print("  standard deviation = {}, rms = {}, snr = {}".format(std, rms, snr))
     
 #     if return_data : return min_value,median_value,max_value,std, rms, snr
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def fit_clip(x, y, clip=0.4, index_fit = 2, kernel = 19,
+def fit_clip_old(x, y, clip=0.4, index_fit = 2, kernel = 19, mask ="",                          
              xmin="",xmax="",ymin="",ymax="",percentile_min=2, percentile_max=98,
              ptitle=None, xlabel=None, ylabel = None, label="", 
              hlines=[], vlines=[],chlines=[], cvlines=[], axvspan=[[0,0]], hwidth =1, vwidth =1,
@@ -2052,10 +2202,10 @@ def fit_clip(x, y, clip=0.4, index_fit = 2, kernel = 19,
         y = np.array(y)
         
         y_smooth = signal.medfilt(y, kernel)
-        y_norm = y - y_smooth
-        y_std = np.std(y_norm)
+        residuals = y - y_smooth
+        residuals_std = np.std(residuals)
         
-        y_nan = [np.nan if np.abs(i) > y_std*clip else 1. for i in y_norm ] 
+        y_nan = [np.nan if np.abs(i) > residuals_std*clip else 1. for i in residuals ] 
         y_clipped = y * y_nan
         
         idx = np.isfinite(x) & np.isfinite(y_clipped)
@@ -2096,19 +2246,19 @@ def correct_defects(spectrum, w=[], only_nans = True,
     
     s = copy.deepcopy(spectrum)
     if only_nans:
-        s = [0 if np.isnan(x) or np.isinf(x) else x for x in s]  # Fix nans & inf
+        # Fix nans & inf
+        s = [0 if np.isnan(x) or np.isinf(x) else x for x in s]  
     else:
-        s = [0 if np.isnan(x) or x < 0. or np.isinf(x) else x for x in
-             s]  # Fix nans, inf & negative values = 0
-    s_m = medfilt(s, kernel_correct_defects)
+        # Fix nans, inf & negative values = 0
+        s = [0 if np.isnan(x) or x < 0. or np.isinf(x) else x for x in s]  
+    s_smooth = medfilt(s, kernel_correct_defects)
 
-    fit_median = medfilt(s, kernel_correct_defects)
     bad_indices = [i for i, x in enumerate(s) if x == 0]
     for index in bad_indices:
-        s[index] = s_m[index]  # Replace 0s for median value
+        s[index] = s_smooth[index]  # Replace 0s for median value
     
     if plot and len(w) > 0:
-        plot_plot(w, [spectrum,fit_median,s], ptitle="Comparison between old (red) and corrected (green) spectrum.\n Smoothed spectrum in blue.")
+        plot_plot(w, [spectrum,s_smooth,s], ptitle="Comparison between old (red) and corrected (green) spectrum.\n Smoothed spectrum in blue.")
     return s
     
     

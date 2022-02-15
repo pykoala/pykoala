@@ -565,7 +565,12 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
         if  config_property[i] == "plot" : 
             if config_value[i] == "True" : 
                 plot = True 
-            else: plot = False 
+            else: 
+                plot = False 
+                plot_rss = False 
+                plot_weight=False
+                plot_spectra=False
+                
         if  config_property[i] == "plot_rss" : 
             if config_value[i] == "True" : 
                 plot_rss = True 
@@ -574,6 +579,10 @@ def automatic_KOALA_reduce(KOALA_REDUCE_FILE, path=""):
             if config_value[i] == "True" : 
                 plot_weight = True 
             else: plot_weight = False             
+        if  config_property[i] == "plot_spectra" : 
+            if config_value[i] == "True" : 
+                plot_spectra = True 
+            else: plot_spectra = False            
                            
         if  config_property[i] == "warnings" : 
             if config_value[i] == "True" : 
