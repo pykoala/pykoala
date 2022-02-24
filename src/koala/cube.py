@@ -102,9 +102,9 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         
         half_size_for_centroid = 10: This determines half the width/height of the for the box centred at the maximum value, should be integer. (default 10)
         
-        g2d=False: If True uses a 2D gaussian, else doesn't. (default False)
+        g2d=False: If True uses a 2D Gaussian, else doesn't. (default False)
             
-        aligned_coor=False: If True uses a 2D gaussian, else doesn't. (default False)
+        aligned_coor=False: If True assumes the Cube has been aligned and uses inputted values, else calculates them. (default False)
             
         delta_RA =0: This is a small offset of the RA (right ascension). (default 0)
         
@@ -1066,7 +1066,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         step_tracing : Integer, optional
             DESCRIPTION. The default is 100. #TODO 
         g2d : Boolean, optional
-            If True uses a 2D gaussian, else doesn't. The default is True. 
+            If True uses a 2D Gaussian, else doesn't. The default is True. 
         plot_tracing_maps : List, optional
             DESCRIPTION. The default is []. #TODO 
         plot : Boolean, optional
@@ -1240,7 +1240,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         trimmed : Boolean, optional
             If True only plots the map within box_x and box_y. The default is False
         g2d : Boolean, optional
-            If True uses a 2D gaussian, else doesn't. The default is False. 
+            If True uses a 2D Gaussian, else doesn't. The default is False. 
         plot_centroid : Boolean, optional
             If True will plot the centroid. The default is True.
         trace_peaks : Boolean, optional
@@ -1917,7 +1917,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         plot_centroid : Boolean, optional
             If True will plot the centroid. The default is False.
         g2d : Boolean, optional
-            If True uses a 2D gaussian, else doesn't. The default is True. 
+            If True uses a 2D Gaussian, else doesn't. The default is True. 
         half_size_for_centroid : Integer, optional
             This is half the length/width of the box. The default is 0.
         circle : Integer List, optional
@@ -3027,7 +3027,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         adr_index_fit : Integer, optional
             This is the fitted polynomial with highest degree n. The default is 2. 
         g2d : Boolean, optional
-            If True uses a 2D gaussian, else doesn't. The default is False. 
+            If True uses a 2D Gaussian, else doesn't. The default is False. 
         step_tracing : Integer, optional
             DESCRIPTION. The default is 100. #TODO
         plot_tracing_maps : List, optional
@@ -3398,7 +3398,7 @@ def align_n_cubes(rss_file_list, cube_list=[0], flux_calibration_list=[[]],
     adr_index_fit : Integer, optional
         This is the fitted polynomial with highest degree n. The default is 2.
     g2d : Boolean, optional
-        If True uses a 2D gaussian, else doesn't. The default is False.
+        If True uses a 2D Gaussian, else doesn't. The default is False.
     step_tracing : Integer, optional
         DESCRIPTION. The default is 100.
     kernel_tracing : TYPE, optional
@@ -3633,7 +3633,7 @@ def align_blue_and_red_cubes(blue, red, half_size_for_centroid = 12, box_x= [], 
     plot_centroid : Boolean, optional
         If True will plot the centroid. The default is True.
     g2d : Boolean, optional
-        If True uses a 2D gaussian, else doesn't. The default is False.
+        If True uses a 2D Gaussian, else doesn't. The default is False.
 
     Returns
     -------
@@ -4687,7 +4687,7 @@ def centroid_of_cube(cube, x0=0,x1=-1,y0=0,y1=-1, box_x=[], box_y=[],
     step_tracing : Integer, optional
         DESCRIPTION. The default is 100.
     g2d : Boolean, optional
-        If True uses a 2D gaussian, else doesn't. The default is True.
+        If True uses a 2D Gaussian, else doesn't. The default is True.
     adr_index_fit : Integer, optional
         This is the fitted polynomial with highest degree n. The default is 2.
     kernel_tracing : Odd integer, optional
@@ -5043,7 +5043,7 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
     adr_index_fit : Integer, optional
         This is the fitted polynomial with highest degree n. The default is 2.
     g2d : Boolean, optional
-        If True uses a 2D gaussian, else doesn't. The default is False.
+        If True uses a 2D Gaussian, else doesn't. The default is False.
     step_tracing : Integer, optional
         DESCRIPTION. The default is 100.
     kernel_tracing : Integer, optional
@@ -5339,7 +5339,7 @@ def read_cube(filename, path="", description="", half_size_for_centroid = 10,
     edgehigh : Integer, optional
         This is the highest value in the wavelength range in terms of pixels. The default is 50.
     g2d : Boolean, optional
-        If True uses a 2D gaussian, else doesn't. The default is False.
+        If True uses a 2D Gaussian, else doesn't. The default is False.
     step_tracing : Integer, optional
         DESCRIPTION. The default is 100.
     adr_index_fit : Integer, optional

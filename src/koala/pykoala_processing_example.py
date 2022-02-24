@@ -42,11 +42,16 @@ if __name__ == "__main__":
     # # That will be where your data are.
     # # 
     # # Type where your data will be:
+
+        #check folder is correct for Barr -> /Users/barrp/KOALA/DATA/original_data_not_in_GIT/data_worked_on/
+    path = "/Users/barrp/KOALA/DATA/original_data_not_in_GIT/data_worked_on/"
+
     #path = "/DATA/KOALA/Python/GitHub/test_reduce/"
 
     path = os.path.join('..', '..', 'tests', 'reduced_data')
     if not os.path.isdir(path):
         os.mkdir('../../tests/reduced_data')
+
 
     # # If needed, you can copy the example data using this:        
     #os.system("mkdir "+path)
@@ -63,7 +68,7 @@ if __name__ == "__main__":
     # # -----------------------------------------------------------------------
 
     # # List the files in the folder
-    list_fits_files_in_folder(path_red)
+    #list_fits_files_in_folder(path_red)
     
     # PyKOALA finds 4 objects: HD60753, HILT600 (calibration stars),
     #                          He2-10 (the galaxy),
@@ -73,7 +78,7 @@ if __name__ == "__main__":
 
     # # Next, run this for AUTOMATICALLY processing calibration of the night
     # automatic_calibration_night(path=path_red, auto=True)
-                                #, kernel_throughput = 21)
+                                # , kernel_throughput = 21)
  
     
     # # This will create 2 (3 for red) files needed for the calibration:
@@ -111,23 +116,24 @@ if __name__ == "__main__":
     # # Now it is time to process an RSS file, using KOALA_RSS
     # # It is recommended to test it here BEFORE running automatic scripts
     
-    # file_in   = path_red+"27feb20031red.fits"
+    file_in   = path_red+"/27feb20031red.fits"
     # file_med  = path_red+"27feb20031red_TCWXU____.fits"
     # file_med2 = path_red+"27feb20031red_TCWXUS___.fits"
     # file_out  = path_red+"27feb20031red_TCWXUS_NR.fits"
 
     # # As the critical part is the SKY SUBTRACION, first do everything till that
     
-    # test = KOALA_RSS(file_in, 
-    #                  save_rss_to_fits_file="auto",  
-    #                  apply_throughput=True, 
-    #                  throughput_2D_file=throughput_2D_file,       # if throughput_2D_file given, use SOL in fits file for fixing wave
-    #                  #throughput_2D=throughput_2D_20180227_385R,
-    #                  correct_ccd_defects = True, 
-    #                  fix_wavelengths = True, 
-    #                  #sol=[0.0853325247121367,-0.0009925545410042428,1.582994591921196e-07],
-    #                  do_extinction=True,
-    #                  telluric_correction_file=telluric_correction_file)
+    test = KOALA_RSS(file_in, 
+                      save_rss_to_fits_file="auto",  
+                      # apply_throughput=True, 
+                      # throughput_2D_file=throughput_2D_file,       # if throughput_2D_file given, use SOL in fits file for fixing wave
+                      #throughput_2D=throughput_2D_20180227_385R,
+                      correct_ccd_defects = True, 
+                      # fix_wavelengths = True, 
+                      #sol=[0.0853325247121367,-0.0009925545410042428,1.582994591921196e-07],
+                      do_extinction=True,
+                       # telluric_correction_file=telluric_correction_file
+                       )
 
     # # This will automatically create the file "27feb20031red_TCWXU____.fits"
     
