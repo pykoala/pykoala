@@ -128,9 +128,11 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
     
         jump = -1: If a positive number partitions the wavelengths with step size jump, if -1 will not partition. (default -1)
     
+        kernel_tracing = 5: Odd number for smoothing the data to get ADR solution
+    
         adr_index_fit = 2: This is the fitted polynomial with highest degree n. (default n = 2)
         
-        adr_clip_fit = 0.4
+        adr_clip_fit = 0.4 : sigma clipping of ADR fit
         
         ADR_x_fit=[0]: This is the ADR coefficients values for the x axis. (default constant 0)
         
@@ -395,7 +397,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         else:  
             # Build the cube
             self.data=self.build_cube(jump=jump, RSS=RSS) 
-
+            
             # Trace peaks (check ADR only if requested)          
             if ADR_repeat or check_ADR:
                 _check_ADR_ = False
@@ -404,14 +406,18 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                         
             if ADR:
                 # Define box for tracing peaks if requested / needed
-                box_x,box_y = self.box_for_centroid(half_size_for_centroid=half_size_for_centroid, verbose=verbose, plot_map=plot, log=log, g2d=g2d)
-                if verbose: print("  Using this box for tracing peaks and checking ADR ...")
+                if np.nanmedian(box_x+box_y) == -0.5:
+                    box_x,box_y = self.box_for_centroid(half_size_for_centroid=half_size_for_centroid, verbose=verbose, plot_map=plot, log=log, g2d=g2d)
+                    if verbose: print("  Using this box for tracing peaks and checking ADR ...")
+                else:
+                    print("  Using box provided:  box_x =",box_x," , box_y =",box_y)
+                
                 self.trace_peak(box_x=box_x, box_y=box_y, #half_size_for_centroid = half_size_for_centroid,
                                 edgelow=edgelow, edgehigh =edgehigh, plot=plot, plot_tracing_maps=plot_tracing_maps,
                                 verbose=verbose, adr_index_fit=adr_index_fit, g2d=g2d, kernel_tracing = kernel_tracing,
                                 check_ADR = _check_ADR_, step_tracing= step_tracing, adr_clip_fit=adr_clip_fit)
             else:
-                self.get_peaks(plot=False, verbose=True)
+                self.get_peaks(box_x = box_x, box_y=box_y, plot=False, verbose=True)
                 if verbose:
                     print("\n> ADR will NOT be checked!")
                     if np.nansum(self.ADR_y + self.ADR_x) != 0:
@@ -4613,7 +4619,8 @@ def telluric_correction_using_bright_continuum_source(objeto, save_telluric_file
         
         ntc_ =  y_fitted_range / y_fit_range
         
-        ntc_low_index = w.tolist().index(w[np.where((w >= low_high) & (w <= high_low))][0])
+
+        ntc_low_index = w.tolist().index(w[np.where((w >= low_high) & (w <= high_low))][0])        
         ntc_high_index = w.tolist().index(w[np.where((w >= low_high) & (w <= high_low))][-1])
 
         #ntc = [ntc_(j) for j in range(ntc_low_index,ntc_high_index+1)  ]
@@ -5066,6 +5073,9 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
         This is a cube combined of multiple cubes.
 
     """
+    if plot is False:
+        plot_weight = False
+        plot_spectra = False
     
                             
     if say_making_combined_cube: print("\n> Making combined cube ...")

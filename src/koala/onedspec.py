@@ -1391,16 +1391,17 @@ def fit_clip(x, y, clip=0.4, index_fit = 2, kernel = 19, mask ="",
     the values of the valid x
     the values of the valid y
     """
-     
+    
+    if ylabel is None: ylabel = "y (x)"
+    
     # Preparing the data. Trim edges and remove nans
     
     
-    
-    
-    if kernel != 0:
-        x = np.array(x)
-        y = np.array(y)
+    x = np.array(x)
+    y = np.array(y)
         
+    if clip != 0 and kernel not in [0,1]:
+    
         y_smooth = signal.medfilt(y, kernel)
         residuals = y - y_smooth
         residuals_std = np.std(residuals)
@@ -1416,14 +1417,15 @@ def fit_clip(x, y, clip=0.4, index_fit = 2, kernel = 19, mask ="",
         y_fit_clipped =pp(x[idx])
    
         if verbose: 
-            print("\n> Fitting a polynomium of degree",index_fit,"using clip =",clip,"* std ...")
+            print("\n> Fitting a polynomium of degree",index_fit,"using clip =",clip,"* std to smoothed spectrum with kernel = ",kernel,"...")
             print("  Eliminated",len(x)-len(x[idx]),"outliers, the solution is: ",fit)
-        
+    
         if plot:
-            if ylabel is None: ylabel = "y (x)"
-            
             if ptitle is None:
-                ptitle = "Polyfit of degree "+np.str(index_fit)+" using clip = "+np.str(clip)+" * std"
+                ptitle = "Polyfit of degree "+np.str(index_fit)+" using clip = "+np.str(clip)+" * std to smoothed spectrum with kernel = "+np.str(kernel)
+            if label == "":
+                label =["Spectrum","Smoothed spectrum","Clipped spectrum","Fit"]
+            
             plot_plot(x, [y,y_smooth, y_clipped, y_fit], psym=["+","-", "+","-"],
                       alpha=[0.5,0.5,0.8,1], color=["r","b","g","k"], label=label,
                       xlabel=xlabel, ylabel=ylabel, ptitle=ptitle, 
@@ -1433,9 +1435,26 @@ def fit_clip(x, y, clip=0.4, index_fit = 2, kernel = 19, mask ="",
 
         return fit, pp, y_fit, y_fit_clipped, x[idx], y_clipped[idx]   
     else:
+        
         fit  = np.polyfit(x, y, index_fit) 
         pp=np.poly1d(fit)
         y_fit=pp(x)
+        
+        if verbose: print("\n> Fitting a polynomium of degree",index_fit,"...")
+        
+        if plot:
+            if ptitle is None:
+                ptitle = "Polyfit of degree "+np.str(index_fit)
+            if label == "":
+                label =["Spectrum", "Fit"]
+            plot_plot(x, [y, y_fit], psym=["+","-"],
+                      alpha=[0.5,1], color=["g","k"], label=label,
+                      xlabel=xlabel, ylabel=ylabel, ptitle=ptitle, 
+                      xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax,percentile_min=percentile_min, percentile_max=percentile_max,
+                      hlines=hlines, vlines=vlines,chlines=chlines, cvlines=cvlines, 
+                      axvspan=axvspan, hwidth =hwidth, vwidth =vwidth)
+        
+        
         return fit, pp, y_fit, y_fit, x, y
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -1697,6 +1716,111 @@ def smooth_spectrum(wlm, s, wave_min=0, wave_max=0, step=50, exclude_wlm=[[0,0]]
         print('  Weights for getting smooth spectrum:  fit_median =',weight_fit_median,'    fit_median_interpolated =',(1-weight_fit_median))
 
     return weight_fit_median*fit_median + (1-weight_fit_median)*fit_median_interpolated #   (fit_median+fit_median_interpolated)/2      # Decide if fit_median or fit_median_interpolated
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+def find_scale(f1, f2, x=None, step=0.0001, offset_min=0.01, offset_max=0.01,
+               exclude_x = [[]], 
+               fit_1D_points = 0,  clip=0.5, index_fit = 1, kernel = 21,
+               xlabel="", ylabel ="", ymax="", ymin ="", 
+               percentile_min="", percentile_max="", ptitle= "",
+               plot = True, verbose = True):
+    
+    if x is not None: x_original = copy.deepcopy(x)
+    
+    if len(exclude_x[0]) > 0 and x is not None:
+        x_, f1, ind = trim_spectrum(x,f1,  
+                  exclude_wlm=exclude_x, verbose=False, plot=False, auto_trim=True)
+        x, f2, ind = trim_spectrum(x,f2,  
+                  exclude_wlm=exclude_x, verbose=False, plot=False, auto_trim=True)
+        
+    f1_m = np.nanmedian(f1)
+    f2_m = np.nanmedian(f2)
+
+    scale = f1_m / f2_m
+    
+    factores = np.arange(scale-offset_min, scale+offset_max, step)
+    
+    if fit_1D_points == 0 or x is None: 
+        residua=[]    
+        for factor in factores :
+            residua.append(np.nansum(np.abs(f1-factor*f2)))
+        
+        residua_min = np.nanmin(residua)
+        v = np.abs(residua-residua_min)
+        index = v.tolist().index(np.nanmin(v))
+        
+        best_factor  = factores[index]
+        
+        if plot:
+            if x is None: x = range(len(f1))
+            if percentile_min == "" and  percentile_min == "" and ymax =="" and ymin =="":
+                _y_min_ = np.nanmin([np.nanmin(f1), np.nanmin(f2*best_factor)] )
+                _y_max_ = np.nanmax([np.nanmax(f1), np.nanmax(f2*best_factor)])
+                rango = _y_max_-_y_min_
+                ymin = _y_min_ - rango /20.
+                ymax = _y_max_ + rango /20.
+                
+            
+            round_value = -np.int(np.round(np.log10(step)))
+            label2 = "Second spectrum scaled by "+np.str(np.round(best_factor,round_value))
+            if ptitle == "" :ptitle = "Scaling second spectrum by "+np.str(np.round(best_factor,round_value))
+            plot_plot(x,[f1,f2*best_factor], ylabel = ylabel, xlabel=xlabel,
+                      ymin=ymin, ymax=ymax, percentile_min=percentile_min, percentile_max=percentile_max, 
+                      ptitle=ptitle, label=["First spectrum", label2])
+            
+        if verbose: print("\n> The scale that minimize residua between f1 and f2 is",best_factor,"for f2")
+        return best_factor
+    
+    else:
+        best_factor_list =[]
+        x_list =[]
+        block_length = np.int(len(x)/fit_1D_points)
+        x_divided=[]
+        f1_divided =[]
+        f2_divided =[]
+        
+        for i in range(fit_1D_points):
+            x_divided.append(x[i*block_length:(i+1)*block_length])
+            x_list.append(np.nanmedian(x[i*block_length:(i+1)*block_length]))
+            f1_divided.append(f1[i*block_length:(i+1)*block_length])
+            f2_divided.append(f2[i*block_length:(i+1)*block_length])
+
+        for i in range(len(x_divided)) :
+            residua=[]    
+            for factor in factores :
+                residua.append(np.nansum(np.abs(f1_divided[i]-factor*f2_divided[i])))
+            
+            residua_min = np.nanmin(residua)
+            v = np.abs(residua-residua_min)
+            index = v.tolist().index(np.nanmin(v))
+            
+            best_factor_list.append(factores[index])
+            
+        if percentile_min == "" and  percentile_min == "" and ymax =="" and ymin =="" and plot :
+            _y_min_ = np.nanmin(best_factor_list)
+            _y_max_ = np.nanmax(best_factor_list)
+            rango = _y_max_-_y_min_
+            ymin = _y_min_ - rango /20.
+            ymax = _y_max_ + rango /20.
+                           
+        fit, pp, y_fit, y_fit_clipped, x_clipped, y_clipped = fit_clip(x_list, best_factor_list, 
+                                                                       clip=clip, index_fit = index_fit, kernel = kernel, #mask ="",                          
+                                                                       ymin=ymin, ymax=ymax,
+                                                                       ptitle=None, xlabel=None, ylabel = None, label="", 
+                                                                       hlines=[], vlines=[],chlines=[], cvlines=[], axvspan=[[0,0]], hwidth =1, vwidth =1,
+                                                                       plot=plot, verbose=verbose)
+            
+        if verbose: print("\n> The 1D fit that scale the second spectra is: ",fit)
+        scale_1D = pp(x_original)
+        return   scale_1D          
+
+
+        
+        
+        
+        
+        
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
