@@ -27,6 +27,11 @@ start = timer()
 
 pykoala_path = os.getcwd()
 
+# # if we need to install pykoala using spyder:
+# # in KOALA/git/koala
+# runfile("setup.py", wdir = "/Users/barrp/KOALA/git/koala", args = "install") and restart console
+
+
 exec(compile(open(os.path.join(pykoala_path, "load_PyKOALA.py"), "rb").read(),
              os.path.join(pykoala_path, "load_PyKOALA.py"), 'exec'))   # This just reads the file.
 # -----------------------------------------------------------------------------
@@ -48,9 +53,9 @@ if __name__ == "__main__":
 
     #path = "/DATA/KOALA/Python/GitHub/test_reduce/"
 
-    path = os.path.join('..', '..', 'tests', 'reduced_data')
-    if not os.path.isdir(path):
-        os.mkdir('../../tests/reduced_data')
+    # path = os.path.join('..', '..', 'tests', 'reduced_data')
+    # if not os.path.isdir(path):
+    #     os.mkdir('../../tests/reduced_data')
 
 
     # # If needed, you can copy the example data using this:        
@@ -58,7 +63,7 @@ if __name__ == "__main__":
     #os.system("cp -R ./input_data/sample_RSS/* "+path)
 
     # # For AAOmega, we have TWO folders per night: blue (580V) and red (385R)
-    path_red = os.path.join(path, "385R")
+    path_red = os.path.join(path, "385R/")
     path_blue = os.path.join(path, "580V")
 
     # # -----------------------------------------------------------------------
@@ -68,15 +73,16 @@ if __name__ == "__main__":
     # # -----------------------------------------------------------------------
 
     # # List the files in the folder
-    #list_fits_files_in_folder(path_red)
+    # list_fits_files_in_folder(path_red)
     
-    # PyKOALA finds 4 objects: HD60753, HILT600 (calibration stars),
-    #                          He2-10 (the galaxy),
-    #                          SKYFLAT
+    # # PyKOALA finds 4 objects: HD60753, HILT600 (calibration stars),
+    # #                          He2-10 (the galaxy),
+    # #                          SKYFLAT
     
     # # -----------------------------------------------------------------------
 
     # # Next, run this for AUTOMATICALLY processing calibration of the night
+    # # run when you aren't using computer
     # automatic_calibration_night(path=path_red, auto=True)
                                 # , kernel_throughput = 21)
  
@@ -117,23 +123,23 @@ if __name__ == "__main__":
     # # It is recommended to test it here BEFORE running automatic scripts
     
     file_in   = path_red+"/27feb20031red.fits"
-    # file_med  = path_red+"27feb20031red_TCWXU____.fits"
-    # file_med2 = path_red+"27feb20031red_TCWXUS___.fits"
+    file_med  = path_red+"27feb20031red_TCWX_____.fits" # file_med  = path_red+"27feb20031red_TCWXU____.fits"
+    file_med2 = path_red+"27feb20031red_TCWX_S___.fits" # file_med2 = path_red+"27feb20031red_TCWXUS___.fits"
     # file_out  = path_red+"27feb20031red_TCWXUS_NR.fits"
 
     # # As the critical part is the SKY SUBTRACION, first do everything till that
     
-    test = KOALA_RSS(file_in, 
-                      save_rss_to_fits_file="auto",  
-                      # apply_throughput=True, 
-                      # throughput_2D_file=throughput_2D_file,       # if throughput_2D_file given, use SOL in fits file for fixing wave
-                      #throughput_2D=throughput_2D_20180227_385R,
-                      correct_ccd_defects = True, 
-                      # fix_wavelengths = True, 
-                      #sol=[0.0853325247121367,-0.0009925545410042428,1.582994591921196e-07],
-                      do_extinction=True,
-                       # telluric_correction_file=telluric_correction_file
-                       )
+    # test = KOALA_RSS(file_in, 
+    #                   save_rss_to_fits_file="auto",  
+    #                   apply_throughput=True, 
+    #                   throughput_2D_file=throughput_2D_file,       # if throughput_2D_file given, use SOL in fits file for fixing wave
+    #                   # throughput_2D=throughput_2D_20180227_385R,
+    #                   correct_ccd_defects = True, 
+    #                   fix_wavelengths = True, 
+    #                   sol=[0.0853325247121367,-0.0009925545410042428,1.582994591921196e-07],
+    #                   do_extinction=True,
+    #                   # telluric_correction_file=telluric_correction_file
+    #                   )
 
     # # This will automatically create the file "27feb20031red_TCWXU____.fits"
     
@@ -142,8 +148,8 @@ if __name__ == "__main__":
     # # using the 25 fibres with LOWEST integrated values to get the sky:
     
     # test = KOALA_RSS(file_med, 
-    #                  save_rss_to_fits_file="auto",  
-    #                  sky_method="self", n_sky=25)
+    #                   save_rss_to_fits_file="auto",  
+    #                   sky_method="self", n_sky=25)
     
     # # This will create file_med2, that has keys "_TCWXUS___"
     # # Change manually the name of that file to compare in DS9 later with 
@@ -159,15 +165,15 @@ if __name__ == "__main__":
     # # and SCALING 
     # #
     # sky1=KOALA_RSS(path_red+"27feb20030red.fits",
-    #                #save_rss_to_fits_file="auto",
-    #                apply_throughput=True, 
-    #                throughput_2D_file=throughput_2D_file,
-    #                correct_ccd_defects = True, 
-    #                fix_wavelengths = True, 
-    #                do_extinction=True,
-    #                is_sky=True,
-    #                sky_fibres= fibres_best_sky_100,
-    #                plot=True, warnings=False)
+    #                 #save_rss_to_fits_file="auto",
+    #                 apply_throughput=True, 
+    #                 throughput_2D_file=throughput_2D_file,
+    #                 correct_ccd_defects = True, 
+    #                 fix_wavelengths = True, 
+    #                 do_extinction=True,
+    #                 is_sky=True,
+    #                 sky_fibres= fibres_best_sky_100,
+    #                 plot=True, warnings=False)
 
     # # This will be our sky spectrum for replacing emission lines in rss
     # sky1_spec=sky1.sky_emission   
@@ -200,7 +206,8 @@ if __name__ == "__main__":
     # # and using file "sky_lines_IR_short"  (we call it with "IRshort")
     # # We also need to add parameter brightest_line_wavelength
     # # with the OBSERVED H-alpha wavelength, around 6583
-
+    
+    # # takes about 10 minutes on a slow pc
     # test = KOALA_RSS(file_med, 
     #                   save_rss_to_fits_file="auto",  
     #                   sky_spectrum = sky1_spec_good,
@@ -349,7 +356,7 @@ if __name__ == "__main__":
     #                   plot_final_rss = True,
     #                   plot=True, warnings=False, verbose=True)
   
-
+    # WORK FROM HERE, TEST DIFFERENT PARAMETERS, see if I can get the final cube, note any problems
     # # -----------------------------------------------------------------------
     # # Once we have the CLEAN RSS files, we can do the cubing & combine
     # # -----------------------------------------------------------------------
@@ -357,7 +364,8 @@ if __name__ == "__main__":
     # # For making a cube, we call Interpolated_cube defining the
     # # pixel and kernel size and adding the flux_calibration
     
-    # file_out  = path_red+"27feb20031red_TCWXUS_NR.fits"
+    file_out  = path_red+"27feb20031red_TCWXUS_NR.fits"
+    # file_out  = path_red+"/27feb20031red.fits"
     
     # cube_test = Interpolated_cube(file_out, 
     #                               pixel_size_arcsec=0.7,
@@ -382,9 +390,10 @@ if __name__ == "__main__":
     #                               flux_calibration_file=flux_calibration_file,
     #                               ADR=True,
     #                               #plot_tracing_maps=[6250,7500,9000],
-    #                               size_arcsec=[60,40],
-    #                               step_tracing = 10,             # Increase the number of points for tracing
-    #                               kernel_tracing = 19,           # Smooth tracing for removing outliers
+    #                               # size_arcsec=[60,40],
+    #                               step_tracing = 50,   #10            # Increase the number of points for tracing
+    #                               kernel_tracing = 11, #19         # Smooth tracing for removing outliers
+    #                               # clip = 0.5,          #0.3
     #                               g2d=False, 
     #                               adr_index_fit = 3,
     #                               trim_cube = True,             # Trimming the cube
@@ -396,59 +405,66 @@ if __name__ == "__main__":
     # # We first check the 3 first files    
 
     # # list with RSS files (no need to include path)    
-    # rss_list = ["27feb20031red_TCWXUS_NR.fits","27feb20032red_TCWXUS_NR.fits","27feb20033red_TCWXUS_NR.fits"]
+    rss_list = ["27feb20031red_TCWXUS_NR.fits","27feb20032red_TCWXUS_NR.fits","27feb20033red_TCWXUS_NR.fits"]
     
     # # Once you have run KOALA_reduced and obtained ADRs, you can copy and paste values for speeding tests
 
     # ADR_x_fit_list =  [[-2.3540791265017944e-12, 6.762388793515361e-08, -0.0006627297804396334, 2.1666411712553812], [-3.0634647703827036e-12, 8.407943128848677e-08, -0.0007965956049746986, 2.545773557437055], [-8.043867327151777e-13, 2.8827477735272883e-08, -0.0003496319743184722, 1.34787667608832]]
     # ADR_y_fit_list =  [[1.0585167511142714e-12, -3.972561095302862e-08, 0.00047854197119031385, -1.806746479722604], [5.712676673528853e-13, -2.7118172653512425e-08, 0.00034731129018336117, -1.322842656375085], [-1.2201306546407504e-12, 2.3629083572706315e-08, -0.00013682268516072916, 0.21158456279065121]]
+    
+    # # this is what I got
+    ADR_x_fit_list =  [[1.4436821562009649e-08, -0.0002701714605806703, 1.22069126653238], [1.3586500379225924e-08, -0.00025835507699593506, 1.1809999873682766], [2.8431356041830888e-09, -8.144115163756405e-05, 0.4583280161576916]]
+    ADR_y_fit_list =  [[-3.2303520355240534e-09, 8.385312980995047e-05, -0.45358851644843134], [-4.767240712783742e-09, 8.038803280082513e-05, -0.33492052388974347], [6.947081894069943e-10, -1.5837384215692347e-05, 0.08166977426928765]]
 
     # # Same thing with offsets
     
     # offsets =  [ -0.2773903893335756 , 0.7159980346947741 , 2.6672716919949306 , 0.8808234960793637 ]
     
-    # combined_cube_test=KOALA_reduce(rss_list, path=path_red, 
-    #                                 fits_file="combined_cube_test_.fits",
-    #                                 rss_clean=True,                 # RSS files are clean
-    #                                 pixel_size_arcsec=0.7, kernel_size_arcsec=1.1,
-    #                                 flux_calibration_file=flux_calibration_file,
-    #                                 #size_arcsec=[60,40],
+    # # this is what I got
+    offsets =  [ -0.17640333013060605 , 1.030780447049354 , 3.123564498759942 , 1.3506065001346936 ]
     
-    #                                 #ADR=True,
-    #                                 #plot_tracing_maps=[6250,7500,9000],
-    #                                 #box_x=[53,64], box_y=[22,32],
-    #                                 #box_x = [10,70],
-    #                                 #box_y = [10,60],
-    #                                 half_size_for_centroid = 0,   # Using all data for registering
-    #                                 step_tracing = 20,            # Increase the number of points for tracing
-    #                                 kernel_tracing = 9,           # Smooth tracing for removing outliers
-    #                                 g2d=False, 
-    #                                 adr_index_fit = 3,
+    combined_cube_test=KOALA_reduce(rss_list, path=path_red, 
+                                    fits_file="combined_cube_test_.fits",
+                                    rss_clean=True,                 # RSS files are clean
+                                    pixel_size_arcsec=0.7, kernel_size_arcsec=1.1,
+                                    flux_calibration_file=flux_calibration_file,
+                                    #size_arcsec=[60,40],
+    
+                                    #ADR=True,
+                                    #plot_tracing_maps=[6250,7500,9000],
+                                    #box_x=[53,64], box_y=[22,32],
+                                    #box_x = [10,70],
+                                    #box_y = [10,60],
+                                    half_size_for_centroid = 0,   # Using all data for registering
+                                    step_tracing = 20,            # Increase the number of points for tracing
+                                    kernel_tracing = 9,           # Smooth tracing for removing outliers
+                                    g2d=False, 
+                                    adr_index_fit = 3,
 
-    #                                 ADR_x_fit_list = ADR_x_fit_list,
-    #                                 ADR_y_fit_list = ADR_y_fit_list,
-    #                                 offsets = offsets,
+                                    ADR_x_fit_list = ADR_x_fit_list,
+                                    ADR_y_fit_list = ADR_y_fit_list,
+                                    offsets = offsets,
                                     
-    #                                 trim_cube = True,             # Trimming the cube
-    #                                 scale_cubes_using_integflux = False, # Not scaling cubes using integrated flux of common region
-    #                                 plot= True, 
-    #                                 plot_rss=False, 
-    #                                 plot_weight=False,
-    #                                 plot_spectra = False,
-    #                                 fig_size=12,
-    #                                 warnings=False, verbose = True)
+                                    trim_cube = True,             # Trimming the cube
+                                    scale_cubes_using_integflux = False, # Not scaling cubes using integrated flux of common region
+                                    plot= True, 
+                                    plot_rss=False, 
+                                    plot_weight=False,
+                                    plot_spectra = False,
+                                    fig_size=12,
+                                    warnings=False, verbose = True)
   
-    # # Plotting a larger map without plot_spaxel_grid, contours, or grid  
+    # Plotting a larger map without plot_spaxel_grid, contours, or grid  
   
-    # combined_cube_test.combined_cube.plot_map(log=True, cmap=fuego_color_map, fig_size=20, 
-                                              # plot_centre=False, plot_spaxel_grid = False, 
-                                              # contours= False, alpha_grid=0, fraction =0.027)
+    combined_cube_test.combined_cube.plot_map(log=True, cmap=fuego_color_map, fig_size=20, 
+                                                plot_centre=False, plot_spaxel_grid = False, 
+                                                contours= False, alpha_grid=0, fraction =0.027)
     
 
     # # Now we check the 3 last files    
 
     # # list with RSS files (no need to include path)    
-    # rss_list = ["27feb20034red_TCWXUS_NR.fits","27feb20035red_TCWXUS_NR.fits","27feb20036red_TCWXUS_NR.fits"]
+    rss_list = ["27feb20034red_TCWXUS_NR.fits","27feb20035red_TCWXUS_NR.fits","27feb20036red_TCWXUS_NR.fits"]
     
     # # For these, there is a star in the bottom left corner we can use for aligning / ADR
     # # g2d=True # it is a star
@@ -459,11 +475,18 @@ if __name__ == "__main__":
     # ADR_x_fit_list =  [[9.472735325782044e-13, -1.8414272142169123e-08, 0.00010639453474275714, -0.16011731471966129], [1.8706793461446896e-12, -4.151166766143467e-08, 0.00029190493266945084, -0.6408077338639665], [-1.3780071545760161e-12, 3.170991526784723e-08, -0.0002355233904377564, 0.5627653239513558]]
     # ADR_y_fit_list =  [[-2.0911079335920793e-12, 4.703018551076634e-08, -0.00033904804410673275, 0.7771617214421154], [-2.838537640353266e-12, 6.54908082091063e-08, -0.00048530769637374164, 1.148318135983978], [-3.1271687976010236e-12, 7.140942741912648e-08, -0.0005301049734410775, 1.2753542609892792]]    
 
+    # # I got
+    ADR_x_fit_list =  [[2.6441958303650974e-08, -0.00045186686824060115, 1.851395756597703], [3.548511515807151e-09, -6.762878277170128e-05, 0.3091938016393571], [-1.8024174258499228e-09, 3.533794242124774e-05, -0.16538518916439623]]
+    ADR_y_fit_list =  [[2.987936387608651e-08, -0.0004974421755206838, 1.9686031440878786], [6.890869374620818e-10, 5.9174536165621995e-06, -0.08873864846366501], [-2.3180635185128687e-10, 1.3393767662267328e-05, -0.09001137338888468]]
+
     # # Same thing with offsets
     
     # offsets =  [ 1.4239020516303178 , 0.003232821107207684 , 1.4757701790022182 , 1.495021090623025 ]
     # offsets =  [1.5, 0, 1.5, 1.5]  # Given at the telescope
     
+    # # I got
+    offsets =  [ 1.4388510691168577 , 0.08062209451559887 , 1.4644028580908817 , 1.4922098017534715 ]
+            #TODO
     # combined_cube_test=KOALA_reduce(rss_list, path=path_red, 
     #                                 fits_file="combined_cube_test_2.fits",
     #                                 rss_clean=True,                 # RSS files are clean
@@ -760,8 +783,9 @@ if __name__ == "__main__":
     # # -----------------------------------------------------------------------
 
     # Truco de Pablo para cambiar algo en header:
-    # with fits.open(path_blue+"27feb10031red.fits", "update") as f:
+    # with fits.open(path_red+"/27feb20031red.fits", "update") as f:
     #     f[0].header["OBJECT"]="He2-10"
+    
     
     # with fits.open(blue_cube, "update") as f:
     #     f[0].header["COMCUBE"]="T"

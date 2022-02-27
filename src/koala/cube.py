@@ -404,8 +404,12 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                         
             if ADR:
                 # Define box for tracing peaks if requested / needed
-                box_x,box_y = self.box_for_centroid(half_size_for_centroid=half_size_for_centroid, verbose=verbose, plot_map=plot, log=log, g2d=g2d)
-                if verbose: print("  Using this box for tracing peaks and checking ADR ...")
+                if np.nanmedian(box_x+box_y) == -0.5:
+                    box_x,box_y = self.box_for_centroid(half_size_for_centroid=half_size_for_centroid, verbose=verbose, plot_map=plot, log=log, g2d=g2d)
+                    if verbose: print("  Using this box for tracing peaks and checking ADR ...")
+                else:
+                    print("  Using box provided:  box_x =",box_x," , box_y =",box_y)
+
                 self.trace_peak(box_x=box_x, box_y=box_y, #half_size_for_centroid = half_size_for_centroid,
                                 edgelow=edgelow, edgehigh =edgehigh, plot=plot, plot_tracing_maps=plot_tracing_maps,
                                 verbose=verbose, adr_index_fit=adr_index_fit, g2d=g2d, kernel_tracing = kernel_tracing,
@@ -464,12 +468,12 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         flux_calibration : Float List, optional
             It is a list of floats. The default is empty
             
+        path : String, optional
+            The directory of the folder the flux_calibration_file is in. The default is None 
+            
         flux_calibration_file : String, optional
             The file name of the flux_calibration. The default is None
             
-        path : String, optional
-            The directory of the folder the flux_calibration_file is in. The default is None 
-        
         verbose : Boolean, optional
             Print results. The default is True.
                          
@@ -794,18 +798,22 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 
         Parameters
         ----------
-        jump : TYPE, optional
-            DESCRIPTION. The default is -1.
-        delta_RA : TYPE, optional
-            DESCRIPTION. The default is 0.
-        delta_DEC : TYPE, optional
-            DESCRIPTION. The default is 0.
-        plot : TYPE, optional
-            DESCRIPTION. The default is True.
-        warnings : TYPE, optional
-            DESCRIPTION. The default is True.
-        verbose : TYPE, optional
-            DESCRIPTION. The default is True.
+        jump : Integer, optional
+            If a positive number partitions the wavelengths with step size jump, if -1 will not partition. The default is -1.
+        delta_RA : Integer, optional
+            This is the Right Ascension shift amount. The default is 0.
+        delta_DEC : Integer, optional
+            This is the Declination change shift amount. The default is 0.
+        plot : Boolean, optional
+            If True generates and shows the plots. The default is True.
+        plot_comparison : Boolean, optional
+            If True will plot the comparison of the unshifted and shifted cubes. The default is True.
+        warnings : Boolean, optional
+            If True will show any problems that arose, else skipped. The default is True.
+        verbose : Boolean, optional
+            Print results. The default is True.
+        return_cube : Boolean, optional
+            If True returns the cube. The default is False.
 
         Returns
         -------
@@ -903,13 +911,27 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 
         Parameters
         ----------
-        intensity: np.array(float)
-          Spectrum.
-        offset_rows, offset_cols: float
-          Offset with respect to the image centre, in pixels.
-        kernel_FWHM_pixels: float
-          FWHM of the interpolating kernel, in pixels
+        intensity : Numpy Array of Floats
+            DESCRIPTION.
+        offset_rows : Float
+            DESCRIPTION. #TODO
+        offset_cols : Float
+            DESCRIPTION. #TODO
+        ADR_x : List of Integers, optional
+            DESCRIPTION. The default is [0]. #TODO
+        ADR_y : List of Integers, optional
+            DESCRIPTION. The default is [0]. #TODO
+        jump : Integer, optional
+            If a positive number partitions the wavelengths with step size jump, if -1 will not partition. The default is -1. #TODO
+        warnings : Boolean, optional
+            DESCRIPTION. The default is False. #TODO
+
+        Returns
+        -------
+        None.
+
         """
+        
         if jump == -1 : jump = self.n_wave
 
         if np.nanmedian(ADR_x) == 0 and np.nanmedian(ADR_y) == 0 : jump = self.n_wave 
@@ -1043,7 +1065,8 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                    half_size_for_centroid=0, plot_tracing_maps = [],
                    plot=False, log=True, gamma=0., check_ADR=False, verbose = True): 
         """
-        #TODO
+        This functions provides the ADR x/y fits, tracing the peaks of the planes of the cube.
+        For correcting the ADR and getting offsets between different cubes.
         
         Parameters
         ----------
@@ -1058,9 +1081,15 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         adr_index_fit : Integer, optional
             This is the fitted polynomial with highest degree n. The default is 2. 
         step_tracing : Integer, optional
-            DESCRIPTION. The default is 100. #TODO 
+            DESCRIPTION. The default is 25. #TODO 
         g2d : Boolean, optional
-            If True uses a 2D Gaussian, else doesn't. The default is True. 
+            If True uses a 2D Gaussian, else doesn't. The default is True.
+        kernel_tracing : Odd Integer, optional
+            DESCRIPTION. The default is 5. #TODO
+        adr_clip_fir : Float, optional
+            DESCRIPTION. The default is 0.3. #TODO
+        half_size_for_centroid : Integer, optional
+            DESCRIPTION. The default is 0. #TODO
         plot_tracing_maps : List, optional
             DESCRIPTION. The default is []. #TODO 
         plot : Boolean, optional
@@ -1158,6 +1187,8 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
             Print results. The default is True.
         plot : Boolean, optional
             If True generates and shows the plots. The default is False.
+        g2d : Boolean, optional
+            DESCRIPTION. The default is False. #TODO
         plot_map : Boolean, optional
             If True will plot the maps. The default is True.
         log : Boolean, optional
@@ -1308,7 +1339,50 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 # -----------------------------------------------------------------------------
     def plot_spectrum_cube(self, x=-1, y=-1, lmin=0, lmax=0, fmin=1E-30, fmax=1E30, 
                            fcal=False, fig_size=10., fig_size_y=0., save_file="", title="", z=0.,
-                           median=False, plot = True, verbose=True):    # Must add: elines, alines...
+                           median=False, plot = True, verbose=True):        # Must add: elines, alines...
+        """
+        Plot spectrum of a particular spaxel or list of spaxels.
+
+        Parameters
+        ----------
+        x : Integer, optional
+            DESCRIPTION. The default is -1. #TODO
+        y : Integer, optional
+            DESCRIPTION. The default is -1. #TODO
+        lmin : Integer, optional
+            DESCRIPTION. The default is 0. #TODO
+        lmax : Integer, optional
+            DESCRIPTION. The default is 0. #TODO
+        fmin : Float, optional
+            DESCRIPTION. The default is 1E-30. #TODO
+        fmax : Float, optional
+            DESCRIPTION. The default is 1E30. #TODO
+        fcal : Boolean, optional
+            DESCRIPTION. The default is False. #TODO
+        fig_size : Float, optional
+            DESCRIPTION. The default is 10.. #TODO
+        fig_size_y : Float, optional
+            DESCRIPTION. The default is 0.. #TODO
+        save_file : String, optional
+            DESCRIPTION. The default is "". #TODO
+        title : String, optional
+            DESCRIPTION. The default is "". #TODO
+        z : Float, optional
+            DESCRIPTION. The default is 0.. #TODO
+        median : Boolean, optional
+            DESCRIPTION. The default is False. #TODO
+        plot : Boolean, optional
+            DESCRIPTION. The default is True. #TODO
+        verbose : Boolean, optional
+            DESCRIPTION. The default is True. #TODO
+
+        Returns
+        -------
+        spectrum : TYPE
+            DESCRIPTION. #TODO
+
+        """
+
         """
         Plot spectrum of a particular spaxel or list of spaxels.
 
@@ -1602,12 +1676,12 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
             DESCRIPTION. The default is 1E30. #TODO 
         cmap : String, optional
             This is the colour of the map. The default is "gist_gray".
-        fig : Integer, optional
+        fig_size : Integer, optional
             DESCRIPTION. The default is 10. #TODO 
         save_file : String, optional
             Save plot in file "file.extension". The default is "".
         #ADR : Boolean, optional
-            If True will correct for ADR (Atmospheric Differential Refraction). The default is True.
+            If True will correct for ADR (Atmospheric Differential Refraction). The default is True. #UNSURE IF NEEDED
         description : String, optional
             This is the description of the cube. The default is "".
         contours : Boolean, optional
@@ -1688,8 +1762,8 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
 
         Parameters
         ----------
-        line : TYPE
-            DESCRIPTION.
+        line : TYPE #TODO
+            DESCRIPTION. #TODO
         w2 : Float, optional
             DESCRIPTION. The default is 0.. #TODO
         gaussian_fit : Boolean, optional
@@ -2365,17 +2439,24 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         max_wave : Integer, optional
             The maximum wavelength passed through the mask. The default is 0.
         sky_annulus_low_arcsec : Float, optional
-            DESCRIPTION. The default is 7..
+            DESCRIPTION. The default is 7.. #TODO
         sky_annulus_high_arcsec : Float, optional
-            DESCRIPTION. The default is 12..
+            DESCRIPTION. The default is 12.. #TODO
         plot : Boolean, optional
             If True generates and shows the plots. The default is False.
         verbose : Boolean, optional
 			Print results. The default is False.
 
         Returns
-        -------
-        None.
+        ------- #TODO
+        r2_growth_curve : TYPE
+            DESCRIPTION
+        F_growth_star : TYPE
+            DESCRIPTION
+        F_guess : TYPE
+            DESCRIPTION
+        r_half_light : TYPE
+            DESCRIPTION
 
         """      
         if min_wave == 0 : min_wave = self.valid_wave_min 
