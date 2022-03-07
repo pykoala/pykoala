@@ -9,7 +9,7 @@ from koala.automatic_scripts.koala_reduce import KOALA_reduce
 from koala.cube import read_cube, telluric_correction_from_star
 
 import numpy as np
-import copy
+import copy  # Do not comment, it is in an exec
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------

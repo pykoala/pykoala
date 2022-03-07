@@ -3276,8 +3276,9 @@ class RSS(object):
             print("  Airmass = ", np.round(self.airmass, 3))
         # Read data
         if observatory_extinction_file is None:
-            observatory_extinction_file = os.path.join('.', 'input_data', 'observatory_extinction', 'ssoextinct.dat')
-
+            #observatory_extinction_file = os.path.join('.', 'input_data', 'observatory_extinction', 'ssoextinct.dat')
+            observatory_extinction_file = "/DATA/KOALA/Python/GitHub/koala/src/koala/input_data/observatory_extinction/ssoextinct.dat"
+            
         data_observatory = np.loadtxt(observatory_extinction_file, unpack=True)
         extinction_curve_wavelenghts = data_observatory[0]
         extinction_curve = data_observatory[1]
@@ -4365,7 +4366,7 @@ class RSS(object):
             if flat_filename is not None: self.history.append("   provided in file "+flat_filename)
 # %% ==========================================================================
     def fix_wavelengths_edges(self,  # sky_lines =[6300.309, 7316.290, 8430.147, 8465.374],
-                                    sky_lines=[6300.309, 8430.147, 8465.374],
+                                    sky_lines="",
                                     # valid_ranges=[[-0.25,0.25],[-0.5,0.5],[-0.5,0.5]],
                                     # valid_ranges=[[-0.4,0.3],[-0.4,0.45],[-0.5,0.5],[-0.5,0.5]], # ORIGINAL
                                     valid_ranges=[[-1.2, 0.6], [-1.2, 0.6], [-1.2, 0.6]],
@@ -4408,6 +4409,11 @@ class RSS(object):
         fig_size : integer (default = 12)
             Size of the image plotted          
         """
+        
+        if sky_lines == "":
+            sky_lines = [6300.309, 8430.147, 8465.374]
+            if self.grating == "2000R": sky_lines = [6498.737, 6553.626, 6863.971]
+                
 
         print("\n> Fixing wavelengths using skylines in edges")
         print("\n  Using skylines: ", sky_lines, "\n")
@@ -4863,36 +4869,38 @@ class RSS(object):
 
             # Check results
         if plot:
-            if verbose: print("\n> Plotting some results after fixing wavelengths: ")
-
-            for line in range(len(xmin)):
-
-                xmin_ = xmin[line]
-                xmax_ = xmax[line]
-
-                plot_y = []
-                plot_y_corrected = []
-                ptitle = "Before corrections, fibres "
-                ptitle_corrected = "After wavelength correction, fibres "
-                if ymax == "": y_max_list = []
-                for fibre in fibres_to_plot:
-                    plot_y.append(self.intensity[fibre])
-                    plot_y_corrected.append(self.intensity_corrected[fibre])
-                    ptitle = ptitle + np.str(fibre) + " "
-                    ptitle_corrected = ptitle_corrected + np.str(fibre) + " "
-                    if ymax == "":
-                        y_max_ = []
-                        y_max_.extend(
-                            (self.intensity[fibre, i]) for i in range(len(w)) if (w[i] > xmin_ and w[i] < xmax_))
-                        y_max_list.append(np.nanmax(y_max_))
-                if ymax == "": ymax = np.nanmax(y_max_list) + 20  # TIGRE
-                plot_plot(w, plot_y, ptitle=ptitle, xmin=xmin_, xmax=xmax_, percentile_min=0.1,
-                          ymax=ymax)  # ymin=ymin, ymax=ymax)
-                plot_plot(w, plot_y_corrected, ptitle=ptitle_corrected, xmin=xmin_, xmax=xmax_, percentile_min=0.1,
-                          ymax=ymax)  # ymin=ymin, ymax=ymax)
-                y_max_list = []
-                ymax = ""
-
+            try:
+                if verbose: print("\n> Plotting some results after fixing wavelengths: ")
+    
+                for line in range(len(xmin)):
+    
+                    xmin_ = xmin[line]
+                    xmax_ = xmax[line]
+    
+                    plot_y = []
+                    plot_y_corrected = []
+                    ptitle = "Before corrections, fibres "
+                    ptitle_corrected = "After wavelength correction, fibres "
+                    if ymax == "": y_max_list = []
+                    for fibre in fibres_to_plot:
+                        plot_y.append(self.intensity[fibre])
+                        plot_y_corrected.append(self.intensity_corrected[fibre])
+                        ptitle = ptitle + np.str(fibre) + " "
+                        ptitle_corrected = ptitle_corrected + np.str(fibre) + " "
+                        if ymax == "":
+                            y_max_ = []
+                            y_max_.extend(
+                                (self.intensity[fibre, i]) for i in range(len(w)) if (w[i] > xmin_ and w[i] < xmax_))
+                            y_max_list.append(np.nanmax(y_max_))
+                    if ymax == "": ymax = np.nanmax(y_max_list) + 20  
+                    plot_plot(w, plot_y, ptitle=ptitle, xmin=xmin_, xmax=xmax_, percentile_min=0.1,
+                              ymax=ymax)  # ymin=ymin, ymax=ymax)
+                    plot_plot(w, plot_y_corrected, ptitle=ptitle_corrected, xmin=xmin_, xmax=xmax_, percentile_min=0.1,
+                              ymax=ymax)  # ymin=ymin, ymax=ymax)
+                    y_max_list = []
+                    ymax = ""
+            except Exception:
+                if verbose or warnings: print("\n> Plotting some results after fixing wavelengths FAILED !!\n")
         if verbose: print("\n> Small fixing of the wavelengths done!")
         # return
 # -----------------------------------------------------------------------------
@@ -5722,7 +5730,7 @@ def auto_scale_two_spectra(rss, sky_r_self, sky_r_star, scale=[0.1, 1.11, 0.025]
                            plot=True, verbose=True):
     """
 
-    THIS NEEDS TO BE CHECKED TO BE SURE IT WORKS OK FOR CONTINUUM
+    #TODO THIS NEEDS TO BE CHECKED TO BE SURE IT WORKS OK FOR CONTINUUM
 
     Parameters
     ----------

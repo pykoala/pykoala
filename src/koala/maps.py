@@ -161,7 +161,7 @@ def create_map(cube, line, w2=None, gaussian_fit = False, gf=False,
             #print "\n> Summary of Gaussian fitting : "
             print("\n> Found ",len(empty_spaxels)," the list with empty spaxels is ",empty_spaxels)
             print("  Gaussian fit FAILED in",len(fit_failed_list)," spaxels = ",fit_failed_list)
-            print("\n> Returning [map_flux, map_vel, map_fwhm, map_ew, description] ")
+            print("\n> Returning [description, map_flux, map_vel, map_fwhm, map_ew] ")
         return description, map_flux, map_vel, map_fwhm, map_ew 
 
     else:
