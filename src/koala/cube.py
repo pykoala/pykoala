@@ -581,9 +581,9 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         force_ADR : Boolean, optional
             If True will correct for ADR even considoring a small correction. The default is False.
         method : String, optional
-            DESCRIPTION. The default is "new". #TODO
+            For correcting the ADR, use either "old" or "new" method. The new method (recomended) rebuilds the cube considering the ADR correction. The old method will correct ADR moving planes in the existing cube (use this one in combinded cubes, if needed). The default is "new".
         remove_spaxels_not_fully_covered : Boolean, optional
-            DESCRIPTION. The default is True. #TODO
+            If False will sum the number of NaNs in the columns and rows in the intergrated map. The default is True.
         jump : Integer, optional
             If a positive number partitions the wavelengths with step size jump, if -1 will not partition. The default is -1.
         warnings : Boolean, optional
@@ -914,15 +914,15 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         Parameters
         ----------
         intensity : Numpy Array of Floats
-            DESCRIPTION. #TODO
-        offset_rows : Float
-            DESCRIPTION. #TODO
-        offset_cols : Float
-            DESCRIPTION. #TODO
-        ADR_x : List of Integers, optional
-            DESCRIPTION. The default is [0]. #TODO
-        ADR_y : List of Integers, optional
-            DESCRIPTION. The default is [0]. #TODO
+            This is the intensity of the functional wavelength.
+        offset_rows : List of Floats
+            This is a list offsets of the spaxel in DEC from the centre in pixels.
+        offset_cols : List of Floats
+            This is a list offsets of the spaxel in RA from the centre in pixels.
+        ADR_x : List of Floats, optional
+            The correction in RA induced by the ADR for all wavelengths. The default is [0].
+        ADR_y : List of Floats, optional
+            The correction in DEC induced by the ADR for all wavelengths. The default is [0].
         jump : Integer, optional
             If a positive number partitions the wavelengths with step size jump, if -1 will not partition. The default is -1.
         warnings : Boolean, optional
@@ -1748,19 +1748,19 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         w2 : Float, optional
             If this parameter is given, the map is the integrated map between "wavelength" and "w2". The default is 0..
         gaussian_fit : Boolean, optional
-            DESCRIPTION. The default is False. #TODO
+            Create the map proforming a gaussian fit to the line. The default is False.
         gf : Boolean, optional
-            DESCRIPTION. The default is False. #TODO
-        lowlow : Integer, optional
-            DESCRIPTION. The default is 50. #TODO
-        lowhigh : Integer, optional
-            DESCRIPTION. The default is 10. #TODO
-        highlow : Integer, optional
-            DESCRIPTION. The default is 10. #TODO
-        highhigh : Integer, optional
-            DESCRIPTION. The default is 50. #TODO
-        show_spaxels : List, optional
-            DESCRIPTION. The default is []. #TODO
+            Create the map proforming a gaussian fit to the line. The default is False.
+        lowlow : Float, optional
+            Furthest wavelength from the centre of the line moving to the left, to be used as continuum. The default is 50.
+        lowhigh : Float, optional
+            Closest wavelength from the centre of the line moving to the left, to be used as continuum. The default is 10.
+        highlow : Float, optional
+            Closest wavelength from the centre of the line moving to the right, to be used as continuum. The default is 10.
+        highhigh : Float, optional
+            Furthest wavelength from the centre of the line moving to the right, to be used as continuum. The default is 50.
+        show_spaxels : List of List of two Floats, optional
+            list of spaxels to plot. The default is [].
         verbose : Boolean, optional
 			Print results. The default is True.
         description : String, optional
@@ -2353,7 +2353,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
     def mask_cube(self, min_wave = 0, max_wave = 0, include_partial_spectra= False,
                   cmap="binary_r", plot=False, verbose = False):
         """
-        #TODO
+        Create a mask to only include a particular wavelength range.
 
         Parameters
         ----------
@@ -2362,7 +2362,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         max_wave : Integer, optional
             The maximum wavelength passed through the mask. The default is 0.
         include_partial_spectra : Boolean, optional
-            DESCRIPTION. The default is False. #TODO
+            If True it will consider a spectra that only have a portion of the wavelength. The default is False.
         cmap : String, optional
             This is the colour of the map. The default is "binary_r".
         plot : Boolean, optional
@@ -2667,29 +2667,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
                           exclude_wlm=[[0,0]],
                           plot=True, verbose= False): 
         """
-        Compute the response curve of a spectrophotometric star.
-
-        Parameters
-        ----------
-        absolute_flux_file: string
-            filename where the spectrophotometric data are included (e.g. ffeige56.dat)
-        min_wave, max_wave: floats
-          wavelength range = [min_wave, max_wave] where the fit is performed
-        step = 25: float
-          Step (in A) for smoothing the data
-        fit_degree = 3: integer
-            degree of the polynomium used for the fit (3, 5, or 7). 
-            If fit_degree = 0 it interpolates the data 
-        exp_time = 60: float
-          Exposition time of the calibration star
-        smooth = 0.03: float
-          Smooth value for interpolating the data for fit_degree = 0.  
-        plot: boolean 
-          Plot yes/no  
-        
-        Example
-        -------
-        >>> babbsdsad   !
+        Compute the response curve of a spectrophotometric star. 
         
         Parameters
         ----------
@@ -2710,7 +2688,7 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         ha_width : Float, optional
             The expected equivalent width of H alpha. The default is 0..
         after_telluric_correction : Boolean, optional
-            DESCRIPTION. The default is False. #TODO
+            If True it will not obtain the integrated spectrum of the star, because it has already been done, by the telluric correction. The default is False.
         sky_annulus_low_arcsec : Float, optional
             This is the minimum radius (in arc seconds) from which the annulus for subtrating the sky is considered. The default is 5..
         sky_annulus_high_arcsec : Float, optional
@@ -2718,13 +2696,13 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         odd_number : Odd Integer, optional
             Kernel for a smoothing of the response curve. The default is 0.
         fit_weight : Float, optional
-            DESCRIPTION. The default is 0.. #TODO
+            This is the weight of the fitted solution. This has preference of smooth_weight. The default is 0..
         smooth_weight : Float, optional
-            DESCRIPTION. The default is 0.. #TODO
+            This is the weight for the smooth solution. The default is 0..
         smooth : Float, optional
             smooths the data. The default is 0..
-        exclude_wlm : List of Lists of Integers, optional
-            DESCRIPTION. The default is [[0,0]]. #TODO
+        exclude_wlm : List of List of two FLoats, optional
+            Wavelength ranges to not be considered in the fit. The default is [[0,0]].
         plot : Boolean, optional
             If True generates and shows the plots. The default is True.
         verbose : Boolean, optional
@@ -3019,11 +2997,11 @@ class Interpolated_cube(object):                       # TASK_Interpolated_cube
         Returns
         -------
         flux : Float
-            DESCRIPTION. #TODO
+            This is the flux based on the fit.
         np.sqrt(r2_half_light)*self.pixel_size_arcsec : Float
-            DESCRIPTION. #TODO
+            Half light radius in arc seconds.
         beta : Float
-            DESCRIPTION. #TODO
+            The beta of the Moffat fit.
 
         """
         
@@ -3419,24 +3397,24 @@ def align_n_cubes(rss_file_list, cube_list=[0], flux_calibration_list=[[]],
         This is a list of RSS objects.
     cube_list : List of Cube Objects, optional
         This is a list of Cube Objects. The default is [0].
-    flux_calibration_list : List of Lists, optional
-        DESCRIPTION. The default is [[]]. #TODO
-    reference_rss : String, optional
-        DESCRIPTION. The default is "". #TODO
+    flux_calibration_list : List of Arrays of Floats, optional
+        List of the flux calibration. The default is [[]].
+    reference_rss : Integer, optional
+        The ID of the rss to be used, e.g. 0,1,2..., if none given uses the first rss. The default is "".
     pixel_size_arcsec : Float, optional
-        DESCRIPTION. The default is 0.3. #TODO
+        This is the pixel size in arcseconds. The default is 0.7.
     kernel_size_arcsec : Float, optional
-        DESCRIPTION. The default is 1.5. #TODO
+        This is the kernel size in arcseconds. The default is 1.1.
     edgelow : Integer, optional
         This is the lowest value in the wavelength range in terms of pixels. The default is -1.
     edgehigh : Integer, optional
         This is the highest value in the wavelength range in terms of pixels. The default is -1.
-    size_arcsec : List, optional
-        DESCRIPTION. The default is []. #TODO
-    centre_deg : List, optional
-        DESCRIPTION. The default is []. #TODO
-    offsets : List, optional
-        DESCRIPTION. The default is []. #TODO
+    size_arcsec : List of two Floats, optional
+        This is the size in arcseconds of the cube, [RA,DEC]. The default is [].
+    centre_deg : List of two Floats, optional
+        These are the coordinates of the centre of the cube, in degrees. The default is [].
+    offsets : List of Floats, optional
+        The List of offsets between the rss. You need to specify a pair of values for every consecutive pair rss. e.g. 3 rss needs 4 values, the first 2 are between rss1 and rss2, the third and fourth will be between rss2 and rss3. The default is [].
     ADR : Boolean, optional
         If True will correct for ADR (Atmospheric Differential Refraction). The default is False.
     jump : Integer, optional
@@ -3672,10 +3650,10 @@ def align_blue_and_red_cubes(blue, red, half_size_for_centroid = 12, box_x= [], 
 
     Parameters
     ----------
-    blue : TYPE #TODO
-        DESCRIPTION.
-    red : TYPE #TODO
-        DESCRIPTION.
+    blue : Object
+        Object with the blue cube.
+    red : Object
+        Object with the red cube.
     half_size_for_centroid : Integer, optional
         This is half the length/width of the box. The default is 8.
     box_x : Integer List, optional
@@ -3829,23 +3807,23 @@ def running_mean(x, N):
 # -----------------------------------------------------------------------------
 def cumulative_Moffat(r2, L_star, alpha2, beta):
     """
-    #TODO
+    This function cumulative of the Moffat.
 
     Parameters
     ----------
-    r2 : TYPE
-        DESCRIPTION.
-    L_star : TYPE
-        DESCRIPTION.
-    alpha2 : TYPE
-        DESCRIPTION.
-    beta : TYPE
-        DESCRIPTION.
+    r2 : Float #TODO
+        This is the distance squared in pixels from the centre of the star.
+    L_star : Float
+        The resulting value of the Moffat. #TODO
+    alpha2 : Float
+        alpha squared of the Moffat fit. #TODO
+    beta : Float
+        The beta of the Moffat fit. #TODO
 
     Returns
     -------
-    TYPE
-        DESCRIPTION.
+    L_star*(1 - np.power(1+(r2/alpha2), -beta)) : Float
+        The cumulative fit of the Moffat of the star.
 
     """
     return L_star*(1 - np.power(1+(r2/alpha2), -beta))
@@ -3859,25 +3837,25 @@ def fit_Moffat(r2_growth_curve, F_growth_curve,
     cutting at to r_max (in units of the half-light radius),
     provided an initial guess of the total flux and half-light radius squared.
 
-    Parameters #TODO
+    Parameters
     ----------
-    r2_growth_curve : TYPE
-        DESCRIPTION.
-    F_growth_curve : TYPE
-        DESCRIPTION.
-    F_guess : TYPE
-        DESCRIPTION.
-    r2_half_light : TYPE
-        DESCRIPTION.
-    r_max : TYPE
-        DESCRIPTION.
+    r2_growth_curve : List of Floats
+        The radius squared from the centre.
+    F_growth_curve : Array of Floats
+        The flux associated to the radius of the growing curve.
+    F_guess : Float
+        This is the expected integrated value.
+    r2_half_light : Float
+        This is the radius squared where we will find the integrated value.
+    r_max : Integer
+        r_max to integrate, in units of r2_half_light (= seeing if object is a star, for flux calibration make r_max=5).
     plot : Boolean, optional
         If True generates and shows the plots. The default is False.
 
     Returns
     -------
-    fit : TYPE
-        DESCRIPTION.
+    fit : List of Floats
+        Coefficents of the fit.
     
     """
     index_cut = np.searchsorted(r2_growth_curve, r2_half_light*r_max**2)
@@ -4252,14 +4230,14 @@ def estimate_offsets_comparing_cubes(cube1, cube2, line=None, line2=None,   # BO
 # -----------------------------------------------------------------------------
 def plot_response(calibration_star_cubes, scale=[], use_median=False, verbose = True, plot=True):
     """
-    #TODO
+    This function plots the response curve.
 
     Parameters
     ----------
-    calibration_star_cubes : TYPE #TODO
-        DESCRIPTION.
+    calibration_star_cubes : Object
+        These are the Objects with stars for getting the calibration.
     scale : List, optional
-        DESCRIPTION. The default is []. #TODO
+        In the case any solutions provided in calibration_star_cubes needs to be scaled. The default is [].
     use_median : Boolean, optional
         If True will use the median instead of mean. The default is False.
 
@@ -4350,15 +4328,15 @@ def obtain_flux_calibration(calibration_star_cubes, verbose = True):
 
     Parameters
     ----------
-    calibration_star_cubes : TYPE #TODO
-        DESCRIPTION.
+    calibration_star_cubes : Object
+        These are the Objects with stars for getting the calibration.
     verbose : Boolean
         Print results
 
     Returns
     -------
-    flux_calibration : TYPE #TODO
-        DESCRIPTION.
+    flux_calibration : Array of Floats
+        Conversion between counts and physical units.
 
     """
     
@@ -4389,16 +4367,16 @@ def obtain_telluric_correction(w, telluric_correction_list, plot=True, verbose =
 
     Parameters
     ----------
-    w : TYPE #TODO
-        DESCRIPTION.
+    w : Array of Floats
+        This is a wavelength vector.
     telluric_correction_list : List of arrays of Floats
         This is the inputted list of telluric corrections.
     plot : Boolean, optional
         If True generates and shows the plots. The default is True.
     label_stars : List, optional
-        DESCRIPTION. The default is []. #TODO
-    scale : List, optional
-        DESCRIPTION. The default is []. #TODO
+        This is a list of Strings with the names of the stars. The default is [].
+    scale : List of Floats, optional
+        In the case any solutions provided in telluric_correction_list needs to be scaled. The default is [].
 
     Returns
     -------
@@ -4473,7 +4451,7 @@ def telluric_correction_from_star(objeto, save_telluric_file="",
     high_fibres : Integer, optional
         Number of fibers to add for obtaining spectrum. The default is 20.
     list_of_telluric_ranges : List of Integer List, optional
-        DESCRIPTION. The default is [[0]]. #TODO
+        These are the telluric ranges for which we are correcting. The default is [[0]].
     order : Integer, optional
         This is the highest power for a polynomial. The default is 2.
     apply_tc : Boolean, optional
@@ -4614,7 +4592,7 @@ def telluric_correction_using_bright_continuum_source(objeto, save_telluric_file
     use:> telluric_correction_with_bright_continuum_source(EG21_red.rss1, bright_spectrum=spec)
     """
     """
-    #TODO
+    This function will get the telluric correction given a bright continuum source.
 
     Parameters
     ----------
@@ -4623,15 +4601,15 @@ def telluric_correction_using_bright_continuum_source(objeto, save_telluric_file
     save_telluric_file : String, optional
         This is what the file name will be when saving the telluric file. The default is "".
     fibre_list : Integer List, optional
-        DESCRIPTION. The default is [-1]. #TODO
+        This is the list of fibres that is used for extrating the spectrum of a bright object and use it to calculate the telluric correction. The default is [-1].
     high_fibres : Integer, optional
         Number of fibers to add for obtaining spectrum. The default is 20.
-    bright_spectrum : Integer List, optional
-        DESCRIPTION. The default is [0]. #TODO
+    bright_spectrum : List of Arrays, optional
+        This is the bright spectrum to get the telluric correction. The default is [0].
     odd_number : Integer, optional
         Kernel for a smoothing of the telluric correction. The default is 51.
-    list_of_telluric_ranges : List of Integer List, optional
-        DESCRIPTION. The default is [[0]]. #TODO
+    list_of_telluric_ranges : List of Lists with four Floats each, optional
+        These are the telluric ranges for which we are correcting. The default is [[0]].
     order : Integer, optional
         This is the highest power for a polynomial. The default is 2.
     plot : Boolean, optional
@@ -4782,13 +4760,13 @@ def centroid_of_cube(cube, x0=0,x1=-1,y0=0,y1=-1, box_x=[], box_y=[],
     cube : Cube Object
         This is the Cube object being worked on.
     x0 : Integer, optional
-        DESCRIPTION. The default is 0. #TODO
+        This is the left point for the box in x. The default is 0.
     x1 : Integer, optional
-        DESCRIPTION. The default is -1. #TODO
+        This is the right point for the box in x, not included in the box. The default is -1.
     y0 : Integer, optional
-        DESCRIPTION. The default is 0. #TODO
+        This is the left point for the box in y. The default is 0.
     y1 : Integer, optional
-        DESCRIPTION. The default is -1. #TODO
+        This is the right point for the box in y, not included in the box. The default is -1.
     box_x : List, optional
         When creating a box to show/trim/alignment these are the x cooridnates in spaxels of the box. The default is [].
     box_y : List, optional
@@ -4823,27 +4801,27 @@ def centroid_of_cube(cube, x0=0,x1=-1,y0=0,y1=-1, box_x=[], box_y=[],
     Returns
     -------
     ADR_x_fit : Array of Floats
-        DESCRIPTION. #TODO
+        This is the coefficients of the fit polynomial for RA.
     ADR_y_fit : Array of Floats
-        DESCRIPTION. #TODO
+        This is the coefficients of the fit polynomial for DEC.
     ADR_x_max : Float
-        DESCRIPTION. #TODO
+        This is the maximum value for the ADR in RA.
     ADR_y_max : Float
-        DESCRIPTION. #TODO
+        This is the maximum value for the ADR in DEC.
     ADR_total : Float
-        DESCRIPTION. #TODO
+        This is the magnitude of the ADR maximums.
     x_peaks : Array of Floats
-        DESCRIPTION. #TODO
+        The x position of the peaks for every wavelength.
     y_peaks : Array of Floats
-        DESCRIPTION. #TODO
+        The y position of the peaks for every wavelength.
     stat_x[3] : Float
-        DESCRIPTION. #TODO
+        This is the standard deviation of ADR x.
     stat_y[3] : Float
-        DESCRIPTION. #TODO
+        This is the standard deviation of ADR y.
     stat_total : Float
-        DESCRIPTION. #TODO
+        This is the magnitude of the stat x and y.
     [wc_vector, xc_vector, yc_vector] : List of List and Arrays
-        DESCRIPTION. #TODO
+        wc is the average wavelength if that batch of wavelengths, xc is the associated peak in x, and yc is the associated peak in y. These are the values used for the fitting.
 
     """
     
@@ -5114,7 +5092,7 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
     cube_list : Cube List
         This is a list of Cube Objects.
     obj_name : String, optional
-        DESCRIPTION. The default is "". #TODO
+        This is the name of the combined cube. The default is "".
     description : String, optional
         This is the description of the cube. The default is "".
     fits_file : String, optional
@@ -5122,11 +5100,11 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
     path : String, optional
         Where you want to save the combinded cube. The default is "".
     scale_cubes_using_integflux : Boolean, optional
-        DESCRIPTION. The default is True. #TODO
+        If True will scale the integrated flux of each cube, to have the same total integrated flux. The default is True.
     flux_ratios : List, optional
         This is a list of flux ratios between the cubes. The default is [].
     apply_scale : Boolean, optional
-        DESCRIPTION. The default is True. #TODO
+        If True applys flux ratios to cubes, else doesn't. The default is True.
     edgelow : Integer, optional
         This is the lowest value in the wavelength range in terms of pixels. The default is 30.
     edgehigh : Integer, optional
@@ -5134,11 +5112,11 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
     ADR : Boolean, optional
         If True will correct for ADR even considoring a small correction. The default is True.
     ADR_cc : Boolean, optional
-        DESCRIPTION. The default is False. #TODO
+        If True will do the calculate the ADR for the combined cube. The default is False.
     jump : Integer, optional
         If a positive number partitions the wavelengths with step size jump, if -1 will not partition. The default is -1.
-    pk : TYPE, optional
-        DESCRIPTION. The default is "". #TODO
+    pk : String, optional
+        This saves the values of the pixel and kernel of the cube. The default is "".
     ADR_x_fit_list : List, optional
         This is a list of ADR x fits. The default is [].
     ADR_y_fit_list : List, optional
@@ -5176,7 +5154,7 @@ def build_combined_cube(cube_list, obj_name="", description="", fits_file = "", 
     verbose : Boolean, optional
         Print results. The default is True.
     say_making_combined_cube : Boolean, optional
-        DESCRIPTION. The default is True. #TODO
+        If True will print (Making combined cube ...). The default is True.
 
     Returns
     -------
@@ -5464,9 +5442,9 @@ def read_cube(filename, path="", description="", half_size_for_centroid = 10,
     plot_spectra : Boolean, optional
         If True will plot the spectra. The default is False.
     print_summary : Boolean, optional
-        DESCRIPTION. The default is True. #TODO
-    text_intro : TYPE, optional
-        DESCRIPTION. The default is "\n> Reading datacube from fits file:". #TODO
+        If both verbose and this is True will print out the summary. The default is True.
+    text_intro : String, optional
+        This is what is printed out at the beginning. The default is "\n> Reading datacube from fits file:".
 
     Returns
     -------
