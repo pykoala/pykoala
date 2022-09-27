@@ -3,7 +3,6 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
-from koala.io import full_path
 
 def plot_plot(x, y,  xmin="",xmax="",ymin="",ymax="",percentile_min=2, percentile_max=98,
               ptitle = None, xlabel = None, ylabel = None, label="",
@@ -148,16 +147,7 @@ def plot_plot(x, y,  xmin="",xmax="",ymin="",ymax="",percentile_min=2, percentil
        if np.isscalar(linewidth): linewidth=[linewidth_]*n_plots
        if np.isscalar(markersize):markersize=[markersize_]*n_plots
        if np.isscalar(linestyle): linestyle=[linestyle_]*n_plots
-       if color == "blue" : 
-           color_list = ["red","blue","green","k","orange", "purple", "cyan", "lime"]
-           color = []
-           j=0
-           for i in range(n_plots):
-               color.append(color_list[j])
-               j = j+1
-               if j == 8 : j = 0
-           
-           #color = [color_list[i] for i in range(n_plots)]
+       if color == "blue" : color = ["red","blue","green","k","orange", "purple", "cyan", "lime"]
        if ymax == "": y_max_list = []
        if ymin == "": y_min_list = []
               
@@ -179,7 +169,6 @@ def plot_plot(x, y,  xmin="",xmax="",ymin="",ymax="",percentile_min=2, percentil
                # print(markersize)
                # print(len(xx),len(y), len(psym), len(color), len(alpha), len(label), len(linewidth), len(markersize))
                plt.plot(xx[i],y[i], psym[i], color=color[i], alpha=alpha[i], label=label[i], mew=linewidth[i], markersize=markersize[i])
-
            if ymax == "":
                     y_max_ = []                
                     y_max_.extend((y[i][j]) for j in range(len(xx[i])) if (xx[i][j] > xmin and xx[i][j] < xmax) )  
