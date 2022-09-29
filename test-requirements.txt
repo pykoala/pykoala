@@ -1,5 +1,5 @@
 pytest==6.2.5;python_version>'3.0'
-pytest-cov==2.12.1
+pytest-cov==4.0.0
 #pytest-datadir
 #pytest-mpl
 #pytest-regtest
