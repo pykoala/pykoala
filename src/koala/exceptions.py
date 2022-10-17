@@ -72,3 +72,13 @@ class FitError(Exception):
     def __init__(self):
         self.message = "Unsuccessful fit."
         super().__init__(self.message)
+
+
+class CalibrationError(Exception):
+    """
+        Exception class raised during flux calibration
+        """
+
+    def __init__(self):
+        self.message = "Data Container already flux calibrated."
+        super().__init__(self.message)

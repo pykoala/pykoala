@@ -32,8 +32,8 @@ class DataContainer(object):
         self.variance_corrected = kwargs.get("variance", None)
         self.intensity_units = kwargs.get("intensity_units", None)
         # Information and masking
-        self.info = kwargs.get("info", None)
-        self.log = kwargs.get("log", None)
+        self.info = kwargs.get("info", dict())
+        self.log = kwargs.get("log", dict(corrections=dict()))
         self.mask = kwargs.get("mask", None)
         self.mask_map = kwargs.get("mask_map", None)
 

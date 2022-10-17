@@ -26,7 +26,7 @@ from koala.data_container import DataContainer
 
 def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
                       offset_cols, offset_rows, pixel_size, kernel_size_pixels,
-                      adr_x=None, adr_y=None, adr_pixel_frac=0.1):
+                      adr_x=None, adr_y=None, adr_pixel_frac=0.05):
     """ Interpolate fibre spectra and variance to data cube.
 
     Parameters
@@ -77,8 +77,10 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
     ones = np.ones_like(fib_spectra)
     ones[bad_wavelengths] = 0.
     # Estimate spectral window
-    spectral_window = np.min(int(np.abs(adr_x[0] - adr_x[-1]) / adr_pixel_frac),
-                             int(np.abs(adr_y[0] - adr_y[-1]) / adr_pixel_frac))
+    spectral_window = int(np.min(
+        (adr_pixel_frac / np.abs(adr_x[0] - adr_x[-1]),
+         adr_pixel_frac / np.abs(adr_y[0] - adr_y[-1]))
+                             ) * fib_spectra.size)
     if spectral_window == 0:
         spectral_window = fib_spectra.size
     # Loop over wavelength
@@ -179,7 +181,7 @@ def interpolate_rss(rss, pixel_size_arcsec=0.7, kernel_size_arcsec=1.1,
 
 def build_cube(rss_set, reference_coords, cube_size_arcsec, reference_pa=0,
                kernel_size_arcsec=1.1, pixel_size_arcsec=0.7,
-               adr_x=None, adr_y=None):
+               adr_x_set=None, adr_y_set=None, **cube_info):
     """Create a Cube from a set of Raw Stacked Spectra (RSS).
 
     Parameters
@@ -197,8 +199,8 @@ def build_cube(rss_set, reference_coords, cube_size_arcsec, reference_pa=0,
         Interpolator kernel physical size in *arcseconds*.
     pixel_size_arcsec: float, default=0.7
         Cube pixel physical size in *arcseconds*.
-    adr_x: # TODO
-    adr_y: # TODO
+    adr_x_set: # TODO
+    adr_y_set: # TODO
 
     Returns
     -------
@@ -213,6 +215,10 @@ def build_cube(rss_set, reference_coords, cube_size_arcsec, reference_pa=0,
     datacube_weight = np.zeros_like(datacube)
     rss_mask = np.zeros((len(rss_set), *datacube.shape), dtype=bool)
     exposure_times = np.zeros((len(rss_set)))
+    if adr_x_set is None:
+        adr_x_set = [None] * len(rss_set)
+    if adr_y_set is None:
+        adr_y_set = [None] * len(rss_set)
 
     for i, rss in enumerate(rss_set):
         copy_rss = copy.deepcopy(rss)
@@ -224,6 +230,8 @@ def build_cube(rss_set, reference_coords, cube_size_arcsec, reference_pa=0,
         cos_alpha = np.cos(np.deg2rad(copy_rss.info['pos_angle'] - reference_pa))
         sin_alpha = np.sin(np.deg2rad(copy_rss.info['pos_angle'] - reference_pa))
         offset = (offset[0] * cos_alpha - offset[1] * sin_alpha, offset[0] * sin_alpha + offset[1] * cos_alpha)
+        adr_x = adr_x_set[i] * cos_alpha - adr_y_set[i] * sin_alpha
+        adr_y = adr_x_set[i] * sin_alpha + adr_y_set[i] * cos_alpha
         print("{}-th RSS transformed offset".format(i), offset)
         new_ra = (copy_rss.info['fib_ra_offset'] * cos_alpha - copy_rss.info['fib_dec_offset'] * sin_alpha
                   - offset[0])
@@ -242,8 +250,9 @@ def build_cube(rss_set, reference_coords, cube_size_arcsec, reference_pa=0,
     pixel_exptime = np.sum(rss_mask * exposure_times[:, np.newaxis, np.newaxis, np.newaxis], axis=0)
     datacube /= pixel_exptime
     datacube_var /= pixel_exptime**2
+    # Create cube meta data
     info = dict(pixel_size_arcsec=pixel_size_arcsec, reference_coords=reference_coords, reference_pa=reference_pa,
-                pixel_exptime=pixel_exptime, kernel_size_arcsec=kernel_size_arcsec)
+                pixel_exptime=pixel_exptime, kernel_size_arcsec=kernel_size_arcsec, **cube_info)
     cube = Cube(parent_rss=rss_set, rss_mask=rss_mask, intensity=datacube, variance=datacube_var,
                 wavelength=rss.wavelength, info=info)
     return cube
@@ -337,6 +346,7 @@ class Cube(DataContainer):
         # Save fits
         hdul = fits.HDUList(hdu_list)
         hdul.writeto(fname, overwrite=True)
-        return hdul
+        hdul.close()
+        print("[Saving] Cube saved at:\n {}".format(fname))
 
 # Mr Krtxo \(ﾟ▽ﾟ)/

@@ -5,6 +5,7 @@ This module contains... #TODO
 # Basics packages
 # =============================================================================
 from scipy import interpolate
+from matplotlib import pyplot as plt
 import numpy as np
 import copy
 import os
@@ -74,21 +75,57 @@ class AtmosphericExtinction(Correction):
         rss_out.log['extinction'] = comment
         return rss_out
 
-        # TODO: Include some plotting
-        # if plot:
-        #     valid_wave_min, min_index, valid_wave_max, max_index = detect_edge(rss)
-        #     cinco_por_ciento = 0.05 * (np.max(extinction_correction) - np.min(extinction_correction))
-        #     plot_plot(extinction_curve_wavelenghts, extinction_corrected_airmass, xmin=np.min(rss_out.wavelength),
-        #               xmax=np.max(rss_out.wavelength), ymin=np.min(extinction_correction) - cinco_por_ciento,
-        #               ymax=np.max(extinction_correction) - cinco_por_ciento,
-        #               vlines=[valid_wave_min, valid_wave_max],
-        #               ptitle='Correction for extinction using airmass = ' + str(np.round(airmass, 3)),
-        #               xlabel="Wavelength [$\mathrm{\AA}$]", ylabel="Flux correction", fig_size=12,
-        #               statistics=False)
-
 # =============================================================================
 # Atmospheric Differential Refraction
 # =============================================================================
+
+def get_adr(data_container, max_adr=0.5, pol_deg=2, plot=False):
+    """Computes the ADR for a given DataContainer."""
+    # Centre of mass using multiple power of the intensity
+    com = []
+    for i in range(1, 5):
+        com.append(data_container.get_centre_of_mass(power=i))
+    com = np.array(com)
+    com -= np.nanmedian(com, axis=2)[:, :, np.newaxis]
+    median_com = np.nanmedian(
+        com, axis=0) - np.nanmedian(com, axis=(0, 2))[:, np.newaxis]
+    median_com[np.abs(median_com) > max_adr] = np.nan
+    p_x = np.polyfit(data_container.wavelength[np.isfinite(median_com[0])],
+                     median_com[0][np.isfinite(median_com[0])], deg=pol_deg)
+    polfit_x = np.poly1d(p_x)(data_container.wavelength)
+
+    p_y = np.polyfit(data_container.wavelength[np.isfinite(median_com[1])],
+                     median_com[1][np.isfinite(median_com[1])], deg=pol_deg)
+    polfit_y = np.poly1d(p_y)(data_container.wavelength)
+
+    if plot:
+        fig = plt.figure(figsize=(10, 5))
+        ax = fig.add_subplot(121)
+        ax.plot(data_container.wavelength, com[0, 0], label='P=1')
+        ax.plot(data_container.wavelength, com[1, 0], label='P=2')
+        ax.plot(data_container.wavelength, com[2, 0], label='P=3')
+        ax.plot(data_container.wavelength, com[3, 0], label='P=4')
+        ax.plot(data_container.wavelength, median_com[0], c='k', label='Median')
+        ax.plot(data_container.wavelength, polfit_x, c='fuchsia', label='Fit')
+        ax.set_ylim(-max_adr, max_adr)
+        ax.legend()
+        ax.set_ylabel(r'$\Delta RA$ (")')
+        ax.set_xlabel(r'$\lambda$')
+
+        ax = fig.add_subplot(122)
+        ax.plot(data_container.wavelength, com[0, 1], label='P=1')
+        ax.plot(data_container.wavelength, com[1, 1], label='P=2')
+        ax.plot(data_container.wavelength, com[2, 1], label='P=3')
+        ax.plot(data_container.wavelength, com[3, 1], label='P=4')
+        ax.plot(data_container.wavelength, median_com[1], c='k', label='Median')
+        ax.plot(data_container.wavelength, polfit_y, c='fuchsia', label='Fit')
+        ax.set_ylim(-max_adr, max_adr)
+        ax.legend()
+        ax.set_ylabel(r'$\Delta DEC$ (")')
+        ax.set_xlabel(r'$\lambda$')
+        plt.close(fig)
+        return polfit_x, polfit_y, fig
+    return polfit_x, polfit_y
 
 # def ADR_correction(cube, RSS, plot=True, force_ADR=False, method="new", remove_spaxels_not_fully_covered=True,
 #                    jump=-1, warnings=False, verbose=True):

@@ -21,7 +21,7 @@ import os
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from koala.exceptions import ClassError, FitError
+from koala.exceptions import ClassError, FitError, CalibrationError
 from koala.corrections.correction import Correction
 from koala.rss import RSS
 from koala.cubing import Cube
@@ -295,9 +295,25 @@ class FluxCalibration(Correction):
         return np.array(names), files
 
     @staticmethod
-    def apply():
-        # TODO...
-        pass
+    def apply(response, data_container):
+        """Apply a spectral response function to a Data Container object.
+        If the object has already been calibrated an exception will be raised.
+
+        Parameters
+        ----------
+        response: np.ndarray
+            Response function interpolated to the same wavelength points as the Data Container data
+        data_container: DataContainer
+            Data to be calibrated.
+        """
+        print("[Flux Calib.] Applying response function to {}".format(data_container.info['name']))
+        if data_container.is_corrected('flux_calibration'):
+            raise CalibrationError()
+        else:
+            ss = [None] * data_container.intensity_corrected.ndim
+            ss[0] = slice(None)
+            data_container.intensity_corrected /= response[ss]
+            data_container.log['corrections']['flux_calibration'] = 'applied'
 
     def save_response(self, fname, response, wavelength, units=None):
         # TODO Include R units in header

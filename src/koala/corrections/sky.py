@@ -383,7 +383,8 @@ class Tellurics(Correction):
             if smooth_med_star[i] / self.spectra[i] > 1.:
                 self.telluric_correction[i] = smooth_med_star[i] / self.spectra[i]
         if plot:
-            self.plot_correction(wave_min=wave_min, wave_max=wave_max, exclude_wlm=exclude_wlm)
+            fig = self.plot_correction(wave_min=wave_min, wave_max=wave_max, exclude_wlm=exclude_wlm)
+            return self.telluric_correction, fig
         return self.telluric_correction
 
     def telluric_from_model(self, file='telluric_lines.txt', width=30, extra_mask=None, pol_deg=5, plot=False):
@@ -428,8 +429,9 @@ class Tellurics(Correction):
 
         self.telluric_correction = np.clip(self.telluric_correction, a_min=1, a_max=None)
         if plot:
-            self.plot_correction(exclude_wlm=np.vstack((w_l_1 - width, w_l_2 + width)).T,
-                                 wave_min=self.wlm[0], wave_max=self.wlm[-1])
+            fig = self.plot_correction(exclude_wlm=np.vstack((w_l_1 - width, w_l_2 + width)).T,
+                                       wave_min=self.wlm[0], wave_max=self.wlm[-1])
+            return self.telluric_correction, fig
         return self.telluric_correction
 
     def plot_correction(self, fig_size=12, wave_min=None, wave_max=None, exclude_wlm=None):
@@ -463,8 +465,9 @@ class Tellurics(Correction):
             for i in range(len(exclude_wlm)):
                 ax.axvspan(exclude_wlm[i][0], exclude_wlm[i][1], color='c', alpha=0.1)
         ax.minorticks_on()
-        plt.show()
+        # plt.show()
         plt.close(fig)
+        return fig
 
     def apply(self, rss, verbose=False, is_combined_cube=False):
         # Set print verbose
@@ -486,6 +489,5 @@ class Tellurics(Correction):
     def save_to_txt(self, filename='telluric_correction.txt', **kwargs):
         """Save telluric correction function to text file."""
         np.savetxt(filename, np.array([self.wlm, self.telluric_correction]).T, **kwargs)
-
 
 # Mr Krtxo \(ﾟ▽ﾟ)/
