@@ -1,0 +1,6 @@
+These are the data obtained on 2018 Feb 27 as part of Hi-KIDS
+
+HD60753		star	25,26,27
+Hiltner600	star	28,29,30
+He2-10 P1	galaxy	31,32,33
+He2-10 P2	galaxy	34,35,36

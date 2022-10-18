@@ -1,0 +1,7 @@
+pytest==6.2.5;python_version>'3.0'
+pytest-cov==2.12.1
+#pytest-datadir
+#pytest-mpl
+#pytest-regtest
+#pytest-xdist
+sybil==2.0.1
