@@ -51,6 +51,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 tests/night_red_test
+tests/
 # Translations
 *.mo
 *.pot

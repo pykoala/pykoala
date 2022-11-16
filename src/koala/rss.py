@@ -24,8 +24,13 @@ from koala.data_container import DataContainer
 # =============================================================================
 # Ancillary Functions
 # =============================================================================
+
+#This has not been implemented. Is meant to return the range of RA and DEC from centre RA and DEC
 def coord_range(rss_list):
-    """TODO."""
+    """
+    Return the spread of the R
+
+    """
     ra = [rss.RA_centre_deg + rss.offset_RA_arcsec / 3600. for rss in rss_list]
     ra_min = np.nanmin(ra)
     ra_max = np.nanmax(ra)
@@ -106,16 +111,22 @@ class RSS(DataContainer):
     variance_corrected: numpy.ndarray(float)
         Variance with all the corresponding corrections applied (see log).
     log : dict
-        Dictionary containing a log of the processes applied on the rss.
-        
+        Dictionary containing a log of the processes applied on the rss.   
     header : astropy.io.fits.header.Header object 
         The header associated with data.
     fibre_table : astropy.io.fits.hdu.table.BinTableHDU object
         Bin table containing fibre metadata.
     info : dict
         Dictionary containing RSS basic information.
-    """
+        Important dictionary keys:
+            info['fib_ra_offset'] - original RA fiber offset 
+            info['fib_dec_offset'] - original DEC fiber offset
+            info['cen_ra'] - WCS RA center coordinates
+            info['cen_dec'] - WCA DEC center coordinates
+            info['pos_angle'] - original position angle (PA) 
 
+            TODO - this is NOT an exhaustive list. Please update when new attributes are encountered       
+    """
     def __init__(self,
                  intensity,
                  wavelength,
@@ -146,7 +157,7 @@ class RSS(DataContainer):
             
         Index    Layer                Bit mask value
         ------   ----------------     --------------
-         0        Read from file     1
+         0        Read from file       1
          1        Blue edge            2                                 
          2        Red edge             4                               
          3        NaNs mask            8                                  
@@ -165,7 +176,6 @@ class RSS(DataContainer):
         -------
         numpy.ndarray(bool)
             Boolean mask with the layer (or layers) selected.
-
         """
         vprint.verbose = verbose
         mask = self.mask.astype(int)
@@ -301,7 +311,7 @@ class RSS(DataContainer):
         new_centre: (2,)-tuple, default=None
             New reference coordinates (RA, DEC) for the RSS, expressed in degrees.
         new_pos_angle: float
-            New reference position angle in degrees.
+            New position angle in degrees (PA)
 
         Returns
         -------
@@ -387,7 +397,7 @@ def read_rss(file_path,
 
     vprint("\n> Reading RSS file", file_name, "created with", instrument, "...")
 
-    #  Open fits file
+    #  Open fits file. This assumes that RSS objects are written to file as .fits.
     rss_fits = fits.open(file_path)
 
     # Read intensity using rss_fits_file[0]

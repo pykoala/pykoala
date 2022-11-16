@@ -27,7 +27,8 @@ from koala.data_container import DataContainer
 def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
                       offset_cols, offset_rows, pixel_size, kernel_size_pixels,
                       adr_x=None, adr_y=None, adr_pixel_frac=0.05):
-    """ Interpolate fibre spectra and variance to data cube.
+
+    """ Interpolates fibre spectra and variance to data cube.
 
     Parameters
     ----------
@@ -133,11 +134,12 @@ def interpolate_rss(rss, pixel_size_arcsec=0.7, kernel_size_arcsec=1.1,
                     cube_size_arcsec=None, datacube=None,
                     datacube_var=None, datacube_weight=None,
                     adr_x=None, adr_y=None):
-    """
+
+    """ Converts a PyKoala RSS object to a datacube via interpolating fibers to cube
 
     Parameters
     ----------
-    rss
+    rss 
     pixel_size_arcsec
     kernel_size_arcsec
     cube_size_arcsec
@@ -182,6 +184,7 @@ def interpolate_rss(rss, pixel_size_arcsec=0.7, kernel_size_arcsec=1.1,
 def build_cube(rss_set, reference_coords, cube_size_arcsec, reference_pa=0,
                kernel_size_arcsec=1.1, pixel_size_arcsec=0.7,
                adr_x_set=None, adr_y_set=None, **cube_info):
+               
     """Create a Cube from a set of Raw Stacked Spectra (RSS).
 
     Parameters
@@ -208,13 +211,20 @@ def build_cube(rss_set, reference_coords, cube_size_arcsec, reference_pa=0,
          Cube created by interpolating the set of RSS.
     """
     print('[Cubing] Starting cubing process')
+    #Use defined cube size to generated number of spaxel columns and rows
     n_cols = int(cube_size_arcsec[1] / pixel_size_arcsec)
     n_rows = int(cube_size_arcsec[0] / pixel_size_arcsec)
+    #Create empty cubes for data, variance and weights - these will be filled and returned 
     datacube = np.zeros((rss_set[0].wavelength.size, n_rows, n_cols))
     datacube_var = np.zeros_like(datacube)
     datacube_weight = np.zeros_like(datacube)
+
+    """What does this mask do?"""
     rss_mask = np.zeros((len(rss_set), *datacube.shape), dtype=bool)
+    #"Empty" array that will be used to store exposure times
     exposure_times = np.zeros((len(rss_set)))
+
+    """what is adr_x_set - this is per"""
     if adr_x_set is None:
         adr_x_set = [None] * len(rss_set)
     if adr_y_set is None:
@@ -223,7 +233,7 @@ def build_cube(rss_set, reference_coords, cube_size_arcsec, reference_pa=0,
     for i, rss in enumerate(rss_set):
         copy_rss = copy.deepcopy(rss)
         exposure_times[i] = copy_rss.info['exptime']
-        # Offset between RSS FoV and reference frame
+        # Offset between RSS WCS and reference frame
         offset = ((copy_rss.info['cen_ra'] - reference_coords[0]) * 3600,
                   (copy_rss.info['cen_dec'] - reference_coords[1]) * 3600)
         # Transform the coordinates of RSS
@@ -259,8 +269,23 @@ def build_cube(rss_set, reference_coords, cube_size_arcsec, reference_pa=0,
 
 
 class Cube(DataContainer):
-    """This class represent a collection of Raw Stacked Spectra (RSS) interpolated over a 2D spatial grid."""
-    # TODO: Add description
+    """This class represent a collection of Raw Stacked Spectra (RSS) interpolated over a 2D spatial grid.
+    
+    parent_rss
+    rss_mask
+    intensity
+    variance
+    intensity_corrected
+    variance_corrected
+    wavelength
+    info
+
+    
+    
+    """
+    
+    
+
     def __init__(self, parent_rss=None, rss_mask=None, intensity=None, variance=None,
                  intensity_corrected=None, variance_corrected=None, wavelength=None,
                  info=None, **kwargs):
@@ -322,7 +347,7 @@ class Cube(DataContainer):
     def to_fits(self, fname=None, primary_hdr_kw=None):
         """ TODO...
         include --
-         parent RSS information
+           parent RSS information
            filenames
            exptimes
            effective exptime?

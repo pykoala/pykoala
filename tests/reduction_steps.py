@@ -22,12 +22,12 @@ from astropy.io import fits
 # =============================================================================
 # 1. Reading the data
 # =============================================================================
-from modular_koala.koala_ifu import koala_rss
+from modular_koala.koala_ifu import koala_rss   
 # =============================================================================
 # 5. Applying throughput
 # =============================================================================
-from modular_koala.throughput import get_from_sky_flat
-from modular_koala.throughput import apply_throughput
+from modular_koala.throughput import get_from_sky_flat  #These are in modular_koala.corrections folder now 
+from modular_koala.throughput import apply_throughput   #These are in modular_koala.corrections folder now 
 # =============================================================================
 # 6. Correcting for extinction
 # =============================================================================
@@ -176,11 +176,11 @@ for rss in std_star_1_rss + std_star_2_rss + science_rss:
 # Cubing
 # =============================================================================
 rss = std_star_1_rss[1]
-std_collapsed = np.nansum(rss.intensity_corrected, axis=1)
-std_collapsed_var = np.nansum(rss.variance_corrected, axis=1)
+std_collapsed = np.nansum(rss.intensity_corrected, axis=1) #this needs to be double checked. Are we collapsing the spectra here?
+std_collapsed_var = np.nansum(rss.variance_corrected, axis=1) 
 
 x0, y0 = rss.get_centre_of_mass(wavelength_step=rss.wavelength.size,
-                                stat=np.mean)
+                                stat=np.mean) #test this method 
 
 xx = rss.info['fib_ra_offset']
 yy = rss.info['fib_dec_offset']

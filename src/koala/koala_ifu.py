@@ -1,5 +1,5 @@
 """
-This script contains the wrapper functions to build an RSS from KOALA (2dfdr-reduced) data.
+This script contains the wrapper functions to build a PyKoala RSS object from KOALA (2dfdr-reduced) data.
 """
 
 # =============================================================================
@@ -16,7 +16,7 @@ from astropy.wcs import WCS
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from koala.ancillary import vprint, rss_info_template  # Template to create the info variable
+from koala.ancillary import vprint, rss_info_template  # Template to create the info variable 
 from koala.rss import read_rss
 
 
@@ -112,7 +112,10 @@ def py_koala_fibre_table(fibre_table):
 
 
 def koala_rss(path_to_file):
-    """..."""
+    """
+    A wrapper function that converts a file (not an RSS object) to a koala RSS object
+    The paramaters used to build the RSS object e.g. bad spaxels, header etc all come from the original (non PyKoala) .fits file
+    """
     header = fits.getheader(path_to_file, 0) + fits.getheader(path_to_file, 2)
     koala_header = py_koala_header(header)
     # WCS
@@ -136,7 +139,7 @@ def koala_rss(path_to_file):
     info['fib_ra_offset'] = koala_fibre_table.data['Delta_RA']
     info['fib_dec_offset'] = koala_fibre_table.data['Delta_DEC']
     info['airmass'] = airmass_from_header(koala_header)
-    # Read RSS file into PyKoala structure
+    # Read RSS file into a PyKoala RSS object
     rss = read_rss(path_to_file, wcs=koala_wcs,
                    bad_spaxels_list=bad_spaxels_list,
                    header=koala_header,
