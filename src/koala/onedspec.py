@@ -7,8 +7,6 @@ from synphot import SourceSpectrum, SpectralElement
 from synphot.models import Empirical1D
 from scipy.signal import medfilt
 
-
-
 #import matplotlib.pyplot as plt
 #import matplotlib.colors as colors
 import numpy as np
