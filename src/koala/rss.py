@@ -27,10 +27,7 @@ from koala.data_container import DataContainer
 
 #This has not been implemented. Is meant to return the range of RA and DEC from centre RA and DEC
 def coord_range(rss_list):
-    """
-    Return the spread of the R
-
-    """
+    """TODO"""
     ra = [rss.RA_centre_deg + rss.offset_RA_arcsec / 3600. for rss in rss_list]
     ra_min = np.nanmin(ra)
     ra_max = np.nanmax(ra)
@@ -265,6 +262,7 @@ class RSS(DataContainer):
 
     def get_centre_of_mass(self, wavelength_step=1, stat=np.nanmedian, power=1.0):
         """Compute the center of mass (COM) based on the RSS fibre positions
+
         Parameters
         ----------
         wavelength_step: int, default=1
@@ -341,28 +339,54 @@ class RSS(DataContainer):
                 self.info['ori_pos_angle'], self.info['pos_angle']))
 
     # =============================================================================
-    # Save RSS in fits
+    # Save an RSS object (corrections applied) as a separate .fits file
     # =============================================================================
-    def to_fits(self, name, layer='corrected', overwrite=False):
-        """TODO"""
+    def to_fits(self, name, layer='corrected', overwrite=False, checksum=False):
+        """
+        Writes a RSS object to .fits
+        
+        Ideally this would be used for RSS objects containing corrected data that need to be saved
+        during an intermediate step
+
+        Parameters
+        ----------
+        name: path-like object
+            File to write to. This can be a path to file written in string format with a meaningful name.
+        layer: TODO
+        overwrite: bool, optional
+            If True, overwrite the output file if it exists. Raises an OSError if False and the output file exists. Default is False.
+        checksum: bool, optional
+            If True, adds both DATASUM and CHECKSUM cards to the headers of all HDU’s written to the file.
+
+        Returns
+        -------
+        """
         data = {'corrected': self.intensity_corrected, 'mask': self.mask}
         primary_hdu = fits.PrimaryHDU(data=data[layer])
         primary_hdu.header = self.header
         primary_hdu.verify('fix')
+    
         if self.fibre_table is not None:
-            # TODO: Why add again this information again in the table header?
+            # The cen_ra and cen_dec attributes exist in the RSS object header self.header which is copied to primary_hdu.header above
+            # Essentially this step is redundant
             self.fibre_table.header['CENRA'] = self.header['RACEN'] / (180 / np.pi)  # Must be in radians
             self.fibre_table.header['CENDEC'] = self.header['DECCEN'] / (180 / np.pi)
             hdu_list = fits.HDUList([primary_hdu, self.fibre_table])
-            hdu_list.writeto(name, overwrite=True)
+
+            # Write the fits using standard writeto with default settings and checksum
+            hdu_list.writeto(name, overwrite=overwrite, checksum=checksum)
         else:
             # Write the fits
-            primary_hdu.writeto(name=name, overwrite=overwrite)
+            primary_hdu.writeto(name=name, overwrite=overwrite, checksum=checksum)
 
 
 # =============================================================================
-# Reading rss from file
+# Reading RSS from .fits file - inverse opeation of to_fits method above
 # =============================================================================
+
+"""
+TODO
+"""
 def read_rss(file_path,
              wcs,
              intensity_axis=0,

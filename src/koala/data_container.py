@@ -12,12 +12,20 @@ class DataContainer(object):
     """
     Abstract class for data containers.
 
-    This class might represent any kind of astronomical data: raw fit files, Raw Stacked Spectra
+    This class might represent any kind of astronomical data: raw fits files, Row Stacked Spectra
     obtained after tramline extraction or datacubes.
 
     Attributes
     ----------
-    # TODO
+    intensity
+    intensity_corrected
+    variance
+    variance_corrected
+    intensity_units
+    info
+    log
+    mask
+    mask_map
 
     Methods
     -------
