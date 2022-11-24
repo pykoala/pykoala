@@ -11,6 +11,57 @@ from scipy import optimize
 from astropy.io import fits
 # =============================================================================
 
+# =============================================================================
+# Ancillary Functions - RSS Related
+# =============================================================================
+
+#This has not been implemented. Is meant to return the range of RA and DEC from centre RA and DEC
+
+def coord_range(rss_list):
+    """TODO"""
+    ra = [rss.RA_centre_deg + rss.offset_RA_arcsec / 3600. for rss in rss_list]
+    ra_min = np.nanmin(ra)
+    ra_max = np.nanmax(ra)
+    dec = [rss.DEC_centre_deg + rss.offset_DEC_arcsec / 3600. for rss in rss_list]
+    dec_min = np.nanmin(dec)
+    dec_max = np.nanmax(dec)
+    return ra_min, ra_max, dec_min, dec_max
+
+
+def detect_edge(rss):
+    """
+    Detect the edges of a RSS. Returns the minimum and maximum wavelength that 
+    determine the maximum interval with valid (i.e. no masked) data in all the 
+    spaxels.
+
+    Parameters
+    ----------
+    rss : RSS object.
+
+    Returns
+    -------
+    min_w : float
+        The lowest value (in units of the RSS wavelength) with 
+        valid data in all spaxels.
+    min_index : int
+        Index of min_w in the RSS wavelength variable.
+    max_w : float
+        The higher value (in units of the RSS wavelength) with 
+        valid data in all spaxels.
+    max_index : int
+        Index of max_w in the RSS wavelength variable.
+
+    """
+    collapsed = np.sum(rss.intensity, 0)
+    nans = np.isfinite(collapsed)
+    wavelength = rss.wavelength
+    min_w = wavelength[nans].min()
+    min_index = wavelength.tolist().index(min_w)
+    max_w = wavelength[nans].max()
+    max_index = wavelength.tolist().index(max_w)
+    return min_w, min_index, max_w, max_index
+
+
 # RSS info dictionary template
 rss_info_template = dict(name=None,  # Name of the object
                          exptime=None,  # Total rss exposure time (seconds)
@@ -52,8 +103,6 @@ def nearest(array, value):
     array = np.asarray(array)
     idx = (np.abs(array - value)).argmin()
     return idx
-
-
 
 # Originally a method of RSS
 
