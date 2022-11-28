@@ -21,9 +21,6 @@ from koala import exceptions as excp
 from koala.data_container import DataContainer
 
 
-
-
-
 # =============================================================================
 # RSS CLASS
 # =============================================================================
@@ -183,7 +180,7 @@ class RSS(DataContainer):
         fig.show()
 
     # =============================================================================
-    # show/save formated log        
+    # Show/save formated log        
     # =============================================================================
     def formated_log(self, verbose=True, save=None):
         """TODO"""
