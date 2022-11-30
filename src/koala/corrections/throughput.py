@@ -14,6 +14,7 @@ from scipy.interpolate import NearestNDInterpolator
 # =============================================================================
 # Modular
 from koala.ancillary import vprint
+from koala.corrections.correction import Correction
 
 # Original
 from koala.plot_plot import plot_plot
@@ -21,6 +22,8 @@ from koala.plot_plot import plot_plot
 # =============================================================================
 
 # TODO: REFACTOR AND CONVERT FUNCTIONS INTO A CORRECTION OBJECT
+
+class Throughput():
 
 
 def create_throughput_from_flat(rss_set, clear_nan=True):
