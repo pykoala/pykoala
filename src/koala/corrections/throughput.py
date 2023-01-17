@@ -23,45 +23,47 @@ from koala.plot_plot import plot_plot
 
 # TODO: REFACTOR AND CONVERT FUNCTIONS INTO A CORRECTION OBJECT
 
-class Throughput():
+class Throughput(Correction):
 
-
-def create_throughput_from_flat(rss_set, clear_nan=True):
-    """TODO"""
-    normalized_fluxes = []
-    for rss in rss_set:
-        f = rss.intensity_corrected / rss.info['exptime']
-        normalized_fluxes.append(f / np.nanmedian(f, axis=0)[np.newaxis, :])
-    mean_throughput = np.nanmean(normalized_fluxes, axis=0)
-    std_throughput = np.nanstd(normalized_fluxes, axis=0)
-    if clear_nan:
-        x, y = np.meshgrid(np.arange(0, mean_throughput.shape[1]), np.arange(0, mean_throughput.shape[0]))
-        nan_mask = np.isfinite(mean_throughput)
-        interpolator = NearestNDInterpolator(list(zip(x[nan_mask], y[nan_mask])), mean_throughput[nan_mask])
-        mean_throughput = interpolator(x, y)
-        std_throughput[~nan_mask] = np.nanmean(std_throughput)
-    return mean_throughput, std_throughput
-
-
-def relative_throughput(rss): 
-
-    # TODO: New dummy function  
-    #    * add histogram plot
-    #    * Sigma clipping parameter
-                            
-# =============================================================================
-# Copy input RSS for storage the changes implemented in the task   
-# =============================================================================
-    rss_out = copy.deepcopy(rss)
     
-    mean_count = np.nanmean(rss.intensity_corrected, axis=1)
-    perc50 = np.nanpercentile(mean_count, 50)
-    # self.low_throughput = mean_count < perc5
-    # self.high_throughput = mean_count > perc95
-    
-    rss_out.intensity_corrected = rss_out.intensity_corrected / perc50
-    
-    return rss_out
+
+
+    def create_throughput_from_flat(rss_set, clear_nan=True):
+        """TODO"""
+        normalized_fluxes = []
+        for rss in rss_set:
+            f = rss.intensity_corrected / rss.info['exptime']
+            normalized_fluxes.append(f / np.nanmedian(f, axis=0)[np.newaxis, :])
+        mean_throughput = np.nanmean(normalized_fluxes, axis=0)
+        std_throughput = np.nanstd(normalized_fluxes, axis=0)
+        if clear_nan:
+            x, y = np.meshgrid(np.arange(0, mean_throughput.shape[1]), np.arange(0, mean_throughput.shape[0]))
+            nan_mask = np.isfinite(mean_throughput)
+            interpolator = NearestNDInterpolator(list(zip(x[nan_mask], y[nan_mask])), mean_throughput[nan_mask])
+            mean_throughput = interpolator(x, y)
+            std_throughput[~nan_mask] = np.nanmean(std_throughput)
+        return mean_throughput, std_throughput
+
+
+    def relative_throughput(rss): 
+
+        # TODO: New dummy function  
+        #    * add histogram plot
+        #    * Sigma clipping parameter
+                                
+    # =============================================================================
+    # Copy input RSS for storage the changes implemented in the task   
+    # =============================================================================
+        rss_out = copy.deepcopy(rss)
+        
+        mean_count = np.nanmean(rss.intensity_corrected, axis=1)
+        perc50 = np.nanpercentile(mean_count, 50)
+        # self.low_throughput = mean_count < perc5
+        # self.high_throughput = mean_count > perc95
+        
+        rss_out.intensity_corrected = rss_out.intensity_corrected / perc50
+        
+        return rss_out
 
 
 
