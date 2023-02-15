@@ -20,8 +20,9 @@ from koala.corrections.correction import Correction
 from koala.plot_plot import plot_plot
 
 # =============================================================================
-
-# TODO: REFACTOR AND CONVERT FUNCTIONS INTO A CORRECTION OBJECT
+"""
+TODO: REFACTOR AND CONVERT FUNCTIONS INTO A CORRECTION OBJECT
+"""
 
 class Throughput(Correction):
     

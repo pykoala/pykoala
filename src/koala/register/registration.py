@@ -165,7 +165,9 @@ def register_stars(data_set, moffat=True, plot=False, com_power=5., **fit_args):
 
 
 def register_interactive(data_set):
-    """TODO"""
+    """
+    Fully manual registration via interactive plot
+    """
     import matplotlib
     from matplotlib import pyplot as plt
     #matplotlib.use("QtAgg")
