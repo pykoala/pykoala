@@ -1,3 +1,9 @@
+"""
+This module contains a colelction of ancilliary functions which are either partially implemented or not fully implemented. 
+Currently this acts as a placeholder for functions that were in the original non-modular version of PyKOALA which have
+not been included in the modular version
+"""
+
 # =============================================================================
 # Basics packages
 # =============================================================================
@@ -18,7 +24,9 @@ from astropy.io import fits
 #This has not been implemented. Is meant to return the range of RA and DEC from centre RA and DEC
 
 def coord_range(rss_list):
-    """TODO"""
+    """
+    Returns the full extent of the coordinate range of a given set of RSS files 
+    """
     ra = [rss.RA_centre_deg + rss.offset_RA_arcsec / 3600. for rss in rss_list]
     ra_min = np.nanmin(ra)
     ra_max = np.nanmax(ra)
