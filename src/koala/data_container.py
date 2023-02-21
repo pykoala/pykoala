@@ -5,7 +5,7 @@ reduction process
 
 import numpy as np
 
-from koala.exceptions import NoneAttrError
+from koala.exceptions.exceptions import NoneAttrError
 
 
 class DataContainer(object):

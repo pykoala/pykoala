@@ -1,7 +1,7 @@
 """
 Parent Correction class
 """
-from koala.exceptions import CorrectionClassError
+from koala.exceptions.exceptions import CorrectionClassError
 
 
 class Correction(object):

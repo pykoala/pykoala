@@ -17,7 +17,7 @@ from astropy.nddata import bitfield_to_boolean_mask
 # =============================================================================
 # Modular
 from koala.ancillary import vprint
-from koala import exceptions as excp
+from koala.exceptions import exceptions as excp
 from koala.data_container import DataContainer
 
 

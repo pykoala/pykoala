@@ -20,7 +20,7 @@ from astropy.modeling import models, fitting
 from koala.ancillary import vprint
 # Modular
 from koala.ancillary import vprint
-from koala.exceptions import TelluricNoFileError
+from koala.exceptions.exceptions import TelluricNoFileError
 from koala.corrections.correction import Correction
 from koala.rss import RSS
 from koala.cubing import Cube

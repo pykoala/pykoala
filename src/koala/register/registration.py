@@ -14,7 +14,7 @@ import numpy as np
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from koala.exceptions import ClassError, FitError
+from koala.exceptions.exceptions import ClassError, FitError
 from koala.rss import RSS
 from koala.cubing import Cube
 

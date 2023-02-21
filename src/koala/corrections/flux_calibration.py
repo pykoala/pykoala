@@ -21,7 +21,7 @@ import os
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from koala.exceptions import ClassError, FitError, CalibrationError
+from koala.exceptions.exceptions import ClassError, FitError, CalibrationError
 from koala.corrections.correction import Correction
 from koala.rss import RSS
 from koala.cubing import Cube
