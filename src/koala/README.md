@@ -5,6 +5,16 @@
 PyKOALA is a Python package to reduce KOALA+AAOmega integral field spectroscopy (IFS) data creating a data cube. It produces full calibrated (wavelength, flux and astrometry) data cubes ready for science.
 
 ---
+## Pre-requisites
+
+PyKOALA has the following pre-requisites 
+
+```astropy```
+```matplotlib```
+
+```synphot```
+
+
 ## Installation
 
 PyKOALA will be available on PyPI soon. In the meantime, it can be built from source as follows. It can then be run from the ```build``` folder by importing the relvant scripts.
