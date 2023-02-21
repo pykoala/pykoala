@@ -8,6 +8,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+pykoala-ifs-0+untagged.571.g0641dc5/
 build/
 develop-eggs/
 dist/
