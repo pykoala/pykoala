@@ -14,22 +14,10 @@ import numpy as np
 from scipy.signal import savgol_filter
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
-from matplotlib import colors
-# =============================================================================
-# Astropy and associated packages
-# =============================================================================
-from astropy.wcs import WCS
-from astropy.io import fits
-# =============================================================================
-# 1. Reading the data
-# =============================================================================
-from koala.koala_ifu import koala_rss
 # =============================================================================
 # 5. Applying throughput
 # =============================================================================
-from koala.corrections.throughput import get_from_sky_flat
-from koala.corrections.throughput import apply_throughput
+from koala.corrections.throughput import Throughput
 # =============================================================================
 # 6. Correcting for extinction
 # =============================================================================
@@ -45,17 +33,12 @@ from koala.corrections.sky import SkyFromObject
 # =============================================================================
 # Cubing
 # =============================================================================
-from koala.register.registration import fit_moffat_profile, register_stars
-from koala.cubing import interpolate_rss, build_cube
-from koala.rss import RSS
+from koala.register.registration import register_stars
+from koala.cubing import build_cube
 # =============================================================================
 # Flux calibration
 # =============================================================================
 from koala.corrections.flux_calibration import FluxCalibration
-from koala.ancillary import (cumulative_1d_moffat_sky,
-                             cumulative_1d_moffat,
-                             cumulative_1d_sky,
-                             flux_conserving_interpolation)
 
 
 def reduce_calibration_stars(rss_set, star_names, throughput,
@@ -69,7 +52,7 @@ def reduce_calibration_stars(rss_set, star_names, throughput,
     for i in range(n_stars):
         for j in range(len(rss_set[i])):
             # Apply throughput
-            rss_set[i][j] = apply_throughput(rss_set[i][j], throughput)
+            rss_set[i][j] = Throughput.apply_throughput(rss_set[i][j], throughput)
             # Atmospheric Extinction
             atm_ext_corr.get_atmospheric_extinction(
                 airmass=rss_set[i][j].info['airmass'])

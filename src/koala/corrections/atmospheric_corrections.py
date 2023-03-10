@@ -18,8 +18,8 @@ import os
 # KOALA packages
 # =============================================================================
 # Modular
-from koala.ancillary import vprint
-from koala.rss import RSS, detect_edge
+#from koala.ancillary import vprint
+from koala.rss import RSS
 from koala.corrections.correction import Correction
 
 # =============================================================================

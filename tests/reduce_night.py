@@ -12,12 +12,12 @@ import yaml
 import os
 
 from matplotlib import pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 # KOALA
 
 from koala.koala_ifu import koala_rss
 
-from koala.corrections.throughput import create_throughput_from_flat
-from koala.corrections.throughput import apply_throughput
+from koala.corrections.throughput import Throughput
 # =============================================================================
 # 6. Correcting for extinction
 # =============================================================================
@@ -34,27 +34,15 @@ from koala.corrections.sky import SkyFromObject, SkyOffset
 # =============================================================================
 # Cubing
 # =============================================================================
-from koala.register.registration import (fit_moffat_profile, register_stars,
-                                         register_interactive, register_new_centres)
-
-from koala.cubing import interpolate_rss, build_cube
-from koala.rss import RSS
-# =============================================================================
-# Flux calibration
-# =============================================================================
-from koala.corrections.flux_calibration import FluxCalibration
-from koala.ancillary import (cumulative_1d_moffat_sky,
-                             cumulative_1d_moffat,
-                             cumulative_1d_sky,
-                             flux_conserving_interpolation)
-
-
+from koala.register.registration import register_stars
+from koala.cubing import build_cube
 # Extra
 from reduce_calib_stars import reduce_calibration_stars
 # =============================================================================
 # Night info
 # =============================================================================
 path_to_night = "/home/pablo/Research/obs_data/HI-KIDS/RSS/sci"
+
 
 with open(os.path.join(path_to_night, "REDUCTION_FLAGS.yml"), "r") as stream:
     try:
@@ -63,6 +51,7 @@ with open(os.path.join(path_to_night, "REDUCTION_FLAGS.yml"), "r") as stream:
         print(exc)
 
 output = 'night_red_test'
+pdf = PdfPages(output + '/report.pdf')
 
 if not os.path.isdir(output):
     print("New directory created: {}".format(output))
@@ -83,7 +72,7 @@ for file in reduction_flag_log.keys():
 
 # Create a master throughput
 
-throughput, throughput_std = create_throughput_from_flat(throughput_rss,
+throughput, throughput_std = Throughput.create_throughput_from_flat(throughput_rss,
                                                          clear_nan=True)
 
 plt.figure(figsize=(8, 5))
@@ -93,7 +82,8 @@ plt.colorbar(orientation='horizontal')
 plt.subplot(122, title='Fibre Throughput hist')
 plt.hist(throughput.flatten(), bins='auto', range=[0.5, 1.5])
 plt.ylabel("# pix")
-plt.savefig(os.path.join(output, "fibre_throughput.png"), bbox_inches='tight')
+pdf.savefig()
+# plt.savefig(os.path.join(output, "fibre_throughput.png"), bbox_inches='tight')
 plt.close()
 # =============================================================================
 # Calibration stars
@@ -140,14 +130,13 @@ for galaxy, files in reduction_list.items():
     science_rss = []
     adr_x_set = []
     adr_y_set = []
-    fig, axs = plt.subplots(nrows=1, ncols=len(files['data']),
-                            figsize=(4*len(files['data']), 4))
+
     for i, file in enumerate(files['data']):
         path = os.path.join(path_to_night,
                             '07sep100{}red.fits'.format(file))
         print(path)
         rss = koala_rss(path)
-        rss = apply_throughput(rss, throughput)
+        rss = Throughput.apply_throughput(rss, throughput)
         atm_ext_corr.get_atmospheric_extinction(
             airmass=rss.info['airmass'])
         rss = atm_ext_corr.apply(rss)
@@ -169,7 +158,7 @@ for galaxy, files in reduction_list.items():
                                        '07sep100{}red.fits'
                                        .format(files['offset'][0]))
             offset_rss = koala_rss(offset_path)
-            offset_rss = apply_throughput(offset_rss, throughput)
+            offset_rss = Throughput.apply_throughput(offset_rss, throughput)
             atm_ext_corr.get_atmospheric_extinction(
                 airmass=offset_rss.info['airmass'])
             offset_rss = atm_ext_corr.apply(offset_rss)
@@ -183,25 +172,23 @@ for galaxy, files in reduction_list.items():
         ax.plot(skymodel.rss.wavelength, skymodel.intensity, c='k')
         ax.plot(skymodel.rss.wavelength, skymodel.variance**0.5, c='r')
         ax.set_yscale('log')
-        fig.savefig(os.path.join(
-                output, 'sky_{}.png'.format(rss.info['name'])),
-                bbox_inches='tight')
-        plt.close(fig)
+        # fig.savefig(os.path.join(
+        #         output, 'sky_{}.png'.format(rss.info['name'])),
+        #         bbox_inches='tight')
+        pdf.savefig()
+        plt.close()
 
         adr_x, adr_y, fig = get_adr(rss, plot=True)
         adr_x_set.append(adr_x)
         adr_y_set.append(adr_y)
-        fig.savefig(os.path.join(
-            output, 'adr_{}.png'.format(rss.info['name'])),
-            bbox_inches='tight')
-
+        # fig.savefig(os.path.join(
+        #     output, 'adr_{}.png'.format(rss.info['name'])),
+        #     bbox_inches='tight')
+        pdf.savefig()
         science_rss.append(rss)
-        axs[i].scatter(rss.info['fib_ra_offset'], rss.info['fib_dec_offset'],
-                       c=np.nanmedian(rss.intensity_corrected, axis=1),
-                       cmap='nipy_spectral')
-    fig.savefig(os.path.join(output, '{}_rss_fibre_maps.png'.format(galaxy)),
-                bbox_inches='tight')
-    plt.close(fig)
+        # axs[i].scatter(rss.info['fib_ra_offset'], rss.info['fib_dec_offset'],
+        #                c=np.nanmedian(rss.intensity_corrected, axis=1),
+        #                cmap='nipy_spectral')
     # -------------------------------------------------------------------------
     # Registration and Cubing
 
@@ -246,7 +233,8 @@ for galaxy, files in reduction_list.items():
              mean_variance**0.5 / calibration['response'](cube.wavelength),
              lw=0.5)
     plt.yscale('log')
-    fig.savefig(os.path.join(output, '{}_gal.png'.format(galaxy)))
-    plt.close(fig)
+    # fig.savefig(os.path.join(output, '{}_gal.png'.format(galaxy)))
+    pdf.savefig()
+    plt.close()
 
-
+pdf.close()
