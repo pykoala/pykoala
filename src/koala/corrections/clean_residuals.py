@@ -451,7 +451,7 @@ def extreme_negatives(rss,
     """
     if plot:
         correction_map = g / self.intensity_corrected  # / g
-        self.RSS_image(image=correction_map, cmap="binary_r", title=" - Correction map")
+        self.RSS_image(image=correction_map, cmap="binary_r", title=" - CorrectionBase map")
     """
 
     return rss_out

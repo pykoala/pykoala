@@ -44,7 +44,7 @@ class RSS(DataContainer):
     mask : numpy.ndarray(float)
         Bit mask that records the pixels with individual corrections performed 
         by the various processes:
-            Mask value      Correction
+            Mask value      CorrectionBase
             -----------     ----------------
             1               Readed from file
             2               Blue edge

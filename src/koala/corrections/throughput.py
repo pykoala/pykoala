@@ -14,7 +14,7 @@ from scipy.interpolate import NearestNDInterpolator
 # =============================================================================
 # Modular
 from koala.ancillary import vprint
-from koala.corrections.correction import Correction
+from koala.corrections.correction import CorrectionBase
 
 # Original
 from koala.plot_plot import plot_plot
@@ -24,7 +24,7 @@ from koala.plot_plot import plot_plot
 TODO: REFACTOR AND CONVERT FUNCTIONS INTO A CORRECTION OBJECT
 """
 
-class Throughput(Correction):
+class Throughput(CorrectionBase):
     
 
         def create_throughput_from_flat(rss_set, clear_nan=True):
@@ -130,10 +130,8 @@ class Throughput(Correction):
 
             return throughput_2D
 
-        def apply_throughput(rss, 
-                  throughput,
-                  verbose=False,
-                  plot=True):
+        @staticmethod
+        def apply(rss, throughput, verbose=False, plot=True):
             """
             Apply throughput_2D using the information of a variable or a fits file.
             """
@@ -147,24 +145,11 @@ class Throughput(Correction):
                 vprint("\n> Applying 2D throughput correction")
 
             except:
-                print("Warning: Incorrect throughput specified. Correction not applied")
-            
-            """
-            if plot:
-                print("\n> Plotting map BEFORE correcting throughput:")
-                self.RSS_image()
-            """
-            
+                print("Warning: Incorrect throughput specified. CorrectionBase not applied")
 
             rss_out.intensity_corrected = rss_out.intensity_corrected / throughput        
             rss_out.variance_corrected = rss_out.variance_corrected / throughput**2
             
-            
-            """
-            if plot:
-                print("  Plotting map AFTER correcting throughput:")
-                self.RSS_image()
-            """
             return rss_out
 
 

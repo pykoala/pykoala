@@ -37,7 +37,10 @@ from koala.corrections.sky import SkyFromObject, SkyOffset
 from koala.register.registration import register_stars
 from koala.cubing import build_cube
 # Extra
+from koala.corrections.flux_calibration import FluxCalibration
 from reduce_calib_stars import reduce_calibration_stars
+
+from report import report_cube
 # =============================================================================
 # Night info
 # =============================================================================
@@ -108,14 +111,6 @@ calibration = reduce_calibration_stars(stars_rss, star_names, throughput,
 # %%===========================================================================
 # Science data
 # =============================================================================
-file_n = [
-    [29, 30, 31, 32],
-    [53, 54, 55],
-    [57, 58, 59],
-    [61, 62],
-    [63, 64, 65]
-    ]
-
 
 with open("list_to_reduce.yml", "r") as stream:
     try:
@@ -136,7 +131,7 @@ for galaxy, files in reduction_list.items():
                             '07sep100{}red.fits'.format(file))
         print(path)
         rss = koala_rss(path)
-        rss = Throughput.apply_throughput(rss, throughput)
+        rss = Throughput.apply(rss, throughput)
         atm_ext_corr.get_atmospheric_extinction(
             airmass=rss.info['airmass'])
         rss = atm_ext_corr.apply(rss)
@@ -147,18 +142,19 @@ for galaxy, files in reduction_list.items():
 
         # Sky emission
         if len(files['offset']) == 0:
-            skymodel = SkyFromObject(rss)
-            pct_sky = skymodel.estimate_sky()
+            # skymodel = SkyFromObject(rss)
+            # pct_sky = skymodel.estimate_sky()
             # mode_sky, h_sky, c_bins = skymodel.estimate_sky_hist()
-            skymodel.intensity = pct_sky[1]
-            skymodel.variance = (pct_sky[1] - pct_sky[0])**2
-            rss = skymodel.substract_sky(rss)
+            # skymodel.intensity = pct_sky[1]
+            # skymodel.variance = (pct_sky[1] - pct_sky[0])**2
+            # rss = skymodel.substract_sky(rss)
+            pass
         else:
             offset_path = os.path.join(path_to_night,
                                        '07sep100{}red.fits'
                                        .format(files['offset'][0]))
             offset_rss = koala_rss(offset_path)
-            offset_rss = Throughput.apply_throughput(offset_rss, throughput)
+            offset_rss = Throughput.apply(offset_rss, throughput)
             atm_ext_corr.get_atmospheric_extinction(
                 airmass=offset_rss.info['airmass'])
             offset_rss = atm_ext_corr.apply(offset_rss)
@@ -169,8 +165,10 @@ for galaxy, files in reduction_list.items():
         fig = plt.figure()
         ax = fig.add_subplot(111)
         ax.set_title("Sky Model for {}".format(rss.info['name']))
-        ax.plot(skymodel.rss.wavelength, skymodel.intensity, c='k')
-        ax.plot(skymodel.rss.wavelength, skymodel.variance**0.5, c='r')
+        ax.plot(skymodel.rss.wavelength, skymodel.intensity, c='k', label='Sky')
+        ax.plot(skymodel.rss.wavelength, skymodel.variance**0.5, c='r',
+                label='Sky err')
+        ax.legend()
         ax.set_yscale('log')
         # fig.savefig(os.path.join(
         #         output, 'sky_{}.png'.format(rss.info['name'])),
@@ -179,16 +177,11 @@ for galaxy, files in reduction_list.items():
         plt.close()
 
         adr_x, adr_y, fig = get_adr(rss, plot=True)
+
         adr_x_set.append(adr_x)
         adr_y_set.append(adr_y)
-        # fig.savefig(os.path.join(
-        #     output, 'adr_{}.png'.format(rss.info['name'])),
-        #     bbox_inches='tight')
-        pdf.savefig()
         science_rss.append(rss)
-        # axs[i].scatter(rss.info['fib_ra_offset'], rss.info['fib_dec_offset'],
-        #                c=np.nanmedian(rss.intensity_corrected, axis=1),
-        #                cmap='nipy_spectral')
+
     # -------------------------------------------------------------------------
     # Registration and Cubing
 
@@ -209,31 +202,16 @@ for galaxy, files in reduction_list.items():
                       # reference_pa=science_rss[0].info['pos_angle'],
                       reference_coords=(0., 0.),
                       reference_pa=0.,
-                      cube_size_arcsec=(50, 50),
+                      cube_size_arcsec=(50, 30),
                       pixel_size_arcsec=.5,
                       adr_x_set=adr_x_set, adr_y_set=adr_y_set)
+    cube.info['name'] = 'gal'
+    FluxCalibration.apply(calibration['response'](cube.wavelength),
+                          cube)
     cube.to_fits(fname=os.path.join(output, '{}_gal.fits.gz'.format(galaxy)))
 
-    # science_cubes.append(cube)
-
-    collapsed_cube = np.nanmean(cube.intensity_corrected, axis=0)
-    mean_spectra = np.nansum(cube.intensity_corrected, axis=(1, 2))
-    mean_variance = np.nansum(cube.variance_corrected, axis=(1, 2))
-    p90_spectra = np.nanpercentile(cube.intensity_corrected, 90, axis=(1, 2))
-
-    fig = plt.figure(figsize=(10, 5))
-    plt.subplot(121)
-    plt.imshow(collapsed_cube, origin='lower', cmap='nipy_spectral',
-               interpolation='none')
-    plt.subplot(122)
-    plt.plot(cube.wavelength,
-             mean_spectra / calibration['response'](cube.wavelength),
-             lw=0.5)
-    plt.plot(cube.wavelength,
-             mean_variance**0.5 / calibration['response'](cube.wavelength),
-             lw=0.5)
-    plt.yscale('log')
-    # fig.savefig(os.path.join(output, '{}_gal.png'.format(galaxy)))
+    # science_cubes.append(cube)     
+    fig = report_cube(cube)
     pdf.savefig()
     plt.close()
 

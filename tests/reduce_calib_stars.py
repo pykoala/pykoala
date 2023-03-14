@@ -52,7 +52,7 @@ def reduce_calibration_stars(rss_set, star_names, throughput,
     for i in range(n_stars):
         for j in range(len(rss_set[i])):
             # Apply throughput
-            rss_set[i][j] = Throughput.apply_throughput(rss_set[i][j], throughput)
+            rss_set[i][j] = Throughput.apply(rss_set[i][j], throughput)
             # Atmospheric Extinction
             atm_ext_corr.get_atmospheric_extinction(
                 airmass=rss_set[i][j].info['airmass'])

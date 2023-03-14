@@ -43,7 +43,7 @@ class MaskBitError(MaskError):
 
 class CorrectionClassError(Exception):
     """
-    Exception class raised for Correction classes
+    Exception class raised for CorrectionBase classes
     """
     def __init__(self, target_class, wrong_target):
         self.message = "ERROR: Target class {} does not match input {}".format(target_class, wrong_target)

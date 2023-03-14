@@ -20,10 +20,10 @@ import os
 # Modular
 #from koala.ancillary import vprint
 from koala.rss import RSS
-from koala.corrections.correction import Correction
+from koala.corrections.correction import CorrectionBase
 
 # =============================================================================
-class AtmosphericExtinction(Correction):
+class AtmosphericExtinction(CorrectionBase):
     """#TODO"""
 
     def __init__(self, extinction_correction=None, extinction_file=None, observatory_extinction=None, airmass=None):

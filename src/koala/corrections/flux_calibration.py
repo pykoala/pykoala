@@ -22,7 +22,7 @@ import os
 # KOALA packages
 # =============================================================================
 from koala.exceptions.exceptions import ClassError, FitError, CalibrationError
-from koala.corrections.correction import Correction
+from koala.corrections.correction import CorrectionBase
 from koala.rss import RSS
 from koala.cubing import Cube
 from koala.ancillary import centre_of_mass, cumulative_1d_moffat, growth_curve_1d, flux_conserving_interpolation
@@ -38,7 +38,7 @@ apply response
 """
 
 
-class FluxCalibration(Correction):
+class FluxCalibration(CorrectionBase):
     """
     This class contains the methods for extracting and applying an absolute flux calibration.
     """
@@ -310,13 +310,15 @@ class FluxCalibration(Correction):
         if data_container.is_corrected('flux_calibration'):
             raise CalibrationError()
         else:
-            ss = [None] * data_container.intensity_corrected.ndim
-            ss[0] = slice(None)
-            data_container.intensity_corrected /= response[ss]
+            response = np.expand_dims(
+                response, axis=tuple(
+                    range(1, data_container.intensity_corrected.ndim))) 
+            data_container.intensity_corrected /= response
+            data_container.variance_corrected /= response**2
             data_container.log['corrections']['flux_calibration'] = 'applied'
 
     def save_response(self, fname, response, wavelength, units=None):
-        # TODO Include R units in header
+        # TODO Include response units in header
         if units is None:
             units = self.calib_units
         np.savetxt(fname, np.array([wavelength, response]).T,

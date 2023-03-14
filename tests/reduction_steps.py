@@ -145,7 +145,7 @@ for rss in science_rss:
 plot_change(rss, title='Atm Corr')
 
 # %%===========================================================================
-# Telluric Correction
+# Telluric CorrectionBase
 # =============================================================================
 telluric_correction = Tellurics(std_star_1_rss[0])
 telluric_correction.telluric_from_model(plot=True)

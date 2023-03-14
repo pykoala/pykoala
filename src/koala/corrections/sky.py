@@ -21,7 +21,7 @@ from koala.ancillary import vprint
 # Modular
 from koala.ancillary import vprint
 from koala.exceptions.exceptions import TelluricNoFileError
-from koala.corrections.correction import Correction
+from koala.corrections.correction import CorrectionBase
 from koala.rss import RSS
 from koala.cubing import Cube
 # Original
@@ -287,9 +287,9 @@ class SkyFromObject(SkyModel):
 
 
 # =============================================================================
-# Telluric Correction
+# Telluric CorrectionBase
 # =============================================================================
-class Tellurics(Correction):
+class Tellurics(CorrectionBase):
     """
     Telluric correction produced by atmosphere absorption. # TODO
     """

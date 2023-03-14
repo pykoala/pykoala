@@ -1898,7 +1898,7 @@ def get_continuum_in_range(w,s,low_low, low_high, high_low, high_high,
         
     
         if plot:
-            ptitle = "Correction in range  "+np.str(np.round(low_low,2))+" - [ "+np.str(np.round(low_high,2))+" - "+np.str(np.round(high_low,2))+" ] - "+np.str(np.round(high_high,2))
+            ptitle = "CorrectionBase in range  "+np.str(np.round(low_low,2))+" - [ "+np.str(np.round(low_high,2))+" - "+np.str(np.round(high_low,2))+" ] - "+np.str(np.round(high_high,2))
             plot_plot(w_fit,[y_fit,y_fitted,y_fitted-highlimit,y_fitted-lowlimit,corrected_s_], color=["r","b", "black","black","green"], alpha=[0.3,0.7,0.2,0.2,0.5],xmin=low_low-40, xmax=high_high+40,vlines=[low_low,low_high,high_low,high_high],ptitle=ptitle, ylabel="Normalized flux")  
             #plot_plot(w,[s,corrected_s],xmin=low_low-40, xmax=high_high+40,vlines=[low_low,low_high,high_low,high_high])
     except Exception:

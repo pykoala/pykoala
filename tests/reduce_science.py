@@ -107,7 +107,7 @@ for i in range(len(science_rss)):
 atmext_intensity = science_rss[0].intensity_corrected.copy()
 
 # %%===========================================================================
-# Telluric Correction
+# Telluric CorrectionBase
 # =============================================================================
 
 for i in range(len(science_rss)):
