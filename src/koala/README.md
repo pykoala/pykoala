@@ -50,6 +50,9 @@ Instrument-dedicated classes for reading the data
 
 
 ### *Corrections*
+
+All the corrections applied to the data are build upon the Correction base class.
+
 #### Fibre Throughput
 #### Atmospheric corrections
 - AtmosphericExtinction
