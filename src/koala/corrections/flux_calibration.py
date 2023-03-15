@@ -1,13 +1,8 @@
-"""
-Module containing the cube class... TODO: Add proper description.
-"""
-
 # =============================================================================
 # Basics packages
 # =============================================================================
 import numpy as np
 from scipy.optimize import curve_fit
-from scipy.interpolate import UnivariateSpline
 from scipy.ndimage import gaussian_filter1d
 from scipy.interpolate import interp1d
 import copy
@@ -27,21 +22,14 @@ from koala.rss import RSS
 from koala.cubing import Cube
 from koala.ancillary import centre_of_mass, cumulative_1d_moffat, growth_curve_1d, flux_conserving_interpolation
 
-"""
-main methods
-
-extract_spectra: DONE
-read_response_from_file: DONE
-extract response curve: DONE
-apply response
-
-"""
-
 
 class FluxCalibration(CorrectionBase):
     """
     This class contains the methods for extracting and applying an absolute flux calibration.
     """
+    name = "FluxCalibration"
+    target = (Cube.__class__, RSS.__class__)
+
     def __init__(self, data_container=None, extract_spectra=None, extract_args=None, ):
         print("[Flux Calib.] Initialising Flux Calibration (Spectral Throughput)")
         self.calib_spectra = None
@@ -49,11 +37,31 @@ class FluxCalibration(CorrectionBase):
         self.calib_units = 1e-16
 
     def auto(self, data, calib_stars, extract_args=None, response_params=None, save=True, fnames=None):
-        """Automatic calibration process for extracting the calibration response curve from a set of stars"""
+        """Automatic calibration process for extracting the calibration response curve from a set of stars.
+
+        Parameters
+        ----------
+        - data: (list) List of DataContainers corresponding to standard stars.
+        - calib_stars: (list) List of stellar names. This names will be used to read
+        the default files in the spectrophotometric_stars library.
+        - extract_args: (dict) Dictionary containing the parameters used for extracting
+        the stellar flux.
+        The default dictionary corresponds to:
+            {wave_rage: None, # Wavelength range used to derive the response function
+            wave_window: 30, # Wavelength window in AA used to average the flux
+            plot: False,  # If True, it will provide a plot showing the extraction results
+            bounds=([0, 0, 0], [np.inf, np.inf, np.inf])  # Bounds used for fitting
+            }
+
+        Returns
+        - flux_cal_results: (dict)
+        """
         if extract_args is None:
+            # Default extraction arguments
             extract_args = dict(wave_range=None, wave_window=30, plot=False,
                                 bounds=([0, 0, 0], [np.inf, np.inf, np.inf]))
         if response_params is None:
+            # Default response curve parameters
             response_params = dict(pol_deg=5, plot=False)
         if save and fnames is None:
             fnames = calib_stars
@@ -312,9 +320,9 @@ class FluxCalibration(CorrectionBase):
         else:
             response = np.expand_dims(
                 response, axis=tuple(
-                    range(1, data_container.intensity_corrected.ndim))) 
+                    range(1, data_container.intensity_corrected.ndim)))
             data_container.intensity_corrected /= response
-            data_container.variance_corrected /= response**2
+            data_container.variance_corrected /= response ** 2
             data_container.log['corrections']['flux_calibration'] = 'applied'
 
     def save_response(self, fname, response, wavelength, units=None):
@@ -323,6 +331,6 @@ class FluxCalibration(CorrectionBase):
             units = self.calib_units
         np.savetxt(fname, np.array([wavelength, response]).T,
                    header='Spectral Response curve \n wavelength (AA), R ({} counts / [erg/s/cm2/AA])'
-                   .format(1/units))
+                   .format(1 / units))
 
 # Mr Krtxo \(ﾟ▽ﾟ)/

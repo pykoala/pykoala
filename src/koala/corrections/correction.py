@@ -33,7 +33,7 @@ class CorrectionBase(ABC):
         raise NotImplementedError("Each class needs to implement this method")
 
     def check_target(self, target):
-        if target.__class__ is not self.target_class:
-            raise CorrectionClassError(self.target_class, target.__class__)
+        if target.__class__ is not self.target:
+            raise CorrectionClassError(self.target, target.__class__)
         else:
             return

@@ -293,6 +293,9 @@ class Tellurics(CorrectionBase):
     """
     Telluric correction produced by atmosphere absorption. # TODO
     """
+    name = "TelluricCorretion"
+    target = RSS
+
     def __init__(self,
                  data_container=None,
                  telluric_correction_file=None,

@@ -18,18 +18,22 @@ import os
 # KOALA packages
 # =============================================================================
 # Modular
-#from koala.ancillary import vprint
+# from koala.ancillary import vprint
 from koala.rss import RSS
 from koala.corrections.correction import CorrectionBase
 
+
 # =============================================================================
 class AtmosphericExtinction(CorrectionBase):
-    """#TODO"""
+    """Atmospheric Extinction Correction.
+
+    # TODO: Fill doc.
+    """
+    name = "AtmosphericExtinction"
+    target = RSS
 
     def __init__(self, extinction_correction=None, extinction_file=None, observatory_extinction=None, airmass=None):
-        """#TODO"""
         print("[AtmosphericExtinction] Initialising Atm ext. correction model.")
-        super().__init__(target_class=RSS)
         # Initialise variables
         self.extinction_correction_model = None
         self.extinction_correction = extinction_correction
@@ -51,7 +55,7 @@ class AtmosphericExtinction(CorrectionBase):
                                               '../input_data/observatory_extinction/ssoextinct.dat')
             self.observatory_extinction = path_to_extinction
         print("[AtmosphericExtinction] Computing extinction at airmass {:.1f} based on model:\n    {}".format(
-              airmass, path_to_extinction))
+            airmass, path_to_extinction))
         wave, extinction_curve = np.loadtxt(path_to_extinction, unpack=True)
         extinction = 10 ** (0.4 * airmass * extinction_curve)
         # Make fit
@@ -71,9 +75,10 @@ class AtmosphericExtinction(CorrectionBase):
             extinction_correction = self.extinction_correction
             comment = "- Data corrected for extinction using provided data"
         rss_out.intensity_corrected *= extinction_correction[np.newaxis, :]
-        rss_out.variance_corrected *= extinction_correction[np.newaxis, :]**2
-        rss_out.log['extinction'] = comment
+        rss_out.variance_corrected *= extinction_correction[np.newaxis, :] ** 2
+        rss_out.log[self.name] = comment
         return rss_out
+
 
 # =============================================================================
 # Atmospheric Differential Refraction
@@ -214,4 +219,3 @@ def get_adr(data_container, max_adr=0.5, pol_deg=2, plot=False):
 
 #     else:
 #         if verbose: print(" NOTHING APPLIED !!!")
-
