@@ -28,7 +28,7 @@ import copy
 # Disable some annoying warnings
 import warnings
 
-from koala.plot_plot import plot_plot, basic_statistics
+from koala.plotting.plot_plot import plot_plot, basic_statistics
 
 warnings.simplefilter('ignore', np.RankWarning)
 warnings.simplefilter(action='ignore',category=FutureWarning)
