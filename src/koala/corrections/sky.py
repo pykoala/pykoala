@@ -48,7 +48,7 @@ def uves_sky_lines():
 class SkyModel(object):
     """
     Abstract class of Sky models
-
+    # TODO: Convert this class to a Correction object
     Attributes
     ----------
     intensity: 1D or 2D array, default None

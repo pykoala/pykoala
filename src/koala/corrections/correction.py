@@ -19,21 +19,10 @@ class CorrectionBase(ABC):
     def name(self, value):
         self._name = value
 
-    @property
     @abstractmethod
-    def target(self):
-        return self._target
-
-    @target.setter
-    def target(self, value):
-        self._target = value
-
-    @abstractmethod
-    def apply(self):
+    def apply(self, correction, data_container):
         raise NotImplementedError("Each class needs to implement this method")
 
-    def check_target(self, target):
-        if target.__class__ is not self.target:
-            raise CorrectionClassError(self.target, target.__class__)
-        else:
-            return
+    def corr_print(self, msg):
+        """Print a message."""
+        print("[Correction: {}] {}".format(self.name, msg))

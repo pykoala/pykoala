@@ -28,7 +28,6 @@ class FluxCalibration(CorrectionBase):
     This class contains the methods for extracting and applying an absolute flux calibration.
     """
     name = "FluxCalibration"
-    target = (Cube.__class__, RSS.__class__)
 
     def __init__(self, data_container=None, extract_spectra=None, extract_args=None, ):
         print("[Flux Calib.] Initialising Flux Calibration (Spectral Throughput)")

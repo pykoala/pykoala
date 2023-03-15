@@ -23,7 +23,7 @@ from koala.onedspec import fluxes
 from koala.onedspec import rebin_spec
 from koala.onedspec import rebin_spec_shift
 from koala.onedspec import fit_clip
-from koala.plot_plot import plot_plot
+from koala.plotting.plot_plot import plot_plot
 # =============================================================================
 
 

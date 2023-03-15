@@ -1,7 +1,6 @@
 """
 
-THIS SCRIPT IS DEPRECATED.
-
+# TODO: THIS SCRIPT IS DEPRECATED.
 """
 
 # =============================================================================
