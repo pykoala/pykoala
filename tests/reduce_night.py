@@ -142,11 +142,11 @@ for galaxy, files in reduction_list.items():
 
         # Sky emission
         if len(files['offset']) == 0:
-            # skymodel = SkyFromObject(rss)
-            # pct_sky = skymodel.estimate_sky()
-            # mode_sky, h_sky, c_bins = skymodel.estimate_sky_hist()
-            # skymodel.intensity = pct_sky[1]
-            # skymodel.variance = (pct_sky[1] - pct_sky[0])**2
+            skymodel = SkyFromObject(rss)
+            pct_sky = skymodel.estimate_sky()
+            mode_sky, h_sky, c_bins = skymodel.estimate_sky_hist()
+            skymodel.intensity = pct_sky[1]
+            skymodel.variance = (pct_sky[1] - pct_sky[0])**2
             # rss = skymodel.substract_sky(rss)
             pass
         else:
@@ -160,7 +160,7 @@ for galaxy, files in reduction_list.items():
             offset_rss = atm_ext_corr.apply(offset_rss)
             skymodel = SkyOffset(rss)
             skymodel.estimate_sky()
-            rss = skymodel.substract_sky(rss)
+            # rss = skymodel.substract_sky(rss)
 
         fig = plt.figure()
         ax = fig.add_subplot(111)

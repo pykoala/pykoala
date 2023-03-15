@@ -9,10 +9,10 @@ PyKOALA is a Python package to reduce KOALA+AAOmega integral field spectroscopy 
 
 PyKOALA has the following pre-requisites 
 
-```astropy```
-```matplotlib```
-
-```synphot```
+```
+astropy
+...
+```
 
 
 ## Installation
