@@ -48,11 +48,12 @@ def reduce_calibration_stars(rss_set, star_names, throughput,
     n_stars = len(rss_set)
     atm_ext_corr = AtmosphericExtinction()
     all_telluric_corrections = []
+    throughput_corr = Throughput()
     # Corrections -------------------------------------------------------------
     for i in range(n_stars):
         for j in range(len(rss_set[i])):
             # Apply throughput
-            rss_set[i][j] = Throughput.apply(rss_set[i][j], throughput)
+            rss_set[i][j] = throughput_corr.apply(throughput, rss_set[i][j])
             # Atmospheric Extinction
             atm_ext_corr.get_atmospheric_extinction(
                 airmass=rss_set[i][j].info['airmass'])

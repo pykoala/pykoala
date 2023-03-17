@@ -40,7 +40,11 @@ from koala.cubing import build_cube
 from koala.corrections.flux_calibration import FluxCalibration
 from reduce_calib_stars import reduce_calibration_stars
 
+# =============================================================================
+# QC
+# =============================================================================
 from report import report_cube
+from koala.plotting.qc_plot import qc_throughput, qc_cube
 # =============================================================================
 # Night info
 # =============================================================================
@@ -75,16 +79,11 @@ for file in reduction_flag_log.keys():
 
 # Create a master throughput
 
-throughput, throughput_std = Throughput.create_throughput_from_flat(throughput_rss,
-                                                         clear_nan=True)
+throughput_corr = Throughput()
+throughput, throughput_std = throughput_corr.create_throughput_from_flat(
+    throughput_rss, clear_nan=True)
 
-plt.figure(figsize=(8, 5))
-plt.subplot(121, title='Fibre Throughput')
-plt.imshow(throughput, cmap='nipy_spectral', vmin=0.8, vmax=1.2, aspect='auto')
-plt.colorbar(orientation='horizontal')
-plt.subplot(122, title='Fibre Throughput hist')
-plt.hist(throughput.flatten(), bins='auto', range=[0.5, 1.5])
-plt.ylabel("# pix")
+fig = qc_throughput(throughput)
 pdf.savefig()
 # plt.savefig(os.path.join(output, "fibre_throughput.png"), bbox_inches='tight')
 plt.close()
@@ -131,7 +130,7 @@ for galaxy, files in reduction_list.items():
                             '07sep100{}red.fits'.format(file))
         print(path)
         rss = koala_rss(path)
-        rss = Throughput.apply(rss, throughput)
+        rss = throughput_corr.apply(throughput, rss)
         atm_ext_corr.get_atmospheric_extinction(
             airmass=rss.info['airmass'])
         rss = atm_ext_corr.apply(rss)
@@ -154,7 +153,7 @@ for galaxy, files in reduction_list.items():
                                        '07sep100{}red.fits'
                                        .format(files['offset'][0]))
             offset_rss = koala_rss(offset_path)
-            offset_rss = Throughput.apply(offset_rss, throughput)
+            offset_rss = throughput_corr.apply(throughput, offset_rss)
             atm_ext_corr.get_atmospheric_extinction(
                 airmass=offset_rss.info['airmass'])
             offset_rss = atm_ext_corr.apply(offset_rss)
@@ -202,7 +201,7 @@ for galaxy, files in reduction_list.items():
                       # reference_pa=science_rss[0].info['pos_angle'],
                       reference_coords=(0., 0.),
                       reference_pa=0.,
-                      cube_size_arcsec=(50, 30),
+                      cube_size_arcsec=(30, 30),
                       pixel_size_arcsec=.5,
                       adr_x_set=adr_x_set, adr_y_set=adr_y_set)
     cube.info['name'] = 'gal'
@@ -211,7 +210,7 @@ for galaxy, files in reduction_list.items():
     cube.to_fits(fname=os.path.join(output, '{}_gal.fits.gz'.format(galaxy)))
 
     # science_cubes.append(cube)     
-    fig = report_cube(cube)
+    fig = qc_cube(cube)
     pdf.savefig()
     plt.close()
 
