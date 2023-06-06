@@ -179,7 +179,7 @@ def qc_registracion(rss_list, **kwargs):
         axs[i+1].scatter(rss.info['fib_ra_offset'],
                    rss.info['fib_dec_offset'],
                    c=np.nansum(rss.intensity_corrected, axis=1),
-                   marker='o', cmap='Grays_r',
+                   marker='o', cmap='Greys_r',
                    )
         axs[i+1].axvline(0, c='r', lw=0.5)
         axs[i + 1].axhline(0, c='r', lw=0.5)
