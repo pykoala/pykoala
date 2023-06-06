@@ -8,6 +8,13 @@
 
 ---------------------------------------------
 
+# PyKOALA: A multi-instrument tool for reducing Integral Field Spectroscopic Data
+
+
+---
+
+PyKOALA is a Python package to reduce KOALA+AAOmega integral field spectroscopy (IFS) data creating a data cube. It produces full calibrated (wavelength, flux and astrometry) data cubes ready for science.
+
 [KOALA][koala_website], the Kilofibre Optical AAT Lenslet Array, is a wide-field, high efficiency, integral field unit used by the 
 AAOmega spectrograph on the 3.9m AAT ([Anglo-Australian Telescope][aat_website]) at Siding Spring Observatory. **PyKOALA** is the forthcoming data reduction pipeline for 
 creating science-ready 3D data cubes using Raw Stacked Spectra (RSS) images created with [2dfdr][2dfdr_website].
@@ -16,7 +23,93 @@ creating science-ready 3D data cubes using Raw Stacked Spectra (RSS) images crea
 [aat_website]: https://www.aao.gov.au/about-us/AAT
 [2dfdr_website]: https://aat.anu.edu.au/science/instruments/current/AAOmega/reduction
 
-Helping to develop PyKOALA 
+
+---
+## Pre-requisites
+
+PyKOALA has the following pre-requisites 
+
+```
+astropy
+...
+```
+
+
+## Installation
+
+...
+
+
+## Package structure
+
+---
+
+### *Data containers*
+Represent the different types of data used by PyKOALA.
+- RSS
+- Cube
+#### Data Wrappers: Instrument-specific classes based on Data Containers for reading the data
+- koala_rss
+
+---
+
+### *Cubing*
+#### cubing.interpolate_fibre
+#### cubing.interpolate_rss
+#### cubing.build_cube
+
+### *Registration*
+#### registration.register_stars
+
+---
+
+
+### *Corrections*
+
+All the corrections applied to the data are build upon the Correction base class.
+
+#### Fibre Throughput
+#### Atmospheric corrections
+- AtmosphericExtinction
+- Atmospheric Differential Refraction (ADR)
+#### Sky
+- Sky substraction
+  - Sky continuum
+  - Sky emission lines
+- Telluric correction
+#### Flux calibration (Spectral throughput)
+#### Cleaning
+- Cosmics
+- NaN's
+- CCD edges
+
+#### Ancillary
+
+---
+
+## Basic reduction procedure
+
+---
+(See examples)
+
+### Reducing calibration star data
+
+- Read RSS data.
+- Apply fibre throughput.
+- Correct data for atmospheric extinction.
+- Correct data from telluric atmospheric absorption.
+- Substract sky (continuum + emission lines).
+- Build cube
+
+
+---
+
+## License and Acknowledgements
+
+...
+
+
+## Helping to develop PyKOALA 
 ---------------------------------------------
 1. Fork koala into your github account
 2. Clone your fork onto your laptop:
