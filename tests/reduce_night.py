@@ -195,16 +195,16 @@ for galaxy, files in reduction_list.items():
     register_stars(science_rss, moffat=False, plot=False, com_power=4)
 
     cube = build_cube(rss_set=science_rss,
-                      # reference_coords=(
+                      #reference_coords=(
                       #     science_rss[0].info['cen_ra'],
                       #     science_rss[0].info['cen_dec']),
-                      # reference_pa=science_rss[0].info['pos_angle'],
+                      #reference_pa=science_rss[0].info['pos_angle'],
                       reference_coords=(0., 0.),
                       reference_pa=0.,
-                      cube_size_arcsec=(30, 30),
+                      cube_size_arcsec=(30, 50),  # (dec, ra)
                       pixel_size_arcsec=.5,
                       adr_x_set=adr_x_set, adr_y_set=adr_y_set)
-    cube.info['name'] = 'gal'
+    cube.info['name'] = rss.info['name'].split(' ')[0]
     FluxCalibration.apply(calibration['response'](cube.wavelength),
                           cube)
     cube.to_fits(fname=os.path.join(output, '{}_gal.fits.gz'.format(galaxy)))

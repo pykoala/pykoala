@@ -82,6 +82,7 @@ def qc_cube(cube):
     # p_snr = np.nanpercentile(sn_pixel, pct, axis=(1, 2))
 
     fig = plt.figure(figsize=(10, 10))
+    plt.suptitle(cube.info['name'])
     gs = fig.add_gridspec(5, 4, wspace=0.15, hspace=0.25)
     # Maps -----
     wl_spaxel_idx = np.sort(np.random.randint(low=0,
@@ -96,7 +97,9 @@ def qc_cube(cube):
                   cmap='cividis')
     mapax = fig.add_subplot(gs[0, -1])
     mapax.set_title("Mean")
-    mapax.imshow(np.nanmean(cube.intensity_corrected, axis=0), aspect='auto',
+    mean_intensity = np.nanmean(cube.intensity_corrected, axis=0)
+    mean_instensity_pos = np.argsort(mean_intensity.flatten())
+    mapax.imshow(mean_intensity, aspect='auto',
                  origin='lower', cmap='cividis')
     # Spectra -------
     pos_col = ['purple', 'orange', 'cyan']
@@ -106,6 +109,9 @@ def qc_cube(cube):
     y_spaxel_idx = np.random.randint(low=0,
                                      high=cube.intensity_corrected.shape[2],
                                      size=3)
+    spaxel_entries = mean_instensity_pos.size // 100 * np.array([16, 50, 84])
+    x_spaxel_idx, y_spaxel_idx = np.unravel_index(spaxel_entries,
+                                                  shape=mean_intensity.shape)
     ax = fig.add_subplot(gs[1:3, :])
     for x_idx, y_idx, i in zip(x_spaxel_idx, y_spaxel_idx, range(3)):
         ax.plot(cube.wavelength, cube.intensity_corrected[:, x_idx, y_idx], lw=0.8,
@@ -115,13 +121,16 @@ def qc_cube(cube):
         ax.axvline(wl, color=wl_col[i], zorder=-1, alpha=0.8)
     # ax.set_yscale('log')
     ax.set_xlabel(r"Wavelength ($\AA$)")
+    ax.set_ylabel("Flux")
+    ax.set_yscale("log")
     # SNR ------------
     ax = fig.add_subplot(gs[3:5, :])
     for x_idx, y_idx, i in zip(x_spaxel_idx, y_spaxel_idx, range(3)):
         ax.plot(cube.wavelength,
                 cube.intensity_corrected[:, x_idx, y_idx] / cube.variance_corrected[:, x_idx, y_idx]**0.5, lw=0.8,
                 color=pos_col[i])
-
+    ax.set_ylabel("SNR/pix")
+    ax.set_xlabel(r"Wavelength ($\AA$)")
     # ax = fig.add_subplot(gs[0, :2])
     # ax.set_title('Collapsed cube')
     # ax.imshow(collapsed_cube, origin='lower', cmap='nipy_spectral',
@@ -150,5 +159,30 @@ def qc_cube(cube):
     # fig.subplots_adjust(wspace=0.3, hspace=0.2)
     return fig
 
+def qc_cubing(cube, ):
+    """..."""
 
+    pass
 
+def qc_registracion(rss_list, **kwargs):
+    n_rss = len(rss_list)
+    fig, axs = plt.subplots(nrows=1, ncols=n_rss+1,
+                            figsize=(4*n_rss + 1, 4))
+    axs[0].set_title("Input overlap")
+    cmap = plt.get_cmap('jet', n_rss)
+    for i, rss in enumerate(rss_list):
+        axs[0].scatter(rss.info['ori_fib_ra_offset'] + rss.info['ori_cen_ra'] * 3600,
+                   rss.info['ori_fib_dec_offset'] + rss.info['ori_cen_dec'] * 3600,
+                   marker='o', ec=cmap(i / (n_rss - 1)), c='none',
+                   #alpha=1/n_rss
+                   )
+        axs[i+1].scatter(rss.info['fib_ra_offset'],
+                   rss.info['fib_dec_offset'],
+                   c=np.nansum(rss.intensity_corrected, axis=1),
+                   marker='o', cmap='Grays_r',
+                   )
+        axs[i+1].axvline(0, c='r', lw=0.5)
+        axs[i + 1].axhline(0, c='r', lw=0.5)
+        axs[i + 1].set_xlabel("RA Offset (arcsec)")
+        axs[i + 1].set_xlabel("DEC Offset (arcsec)")
+    return fig

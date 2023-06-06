@@ -95,7 +95,10 @@ def reduce_calibration_stars(rss_set, star_names, throughput,
     star_cubes = []
 
     for i in range(n_stars):
-        register_stars(rss_set[i], moffat=False, plot=False)
+        fig = register_stars(rss_set[i], moffat=True, plot=True)
+        fig.savefig(os.path.join(output_path, "stars_registration.pdf"),
+                    bbox_inches='tight')
+        plt.close(fig)
 
         adr_corr_x = []
         adr_corr_y = []

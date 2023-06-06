@@ -14,15 +14,31 @@ from astropy.io import fits
 # KOALA packages
 # =============================================================================
 from koala.data_container import DataContainer
-
+from scipy.special import erf
 
 # -------------------------------------------
 # Fibre Interpolation and cube reconstruction
 # -------------------------------------------
 
+def gaussian_kernel(z, norm=False):
+    """Cumulative gaussian kernel function."""
+    c = 0.5 * (1 + erf(z / np.sqrt(2)))
+    w = np.diff(c)
+    if norm:
+        w /= np.sum(w)
+    return w
+
+def cubic_kernel(z, norm=False):
+    c = (3. * z - z ** 3 + 2.) / 4
+    w = np.diff(c)
+    if norm:
+        w /= np.sum(w)
+    return w
+
 def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
                       offset_cols, offset_rows, pixel_size, kernel_size_pixels,
-                      adr_x=None, adr_y=None, adr_pixel_frac=0.05):
+                      adr_x=None, adr_y=None, adr_pixel_frac=0.05,
+                      kernel=cubic_kernel):
 
     """ Interpolates fibre spectra and variance to data cube.
 
@@ -39,9 +55,9 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
     cube_weight: (k, n, m) np.ndarray (float)
         Cube to store fibre spectral weights.
     offset_cols: int
-        offset columns (m) with respect to Cube.
+        offset columns pixels (m) with respect to Cube.
     offset_rows: int
-        offset rows (n) with respect to Cube.
+        offset rows pixels (n) with respect to Cube.
     pixel_size: float
         Cube pixel size in arcseconds.
     kernel_size_pixels: float
@@ -63,70 +79,80 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
     cube_weight:
         Original datacube weights with the fibre data interpolated.
     """
-    if adr_x is None:
+    if adr_x is None and adr_y is None:
         adr_x = np.zeros_like(fib_spectra)
-    if adr_y is None:
         adr_y = np.zeros_like(fib_spectra)
-    cube_shape = cube.shape
+        spectral_window = 0
+    else:
+        # Estimate spectral window
+        spectral_window = int(np.min(
+            (adr_pixel_frac / np.abs(adr_x[0] - adr_x[-1]),
+             adr_pixel_frac / np.abs(adr_y[0] - adr_y[-1]))
+        ) * fib_spectra.size)
+    if spectral_window == 0:
+        spectral_window = fib_spectra.size
     # Set NaNs to 0
-    bad_wavelengths = np.isnan(fib_spectra)
+    bad_wavelengths = ~np.isfinite(fib_spectra)
     fib_spectra[bad_wavelengths] = 0.
     ones = np.ones_like(fib_spectra)
     ones[bad_wavelengths] = 0.
-    # Estimate spectral window
-    spectral_window = int(np.min(
-        (adr_pixel_frac / np.abs(adr_x[0] - adr_x[-1]),
-         adr_pixel_frac / np.abs(adr_y[0] - adr_y[-1]))
-                             ) * fib_spectra.size)
-    if spectral_window == 0:
-        spectral_window = fib_spectra.size
-    # Loop over wavelength
+
+    # Loop over wavelength pixels
     for wl_range in range(0, fib_spectra.size, spectral_window):
         # ADR correction for spectral window
         median_adr_x = np.nanmedian(adr_x[wl_range: wl_range + spectral_window])
         median_adr_y = np.nanmedian(adr_y[wl_range: wl_range + spectral_window])
-        # Kernel for columns (x)
-        kernel_centre_x = .5 * cube_shape[2] + offset_cols - median_adr_x / pixel_size
-        x_min = int(kernel_centre_x - kernel_size_pixels)
-        x_max = int(kernel_centre_x + kernel_size_pixels) + 1
-        n_points_x = x_max - x_min
-        x = np.linspace(x_min - kernel_centre_x, x_max - kernel_centre_x, n_points_x) / kernel_size_pixels
-        # Ensure weight normalization
-        x[0] = -1.
-        x[-1] = 1.
-        weight_x = np.diff((3. * x - x ** 3 + 2.) / 4)
-        # Same for rows (y)
-        kernel_centre_y = .5 * cube_shape[1] + offset_rows - median_adr_y / pixel_size
-        y_min = int(kernel_centre_y - kernel_size_pixels)
-        y_max = int(kernel_centre_y + kernel_size_pixels) + 1
-        n_points_y = y_max - y_min
-        y = np.linspace(y_min - kernel_centre_y, y_max - kernel_centre_y, n_points_y) / kernel_size_pixels
-        y[0] = -1.
-        y[-1] = 1.
-        weight_y = np.diff((3. * y - y ** 3 + 2.) / 4)
 
-        if x_min < 0 or x_max > cube_shape[2] + 1 or y_min < 0 or y_max > cube_shape[1] + 1:
+        # Kernel for columns (x)
+        kernel_centre_x = .5 * cube.shape[2] + offset_cols - median_adr_x / pixel_size
+        x_min = max(int(kernel_centre_x - kernel_size_pixels), 0)
+        x_max = min(int(kernel_centre_x + kernel_size_pixels) + 1, cube.shape[2] + 1)
+        # Kernel for rows (y)
+        n_points_x = x_max - x_min
+        kernel_centre_y = .5 * cube.shape[1] + offset_rows - median_adr_y / pixel_size
+        y_min = max(int(kernel_centre_y - kernel_size_pixels), 0)
+        y_max = min(int(kernel_centre_y + kernel_size_pixels) + 1, cube.shape[1] + 1)
+        n_points_y = y_max - y_min
+
+        if (n_points_x < 1) | (n_points_y < 1):
+            # print("OUT FOV")
             continue
-            # TODO: I'm not sure if it's correct...
-            # print("**** WARNING **** : Spectra outside field of view:", x_min, kernel_centre_x, x_max)
-            # print("                                                 :", y_min, kernel_centre_y, y_max)
-        else:
-            # Kernel weight matrix
-            w = weight_y[np.newaxis, :, np.newaxis] * weight_x[np.newaxis, np.newaxis, :]
-            # Add spectra to cube
-            cube[wl_range: wl_range + spectral_window, y_min:y_max - 1, x_min:x_max - 1] += (
-                    fib_spectra[wl_range: wl_range + spectral_window, np.newaxis, np.newaxis]
-                    * w)
-            cube_var[wl_range: wl_range + spectral_window, y_min:y_max - 1, x_min:x_max - 1] += (
-                    fib_variance[wl_range: wl_range + spectral_window, np.newaxis, np.newaxis]
-                    * w)
-            cube_weight[wl_range: wl_range + spectral_window, y_min:y_max - 1, x_min:x_max - 1] += (
-                    ones[wl_range: wl_range + spectral_window, np.newaxis, np.newaxis]
-                    * w)
+
+        x = np.linspace(x_min - kernel_centre_x, x_max - kernel_centre_x,
+                        n_points_x) / kernel_size_pixels
+        y = np.linspace(y_min - kernel_centre_y, y_max - kernel_centre_y,
+                        n_points_y) / kernel_size_pixels
+        # Ensure weight normalization
+        if x_min > 0:
+            x[0] = -1.
+        if x_max < cube.shape[2] + 1:
+            x[-1] = 1.
+        if y_min > 0:
+            y[0] = -1.
+        if y_max < cube.shape[1] + 1:
+            y[-1] = 1.
+
+        weight_x = kernel(x)
+        weight_y = kernel(y)
+        #weight_x = np.diff((3. * x - x ** 3 + 2.) / 4)
+        #weight_y = np.diff((3. * y - y ** 3 + 2.) / 4)
+
+        # Kernel weight matrix
+        w = weight_y[np.newaxis, :, np.newaxis] * weight_x[np.newaxis, np.newaxis, :]
+        # Add spectra to cube
+        cube[wl_range: wl_range + spectral_window, y_min:y_max - 1, x_min:x_max - 1] += (
+                fib_spectra[wl_range: wl_range + spectral_window, np.newaxis, np.newaxis]
+                * w)
+        cube_var[wl_range: wl_range + spectral_window, y_min:y_max - 1, x_min:x_max - 1] += (
+                fib_variance[wl_range: wl_range + spectral_window, np.newaxis, np.newaxis]
+                * w)
+        cube_weight[wl_range: wl_range + spectral_window, y_min:y_max - 1, x_min:x_max - 1] += (
+                ones[wl_range: wl_range + spectral_window, np.newaxis, np.newaxis]
+                * w)
     return cube, cube_var, cube_weight
 
 
-def interpolate_rss(rss, pixel_size_arcsec=0.7, kernel_size_arcsec=1.1,
+def interpolate_rss(rss, pixel_size_arcsec=0.7, kernel_size_arcsec=2.0,
                     cube_size_arcsec=None, datacube=None,
                     datacube_var=None, datacube_weight=None,
                     adr_x=None, adr_y=None):
@@ -166,11 +192,12 @@ def interpolate_rss(rss, pixel_size_arcsec=0.7, kernel_size_arcsec=1.1,
     kernel_size_pixels = kernel_size_arcsec / pixel_size_arcsec
     # Loop over all RSS fibres
     for fibre in range(rss.intensity_corrected.shape[0]):
-        offset_rows = rss.info['fib_dec_offset'][fibre] / pixel_size_arcsec
-        offset_cols = rss.info['fib_ra_offset'][fibre] / pixel_size_arcsec
+        offset_rows = rss.info['fib_dec_offset'][fibre] / pixel_size_arcsec  # pixel offset
+        offset_cols = rss.info['fib_ra_offset'][fibre] / pixel_size_arcsec   # pixel offset
         # Interpolate fibre to cube
         datacube, datacube_var, datacube_weight = interpolate_fibre(
-            fib_spectra=rss.intensity_corrected[fibre].copy(), fib_variance=rss.variance_corrected[fibre].copy(),
+            fib_spectra=rss.intensity_corrected[fibre].copy(),
+            fib_variance=rss.variance_corrected[fibre].copy(),
             cube=datacube, cube_var=datacube_var, cube_weight=datacube_weight,
             offset_cols=offset_cols, offset_rows=offset_rows, pixel_size=pixel_size_arcsec,
             kernel_size_pixels=kernel_size_pixels, adr_x=adr_x, adr_y=adr_y)
@@ -178,7 +205,7 @@ def interpolate_rss(rss, pixel_size_arcsec=0.7, kernel_size_arcsec=1.1,
 
 
 def build_cube(rss_set, reference_coords, cube_size_arcsec, reference_pa=0,
-               kernel_size_arcsec=1.1, pixel_size_arcsec=0.7,
+               kernel_size_arcsec=2.0, pixel_size_arcsec=0.7,
                adr_x_set=None, adr_y_set=None, **cube_info):
                
     """Create a Cube from a set of Raw Stacked Spectra (RSS).
@@ -207,20 +234,20 @@ def build_cube(rss_set, reference_coords, cube_size_arcsec, reference_pa=0,
          Cube created by interpolating the set of RSS.
     """
     print('[Cubing] Starting cubing process')
-    #Use defined cube size to generated number of spaxel columns and rows
+    # Use defined cube size to generated number of spaxel columns and rows
     n_cols = int(cube_size_arcsec[1] / pixel_size_arcsec)
     n_rows = int(cube_size_arcsec[0] / pixel_size_arcsec)
-    #Create empty cubes for data, variance and weights - these will be filled and returned 
+    # Create empty cubes for data, variance and weights - these will be filled and returned
     datacube = np.zeros((rss_set[0].wavelength.size, n_rows, n_cols))
     datacube_var = np.zeros_like(datacube)
     datacube_weight = np.zeros_like(datacube)
-
-    """What does this mask do?"""
-    rss_mask = np.zeros((len(rss_set), *datacube.shape), dtype=bool)
-    #"Empty" array that will be used to store exposure times
+    # Create an RSS mask that will contain the contribution of each RSS in the datacube
+    rss_mask = np.zeros((len(rss_set), *datacube.shape))
+    # "Empty" array that will be used to store exposure times
     exposure_times = np.zeros((len(rss_set)))
 
-    """what is adr_x_set - this is per"""
+    # For each RSS two arrays containing the ADR over each axis might be provided
+    # otherwise they will be set to None
     if adr_x_set is None:
         adr_x_set = [None] * len(rss_set)
     if adr_y_set is None:
@@ -232,28 +259,37 @@ def build_cube(rss_set, reference_coords, cube_size_arcsec, reference_pa=0,
         # Offset between RSS WCS and reference frame
         offset = ((copy_rss.info['cen_ra'] - reference_coords[0]) * 3600,
                   (copy_rss.info['cen_dec'] - reference_coords[1]) * 3600)
-        # Transform the coordinates of RSS
+        # Transform the coordinates of RSS TODO: Check this
         cos_alpha = np.cos(np.deg2rad(copy_rss.info['pos_angle'] - reference_pa))
         sin_alpha = np.sin(np.deg2rad(copy_rss.info['pos_angle'] - reference_pa))
-        offset = (offset[0] * cos_alpha - offset[1] * sin_alpha, offset[0] * sin_alpha + offset[1] * cos_alpha)
-        adr_x = adr_x_set[i] * cos_alpha - adr_y_set[i] * sin_alpha
-        adr_y = adr_x_set[i] * sin_alpha + adr_y_set[i] * cos_alpha
-        print("{}-th RSS transformed offset".format(i), offset)
+        offset = (offset[0] * cos_alpha - offset[1] * sin_alpha,
+                  offset[0] * sin_alpha + offset[1] * cos_alpha)
+        if adr_x_set[i] is not None and adr_y_set[i] is not None:
+            adr_x = adr_x_set[i] * cos_alpha - adr_y_set[i] * sin_alpha
+            adr_y = adr_x_set[i] * sin_alpha + adr_y_set[i] * cos_alpha
+        else:
+            adr_x = None
+            adr_y = None
+        print("{}-th RSS fibre (transformed) offset with respect reference pos: ".format(i+1), offset)
         new_ra = (copy_rss.info['fib_ra_offset'] * cos_alpha - copy_rss.info['fib_dec_offset'] * sin_alpha
-                  - offset[0])
+                  ) - offset[0]
         new_dec = (copy_rss.info['fib_ra_offset'] * sin_alpha + copy_rss.info['fib_dec_offset'] * cos_alpha
-                   - offset[1])
+                   ) - offset[1]
         copy_rss.info['fib_ra_offset'] = new_ra
         copy_rss.info['fib_dec_offset'] = new_dec
         # Interpolate RSS to data cube
         datacube_weight_before = datacube_weight.copy()
         datacube, datacube_var, datacube_weight = interpolate_rss(
-            copy_rss, pixel_size_arcsec=pixel_size_arcsec, kernel_size_arcsec=kernel_size_arcsec,
+            copy_rss,
+            pixel_size_arcsec=pixel_size_arcsec,
+            kernel_size_arcsec=kernel_size_arcsec,
             cube_size_arcsec=cube_size_arcsec,
             datacube=datacube, datacube_var=datacube_var, datacube_weight=datacube_weight,
             adr_x=adr_x, adr_y=adr_y)
-        rss_mask[i, datacube_weight - datacube_weight_before > 0] = True
-    pixel_exptime = np.sum(rss_mask * exposure_times[:, np.newaxis, np.newaxis, np.newaxis], axis=0)
+        rss_mask[i] = datacube_weight - datacube_weight_before
+        rss_mask[i] /= np.nanmax(rss_mask[i])
+    pixel_exptime = np.nansum(rss_mask * exposure_times[:, np.newaxis, np.newaxis, np.newaxis],
+                           axis=0)
     datacube /= pixel_exptime
     datacube_var /= pixel_exptime**2
     # Create cube meta data
@@ -279,8 +315,6 @@ class Cube(DataContainer):
     
     
     """
-    
-    
 
     def __init__(self, parent_rss=None, rss_mask=None, intensity=None, variance=None,
                  intensity_corrected=None, variance_corrected=None, wavelength=None,

@@ -6,7 +6,9 @@ This module contains the tools for registering different observational data.
 # Basics packages
 # =============================================================================
 import numpy as np
-
+from photutils.centroids import centroid_2dg, centroid_1dg, centroid_com
+import warnings
+warnings.filterwarnings("ignore")
 # =============================================================================
 # Astropy and associated packages
 # =============================================================================
@@ -16,7 +18,8 @@ import numpy as np
 # =============================================================================
 from koala.exceptions.exceptions import ClassError, FitError
 from koala.rss import RSS
-from koala.cubing import Cube
+from koala.cubing import Cube, build_cube
+from koala.plotting.qc_plot import qc_registracion
 
 def fit_moffat_profile(data, wave_range=None, p0=None, fitter_args=None, plot=False):
     """Fit a 2D Moffat profile to a data set (RSS or Cube) over a given wavelength range.
@@ -130,6 +133,7 @@ def register_stars(data_set, moffat=True, plot=False, com_power=5., **fit_args):
     moffat: bool, default=True
         If True, a 2D-Moffat profile will be fitted to derive the position of the star. If False, the centre of light
         will be used instead.
+    plot: TODO
     fit_args:
         Extra arguments passed to the `fit_moffat_profile` function.
     Returns
@@ -140,28 +144,79 @@ def register_stars(data_set, moffat=True, plot=False, com_power=5., **fit_args):
         print("[Registering] Registering stars through 2D-Moffat modelling.")
     else:
         print("[Registering] Registering stars using the Center of Mass (light).")
-
-    if plot:
-        from matplotlib import pyplot as plt
-        fig = plt.figure(figsize=(5, 5))
-        ax = fig.add_subplot(111)
-
-    for data in data_set:
+    for i, data in enumerate(data_set):
         print("Object: ", data.info['name'])
         if moffat:
             fit_model = fit_moffat_profile(data, **fit_args)
             new_centre = fit_model.x_0.value / 3600, fit_model.y_0.value / 3600
-            new_fib_offset_coord = (data.info['fib_ra_offset'] - new_centre[0],
-                                    data.info['fib_dec_offset'] - new_centre[1])
-            data.update_coordinates(new_centre=new_centre, new_fib_offset_coord=new_fib_offset_coord)
+            new_fib_offset_coord = (data.info['fib_ra_offset'] - new_centre[0] * 3600,
+                                    data.info['fib_dec_offset'] - new_centre[1] * 3600)
+            data.update_coordinates(new_centre=new_centre,
+                                    new_fib_offset_coord=new_fib_offset_coord)
         else:
-            x_com, y_com = data.get_centre_of_mass(power=com_power)  # arcsec
+            x_com, y_com = data.get_centre_of_mass(
+                power=com_power,
+                wavelength_step=data.wavelength.size)  # arcsec
             new_centre = (np.nanmedian(x_com) / 3600, np.nanmedian(y_com) / 3600)  # deg
-            new_fib_offset_coord = (data.info['fib_ra_offset'] - new_centre[0],
-                                    data.info['fib_dec_offset'] - new_centre[1])
-            data.update_coordinates(new_centre=new_centre, new_fib_offset_coord=new_fib_offset_coord)
-        if plot:
-            ax.scatter(data.info['fib_ra_offset'], data.info['fib_dec_offset'], ec='k', alpha=0.4)
+            new_fib_offset_coord = (data.info['fib_ra_offset'] - new_centre[0] * 3600,
+                                    data.info['fib_dec_offset'] - new_centre[1] * 3600)
+            data.update_coordinates(new_centre=new_centre,
+                                    new_fib_offset_coord=new_fib_offset_coord)
+    if plot:
+        fig = qc_registracion(data_set)
+    else:
+        fig = None
+    return fig
+
+
+def register_galaxy(data_set, plot=False, com_power=5., **fit_args):
+    """ Register a collection of data (either RSS or Cube) corresponding to stars.
+
+    The registration is based on a 2D-Moffat profile fit, where the coordinates of each data will be updated to the
+    star reference frame.
+
+    Parameters
+    ----------
+    data_set: list
+        Collection of RSS or Cube data.
+    moffat: bool, default=True
+        If True, a 2D-Moffat profile will be fitted to derive the position of the star. If False, the centre of light
+        will be used instead.
+    fit_args:
+        Extra arguments passed to the `fit_moffat_profile` function.
+    Returns
+    -------
+
+    """
+    for i, data in enumerate(data_set):
+        temp_cube = build_cube(rss_set=[data],
+                          reference_coords=(data.info['cen_ra'],
+                                            data.info['cen_dec']),
+                          reference_pa=data.info['pos_angle'],
+                          cube_size_arcsec=(60, 60),
+                          pixel_size_arcsec=1.,
+                          kernel_size_arcsec=1.5, )
+
+        cube_collapsed = np.nanmean(temp_cube.intensity_corrected, axis=0)
+        #cube_collapsed[~np.isfinite(cube_collapsed)] = 0
+        centroid = centroid_com(cube_collapsed, mask=~np.isfinite(cube_collapsed))
+        ra_cen = np.interp(centroid[1], np.arange(0, temp_cube.n_cols, 1),
+                           temp_cube.info['spax_ra_offset'][0, :])
+        dec_cen = np.interp(centroid[0], np.arange(0, temp_cube.n_rows, 1),
+                           temp_cube.info['spax_dec_offset'][:, 0])
+
+        print(ra_cen, dec_cen)
+        from matplotlib import pyplot as plt
+        plt.figure()
+        plt.imshow(cube_collapsed, origin='lower')
+        plt.plot(*centroid, 'r+', ms=10)
+        del temp_cube
+
+    if plot:
+        fig = qc_registracion(data_set)
+    else:
+        fig = None
+    return fig
 
 
 def register_interactive(data_set):
