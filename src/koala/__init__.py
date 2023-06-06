@@ -1,0 +1,5 @@
+from ._version import get_versions
+
+__version__ = get_versions()['version']
+
+print("pyKOALA version: ", __version__)
