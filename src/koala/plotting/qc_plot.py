@@ -109,9 +109,9 @@ def qc_cube(cube):
     y_spaxel_idx = np.random.randint(low=0,
                                      high=cube.intensity_corrected.shape[2],
                                      size=3)
-    spaxel_entries = mean_instensity_pos.size // 100 * np.array([16, 50, 84])
-    x_spaxel_idx, y_spaxel_idx = np.unravel_index(spaxel_entries,
-                                                  shape=mean_intensity.shape)
+    # spaxel_entries = mean_instensity_pos.size // 100 * np.array([16, 50, 84])
+    # x_spaxel_idx, y_spaxel_idx = np.unravel_index(spaxel_entries,
+    #                                               shape=mean_intensity.shape)
     ax = fig.add_subplot(gs[1:3, :])
     for x_idx, y_idx, i in zip(x_spaxel_idx, y_spaxel_idx, range(3)):
         ax.plot(cube.wavelength, cube.intensity_corrected[:, x_idx, y_idx], lw=0.8,
