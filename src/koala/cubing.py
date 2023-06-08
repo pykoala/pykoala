@@ -204,7 +204,8 @@ def interpolate_rss(rss, pixel_size_arcsec=0.7, kernel_size_arcsec=2.0,
     return datacube, datacube_var, datacube_weight
 
 
-def build_cube(rss_set, reference_coords, cube_size_arcsec, reference_pa=0,
+def build_cube(rss_set, reference_coords, cube_size_arcsec,
+               offset=(0, 0), reference_pa=0,
                kernel_size_arcsec=2.0, pixel_size_arcsec=0.7,
                adr_x_set=None, adr_y_set=None, **cube_info):
                
@@ -217,6 +218,7 @@ def build_cube(rss_set, reference_coords, cube_size_arcsec, reference_pa=0,
     reference_coords: (2,) tuple
         Reference coordinates (RA, DEC) in *degrees* for aligning each RSS using
         RSS.info['cen_ra'], RSS.info['cen_dec'].
+    offset: #TODO
     cube_size_arcsec: (2,) tuple
         Cube physical size in *arcseconds* in the form (DEC, RA).
     reference_pa: float
@@ -256,25 +258,29 @@ def build_cube(rss_set, reference_coords, cube_size_arcsec, reference_pa=0,
     for i, rss in enumerate(rss_set):
         copy_rss = copy.deepcopy(rss)
         exposure_times[i] = copy_rss.info['exptime']
-        # Offset between RSS WCS and reference frame
-        offset = ((copy_rss.info['cen_ra'] - reference_coords[0]) * 3600,
-                  (copy_rss.info['cen_dec'] - reference_coords[1]) * 3600)
-        # Transform the coordinates of RSS TODO: Check this
+        # Offset between RSS WCS and reference frame in arcseconds
+        # offset = ((copy_rss.info['cen_ra'] - reference_coords[0]) * 3600,
+        #           (copy_rss.info['cen_dec'] - reference_coords[1]) * 3600)
+        
+        # Transform the coordinates of RSS
         cos_alpha = np.cos(np.deg2rad(copy_rss.info['pos_angle'] - reference_pa))
         sin_alpha = np.sin(np.deg2rad(copy_rss.info['pos_angle'] - reference_pa))
+        
         offset = (offset[0] * cos_alpha - offset[1] * sin_alpha,
                   offset[0] * sin_alpha + offset[1] * cos_alpha)
+        
         if adr_x_set[i] is not None and adr_y_set[i] is not None:
             adr_x = adr_x_set[i] * cos_alpha - adr_y_set[i] * sin_alpha
             adr_y = adr_x_set[i] * sin_alpha + adr_y_set[i] * cos_alpha
         else:
             adr_x = None
             adr_y = None
-        print("{}-th RSS fibre (transformed) offset with respect reference pos: ".format(i+1), offset)
+        print("{}-th RSS fibre (transformed) offset with respect reference pos: "
+              .format(i+1), offset, ' arcsec')
         new_ra = (copy_rss.info['fib_ra_offset'] * cos_alpha - copy_rss.info['fib_dec_offset'] * sin_alpha
-                  ) - offset[0]
+                  ) #- offset[0]
         new_dec = (copy_rss.info['fib_ra_offset'] * sin_alpha + copy_rss.info['fib_dec_offset'] * cos_alpha
-                   ) - offset[1]
+                   ) #- offset[1]
         copy_rss.info['fib_ra_offset'] = new_ra
         copy_rss.info['fib_dec_offset'] = new_dec
         # Interpolate RSS to data cube

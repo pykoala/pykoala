@@ -19,7 +19,7 @@ warnings.filterwarnings("ignore")
 from koala.exceptions.exceptions import ClassError, FitError
 from koala.rss import RSS
 from koala.cubing import Cube, build_cube
-from koala.plotting.qc_plot import qc_registracion
+from koala.plotting.qc_plot import qc_registracion, qc_moffat
 
 def fit_moffat_profile(data, wave_range=None, p0=None, fitter_args=None, plot=False):
     """Fit a 2D Moffat profile to a data set (RSS or Cube) over a given wavelength range.
@@ -38,7 +38,7 @@ def fit_moffat_profile(data, wave_range=None, p0=None, fitter_args=None, plot=Fa
 
     if wave_range is not None:
         wave_mask = (data.wavelength >= wave_range[0]) & (data.wavelength <= wave_range[1])
-    else:
+    else:   
         wave_mask = np.ones_like(data.wavelength, dtype=bool)
 
     # Collect the data to fit
@@ -50,28 +50,36 @@ def fit_moffat_profile(data, wave_range=None, p0=None, fitter_args=None, plot=Fa
     elif type(data) is Cube:
         intensity = np.nansum(data.intensity[wave_mask, :, :], axis=0).flatten()
         variance = np.nansum(data.variance[wave_mask, :, :], axis=0).flatten()
-        x, y = np.meshgrid(np.arange(0, data.intensity.shape[2]), np.arange(0, data.intensity.shape[1]))
+        x, y = np.meshgrid(np.arange(0, data.intensity.shape[2]),
+                           np.arange(0, data.intensity.shape[1]))
         x, y = x.flatten(), y.flatten()
     else:
         raise ClassError([RSS.__class__, Cube.__class__], data.__class__)
 
     # Remove residual sky
-    intensity -= np.nanmedian(intensity)
+    finite_mask = np.isfinite(intensity)
     # -> Fitting
     if p0 is None:
         # Get centre of mass as initial guess
         x_com, y_com = data.get_centre_of_mass(wavelength_step=wave_mask.size)
         x_com, y_com = np.nanmedian(x_com[wave_mask]), np.nanmedian(y_com[0])
+        norm = np.nansum(intensity[finite_mask])
+        x_com, y_com = (
+            np.nansum(x[finite_mask] * intensity[finite_mask]) / norm,
+            np.nansum(y[finite_mask] * intensity[finite_mask]) / norm)
         # Assuming there is only one source, set the Amplitude as the total flux
-        amplitude = np.nansum(intensity)
+        amplitude = np.nansum(intensity[finite_mask])
         # Characteristic square radius
-        x_s = np.nansum((x - x_com)**2 * intensity) / amplitude
-        y_s = np.nansum((y - y_com)** 2 * intensity) / amplitude
+        x_s = np.nansum((x[finite_mask] - x_com)**2 * intensity[finite_mask]
+                        ) / amplitude
+        y_s = np.nansum((y[finite_mask] - y_com)** 2 * intensity[finite_mask]
+                        ) / amplitude
         gamma = x_s + y_s
         # Power-law slope
         alpha = 1
         # Pack everything
-        p0 = dict(amplitude=amplitude, x_0=x_com, y_0=y_com, gamma=gamma, alpha=alpha)
+        p0 = dict(amplitude=amplitude, x_0=x_com, y_0=y_com,
+                  gamma=gamma, alpha=alpha)
     # Initialise model
     profile_model = Moffat2D(**p0)
     # Set bounds to improve performance and prevent unphysical results
@@ -81,43 +89,20 @@ def fit_moffat_profile(data, wave_range=None, p0=None, fitter_args=None, plot=Fa
     #profile_model.gamma.bounds = (p0['gamma'] * 0.1, p0['gamma'] * 10)
     #profile_model.alpha.bounds = (0, 100)
     # Fit model to data
+    print(intensity[finite_mask].sum(), p0)
     try:
-        fit_model = fitter(profile_model, x, y, intensity,
+        fit_model = fitter(profile_model, x[finite_mask], y[finite_mask],
+                           intensity[finite_mask],
                            # weights=1/variance**0.5, # TODO: THIS IS NOT WORKING PROPERLY
                            **fitter_args)
     except FitError as err:
         raise err
     else:
         if plot:
-            from matplotlib import pyplot as plt
-            fig = plt.figure(figsize=(10, 6))
-            ax = fig.add_subplot(111)
-            ax.set_title("2D Moffat fit")
-            inax = ax.inset_axes((0, 0.65, 1, 0.35))
-            inax.plot(np.sqrt((x-fit_model.x_0.value)**2 + (y-fit_model.y_0.value)**2),
-                      (intensity - fit_model(x, y)) / intensity, 'k+')
-            inax.axhspan(-0.3, 0.3, alpha=0.3, color='k')
-            inax.grid(visible=True)
-            inax.set_ylabel(r'$\frac{I-\hat{I}}{I}$', fontsize=17)
-            inax.set_xlabel(r'$|r-\hat{r}_0|$', fontsize=15)
-            inax.set_yscale('symlog', linthresh=0.1)
-            #inax.set_ylim(-1, 100)
-            inax = ax.inset_axes((0, 0.0, 0.5, 0.5))
-            inax.set_title("Data")
-            c = inax.hexbin(x, y, C=np.log10(intensity), gridsize=30, cmap='nipy_spectral')
-            inax.plot(fit_model.x_0.value, fit_model.y_0.value, 'k+', ms=14, mew=2)
-            plt.colorbar(mappable=c, ax=inax, orientation='horizontal', anchor=(0, -1))
-            inax.tick_params(bottom=False, left=False, labelbottom=False, labelleft=False)
-            inax = ax.inset_axes((0.55, 0.0, 0.5, 0.5))
-            inax.set_title(r"$\log_{10}$(Data/Model)")
-            c = inax.hexbin(x, y, C=np.log10(intensity/fit_model(x, y)), gridsize=30,
-                            vmin=-.5, vmax=.5, cmap='seismic')
-            inax.plot(fit_model.x_0.value, fit_model.y_0.value, 'k+', ms=14, mew=2)
-            plt.colorbar(mappable=c, ax=inax, orientation='horizontal', anchor=(0, -1))
-            inax.tick_params(bottom=False, left=False, labelbottom=False, labelleft=False)
-            ax.axis("off")
-            plt.show(fig)
-    return fit_model
+            fig = qc_moffat(intensity, x, y, fit_model)
+        else:
+            fig = None
+    return fit_model, fig
 
 
 def register_stars(data_set, moffat=True, plot=False, com_power=5., **fit_args):
@@ -131,9 +116,11 @@ def register_stars(data_set, moffat=True, plot=False, com_power=5., **fit_args):
     data_set: list
         Collection of RSS or Cube data.
     moffat: bool, default=True
-        If True, a 2D-Moffat profile will be fitted to derive the position of the star. If False, the centre of light
-        will be used instead.
-    plot: TODO
+        If True, a 2D-Moffat profile (koala.registration.fit_moffat_profile)
+        will be fitted to derive the position of the star. If False, the centre
+        of light will be used instead.
+    plot: bool, default=False
+        Set to True to produce a QC plot.
     fit_args:
         Extra arguments passed to the `fit_moffat_profile` function.
     Returns
@@ -147,7 +134,7 @@ def register_stars(data_set, moffat=True, plot=False, com_power=5., **fit_args):
     for i, data in enumerate(data_set):
         print("Object: ", data.info['name'])
         if moffat:
-            fit_model = fit_moffat_profile(data, **fit_args)
+            fit_model, moffat_fig = fit_moffat_profile(data, plot=plot, **fit_args)
             new_centre = fit_model.x_0.value / 3600, fit_model.y_0.value / 3600
             new_fib_offset_coord = (data.info['fib_ra_offset'] - new_centre[0] * 3600,
                                     data.info['fib_dec_offset'] - new_centre[1] * 3600)

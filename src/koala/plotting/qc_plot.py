@@ -61,13 +61,13 @@ def qc_throughput(throughput):
     return fig
 
 
-def qc_cube(cube):
+def qc_cube(cube, spax_pct=[50, 90, 99]):
     """Create a QC plot for a Cube.
 
     Parameters
     ----------
     - cube: (Cube)
-
+    - spax_pct: #TODO
     Returns
     -------
     - fig: (plt.Figure)
@@ -98,6 +98,7 @@ def qc_cube(cube):
     mapax = fig.add_subplot(gs[0, -1])
     mapax.set_title("Mean")
     mean_intensity = np.nanmean(cube.intensity_corrected, axis=0)
+    mean_intensity[~np.isfinite(mean_intensity)] = 0
     mean_instensity_pos = np.argsort(mean_intensity.flatten())
     mapax.imshow(mean_intensity, aspect='auto',
                  origin='lower', cmap='cividis')
@@ -109,9 +110,11 @@ def qc_cube(cube):
     y_spaxel_idx = np.random.randint(low=0,
                                      high=cube.intensity_corrected.shape[2],
                                      size=3)
-    # spaxel_entries = mean_instensity_pos.size // 100 * np.array([16, 50, 84])
-    # x_spaxel_idx, y_spaxel_idx = np.unravel_index(spaxel_entries,
-    #                                               shape=mean_intensity.shape)
+    spaxel_entries = mean_instensity_pos[
+        np.array(mean_instensity_pos.size / 100 * np.array(spax_pct),
+                 dtype=int)]
+    x_spaxel_idx, y_spaxel_idx = np.unravel_index(spaxel_entries,
+                                                  shape=mean_intensity.shape)
     ax = fig.add_subplot(gs[1:3, :])
     for x_idx, y_idx, i in zip(x_spaxel_idx, y_spaxel_idx, range(3)):
         ax.plot(cube.wavelength, cube.intensity_corrected[:, x_idx, y_idx], lw=0.8,
@@ -128,7 +131,9 @@ def qc_cube(cube):
     for x_idx, y_idx, i in zip(x_spaxel_idx, y_spaxel_idx, range(3)):
         ax.plot(cube.wavelength,
                 cube.intensity_corrected[:, x_idx, y_idx] / cube.variance_corrected[:, x_idx, y_idx]**0.5, lw=0.8,
-                color=pos_col[i])
+                color=pos_col[i],
+                label=f"Spaxel rank={spax_pct[i]}")
+    ax.legend()
     ax.set_ylabel("SNR/pix")
     ax.set_xlabel(r"Wavelength ($\AA$)")
     # ax = fig.add_subplot(gs[0, :2])
@@ -163,6 +168,45 @@ def qc_cubing(cube, ):
     """..."""
 
     pass
+
+# =============================================================================
+# Star profile
+# =============================================================================
+
+def qc_moffat(intensity, x, y, fit_model):
+    """#TODO"""
+
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(111)
+    ax.set_title("2D Moffat fit")
+
+    inax = ax.inset_axes((0, 0.65, 1, 0.35))
+    inax.plot(np.sqrt((x-fit_model.x_0.value)**2 + (y-fit_model.y_0.value)**2),
+              np.abs(intensity - fit_model(x, y)) / intensity, 'k+')
+    inax.grid(visible=True)
+    inax.set_ylabel(r'$\frac{I-\hat{I}}{I}$', fontsize=17)
+    inax.set_xlabel(r'$|r-\hat{r}_0|$ (arcsec)', fontsize=15)
+    inax.set_ylim(-0.099, 2)
+    #inax.set_ylim(-1, 100)
+    inax = ax.inset_axes((0, 0.0, 0.5, 0.5))
+    c = inax.hexbin(x, y, C=np.log10(intensity), gridsize=30, cmap='nipy_spectral')
+    inax.plot(fit_model.x_0.value, fit_model.y_0.value, 'k+', ms=14, mew=2)
+    plt.colorbar(mappable=c, ax=inax, orientation='horizontal', anchor=(0, -1),
+                 label=r"$\log_{10}(I)$")
+    inax.tick_params(bottom=False, left=False, labelbottom=False, labelleft=False)
+    inax = ax.inset_axes((0.55, 0.0, 0.5, 0.5))
+    c = inax.hexbin(x, y, C=np.log10(intensity/fit_model(x, y)), gridsize=30,
+                    vmin=-.5, vmax=.5, cmap='seismic')
+    inax.plot(fit_model.x_0.value, fit_model.y_0.value, 'k+', ms=14, mew=2)
+    plt.colorbar(mappable=c, ax=inax, orientation='horizontal', anchor=(0, -1),
+                 label=r"$\log_{10}(I/\hat{I})$")
+    inax.tick_params(bottom=False, left=False, labelbottom=False, labelleft=False)
+    ax.axis("off")
+
+    return fig
+# =============================================================================
+# Registration
+# =============================================================================
 
 def qc_registracion(rss_list, **kwargs):
     n_rss = len(rss_list)
