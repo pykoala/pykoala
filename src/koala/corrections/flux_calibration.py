@@ -30,7 +30,7 @@ class FluxCalibration(CorrectionBase):
     name = "FluxCalibration"
 
     def __init__(self, data_container=None, extract_spectra=None, extract_args=None, ):
-        print("[Flux Calib.] Initialising Flux Calibration (Spectral Throughput)")
+        self.corr_print("Initialising Flux Calibration (Spectral Throughput)")
         self.calib_spectra = None
         self.calib_wave = None
         self.calib_units = 1e-16
@@ -51,9 +51,26 @@ class FluxCalibration(CorrectionBase):
             plot: False,  # If True, it will provide a plot showing the extraction results
             bounds=([0, 0, 0], [np.inf, np.inf, np.inf])  # Bounds used for fitting
             }
+            See FluxCalibration.extract_stellar_flux
+        - response_params: default=None
+        - save: bool, default=True
+        - fnames: default=None
+
 
         Returns
+        -------
         - flux_cal_results: (dict)
+            Dictionary containing the results from the flux calibration process
+            for each of the stars provided. Results for each star are contained
+            within a dictionary that includes:
+                · extraction: 
+                    mean_wave
+                    optimal
+                · interp: Polynomial interpolation of the response function
+                · response: Instrumental throughput.
+                · resp_fig: If plot=True in **respones_params it will contain
+                a plot of the wavelength versus the instrument response function.
+            
         """
         if extract_args is None:
             # Default extraction arguments
@@ -65,37 +82,64 @@ class FluxCalibration(CorrectionBase):
         if save and fnames is None:
             fnames = calib_stars
 
+        # Initialise variables
         calib_stars_wave = []
         calib_stars_spectra = []
-        extraction_results = []
         flux_cal_results = {}
+        # Loop over all standard stars
         for star_i in range(len(calib_stars)):
-            print("-" * 40 + "\nAutomatic calibration process for {}\n".format(calib_stars[star_i]) + "-" * 40)
-            print("-> Loading template spectra")
+            self.corr_print("-" * 40 + "\nAutomatic calibration process for {}\n"
+                            .format(calib_stars[star_i]) + "-" * 40)
+            self.corr_print("-> Loading template spectra")
+
+            # Load standard star
             w, s = self.read_calibration_star(name=calib_stars[star_i])
             calib_stars_wave.append(w)
             calib_stars_spectra.append(s)
-            print("-> Extracting stellar flux from data")
-            result = self.extract_stellar_flux(copy.deepcopy(data[star_i]), **extract_args)
+            # Extract flux from std star
+            self.corr_print("-> Extracting stellar flux from data")
+            result = self.extract_stellar_flux(copy.deepcopy(data[star_i]),
+                                               **extract_args)
             flux_cal_results[calib_stars[star_i]] = dict(extraction=result)
-            print("-> Interpolating template to observed flux wavelength")
+            # Interpolate to the observed wavelength
+            self.corr_print("-> Interpolating template to observed wavelength")
             interp_s = flux_conserving_interpolation(
                 new_wavelength=result['mean_wave'], wavelength=w, spectra=s)
             flux_cal_results[calib_stars[star_i]]['interp'] = interp_s
-            resp_curve = self.get_response_curve(result['mean_wave'], result['optimal'][:, 0], interp_s,
-                                                 **response_params)
-            flux_cal_results[calib_stars[star_i]]['response'] = resp_curve(data[star_i].wavelength.copy())
-            print("-> Saving response as {}".format(calib_stars[star_i]))
+            # Compute the response curve
+            resp_curve, resp_fig = self.get_response_curve(
+                result['mean_wave'], result['optimal'][:, 0], interp_s,
+                **response_params)
+            flux_cal_results[calib_stars[star_i]]['response'] = resp_curve(
+                data[star_i].wavelength.copy())
+            flux_cal_results[calib_stars[star_i]]['response_fig'] = resp_fig
+            self.corr_print("-> Saving response as {}".format(calib_stars[star_i]))
+            # TODO: dump the flux_cal_results to a json / yaml file
             if save:
                 self.save_response(
                     fname=fnames[star_i],
                     response=resp_curve(data[star_i].wavelength),
                     wavelength=data[star_i].wavelength)
         return flux_cal_results
+    
+    @staticmethod
+    def master_flux_auto(flux_cal_results):
+        """Create a master response function.
+        
+        Compute a master reponse function from the results returned by
+        FluxCalibration.auto
+        """
+        throughput_response = []
+        for star, star_res in flux_cal_results.items():
+            throughput_response.append(star_res['response'])
+        
+        master_resp = np.nanmedian(throughput_response, axis=0)
+        return master_resp
 
     @staticmethod
     def extract_stellar_flux(data_container, wave_range=None, wave_window=None,
-                             profile=cumulative_1d_moffat, plot=False, **fitter_args):
+                             profile=cumulative_1d_moffat,
+                             plot=False, **fitter_args):
         """
         Extract the stellar flux from an RSS or Cube.
 
@@ -180,7 +224,8 @@ class FluxCalibration(CorrectionBase):
                     plt.xscale('log')
                     plt.yscale('log')
                     plt.show()
-        result = dict(mean_wave=np.array(running_wavelength), optimal=np.array(profile_popt),
+        result = dict(mean_wave=np.array(running_wavelength),
+                      optimal=np.array(profile_popt),
                       variance=np.array(profile_var))
         return result
 
@@ -206,13 +251,13 @@ class FluxCalibration(CorrectionBase):
             all_names, all_files = self.list_available_stars(verbose=False)
             match = np.where(all_names == name)[0]
             if len(match) > 0:
-                print("Input name {}, matches {}".format(name, all_names[match]))
+                self.corr_print("Input name {}, matches {}".format(name, all_names[match]))
                 path = os.path.join(os.path.dirname(__file__), '..',
                                     'input_data', 'spectrophotometric_stars',
                                     all_files[match[0]])
                 self.calib_wave, self.calib_spectra = np.loadtxt(path, unpack=True, usecols=(0, 1))
                 if len(match) > 1:
-                    print("WARNING: More than one file found")
+                    self.corr_print("WARNING: More than one file found")
             else:
                 raise FileNotFoundError("Calibration star: {} not found".format(name))
         if path is not None:
@@ -235,7 +280,7 @@ class FluxCalibration(CorrectionBase):
             If not None, the response curve will be interpolated to a polynomial of degree pol_deg.
         gauss_smooth_sigma: float (default=None)
             If not None, the cumulative response function will be gaussian smoothed before interpolation. The units must
-            be the same as the wavelength array.
+            be the same as the wavelength array (AA).
         plot: bool (default=False)
             If True, will return a figure containing a plot of the interpolation.
 
@@ -243,8 +288,8 @@ class FluxCalibration(CorrectionBase):
         -------
             response: function
                 Interpolator function of the response curve.
-            fig: plt.figure()
-                If "plot=True".
+            fig: default=None, if plot=True it will return a plt.figure() 
+            containing the response function in terms of wavelength
 
         """
         dwave = np.diff(wave)
@@ -255,6 +300,7 @@ class FluxCalibration(CorrectionBase):
         if gauss_smooth_sigma is not None:
             sigma_pixels = gauss_smooth_sigma / np.mean(dwave)
             cum_response = gaussian_filter1d(cum_response, sigma=sigma_pixels)
+
         # Polynomial interpolation
         if pol_deg is not None:
             p_fit = np.polyfit(wave, cum_response, deg=pol_deg)
@@ -270,22 +316,22 @@ class FluxCalibration(CorrectionBase):
 
         if plot:
             fig = plt.figure(figsize=(8, 4))
-            ax = fig.add_subplot(211)
+            ax = fig.add_subplot(111)
             ax.annotate('{}-deg polynomial fit'.format(pol_deg), xy=(0.05, 0.95), xycoords='axes fraction',
                         va='top', ha='left')
-            ax.plot(wave, cum_response, 'k', lw=2)
-            ax.plot(wave, response(wave), 'r', lw=0.7)
-            ax.set_ylabel(r'$\int_{\lambda_{min}}^{\lambda_{max}} \frac{F_{obs}}{F_{ref}} d\lambda$', fontsize=16)
-            ax = fig.add_subplot(212)
-            ax.plot(wave, obs_spectra / ref_spectra, 'k', lw=2)
-            ax.plot(wave, response(wave), 'r')
+            ax.annotate(r'Gaussian smoothin: $\sigma=${} AA'
+                        .format(gauss_smooth_sigma),
+                        xy=(0.05, 0.80), xycoords='axes fraction',
+                        va='top', ha='left')
+            ax.plot(wave, obs_spectra / ref_spectra, 'k', lw=2, label='Obs/Ref')
+            ax.plot(wave, response(wave), 'r', label='Final response')
             ax.set_xlabel('Wavelength')
             ax.set_ylabel(r'$R(\lambda) = F_{obs} / F_{ref}$', fontsize=16)
-            fig.subplots_adjust(hspace=0.4)
-            fig.show()
+            ax.legend(loc='lower right')
+            plt.close(fig)
             return response, fig
         else:
-            return response
+            return response, None
 
     @staticmethod
     def list_available_stars(verbose=True):
