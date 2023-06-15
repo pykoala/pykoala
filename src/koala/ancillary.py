@@ -226,7 +226,7 @@ def growth_curve_1d(f, x, y):
     """TODO"""
     r2 = x**2 + y**2
     idx_sorted = np.argsort(r2)
-    growth_c = np.cumsum(f[idx_sorted])
+    growth_c = np.nancumsum(f[idx_sorted])
     return r2[idx_sorted], growth_c
 
 

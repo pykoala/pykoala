@@ -127,13 +127,25 @@ def get_adr(data_container, max_adr=0.5, pol_deg=2, plot=False):
     median_com = np.nanmedian(
         com, axis=0) - np.nanmedian(com, axis=(0, 2))[:, np.newaxis]
     median_com[np.abs(median_com) > max_adr] = np.nan
-    p_x = np.polyfit(data_container.wavelength[np.isfinite(median_com[0])],
-                     median_com[0][np.isfinite(median_com[0])], deg=pol_deg)
-    polfit_x = np.poly1d(p_x)(data_container.wavelength)
 
-    p_y = np.polyfit(data_container.wavelength[np.isfinite(median_com[1])],
-                     median_com[1][np.isfinite(median_com[1])], deg=pol_deg)
-    polfit_y = np.poly1d(p_y)(data_container.wavelength)
+    finite_mask = np.isfinite(median_com[0])
+    if finite_mask.any():
+        p_x = np.polyfit(data_container.wavelength[finite_mask],
+                         median_com[0][finite_mask], deg=pol_deg)
+        polfit_x = np.poly1d(p_x)(data_container.wavelength)
+    else:
+        print("[ADR] ERROR: Could not compute ADR-x, all NaN")
+        polfit_x = np.zeros_like(data_container.wavelength)
+
+    finite_mask = np.isfinite(median_com[1])
+    if finite_mask.any():
+        p_y = np.polyfit(data_container.wavelength[finite_mask],
+                         median_com[1][finite_mask], deg=pol_deg)
+        polfit_y = np.poly1d(p_y)(data_container.wavelength)
+    else:
+        print("[ADR] ERROR: Could not compute ADR-y, all NaN")
+        polfit_y = np.zeros_like(data_container.wavelength)
+    
 
     if plot:
         fig = plt.figure(figsize=(10, 5))

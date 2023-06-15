@@ -83,16 +83,17 @@ def fit_moffat_profile(data, wave_range=None, p0=None, fitter_args=None, plot=Fa
     # Initialise model
     profile_model = Moffat2D(**p0)
     # Set bounds to improve performance and prevent unphysical results
-    #profile_model.amplitude.bounds = (0, None)
+    profile_model.amplitude.bounds = (0, None)
     #profile_model.x_0.bounds = (x.min(), x.max())
     #profile_model.y_0.bounds = (y.min(), y.max())
-    #profile_model.gamma.bounds = (p0['gamma'] * 0.1, p0['gamma'] * 10)
-    #profile_model.alpha.bounds = (0, 100)
+    profile_model.gamma.bounds = (p0['gamma'] * 0.1, p0['gamma'] * 10)
+    profile_model.alpha.bounds = (0, 10)
     # Fit model to data
-    print(intensity[finite_mask].sum(), p0)
+    print(intensity[finite_mask].sum(), p0, x[finite_mask].sum(), y[finite_mask].sum())
     try:
         fit_model = fitter(profile_model, x[finite_mask], y[finite_mask],
                            intensity[finite_mask],
+                           filter_non_finite=True,
                            # weights=1/variance**0.5, # TODO: THIS IS NOT WORKING PROPERLY
                            **fitter_args)
     except FitError as err:

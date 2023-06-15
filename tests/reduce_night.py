@@ -107,6 +107,15 @@ for files in file_n:
 calibration = reduce_calibration_stars(stars_rss, star_names, throughput,
                                        output_path=output)
 
+calibration
+
+dummy_wave = np.linspace(3000, 6000, 500)
+dummy_calibration = calibration['response'](dummy_wave)
+dummy_calibration = dummy_calibration.clip(min=0)
+
+np.savetxt('../tutorials/data/instrument_response.dat',
+           np.array([dummy_wave, dummy_calibration]).T,
+           header='Wavelength, Instrument throughput')
 # %%===========================================================================
 # Science data
 # =============================================================================

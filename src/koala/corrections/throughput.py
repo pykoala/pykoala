@@ -52,26 +52,27 @@ class Throughput(CorrectionBase):
             stat_func = np.nanmedian
         elif statistic == 'mean':
             stat_func = np.nanmean
-        err_func = np.nanstd
 
-        normalized_fluxes = []
+        fluxes = []
         for rss in rss_set:
             f = rss.intensity_corrected / rss.info['exptime']
-            normalized_fluxes.append(f / np.nanmedian(f, axis=0)[np.newaxis, :])
-        mean_throughput = stat_func(normalized_fluxes, axis=0)
-        std_throughput = err_func(normalized_fluxes, axis=0)
+            fluxes.append(f)
+        # Combine
+        combined_throughput = stat_func(fluxes, axis=0)
+
+        # Normalize flat
+        throughput = combined_throughput / stat_func(
+            combined_throughput, axis=0)[np.newaxis, :]
         if clear_nan:
-            x, y = np.meshgrid(np.arange(0, mean_throughput.shape[1]),
-                               np.arange(0, mean_throughput.shape[0]))
-            nan_mask = np.isfinite(mean_throughput)
+            x, y = np.meshgrid(np.arange(0, throughput.shape[1]),
+                               np.arange(0, throughput.shape[0]))
+            nan_mask = np.isfinite(throughput)
             interpolator = NearestNDInterpolator(list(zip(x[nan_mask], y[nan_mask])),
-                                                 mean_throughput[nan_mask])
-            mean_throughput = interpolator(x, y)
-            # Fill the nan values with the average error value
-            std_throughput[~nan_mask] = np.nanmean(std_throughput)
+                                                 throughput[nan_mask])
+            throughput = interpolator(x, y)
         if smooth:
             raise NotImplementedError("Smoothing not implemented!")
-        return mean_throughput, std_throughput
+        return throughput, None
 
     def apply(self, throughput, rss, plot=True):
         """Apply a 2D throughput model to a RSS.

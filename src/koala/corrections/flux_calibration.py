@@ -200,8 +200,10 @@ class FluxCalibration(CorrectionBase):
             slice_data = data[wave_slice]
             # Compute the mean value only considering good values (i.e. excluding NaN)
             slice_data = np.nanmean(slice_data, axis=0)
+            if not np.isfinite(slice_data).any():
+                continue
             # Positions without signal are set it to 0.
-            slice_data = np.nan_to_num(slice_data)
+            slice_data = np.nan_to_num(slice_data, posinf=0., neginf=0.)
             # Get the centre of mass
             x0, y0 = centre_of_mass(slice_data, x, y)
             # Make growth curve
@@ -246,7 +248,7 @@ class FluxCalibration(CorrectionBase):
             flux_units = self.calib_units
         if name is not None:
             name = name.lower()
-            if name[0] != 'f':
+            if name[0] != 'f' or 'feige' in name:
                 name = 'f' + name
             all_names, all_files = self.list_available_stars(verbose=False)
             match = np.where(all_names == name)[0]
