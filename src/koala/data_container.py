@@ -73,7 +73,7 @@ class DataContainer(object):
         for key, val in self.log.items():
             if type(val) is dict:
                 for subkey, subval in val.items():
-                    header['_'.join(key, subkey)] = subval
+                    header['_'.join((key, subkey))] = subval
             else:
                 header[key] = val
         return header

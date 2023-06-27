@@ -399,12 +399,12 @@ class Cube(DataContainer):
             self.info['pixel_size_arcsec'] / 3600,
             self.info['pixel_size_arcsec'] / 3600,
             np.diff(self.wavelength).mean()])
-        w.wcs.crval = [self.info['cen_ra'], self.info['cen_dec'],
+        w.wcs.crval = [*self.info['reference_coords'],
                        np.interp(
                            w.wcs.crpix[2],
-                           np.arange(0, self.wavelength.size, self.wavelength))
+                           np.arange(0, self.wavelength.size), self.wavelength)
                        ]
-        w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+        w.wcs.ctype = ["RA---TAN", "DEC--TAN", "WAVE"]
         header = w.to_header()
         return header
 
@@ -423,7 +423,7 @@ class Cube(DataContainer):
             primary_hdr_kw = {}
         
         # Create the PrimaryHDU with WCS information 
-        primary = fits.PrimaryHDU(self.wcs_metadata())
+        primary = fits.PrimaryHDU()
         for key, val in primary_hdr_kw.items():
             primary.header[key] = val
         
@@ -439,8 +439,9 @@ class Cube(DataContainer):
 
         # Create a list of HDU
         hdu_list = [primary]
-        hdu_list.append(fits.ImageHDU(data=self.intensity, name='FLUX'))
-        hdu_list.append(fits.ImageHDU(data=self.variance, name='VARIANCE'))
+        # Change headers for variance and flux
+        hdu_list.append(fits.ImageHDU(data=self.intensity, name='FLUX', header=self.wcs_metadata()))
+        hdu_list.append(fits.ImageHDU(data=self.variance, name='VARIANCE', header=hdu_list[-1].header))
         # Save fits
         hdul = fits.HDUList(hdu_list)
         hdul.writeto(fname, overwrite=True)
