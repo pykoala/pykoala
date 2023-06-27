@@ -55,8 +55,8 @@ class CorrectionBase(ABC):
            'applied' or 'failed'.
            
         """
-        if status == 'applied' or status == 'failed':
-            raise KeyError("Correction log status can only be applied or failed")
+        if status != 'applied' and status != 'failed':
+            raise KeyError("Correction log status can only be 'applied' or 'failed'")
         
         datacontainer.log[self.name] = {'status': status}
         for key, desc in extra_kwargs.items():

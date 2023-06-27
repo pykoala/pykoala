@@ -61,7 +61,7 @@ def qc_throughput(throughput):
     return fig
 
 
-def qc_cube(cube, spax_pct=[50, 90, 99]):
+def qc_cube(cube, spax_pct=[75, 90, 99]):
     """Create a QC plot for a Cube.
 
     Parameters
