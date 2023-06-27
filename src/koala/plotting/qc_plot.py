@@ -82,6 +82,7 @@ def qc_cube(cube, spax_pct=[50, 90, 99]):
     # p_snr = np.nanpercentile(sn_pixel, pct, axis=(1, 2))
 
     fig = plt.figure(figsize=(10, 10))
+    print("[QCPLOT] Cube QC plot for: ", cube.info['name'])
     plt.suptitle(cube.info['name'])
     gs = fig.add_gridspec(5, 4, wspace=0.15, hspace=0.25)
     # Maps -----
@@ -122,12 +123,11 @@ def qc_cube(cube, spax_pct=[50, 90, 99]):
         mapax.plot(y_idx, x_idx, marker='+', ms=8, mew=2, lw=2, color=pos_col[i])
     for i, wl in enumerate(cube.wavelength[wl_spaxel_idx]):
         ax.axvline(wl, color=wl_col[i], zorder=-1, alpha=0.8)
-    # ax.set_yscale('log')
+    ax.set_yscale('log')
     ax.set_xlabel(r"Wavelength ($\AA$)")
     ax.set_ylabel("Flux")
-    ax.set_yscale("log")
     # SNR ------------
-    ax = fig.add_subplot(gs[3:5, :])
+    ax = fig.add_subplot(gs[3:5, :], sharex=ax)
     for x_idx, y_idx, i in zip(x_spaxel_idx, y_spaxel_idx, range(3)):
         ax.plot(cube.wavelength,
                 cube.intensity_corrected[:, x_idx, y_idx] / cube.variance_corrected[:, x_idx, y_idx]**0.5, lw=0.8,
@@ -136,32 +136,7 @@ def qc_cube(cube, spax_pct=[50, 90, 99]):
     ax.legend()
     ax.set_ylabel("SNR/pix")
     ax.set_xlabel(r"Wavelength ($\AA$)")
-    # ax = fig.add_subplot(gs[0, :2])
-    # ax.set_title('Collapsed cube')
-    # ax.imshow(collapsed_cube, origin='lower', cmap='nipy_spectral',
-    #           interpolation='none')
-    #
-    # ax = fig.add_subplot(gs[1, :2])
-    # mappable = ax.imshow(np.nanmedian(sn_pixel, axis=0),
-    #                      origin='lower', cmap='nipy_spectral',
-    #                      interpolation='none', vmin=0)
-    # plt.colorbar(mappable, ax=ax, label='median(SN/pixel)',
-    #              orientation='horizontal')
-    #
-    # ax = fig.add_subplot(gs[1, 2:])
-    # ax.set_title("Median SNR")
-    # for i, p_ in enumerate(p_snr):
-    #     ax.plot(cube.wavelength, p_, lw=0.5, label='P_{}'.format(pct[i]))
-    # ax.set_yscale('log')
-    # ax.set_ylabel('SRN / Pix')
-    # ax.legend()
-    # ax = fig.add_subplot(gs[0, 2:])
-    # # ax.plot(cube.wavelength, collapsed_spectra, lw=0.5)
-    # for p_ in p_spectra:
-    #     ax.plot(cube.wavelength, p_, lw=0.5)
-    # ax.set_yscale('log')
-    # ax.set_ylabel('Flux')
-    # fig.subplots_adjust(wspace=0.3, hspace=0.2)
+    plt.close(fig)
     return fig
 
 def qc_cubing(cube, ):
@@ -176,26 +151,30 @@ def qc_cubing(cube, ):
 def qc_moffat(intensity, x, y, fit_model):
     """#TODO"""
 
+    r = np.sqrt((x-fit_model.x_0.value)**2 + (y-fit_model.y_0.value)**2)
+    r = r.flatten()
+    I = intensity.flatten()
+    I_hat = fit_model(x, y).flatten()
+
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111)
     ax.set_title("2D Moffat fit")
 
     inax = ax.inset_axes((0, 0.65, 1, 0.35))
-    inax.plot(np.sqrt((x-fit_model.x_0.value)**2 + (y-fit_model.y_0.value)**2),
-              np.abs(intensity - fit_model(x, y)) / intensity, 'k+')
+    inax.plot(r, np.abs(I - I_hat) / I, 'k+')
     inax.grid(visible=True)
     inax.set_ylabel(r'$\frac{I-\hat{I}}{I}$', fontsize=17)
     inax.set_xlabel(r'$|r-\hat{r}_0|$ (arcsec)', fontsize=15)
     inax.set_ylim(-0.099, 2)
     #inax.set_ylim(-1, 100)
     inax = ax.inset_axes((0, 0.0, 0.5, 0.5))
-    c = inax.hexbin(x, y, C=np.log10(intensity), gridsize=30, cmap='nipy_spectral')
+    c = inax.pcolormesh(x, y, np.log10(intensity), cmap='nipy_spectral')
     inax.plot(fit_model.x_0.value, fit_model.y_0.value, 'k+', ms=14, mew=2)
     plt.colorbar(mappable=c, ax=inax, orientation='horizontal', anchor=(0, -1),
                  label=r"$\log_{10}(I)$")
     inax.tick_params(bottom=False, left=False, labelbottom=False, labelleft=False)
     inax = ax.inset_axes((0.55, 0.0, 0.5, 0.5))
-    c = inax.hexbin(x, y, C=np.log10(intensity/fit_model(x, y)), gridsize=30,
+    c = inax.pcolormesh(x, y, np.log10(intensity/fit_model(x, y)),
                     vmin=-.5, vmax=.5, cmap='seismic')
     inax.plot(fit_model.x_0.value, fit_model.y_0.value, 'k+', ms=14, mew=2)
     plt.colorbar(mappable=c, ax=inax, orientation='horizontal', anchor=(0, -1),
@@ -208,7 +187,7 @@ def qc_moffat(intensity, x, y, fit_model):
 # Registration
 # =============================================================================
 
-def qc_registracion(rss_list, **kwargs):
+def qc_registration(rss_list, **kwargs):
     n_rss = len(rss_list)
     fig, axs = plt.subplots(nrows=1, ncols=n_rss+1,
                             figsize=(4*n_rss + 1, 4))
@@ -230,3 +209,108 @@ def qc_registracion(rss_list, **kwargs):
         axs[i + 1].set_xlabel("RA Offset (arcsec)")
         axs[i + 1].set_xlabel("DEC Offset (arcsec)")
     return fig
+
+def qc_registration_crosscorr(images_list, cross_corr_results):
+    """TODO..."""
+    # Set reference points to illustrate the shifts
+    ref_points = np.array([
+        [images_list[0].shape[0] / 2, images_list[0].shape[1] / 2],
+        [0, 0],
+        [0, images_list[0].shape[1]],
+        [images_list[0].shape[0], 0],
+        [images_list[0].shape[0], images_list[0].shape[1]]
+        ])
+    
+    radial_points = (images_list[0].shape[0]**2
+                     + images_list[0].shape[1]**2)**0.5 / 2 / np.array([8, 4, 2])
+    vmin, vmax = np.nanpercentile(images_list, [5, 95])
+    imargs = dict(vmin=vmin, vmax=vmax, cmap='viridis', interpolation='none')
+
+    fig, axs = plt.subplots(nrows=1, ncols=len(images_list),
+                          figsize=(4 * len(images_list), 4))
+
+    
+    axs[0].set_title("Reference image")
+    mappable = axs[0].imshow(images_list[0], **imargs)
+    # Reference points
+    for point in ref_points:
+        axs[0].plot(point[1], point[0], c='r', marker='+')
+    for radius in radial_points:
+        circle = plt.Circle((ref_points[0][1], ref_points[0][0]),
+                             radius, color='r', fill=False)
+        axs[0].add_patch(circle)
+    # Plot the rest of images
+    for i, im in enumerate(images_list[1:]):
+        shift = cross_corr_results[i][0]
+        ax = axs[i + 1]
+        mappable = ax.imshow(images_list[i + 1], **imargs)
+        for point in ref_points:
+            ax.plot(point[1] - shift[1], point[0] - shift[0],
+                        c='r', marker='+')
+        for radius in radial_points:
+            circle = plt.Circle((ref_points[0][1] - shift[1],
+                                 ref_points[0][0] - shift[0]),
+                                 radius, color='r',
+                                fill=False)
+            ax.add_patch(circle)
+    cax = ax.inset_axes((1.05, 0, 0.05, 1))
+    plt.colorbar(mappable, cax=cax)
+    plt.close(fig)
+    return fig
+
+def qc_registration_centroids(images_list, centroids):
+    """TODO..."""
+    # Set reference points to illustrate the shifts
+    ref_points = np.array([
+        [images_list[0].shape[0] / 2, images_list[0].shape[1] / 2],
+        [0, 0],
+        [0, images_list[0].shape[1]],
+        [images_list[0].shape[0], 0],
+        [images_list[0].shape[0], images_list[0].shape[1]]
+        ])
+    
+    radial_points = (images_list[0].shape[0]**2
+                     + images_list[0].shape[1]**2)**0.5 / 2 / np.array([8, 4, 2])
+    vmin, vmax = np.nanpercentile(images_list, [5, 95])
+    imargs = dict(vmin=vmin, vmax=vmax, cmap='viridis', interpolation='none')
+
+    fig, axs = plt.subplots(nrows=1, ncols=len(images_list),
+                          figsize=(4 * len(images_list), 4))
+
+    
+    axs[0].set_title("Reference image")
+    mappable = axs[0].imshow(images_list[0], **imargs)
+    # Reference points
+    for point in ref_points:
+        axs[0].plot(point[1], point[0], c='r', marker='+')
+    for radius in radial_points:
+        circle = plt.Circle((ref_points[0][1], ref_points[0][0]),
+                             radius, color='r', fill=False)
+        axs[0].add_patch(circle)
+    axs[0].plot(*centroids[0], '^', color='fuchsia')
+    # Plot the rest of images
+    for i, im in enumerate(images_list[1:]):
+        shift = centroids[0] - centroids[i]
+        ax = axs[i + 1]
+        mappable = ax.imshow(images_list[i + 1], **imargs)
+        for point in ref_points:
+            ax.plot(point[1] - shift[1], point[0] - shift[0],
+                        c='r', marker='+')
+        for radius in radial_points:
+            circle = plt.Circle((ref_points[0][1] - shift[1],
+                                 ref_points[0][0] - shift[0]),
+                                 radius, color='r',
+                                fill=False)
+            ax.add_patch(circle)
+        ax.plot(*centroids[i], '^', color='fuchsia')
+    cax = ax.inset_axes((1.05, 0, 0.05, 1))
+    plt.colorbar(mappable, cax=cax)
+    plt.close(fig)
+    return fig
+
+# =============================================================================
+# Flux calibration
+# =============================================================================
+
+def qc_stellar_extraction():
+    pass

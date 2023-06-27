@@ -46,9 +46,11 @@ class DataContainer(object):
         self.mask_map = kwargs.get("mask_map", None)
 
     def save_log(self):
+        #TODO
         pass
 
     def save_info(self):
+        #TODO
         pass
 
     def is_in_info(self, key):
@@ -61,9 +63,18 @@ class DataContainer(object):
             return False
 
     def is_corrected(self, correction):
-        if correction in self.log['corrections'].keys():
-            return True
+        if correction in self.log.keys():
+            if self.log[correction]['status'] == 'applied':
+                return True
         else:
             return False
 
+    def dump_log_in_header(self, header):
+        for key, val in self.log.items():
+            if type(val) is dict:
+                for subkey, subval in val.items():
+                    header['_'.join(key, subkey)] = subval
+            else:
+                header[key] = val
+        return header
 # Mr Krtxo \(ﾟ▽ﾟ)/

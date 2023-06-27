@@ -5,28 +5,151 @@ This module contains the tools for registering different observational data.
 # =============================================================================
 # Basics packages
 # =============================================================================
+
+from scipy.interpolate import NearestNDInterpolator
 import numpy as np
-from photutils.centroids import centroid_2dg, centroid_1dg, centroid_com
 import warnings
 warnings.filterwarnings("ignore")
 # =============================================================================
 # Astropy and associated packages
 # =============================================================================
+from photutils.centroids import centroid_2dg, centroid_1dg, centroid_com
 
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from koala.exceptions.exceptions import ClassError, FitError
+from koala.ancillary import interpolate_image_nonfinite
+from koala.plotting import qc_plot
+from koala.plotting.qc_plot import qc_registration, qc_moffat, qc_registration_crosscorr
+from koala.cubing import Cube, build_cube, interpolate_rss
 from koala.rss import RSS
-from koala.cubing import Cube, build_cube
-from koala.plotting.qc_plot import qc_registracion, qc_moffat
+from koala.exceptions.exceptions import FitError
 
-def fit_moffat_profile(data, wave_range=None, p0=None, fitter_args=None, plot=False):
+
+
+def fit_2d_gauss_profile(data, wave_range=None, p0=None, fitter_args=None,
+                         plot=False, quick_cube_pix_size=0.3):
     """Fit a 2D Moffat profile to a data set (RSS or Cube) over a given wavelength range.
 
     Based on astropy.modelling.functional_models.Moffat2D, performs a fit to a data set using
     Levenberg-Marquardt Least Squares Fitting.
+
+    When the provided data corresponds to a RSS, a datacube will be created.
+    This helps to better sample the profile distribution of the star.
     """
+    print("[Registration] Fitting 2D Moffat profile")
+    if fitter_args is None:
+        fitter_args = dict(maxiter=10000)
+    try:
+        from astropy.modeling.functional_models import Gaussian2D
+        from astropy.modeling.fitting import LevMarLSQFitter
+        fitter = LevMarLSQFitter()
+    except ModuleNotFoundError as err:
+        raise err
+
+    if wave_range is not None:
+        wave_mask = (data.wavelength >= wave_range[0]) & (
+            data.wavelength <= wave_range[1])
+    else:
+        wave_mask = np.ones_like(data.wavelength, dtype=bool)
+
+    # Collect the data to fit
+    if type(data) is RSS:
+        print(
+            "[Registration]  Data provided in RSS format --> creating a dummy datacube")
+        cube_size_arcsec = (
+            data.info['fib_ra_offset'].max(
+            ) - data.info['fib_ra_offset'].min(),
+            data.info['fib_dec_offset'].max() - data.info['fib_dec_offset'].min())
+        x, y = np.meshgrid(
+            np.arange(- cube_size_arcsec[1] / 2 + quick_cube_pix_size / 2,
+                      cube_size_arcsec[1] / 2 + quick_cube_pix_size / 2,
+                      quick_cube_pix_size),
+            np.arange(- cube_size_arcsec[0] / 2 + quick_cube_pix_size / 2,
+                      cube_size_arcsec[0] / 2 + quick_cube_pix_size / 2,
+                      quick_cube_pix_size))
+        datacube = np.zeros((data.wavelength.size, *x.shape))
+
+        # Interpolate RSS to a datacube
+        datacube, datacube_var, _ = interpolate_rss(
+            data, pixel_size_arcsec=quick_cube_pix_size,
+            kernel_size_arcsec=1,
+            datacube=datacube)
+        intensity = np.nansum(datacube[wave_mask], axis=0)
+        variance = np.nansum(datacube_var[wave_mask], axis=0)
+
+    elif type(data) is Cube:
+        intensity = np.nansum(
+            data.intensity[wave_mask, :, :], axis=0).flatten()
+        variance = np.nansum(data.variance[wave_mask, :, :], axis=0).flatten()
+        x, y = data.info['spax_dec_offset'], data.info['spax_ra_offset']
+
+    # Filter values
+    finite_mask = np.isfinite(intensity)
+    # -> Fitting
+    if p0 is None:
+        # Get centre of mass as initial guess
+        amplitude = np.nansum(intensity[finite_mask])
+
+        x_com, y_com = (
+            np.nansum(x[finite_mask] * intensity[finite_mask]) / amplitude,
+            np.nansum(y[finite_mask] * intensity[finite_mask]) / amplitude)
+        # Assuming there is only one source, set the Amplitude as the total flux
+
+        # standard deviation
+        x_s = np.nansum((x[finite_mask] - x_com)**2 * intensity[finite_mask]
+                        ) / amplitude
+        y_s = np.nansum((y[finite_mask] - y_com) ** 2 * intensity[finite_mask]
+                        ) / amplitude
+
+        # Pack everything
+        p0 = dict(amplitude=amplitude, x_mean=x_com, y_mean=y_com,
+                  x_stddev=x_s, y_stddev=y_s, theta=0)
+        print("[Registration] 2D Gaussian Initial guess: ", p0)
+    # Initialise model
+    profile_model = Gaussian2D(**p0)
+    # Set bounds to improve performance and prevent unphysical results
+    profile_model.amplitude.bounds = (0, None)
+    profile_model.x_mean.bounds = (x.min(), x.max())
+    profile_model.y_mean.bounds = (y.min(), y.max())
+    profile_model.x_stddev.bounds = (
+        .1, np.sqrt((x.max() - x.min())**2 + (y.max() - y.min())**2))
+    profile_model.y_stddev.bounds = (
+        .1, np.sqrt((x.max() - x.min())**2 + (y.max() - y.min())**2))
+    # Fit model to data
+    try:
+        fit_model = fitter(profile_model, x[finite_mask], y[finite_mask],
+                           intensity[finite_mask],
+                           filter_non_finite=True,
+                           **fitter_args)
+    except FitError as err:
+        raise err
+    else:
+        if plot:
+            # fig = qc_moffat(intensity, x, y, fit_model)
+            fig = None
+        else:
+            fig = None
+    # For RSS data you need to convert the pixel values to arcsec
+    # if type(data) is RSS:
+    #     fit_model.x_0 *= quick_cube_pix_size
+    #     fit_model.y_0 *= quick_cube_pix_size
+    #     fit_model.gamma *= quick_cube_pix_size
+
+    return fit_model, fig
+
+
+def fit_moffat_profile(data, wave_range=None, p0=None, fitter_args=None,
+                       plot=False, quick_cube_pix_size=0.3):
+    """Fit a 2D Moffat profile to a data set (RSS or Cube) over a given wavelength range.
+
+    Based on astropy.modelling.functional_models.Moffat2D, performs a fit to a data set using
+    Levenberg-Marquardt Least Squares Fitting.
+
+    When the provided data corresponds to a RSS, a datacube will be created.
+    This helps to better sample the profile distribution of the star.
+    """
+    print("[Registration] Fitting 2D Moffat profile")
     if fitter_args is None:
         fitter_args = dict(maxiter=10000)
     try:
@@ -37,64 +160,81 @@ def fit_moffat_profile(data, wave_range=None, p0=None, fitter_args=None, plot=Fa
         raise err
 
     if wave_range is not None:
-        wave_mask = (data.wavelength >= wave_range[0]) & (data.wavelength <= wave_range[1])
-    else:   
+        wave_mask = (data.wavelength >= wave_range[0]) & (
+            data.wavelength <= wave_range[1])
+    else:
         wave_mask = np.ones_like(data.wavelength, dtype=bool)
 
     # Collect the data to fit
     if type(data) is RSS:
-        intensity = np.nansum(data.intensity_corrected[:, wave_mask], axis=1)
-        variance = np.nansum(data.variance_corrected[:, wave_mask], axis=1)
-        x = data.info['fib_ra_offset'].copy()
-        y = data.info['fib_dec_offset'].copy()
-    elif type(data) is Cube:
-        intensity = np.nansum(data.intensity[wave_mask, :, :], axis=0).flatten()
-        variance = np.nansum(data.variance[wave_mask, :, :], axis=0).flatten()
-        x, y = np.meshgrid(np.arange(0, data.intensity.shape[2]),
-                           np.arange(0, data.intensity.shape[1]))
-        x, y = x.flatten(), y.flatten()
-    else:
-        raise ClassError([RSS.__class__, Cube.__class__], data.__class__)
+        print(
+            "[Registration]  Data provided in RSS format --> creating a dummy datacube")
+        cube_size_arcsec = (
+            data.info['fib_ra_offset'].max(
+            ) - data.info['fib_ra_offset'].min(),
+            data.info['fib_dec_offset'].max() - data.info['fib_dec_offset'].min())
+        x, y = np.meshgrid(
+            np.arange(- cube_size_arcsec[1] / 2 + quick_cube_pix_size / 2,
+                      cube_size_arcsec[1] / 2 + quick_cube_pix_size / 2,
+                      quick_cube_pix_size),
+            np.arange(- cube_size_arcsec[0] / 2 + quick_cube_pix_size / 2,
+                      cube_size_arcsec[0] / 2 + quick_cube_pix_size / 2,
+                      quick_cube_pix_size))
+        datacube = np.zeros((data.wavelength.size, *x.shape))
 
-    # Remove residual sky
+        # Interpolate RSS to a datacube
+        datacube, datacube_var, _ = interpolate_rss(
+            data, pixel_size_arcsec=quick_cube_pix_size,
+            kernel_size_arcsec=1,
+            datacube=datacube)
+        intensity = np.nansum(datacube[wave_mask], axis=0)
+        # variance = np.nansum(datacube_var[wave_mask], axis=0)
+        del datacube, datacube_var
+
+    elif type(data) is Cube:
+        intensity = np.nansum(
+            data.intensity[wave_mask, :, :], axis=0).flatten()
+        # variance = np.nansum(data.variance[wave_mask, :, :], axis=0).flatten()
+        x, y = data.info['spax_dec_offset'], data.info['spax_ra_offset']
+
+    # Filter values
     finite_mask = np.isfinite(intensity)
     # -> Fitting
     if p0 is None:
         # Get centre of mass as initial guess
-        x_com, y_com = data.get_centre_of_mass(wavelength_step=wave_mask.size)
-        x_com, y_com = np.nanmedian(x_com[wave_mask]), np.nanmedian(y_com[0])
-        norm = np.nansum(intensity[finite_mask])
-        x_com, y_com = (
-            np.nansum(x[finite_mask] * intensity[finite_mask]) / norm,
-            np.nansum(y[finite_mask] * intensity[finite_mask]) / norm)
-        # Assuming there is only one source, set the Amplitude as the total flux
         amplitude = np.nansum(intensity[finite_mask])
+
+        x_com, y_com = (
+            np.nansum(x[finite_mask] * intensity[finite_mask]) / amplitude,
+            np.nansum(y[finite_mask] * intensity[finite_mask]) / amplitude)
+        # Assuming there is only one source, set the Amplitude as the total flux
+
         # Characteristic square radius
         x_s = np.nansum((x[finite_mask] - x_com)**2 * intensity[finite_mask]
                         ) / amplitude
-        y_s = np.nansum((y[finite_mask] - y_com)** 2 * intensity[finite_mask]
+        y_s = np.nansum((y[finite_mask] - y_com) ** 2 * intensity[finite_mask]
                         ) / amplitude
-        gamma = x_s + y_s
+        gamma = np.sqrt(x_s + y_s)
         # Power-law slope
         alpha = 1
         # Pack everything
         p0 = dict(amplitude=amplitude, x_0=x_com, y_0=y_com,
                   gamma=gamma, alpha=alpha)
+        print("[Registration] 2D Moffat Initial guess: ", p0)
     # Initialise model
     profile_model = Moffat2D(**p0)
     # Set bounds to improve performance and prevent unphysical results
     profile_model.amplitude.bounds = (0, None)
-    #profile_model.x_0.bounds = (x.min(), x.max())
-    #profile_model.y_0.bounds = (y.min(), y.max())
-    profile_model.gamma.bounds = (p0['gamma'] * 0.1, p0['gamma'] * 10)
+    profile_model.x_0.bounds = (x.min(), x.max())
+    profile_model.y_0.bounds = (y.min(), y.max())
+    profile_model.gamma.bounds = (
+        .1, np.sqrt((x.max() - x.min())**2 + (y.max() - y.min())**2))
     profile_model.alpha.bounds = (0, 10)
     # Fit model to data
-    print(intensity[finite_mask].sum(), p0, x[finite_mask].sum(), y[finite_mask].sum())
     try:
         fit_model = fitter(profile_model, x[finite_mask], y[finite_mask],
                            intensity[finite_mask],
                            filter_non_finite=True,
-                           # weights=1/variance**0.5, # TODO: THIS IS NOT WORKING PROPERLY
                            **fitter_args)
     except FitError as err:
         raise err
@@ -103,6 +243,12 @@ def fit_moffat_profile(data, wave_range=None, p0=None, fitter_args=None, plot=Fa
             fig = qc_moffat(intensity, x, y, fit_model)
         else:
             fig = None
+    # For RSS data you need to convert the pixel values to arcsec
+    # if type(data) is RSS:
+    #     fit_model.x_0 *= quick_cube_pix_size
+    #     fit_model.y_0 *= quick_cube_pix_size
+    #     fit_model.gamma *= quick_cube_pix_size
+
     return fit_model, fig
 
 
@@ -128,6 +274,8 @@ def register_stars(data_set, moffat=True, plot=False, com_power=5., **fit_args):
     -------
 
     """
+    plots = []
+
     if moffat:
         print("[Registering] Registering stars through 2D-Moffat modelling.")
     else:
@@ -135,29 +283,150 @@ def register_stars(data_set, moffat=True, plot=False, com_power=5., **fit_args):
     for i, data in enumerate(data_set):
         print("Object: ", data.info['name'])
         if moffat:
-            fit_model, moffat_fig = fit_moffat_profile(data, plot=plot, **fit_args)
+            fit_model, moffat_fig = fit_moffat_profile(
+                data, plot=plot, **fit_args)
+            print("[Registration] 2D Moffat fit results:\n", '-' * 50, '\n',
+                  fit_model, '\n', '-' * 50, '\n')
             new_centre = fit_model.x_0.value / 3600, fit_model.y_0.value / 3600
             new_fib_offset_coord = (data.info['fib_ra_offset'] - new_centre[0] * 3600,
                                     data.info['fib_dec_offset'] - new_centre[1] * 3600)
             data.update_coordinates(new_centre=new_centre,
                                     new_fib_offset_coord=new_fib_offset_coord)
+            plots.append(moffat_fig)
         else:
             x_com, y_com = data.get_centre_of_mass(
                 power=com_power,
                 wavelength_step=data.wavelength.size)  # arcsec
-            new_centre = (np.nanmedian(x_com) / 3600, np.nanmedian(y_com) / 3600)  # deg
+            new_centre = (np.nanmedian(x_com) / 3600,
+                          np.nanmedian(y_com) / 3600)  # deg
             new_fib_offset_coord = (data.info['fib_ra_offset'] - new_centre[0] * 3600,
                                     data.info['fib_dec_offset'] - new_centre[1] * 3600)
             data.update_coordinates(new_centre=new_centre,
                                     new_fib_offset_coord=new_fib_offset_coord)
     if plot:
-        fig = qc_registracion(data_set)
+        fig = qc_registration(data_set)
+        plots.append(fig)
     else:
         fig = None
-    return fig
+    return plots
 
 
-def register_galaxy(data_set, plot=False, com_power=5., **fit_args):
+def register_centroid(data_set, wave_range=None,
+                      plot=False, quick_cube_pix_size=0.3,
+                      centroider='com',
+                      subbox=None):
+    """ TODO
+    
+    subbox (row, col)
+    Returns
+    -------
+
+    """
+    if centroider == 'com':
+        centroider = centroid_com
+    elif centroider == 'gauss':
+        centroider = centroid_2dg
+
+    if subbox is None:
+        subbox = [[None, None], [None, None]]
+    plots = []
+    images = []
+    centroids = []
+    for data in data_set:
+
+        if wave_range is not None:
+            wave_mask = (data.wavelength >= wave_range[0]) & (
+                data.wavelength <= wave_range[1])
+        else:
+            wave_mask = np.ones_like(data.wavelength, dtype=bool)
+
+        if type(data) is RSS:
+            print(
+                "[Registration]  Data provided in RSS format --> creating a dummy datacube")
+            cube_size_arcsec = (
+                data.info['fib_ra_offset'].max(
+                ) - data.info['fib_ra_offset'].min(),
+                data.info['fib_dec_offset'].max()
+                - data.info['fib_dec_offset'].min())
+            x, y = np.meshgrid(
+                np.arange(- cube_size_arcsec[1] / 2 + quick_cube_pix_size / 2,
+                          cube_size_arcsec[1] / 2 + quick_cube_pix_size / 2,
+                          quick_cube_pix_size),
+                np.arange(- cube_size_arcsec[0] / 2 + quick_cube_pix_size / 2,
+                          cube_size_arcsec[0] / 2 + quick_cube_pix_size / 2,
+                          quick_cube_pix_size))
+            datacube = np.zeros((data.wavelength.size, *x.shape))
+    
+            # Interpolate RSS to a datacube
+            datacube, _, _ = interpolate_rss(
+                data, pixel_size_arcsec=quick_cube_pix_size,
+                kernel_size_arcsec=1.,
+                datacube=datacube)
+            image = np.nanmean(datacube[wave_mask], axis=0)
+    
+        elif type(data) is Cube:
+            image = np.nanmean(data.intensity[wave_mask, :, :], axis=0)
+            image /= np.nansum(image)
+
+        # Select a subbox
+        image = image[subbox[0][0]:subbox[0][1], subbox[1][0]: subbox[1][1]]
+        
+        # Mask bad values
+        image = interpolate_image_nonfinite(image)
+        images.append(image)
+        # Find centroid
+        centroids.append(np.array(centroider(image)))
+
+    ref_centre = (data_set[0].info['cen_ra'], data_set[0].info['cen_dec'])
+    # Update the coordinats of the rest of frames
+    for i, data in enumerate(data_set[1:]):
+        print("[Registration] Object: ", data.info['name'])
+        shift = centroids[0] - centroids[i]
+        # Convert the shift in pixels to arcseconds
+        shift *= quick_cube_pix_size
+        print(f"[Registration] Shift found: {shift} (arcsec)")
+        new_fib_offset_coord = (data.info['fib_ra_offset'] - shift[1],
+                                data.info['fib_dec_offset'] - shift[0])
+        data.update_coordinates(new_centre=ref_centre,
+                                new_fib_offset_coord=new_fib_offset_coord)
+        
+        
+    if plot:
+        fig = qc_plot.qc_registration_centroids(images, centroids)
+        plots.append(fig)
+    else:
+        fig = None
+    return plots
+
+# =============================================================================
+# Cross-correlation
+# =============================================================================
+
+def cross_correlate_images(list_of_images, oversample=100):
+    """Compute image cross-correlation shift.
+    
+    Description
+    -----------
+    Apply the skimage.registration.phase_cross_correlation method to find 
+    the shift of a list of images with respect to the first one.
+
+    """
+    try:
+        from skimage.registration import phase_cross_correlation
+    except Exception:
+        raise ImportError()
+
+    results = []
+    for i in range(len(list_of_images) - 1):
+        shift, error, diffphase = phase_cross_correlation(
+            list_of_images[0], list_of_images[i+1],
+            upsample_factor=100)
+        results.append([shift, error, diffphase])
+    return results
+
+def register_crosscorr(data_set, ref_image=0,
+                       oversample=100, quick_cube_pix_size=0.2,
+                       wave_range=None, plot=False):
     """ Register a collection of data (either RSS or Cube) corresponding to stars.
 
     The registration is based on a 2D-Moffat profile fit, where the coordinates of each data will be updated to the
@@ -168,8 +437,110 @@ def register_galaxy(data_set, plot=False, com_power=5., **fit_args):
     data_set: list
         Collection of RSS or Cube data.
     moffat: bool, default=True
-        If True, a 2D-Moffat profile will be fitted to derive the position of the star. If False, the centre of light
-        will be used instead.
+        If True, a 2D-Moffat profile (koala.registration.fit_moffat_profile)
+        will be fitted to derive the position of the star. If False, the centre
+        of light will be used instead.
+    plot: bool, default=False
+        Set to True to produce a QC plot.
+    fit_args:
+        Extra arguments passed to the `fit_moffat_profile` function.
+    Returns
+    -------
+
+    """
+
+    plots = []
+    images = []
+    for data in data_set:
+
+        if wave_range is not None:
+            wave_mask = (data.wavelength >= wave_range[0]) & (
+                data.wavelength <= wave_range[1])
+        else:
+            wave_mask = np.ones_like(data.wavelength, dtype=bool)
+
+        if type(data) is RSS:
+            print(
+                "[Registration]  Data provided in RSS format --> creating a dummy datacube")
+            cube_size_arcsec = (
+                data.info['fib_ra_offset'].max(
+                ) - data.info['fib_ra_offset'].min(),
+                data.info['fib_dec_offset'].max()
+                - data.info['fib_dec_offset'].min())
+            x, y = np.meshgrid(
+                np.arange(- cube_size_arcsec[1] / 2 + quick_cube_pix_size / 2,
+                          cube_size_arcsec[1] / 2 + quick_cube_pix_size / 2,
+                          quick_cube_pix_size),
+                np.arange(- cube_size_arcsec[0] / 2 + quick_cube_pix_size / 2,
+                          cube_size_arcsec[0] / 2 + quick_cube_pix_size / 2,
+                          quick_cube_pix_size))
+            datacube = np.zeros((data.wavelength.size, *x.shape))
+    
+            # Interpolate RSS to a datacube
+            datacube, _, _ = interpolate_rss(
+                data, pixel_size_arcsec=quick_cube_pix_size,
+                kernel_size_arcsec=1.,
+                datacube=datacube)
+            image = np.nanmean(datacube[wave_mask], axis=0)
+            mask = np.isfinite(image)
+            image[~mask] = 0
+            # NN interpolation of NaN values ----------------------------------
+            # print("[Registration] Nearest-neightbour interpolation of NaN's")
+            # interp = NearestNDInterpolator(
+            #     list(zip(x[mask], y[mask])), image[mask])
+            # image = interp(x, y)
+            # -----------------------------------------------------------------
+            # from scipy.ndimage import gaussian_filter
+            # image = gaussian_filter(image, 2 / quick_cube_pix_size)
+            images.append(image)
+    
+        elif type(data) is Cube:
+            image = np.nanmean(data.intensity[wave_mask, :, :], axis=0)
+            image /= np.nansum(image)
+            images.append(image)
+
+    results = cross_correlate_images(images, oversample=oversample)
+    ref_centre = (data_set[0].info['cen_ra'], data_set[0].info['cen_dec'])
+    # Update the coordinats of the rest of frames
+    for i, data in enumerate(data_set[1:]):
+        print("[Registration] Object: ", data.info['name'])
+        shift = results[i][0]
+        # Convert the shift in pixels to arcseconds
+        shift *= quick_cube_pix_size
+        print(f"[Registration] Shift found: {shift} (arcsec)")
+        new_fib_offset_coord = (data.info['fib_ra_offset'] - shift[0],
+                                data.info['fib_dec_offset'] - shift[1])
+        data.update_coordinates(new_centre=ref_centre,
+                                new_fib_offset_coord=new_fib_offset_coord)
+        
+        
+    if plot:
+        fig = qc_registration_crosscorr(images, results)
+        plots.append(fig)
+    else:
+        fig = None
+    return plots
+
+# =============================================================================
+# Manual
+# =============================================================================
+
+def register_manual(data_set, offset_set, absolute=False):
+    """ Register a collection of data (either RSS or Cube) corresponding to stars.
+
+    The registration is based on a 2D-Moffat profile fit, where the coordinates of each data will be updated to the
+    star reference frame.
+
+    Parameters
+    ----------
+    data_set: list
+        Collection of RSS or Cube data.
+    moffat: bool, default=True
+        If True, a 2D-Moffat profile (koala.registration.fit_moffat_profile)
+        will be fitted to derive the position of the star. If False, the centre
+        of light will be used instead.
+    plot: bool, default=False
+        Set to True to produce a QC plot.
     fit_args:
         Extra arguments passed to the `fit_moffat_profile` function.
     Returns
@@ -177,43 +548,26 @@ def register_galaxy(data_set, plot=False, com_power=5., **fit_args):
 
     """
     for i, data in enumerate(data_set):
-        temp_cube = build_cube(rss_set=[data],
-                          reference_coords=(data.info['cen_ra'],
-                                            data.info['cen_dec']),
-                          reference_pa=data.info['pos_angle'],
-                          cube_size_arcsec=(60, 60),
-                          pixel_size_arcsec=1.,
-                          kernel_size_arcsec=1.5, )
+        print("[Registration] Object: ", data.info['name'])
+        offset = offset_set[i]
+        print(f"[Registration] Offset: {offset} (arcsec)")
+        if absolute:
+            ref_centre = (offset[0], offset[1])
+        else:
+            ref_centre = (data_set[0].info['cen_ra'] - offset[0] / 3600,
+                          data_set[0].info['cen_dec'] - offset[1] / 3600)
+        data.update_coordinates(new_centre=ref_centre)
 
-        cube_collapsed = np.nanmean(temp_cube.intensity_corrected, axis=0)
-        #cube_collapsed[~np.isfinite(cube_collapsed)] = 0
-        centroid = centroid_com(cube_collapsed, mask=~np.isfinite(cube_collapsed))
-        ra_cen = np.interp(centroid[1], np.arange(0, temp_cube.n_cols, 1),
-                           temp_cube.info['spax_ra_offset'][0, :])
-        dec_cen = np.interp(centroid[0], np.arange(0, temp_cube.n_rows, 1),
-                           temp_cube.info['spax_dec_offset'][:, 0])
-
-        print(ra_cen, dec_cen)
-        from matplotlib import pyplot as plt
-        plt.figure()
-        plt.imshow(cube_collapsed, origin='lower')
-        plt.plot(*centroid, 'r+', ms=10)
-        del temp_cube
-
-    if plot:
-        fig = qc_registracion(data_set)
-    else:
-        fig = None
-    return fig
-
-
+# =============================================================================
+# 
+# =============================================================================
 def register_interactive(data_set):
     """
     Fully manual registration via interactive plot
     """
     import matplotlib
     from matplotlib import pyplot as plt
-    #matplotlib.use("QtAgg")
+    # matplotlib.use("QtAgg")
     plt.ion()
     centres = []
 
@@ -233,58 +587,7 @@ def register_interactive(data_set):
     plt.show()
     return centres
 
-
-def register_new_centres(data_set, centroids):
-    """TODO"""
-    for i, data in enumerate(data_set):
-        new_centre = centroids[i]
-        new_fib_offset_coord = (data.info['fib_ra_offset'] - centroids[i][0] * 3600,
-                                data.info['fib_dec_offset'] - centroids[i][1] * 3600)
-        data.update_coordinates(new_centre=new_centre, new_fib_offset_coord=new_fib_offset_coord)
-
-
-def register_extended_source(data_set, pixel_size=0.1):
-    """TODO"""
-    from matplotlib import pyplot as plt
-    from scipy.interpolate import griddata
-    try:
-        from image_registration import chi2_shift
-    except ImportError as err:
-        raise err()
-
-    all_images = []
-    for i, data in enumerate(data_set):
-        x, y = np.meshgrid(np.arange(data.info['fib_ra_offset'].min(),
-                                     data.info['fib_ra_offset'].max(),
-                                     pixel_size),
-                           np.arange(data.info['fib_dec_offset'].min(),
-                                     data.info['fib_dec_offset'].max(),
-                                     pixel_size))
-
-        image = griddata(
-                list(zip(data.info['fib_ra_offset'], data.info['fib_dec_offset'])),
-                np.nanmedian(data.intensity_corrected, axis=1), (x, y))
-        all_images.append(image)
-    offsets = []
-    fig, axs = plt.subplots(nrows=1, ncols=len(all_images), figsize=(len(all_images) * 4, 4))
-    axs[0].imshow(all_images[0], origin='lower')
-    x, y = np.meshgrid(np.arange(0.5, all_images[0].shape[1], all_images[0].shape[1] // 10),
-                       np.arange(0.5, all_images[0].shape[0], all_images[0].shape[0] // 10))
-    axs[0].scatter(x.flatten(), y.flatten(), marker='+', c='k')
-    for i in range(len(all_images) - 1):
-        xoff, yoff, exoff, eyoff = chi2_shift(all_images[0], all_images[i + 1],
-                                              return_error=True, upsample_factor='auto')
-        offsets.append([xoff * pixel_size, yoff * pixel_size, exoff * pixel_size, eyoff * pixel_size])
-
-        new_centre = (data_set[i + 1].info['cen_ra'] - xoff * pixel_size / 3600,
-                      data_set[i + 1].info['cen_dec'] - yoff * pixel_size / 3600)
-        new_fib_offset_coord = (data_set[i + 1].info['fib_ra_offset'] - xoff * pixel_size,
-                                data.info['fib_dec_offset'] - yoff * pixel_size)
-        data_set[i + 1].update_coordinates(new_centre=new_centre, new_fib_offset_coord=new_fib_offset_coord)
-        # Plot
-        axs[i + 1].imshow(all_images[i+1], origin='lower')
-        axs[i + 1].scatter(x.flatten() - yoff, y.flatten() - xoff, marker='+', c='k')
-    plt.show()
-    return offsets
-
 # Mr Krtxo \(ﾟ▽ﾟ)/
+
+
+

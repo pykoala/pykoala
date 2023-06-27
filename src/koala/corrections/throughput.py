@@ -3,6 +3,7 @@
 # =============================================================================
 import numpy as np
 import copy
+from astropy.io import fits
 from scipy.interpolate import NearestNDInterpolator
 # =============================================================================
 # Astropy and associated packages
@@ -28,6 +29,15 @@ class Throughput(CorrectionBase):
     -
     """
     name = "ThroughputCorrection"
+    throughput = None
+    verbose = False
+
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.throughput = kwargs.get('throughput', None)
+        self.throughput_path = kwargs.get('throughput_path', None)
+        if self.throughput_path is not None:
+            self.load_throughput(self.throughput_path)
 
     @staticmethod
     def create_throughput_from_flat(rss_set, clear_nan=True,
@@ -74,7 +84,14 @@ class Throughput(CorrectionBase):
             raise NotImplementedError("Smoothing not implemented!")
         return throughput, None
 
-    def apply(self, throughput, rss, plot=True):
+    def load_throughput(self, path, extension=1):
+        """Load a throughput map from a FITS file."""
+        self.throughput_path = path
+        self.corr_print("Loading throughput from: ", self.throughput_path)
+        with fits.open(self.throughput_path) as f:
+            self.throughput = f[extension].data.copy()
+
+    def apply(self, rss, throughput=None, plot=True):
         """Apply a 2D throughput model to a RSS.
 
         Parameters
@@ -83,6 +100,12 @@ class Throughput(CorrectionBase):
         - rss: (RSS)
         - plot: (bool, optional, default=True)
         """
+        
+        if throughput is None and self.throughput is not None:
+            throughput = self.throughput
+        else:
+            raise RuntimeError("Throughput not provided!")
+            
         if type(rss) is not RSS:
             raise ValueError("Throughput can only be applied to RSS data:\n input {}"
                              .format(type(rss)))
@@ -93,5 +116,5 @@ class Throughput(CorrectionBase):
 
         rss_out.intensity_corrected = rss_out.intensity_corrected / throughput
         rss_out.variance_corrected = rss_out.variance_corrected / throughput ** 2
-        rss_out.log[self.name] = "2D throughput applied"
+        self.log_correction(rss, status='applied')
         return rss_out

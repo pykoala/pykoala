@@ -142,8 +142,6 @@ def koala_rss(path_to_file):
     # Read RSS file into a PyKoala RSS object
     rss = read_rss(path_to_file, wcs=koala_wcs,
                    bad_fibres_list=bad_fibres_list,
-                   intensity_axis=0,
-                   variance_axis=1,
                    header=koala_header,
                    fibre_table=koala_fibre_table,
                    info=info

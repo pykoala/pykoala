@@ -34,6 +34,7 @@ class AtmosphericExtinction(CorrectionBase):
     - airmass: ()
     """
     name = "AtmosphericExtinction"
+    verbose = False
 
     def __init__(self, extinction_correction=None, extinction_file=None,
                  observatory_extinction=None, airmass=None):
@@ -108,7 +109,8 @@ class AtmosphericExtinction(CorrectionBase):
 
         data_container_out.intensity_corrected *= extinction_correction
         data_container_out.variance_corrected *= extinction_correction**2
-        data_container_out.log[self.name] = comment
+        self.log_correction(data_container_out, status='applied',
+                            comment=comment)
         return data_container_out
 
 
@@ -175,91 +177,3 @@ def get_adr(data_container, max_adr=0.5, pol_deg=2, plot=False):
         plt.close(fig)
         return polfit_x, polfit_y, fig
     return polfit_x, polfit_y
-
-# def ADR_correction(cube, RSS, plot=True, force_ADR=False, method="new", remove_spaxels_not_fully_covered=True,
-#                    jump=-1, warnings=False, verbose=True):
-#     """
-#     Corrects for Atmospheric Differential Refraction (ADR)
-
-#     Parameters
-#     ----------
-#     RSS : File/Object created with KOALA_RSS
-#         This is the file that has the raw stacked spectra.
-#     plot : Boolean, optional
-#         If True generates and shows the plots. The default is True.
-#     force_ADR : Boolean, optional
-#         If True will correct for ADR even considoring a small correction. The default is False.
-#     method : String, optional
-#         DESCRIPTION. The default is "new". #TODO
-#     remove_spaxels_not_fully_covered : Boolean, optional
-#         DESCRIPTION. The default is True. #TODO
-#     jump : Integer, optional
-#         If a positive number partitions the wavelengths with step size jump, if -1 will not partition. The default is -1.
-#     warnings : Boolean, optional
-#         If True will show any problems that arose, else skipped. The default is False.
-#     verbose : Boolean, optional
-#         Print results. The default is True.
-
-#     Returns
-#     -------
-#     None.
-
-#     """
-
-#     # Check if this is a self.combined cube or a self
-#     try:
-#         _x_ = np.nanmedian(self.combined_cube.data)
-#         if _x_ > 0:
-#             cubo = self.combined_cube
-#             # data_ = np.zeros_like(cubo.weighted_I)
-#             method = "old"
-#             # is_combined_cube=True
-#     except Exception:
-#         cubo = self
-
-#     # Check if ADR is needed (unless forced)...
-#     total_ADR = np.sqrt(cubo.ADR_x_max ** 2 + cubo.ADR_y_max ** 2)
-
-#     cubo.adrcor = True
-#     if total_ADR < cubo.pixel_size_arcsec * 0.1:  # Not needed if correction < 10 % pixel size
-#         if verbose:
-#             print("\n> Atmospheric Differential Refraction (ADR) correction is NOT needed.")
-#             print(
-#                 '  The computed max ADR value, {:.3f}",  is smaller than 10% the pixel size of {:.2f} arcsec'.format(
-#                     total_ADR, cubo.pixel_size_arcsec))
-#         cubo.adrcor = False
-#         if force_ADR:
-#             cubo.adrcor = True
-#             if verbose: print('  However we proceed to do the ADR correction as indicated: "force_ADR = True" ...')
-
-#     if cubo.adrcor:
-#         cubo.history.append("- Correcting for Atmospheric Differential Refraction (ADR) using:")
-#         cubo.history.append("  ADR_x_fit = " + np.str(cubo.ADR_x_fit))
-#         cubo.history.append("  ADR_y_fit = " + np.str(cubo.ADR_y_fit))
-#         cubo.history.append("  Residua in RA  = " + np.str(np.round(cubo.ADR_x_residua, 3)) + '" ')
-#         cubo.history.append("  Residua in Dec = " + np.str(np.round(cubo.ADR_y_residua, 3)) + '" ')
-#         cubo.history.append("  Total residua  = " + np.str(np.round(cubo.ADR_total_residua, 3)) + '" ')
-
-#         # New procedure 2nd April 2020
-#         else:
-#             if verbose:
-#                 print("\n  Using the NEW method (building the cube including the ADR offsets)...")
-#                 print("  Creating new cube considering the median value each ", jump, " lambdas...")
-#             cubo.adrcor = True
-#             cubo.data = cubo.build_cube(jump=jump, RSS=RSS)
-#             cubo.get_integrated_map()
-#             cubo.history.append("- New cube built considering the ADR correction using jump = " + np.str(jump))
-
-#             # Now remove spaxels with not full wavelength if requested
-#         if remove_spaxels_not_fully_covered == True:
-#             if verbose: print(
-#                 "\n> Removing spaxels that are not fully covered in wavelength in the valid range...")  # Barr
-
-#             _mask_ = cubo.integrated_map / cubo.integrated_map
-#             for w in range(cubo.n_wave):
-#                 cubo.data[w] = cubo.data[w] * _mask_
-#             cubo.history.append(
-#                 "  Spaxels that are not fully covered in wavelength in the valid range have been removed")
-
-#     else:
-#         if verbose: print(" NOTHING APPLIED !!!")

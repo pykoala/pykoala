@@ -19,10 +19,47 @@ class CorrectionBase(ABC):
     def name(self, value):
         self._name = value
 
+    @property
+    @abstractmethod
+    def verbose(self):
+        return self._verbose
+
+    @verbose.setter
+    def verbose(self, verbose):
+        self._verbose = verbose
+
     @abstractmethod
     def apply(self, correction, data_container):
         raise NotImplementedError("Each class needs to implement this method")
 
-    def corr_print(self, msg):
+    def corr_print(self, msg, *args):
         """Print a message."""
-        print("[Correction: {}] {}".format(self.name, msg))
+        if self.verbose:
+            print("[Correction: {}] {}".format(self.name, msg), *args)
+
+    def log_correction(self, datacontainer, status='applied', **extra_kwargs):
+        """Log in the DataContainer the correction and additional info.
+        
+        Description
+        -----------
+        Whenever a correction is applied, this is logged into the DataContainer
+        log. This might just inform of the status of the correction (applied/failed)
+        as well as other relevant information.
+        
+        Parameters
+        ----------
+        - datacontainer: koala.DataContainer
+            DC to log the correction.
+        - status: str, default='applied'
+           Keyword to denote the success of the correction. Can take two values
+           'applied' or 'failed'.
+           
+        """
+        if status == 'applied' or status == 'failed':
+            raise KeyError("Correction log status can only be applied or failed")
+        
+        datacontainer.log[self.name] = {'status': status}
+        for key, desc in extra_kwargs.items():
+            datacontainer.log[self.name][key] = desc
+
+        

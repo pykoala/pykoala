@@ -219,7 +219,12 @@ def centre_of_mass(w, x, y):
     """
     norm = np.nansum(w)
     x_com, y_com = np.nansum(w * x) / norm, np.nansum(w * y) / norm
-    return x_com, y_com
+    if np.isfinite(x_com) and np.isfinite(y_com):
+        return x_com, y_com
+    else:
+        raise RuntimeError(
+            "Failed computing centre of mass computed for\n w={}\n x={}\n y={}"
+            .format(w, x, y))
 
 
 def growth_curve_1d(f, x, y):
@@ -257,6 +262,15 @@ def growth_curve_2d(image, x0=None, y0=None):
     return r2[idx_sorted], growth_c
 
 
+def interpolate_image_nonfinite(image):
+    x, y = np.meshgrid(
+        np.arange(0, image.shape[1], 1),
+        np.arange(0, image.shape[0], 1))
+    mask = np.isfinite(image)
+    interp = interpolate.NearestNDInterpolator(
+        list(zip(x[mask], y[mask])), image[mask])
+    image = interp(x, y)
+    return image
 # ----------------------------------------------------------------------------------------------------------------------
 # Models and fitting
 # ----------------------------------------------------------------------------------------------------------------------
@@ -351,5 +365,36 @@ def fit_moffat(r2_growth_curve, f_growth_curve,
                                            fit[0], fit[1], fit[2]) / fit[0], ':')
     return fit
 
+def gaussian_2d(xy, amplitude, x0, y0, sigma_x, sigma_y, offset):
+    x, y = xy
+    exponent = -0.5 * (((x - x0) / sigma_x) ** 2 + ((y - y0) / sigma_y) ** 2)
+    return amplitude * np.exp(exponent) + offset
+
+# =============================================================================
+# Lines
+# =============================================================================
+
+lines = {
+        # Balmer
+           'hepsilon': 3970.1,
+           'hdelta': 4101.7,
+           'hgamma': 4340.4,
+           'hbeta': 4861.3,
+           'halpha': 6562.79,
+        # K
+           'K': 3934.777,
+           'H': 3969.588,
+           'Mg': 5176.7,
+           'Na': 5895.6,
+           'CaII1': 8500.36,
+           'CaII2': 8544.44,
+           'CaII3': 8664.52,
+           }
+
+def mask_lines(wave_array, width=30, lines=lines.values()):
+    mask = np.ones_like(wave_array, dtype=bool)
+    for line in lines:
+        mask[(wave_array < line + width) & (wave_array > line - width)] = False
+    return mask
 
 # Mr Krtxo \(ﾟ▽ﾟ)/

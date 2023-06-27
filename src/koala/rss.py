@@ -87,128 +87,15 @@ class RSS(DataContainer):
                  info
                  ):
 
-        super().__init__(intensity=intensity, intensity_corrected=intensity_corrected,
-                         variance=variance, variance_corrected=variance_corrected,
+        super().__init__(intensity=intensity,
+                         intensity_corrected=intensity_corrected,
+                         variance=variance,
+                         variance_corrected=variance_corrected,
                          info=info, mask=mask, log=log)
         # Specific RSS attributes
         self.wavelength = wavelength
         self.header = header
         self.fibre_table = fibre_table
-
-    # =============================================================================
-    # Mask layer
-    # =============================================================================
-    def mask_layer(self, index=-1, verbose=False):
-        """
-        Filter the bit mask according the index value:
-            
-        Index    Layer                Bit mask value
-        ------   ----------------     --------------
-         0        Read from file       1
-         1        Blue edge            2                                 
-         2        Red edge             4                               
-         3        NaNs mask            8                                  
-         4        Cosmic rays          16                                 
-         5        Extreme negative     32                               
-
-        Parameters
-        ----------
-        index : int or list, optional
-            Layer index. The default -1 means that all the existing layers are 
-            returned.
-        verbose: bool, optional
-            Set to True for getting information on the procedure.
-
-        Returns
-        -------
-        numpy.ndarray(bool)
-            Boolean mask with the layer (or layers) selected.
-        """
-        vprint.verbose = verbose
-        mask = self.mask.astype(int)
-        if type(index) is not list:
-            index = [index]
-        ignore_flags = [1, 2, 4, 8, 16, 32]
-        for i in index:
-            mask_value = 2**i
-            try:
-                ignore_flags.remove(mask_value)
-            except excp.MaskBitError:
-                raise excp.MaskBitError(ignore_flags, i)
-            vprint('Layers considered: ', ignore_flags)
-        return bitfield_to_boolean_mask(mask, ignore_flags=ignore_flags)
-
-    def show_mask(self):
-        colormap = colors.ListedColormap(['darkgreen', 'blue', 'red', 'darkviolet', 'black', 'orange'])
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        ax.imshow(np.log2(self.mask), vmin=0, vmax=6, cmap=colormap, interpolation='none')
-        fig.show()
-
-    # =============================================================================
-    # Imshow data
-    # =============================================================================
-    def show(self, pmin=5, pmax=95, mask=False, **kwargs):
-        """
-        Simple "imshow" of the corrected data (i.e. self.intensity_corrected ).
-        Accept all (matplotlib.pyplot) imshow parameters.
-        
-        In the future we will implement the PyKoala RSS display function here. 
-        
-        Parameters
-        ----------
-        pmin : float, optional
-            Minimum percentile of the data range that the colormap will covers. 
-            The default is 5.
-        pmax : TYPE, optional
-            Maximum percentile of the data range that the colormap will covers. 
-            The default is 95.
-        mask : bool, optional
-            True show the image with correceted pixels masked. 
-            The default is False.
-        """
-
-        if mask:
-            data = np.ma.masked_array(self.intensity_corrected, self.mask)
-        else:
-            data = self.intensity_corrected
-
-        vmin, vmax = np.nanpercentile(data, (pmin, pmax))
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        ax.imshow(data, vmin=vmin, vmax=vmax, **kwargs)
-        fig.show()
-
-    # =============================================================================
-    # Show/save formated log        
-    # =============================================================================
-    def formated_log(self, verbose=True, save=None):
-        """TODO"""
-        pretty_line = '-' * 50
-        try:
-            import textwrap
-        except ModuleNotFoundError as err:
-            raise err(textwrap)
-        if verbose:
-            for procedure in self.log.keys():
-                comment = self.log[procedure]['comment']
-                index = self.log[procedure]['index']
-                applied = isinstance(comment, str)
-                mask_index = {None: '',
-                              0: 'Mask index: 0 (bit mask value 2**0)',
-                              1: 'Mask index: 1 (bit mask value 2**1)',
-                              2: 'Mask index: 2 (bit mask value 2**2)',
-                              3: 'Mask index: 3 (bit mask value 2**3)',
-                              4: 'Mask index: 4 (bit mask value 2**4)',
-                              5: 'Mask index: 5 (bit mask value 2**5)',
-                              }
-                if applied:
-                    print('\n' + pretty_line)
-                    print("{:<49}{:<2}".format(procedure.capitalize(), mask_index[index]))
-                    print(pretty_line)
-                    for i in textwrap.wrap(comment + '\n', 80):
-                        print(i)
-                    print('\n')
 
     def get_centre_of_mass(self, wavelength_step=1, stat=np.nanmedian, power=1.0):
         """Compute the center of mass (COM) based on the RSS fibre positions
@@ -273,7 +160,7 @@ class RSS(DataContainer):
             print("[RSS] Offset-coords updated")
         if new_centre is not None:
             self.info['ori_cen_ra'], self.info['ori_cen_dec'] = (
-                self.info['cen_dec'].copy(), self.info['cen_dec'].copy())
+                self.info['cen_ra'].copy(), self.info['cen_dec'].copy())
             self.info['cen_ra'] = new_centre[0]
             self.info['cen_dec'] = new_centre[1]
             self.log['update_coords'] = "Centre coords updated"
@@ -328,6 +215,9 @@ class RSS(DataContainer):
         else:
             # Write the fits
             primary_hdu.writeto(name=name, overwrite=overwrite, checksum=checksum)
+        
+        primary_hdu.close()
+        print(f"[RSS] File saved as {name}")
 
 
 # =============================================================================
@@ -340,8 +230,8 @@ TODO
 def read_rss(file_path,
              wcs,
              intensity_axis=0,
-             variance_axis=None,
-             bad_spaxels_list=None,
+             variance_axis=1,
+             bad_fibres_list=None,
              instrument=None,
              verbose=False,
              log=None,
@@ -368,34 +258,28 @@ def read_rss(file_path,
     file_name = os.path.basename(file_path)
 
     vprint.verbose = verbose
-
     vprint("\n> Reading RSS file", file_name, "created with", instrument, "...")
 
     #  Open fits file. This assumes that RSS objects are written to file as .fits.
-    rss_fits = fits.open(file_path)
+    with fits.open(file_path) as rss_fits:
+        # Read intensity using rss_fits_file[0]
+        all_intensities = np.array(rss_fits[intensity_axis].data, dtype=np.float32)
+        intensity = np.delete(all_intensities, bad_fibres_list, 0)
+        # Bad pixel verbose summary
+        vprint("\n  Number of spectra in this RSS =", len(all_intensities),
+            ",  number of good spectra =", len(intensity),
+            " ,  number of bad spectra =", len(bad_fibres_list))
+        if bad_fibres_list is not None:
+            vprint("  Bad fibres =", bad_fibres_list)
 
-    # Read intensity using rss_fits_file[0]
-    all_intensities = rss_fits[intensity_axis].data
-    intensity = np.delete(all_intensities, bad_spaxels_list, 0)
+        # Read errors if exist a dedicated axis
+        if variance_axis is not None:
+            all_variances = rss_fits[variance_axis].data
+            variance = np.delete(all_variances, bad_fibres_list, 0)
 
-    # Bad pixel verbose summary
-    vprint("\n  Number of spectra in this RSS =", len(all_intensities),
-           ",  number of good spectra =", len(intensity),
-           " ,  number of bad spectra =", len(bad_spaxels_list))
-    if bad_spaxels_list:
-        vprint("  Bad fibres =", bad_spaxels_list)
-
-    # Read errors if exist a dedicated axis
-    if variance_axis is not None:
-        all_variances = rss_fits[variance_axis].data
-        variance = np.delete(all_variances, bad_spaxels_list, 0)
-
-    else:
-        vprint("\n  WARNING! Variance extension not found in fits file!")
-        variance = copy.deepcopy(intensity)
-
-    # Close fits file
-    rss_fits.close()
+        else:
+            vprint("\n  WARNING! Variance extension not found in fits file!")
+            variance = np.full_like(intensity, fill_value=np.nan)
 
     # Create wavelength from wcs
     nrow, ncol = wcs.array_shape
@@ -411,10 +295,10 @@ def read_rss(file_path,
     mask = np.zeros_like(intensity)
 
     # Blank corrected intensity (i.e. a copy of the data)
-    intensity_corrected = copy.deepcopy(intensity)
+    intensity_corrected = intensity.copy()
 
     # Blank corrected variance (i.e a copy of the variance)
-    variance_corrected = copy.deepcopy(variance)
+    variance_corrected = variance.copy()
 
     return RSS(intensity=intensity,
                wavelength=wavelength,

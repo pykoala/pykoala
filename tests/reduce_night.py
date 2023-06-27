@@ -116,6 +116,7 @@ dummy_calibration = dummy_calibration.clip(min=0)
 np.savetxt('../tutorials/data/instrument_response.dat',
            np.array([dummy_wave, dummy_calibration]).T,
            header='Wavelength, Instrument throughput')
+
 # %%===========================================================================
 # Science data
 # =============================================================================

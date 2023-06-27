@@ -286,6 +286,9 @@ class SkyFromObject(SkyModel):
                             & (self.rss.wavelength < line + 5)] = False
 
 
+class SkySubstraction(CorrectionBase):
+    # TODO
+    pass
 # =============================================================================
 # Telluric CorrectionBase
 # =============================================================================
@@ -295,25 +298,27 @@ class Tellurics(CorrectionBase):
     """
     name = "TelluricCorretion"
     target = RSS
+    telluric_correction = None
+    verbose = True
 
     def __init__(self,
                  data_container=None,
                  telluric_correction_file=None,
                  n_fibres=10,
-                 verbose=False,
+                 verbose=True,
                  frac=0.5):
-
-        # Initialise variables
-        self.telluric_correction = None
-        # Data container (RSS, Cube)
+        
+        self.verbose = verbose
+        self.corr_print("Obtaining telluric correction using spectrophotometric star...")
+        
         self.data_container = data_container
-        # Set print verbose
-        vprint.verbose = verbose
-        vprint("\n> Obtaining telluric correction using spectrophotometric star...")
 
         # Store basic data
-        self.wlm = self.data_container.wavelength
         if self.data_container is not None:
+
+            self.data_container = data_container
+            self.wlm = self.data_container.wavelength
+
             if self.data_container.__class__ is Cube:
                 self.spectra = self.data_container.get_integrated_light_frac(frac=frac)
             elif self.data_container.__class__ is RSS:
@@ -397,7 +402,7 @@ class Tellurics(CorrectionBase):
         - file: str, (default="telluric_lines.txt")
             File containing the list of telluric lines to mask.
         - width: int
-            Half-window size to account for the instrumental dispersion.
+            Half-window size (AA) to account for the instrumental dispersion.
         - extra_mask: 1D bool array
             Mask containing additional spectral regions to mask during Telluric estimation.
         - pol_deg: int
@@ -477,19 +482,13 @@ class Tellurics(CorrectionBase):
         vprint.verbose = verbose
         # Copy input RSS for storage the changes implemented in the task
         rss_out = copy.deepcopy(rss)
-        vprint("  Applying telluric correction to this star...")
-        if is_combined_cube:
-            # TODO: Deprecated
-            rss.combined_cube.integrated_star_flux = rss.combined_cube.integrated_star_flux * self.telluric_correction
-            for i in range(rss.combined_cube.n_rows):
-                for j in range(rss.combined_cube.n_cols):
-                    rss.combined_cube.data[:, i, j] = rss.combined_cube.data[:, i, j] * self.telluric_correction
-        else:
-            rss_out.intensity_corrected *= self.telluric_correction
-            rss_out.variance_corrected *= self.telluric_correction**2
+        self.corr_print("Applying telluric correction to this star...")
+        rss_out.intensity_corrected *= self.telluric_correction
+        rss_out.variance_corrected *= self.telluric_correction**2
+        self.log_correction(rss, status='applied')
         return rss_out
 
-    def save_to_txt(self, filename='telluric_correction.txt', **kwargs):
+    def save(self, filename='telluric_correction.txt', **kwargs):
         """Save telluric correction function to text file."""
         np.savetxt(filename, np.array([self.wlm, self.telluric_correction]).T, **kwargs)
 
