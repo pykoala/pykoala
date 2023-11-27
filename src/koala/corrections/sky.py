@@ -155,12 +155,19 @@ class SkyModel(object):
         var_subs: (np.ndarray)
         """
         # TODO
-        # if data.ndim != self.intensity.ndim:
-        data_subs = data - self.intensity
-        var_subs = variance + self.variance
+        if data.ndim == 3 and self.intensity.ndim == 1:
+            skymodel_intensity = self.intensity[:, np.newaxis, np.newaxis]
+            skymodel_var = self.intensity[:, np.newaxis, np.newaxis]
+        elif data.ndim == 2 and self.intensity.ndim == 1:
+            skymodel_intensity = self.intensity[np.newaxis, :]
+            skymodel_var = self.intensity[np.newaxis, :]
+        else:
+            self.vprint(f"Data dimensions ({data.shape}) cannot be reconciled with sky mode ({self.intensity.shape})")
+        data_subs = data - skymodel_intensity
+        var_subs = variance + skymodel_var
         return data_subs, var_subs
 
-    def substract_PCA():
+    def substract_pca():
         # TODO: Implement PCA substraction method
         pass
     
@@ -277,19 +284,38 @@ class SkyFromObject(SkyModel):
             bckgr_params = {}
 
         if hasattr(BackgroundEstimator, bckgr_estimator):
-            bckgr_estimator = getattr(BackgroundEstimator, bckgr_estimator)
+            estimator = getattr(BackgroundEstimator, bckgr_estimator)
         else:
             raise NameError(f"Input background estimator {bckgr_estimator} does not exist")        
 
         data = self.dc.intensity_corrected.copy()
 
+        if data.ndim == 3:
+            if "axis" not in bckgr_params.keys():
+                bckgr_params["axis"] = (1, 2)
+            else:
+                bckgr_params["axis"] = (1, 2)
+            dims_to_expand = (1, 2)
+        elif data.ndim == 2:
+            if "axis" not in bckgr_params.keys():
+                bckgr_params["axis"] = (0)
+            else:
+                bckgr_params["axis"] = (0)
+            dims_to_expand = (0)
+
         if source_mask_nsigma is not None:
+            if self.bckgr is None:
+                # Call it again
+                self.vprint("Pre-estimating background using all data")
+                self.estimate_background(bckgr_estimator=bckgr_estimator, bckgr_params=bckgr_params,
+                                         source_mask_nsigma=None)
             self.vprint(f"Applying sigma-clipping mask (n-sigma={source_mask_nsigma})")
-            source_mask = data > self.bckgr + source_mask_nsigma * self.bckgr_sigma
+            source_mask = (data > np.expand_dims(self.bckgr, dims_to_expand)
+                           + source_mask_nsigma * np.expand_dims(self.bckgr_sigma, dims_to_expand))
             data[source_mask] = np.nan
-            self.bckgr, self.bckgr_sigma = bckgr_estimator(data, **bckgr_params)
+            self.bckgr, self.bckgr_sigma = estimator(data, **bckgr_params)
         else:
-            self.bckgr, self.bckgr_sigma = bckgr_estimator(data, **bckgr_params)
+            self.bckgr, self.bckgr_sigma = estimator(data, **bckgr_params)
         return self.bckgr, self.bckgr_sigma
 
     def remove_continuum(self, cont_estimator="median", cont_estimator_args=None):
@@ -417,7 +443,7 @@ class SkyFromObject(SkyModel):
 # Sky Substraction Correction
 # =============================================================================
 
-class SkyCorrection(CorrectionBase):
+class SkySubsCorrection(CorrectionBase):
     """Correction for removing sky emission from a datacube."""
     name = "SkyCorrection"
     verbose = True
@@ -448,14 +474,18 @@ class SkyCorrection(CorrectionBase):
         plt.close(fig)
         return fig
         
-    def apply(self, dc, verbose=True, plot=False, **plot_kwargs):
+    def apply(self, dc, pca=False, verbose=True, plot=False, **plot_kwargs):
         # Set print verbose
         self.verbose = verbose
         # Copy input RSS for storage the changes implemented in the task
         dc_out = copy.deepcopy(dc)
         self.corr_print("Applying sky substraction")
-        dc_out.intensity_corrected, dc_out.variance_corrected = self.skymodel.substract(
+        if pca:
+            dc_out.intensity_corrected, dc_out.variance_corrected = self.skymodel.substract_pca(
             dc_out.intensity_corrected, dc_out.variance_corrected)
+        else:
+            dc_out.intensity_corrected, dc_out.variance_corrected = self.skymodel.substract(
+                 dc_out.intensity_corrected, dc_out.variance_corrected)
         self.log_correction(dc_out, status='applied')
         
         if plot:
