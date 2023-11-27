@@ -73,10 +73,10 @@ All the corrections applied to the data are build upon the Correction base class
 - AtmosphericExtinction
 - Atmospheric Differential Refraction (ADR)
 #### Sky
-- Sky substraction
+- Sky substraction (SkySubsCorrection)
   - Sky continuum
   - Sky emission lines
-- Telluric correction
+- Telluric correction (TelluricCorrection)
 #### Flux calibration (Spectral throughput)
 #### Cleaning
 - Cosmics
@@ -118,7 +118,7 @@ All the corrections applied to the data are build upon the Correction base class
 ```
 3. Add this repository as another remote (to get the latest stuff):
 ```
-    git remote add upstream https://github.com/pykoala/koala
+    git remote add  upstream https://github.com/pykoala/koala
 ```
 4. Create a branch to work on the changes:
 ```
