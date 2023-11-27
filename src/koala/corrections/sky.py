@@ -8,6 +8,8 @@ import numpy as np
 import copy
 import os
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
+import scipy
 # =============================================================================
 # Astropy and associated packages
 # =============================================================================
@@ -18,8 +20,6 @@ from astropy.modeling import models, fitting
 # =============================================================================
 # Modular
 from koala.ancillary import vprint
-# Modular
-from koala.ancillary import vprint
 from koala.exceptions.exceptions import TelluricNoFileError
 from koala.corrections.correction import CorrectionBase
 from koala.rss import RSS
@@ -27,76 +27,166 @@ from koala.cubing import Cube
 # Original
 from koala.onedspec import smooth_spectrum # TODO: Remove
 
+# =============================================================================
+# Background estimators
+# =============================================================================
+
+class BackgroundEstimator:
+    # TODO: this is too heterogeneous
+    def percentile(data, percentiles=[16, 50, 84], axis=0):
+        """Compute the background data and dispersion from the percentiles."""
+        plow, background, pup = np.nanpercentile(data, percentiles, axis=axis)
+        background_sigma = (pup - plow) / 2
+        return background, background_sigma
+
+    def mad(data, axis=0):
+        """Median absolute deviation background estimator."""
+        background = np.nanmedian(data, axis=axis)
+        mad = np.nanmedian(np.abs(data  - np.expand_dims(background, axis=axis)),
+                        axis=axis)
+        background_sigma = 1.4826 * mad
+        return background, background_sigma
+
+    def mode(data, axis=0, n_bins=None, bin_range=None):
+        #TODO
+        raise NotImplementedError("Sorry not implemented :(")
+
+
+# =============================================================================
+# Continuum estimators
+# =============================================================================
+class ContinuumEstimator:
+    # TODO: refactor and homogeneize
+    def medfilt_continuum(data, window_size=5):
+        continuum = scipy.signal.medfilt(data, window_size)
+        return continuum
+
+    def pol_continuum(data, wavelength, pol_order=3, **polfit_kwargs):
+        fit = np.polyfit(data, wavelength, pol_order, **polfit_kwargs)
+        polynomial = np.poly1d(fit)
+        return polynomial(wavelength)
+
+# =============================================================================
+# Sky lines library
+# =============================================================================
 
 def uves_sky_lines():
-    """TODO"""
+    """Library of sky emission lines measured with UVES@VLT.
+    
+    Description
+    -----------
+    For more details see https://www.eso.org/observing/dfo/quality/UVES/pipeline/sky_spectrum.html
+
+    Returns
+    -------
+    - line_wavelength:
+        Array containing the wavelenght position of each emission line centroid in Angstrom.
+    - line_fwhm:
+        Array containing the FWHM values of each line expressed in Ansgtrom.
+    - line_flux: 
+        Array containing the flux of each line expressed in 1e-16 ergs/s/A/cm^2/arcsec^2
+    """
+    # Prefix of each table
     files = ["346", "437", "580L", "580U", "800U", "860L", "860U"]
+    # Path to tables
     data_path = os.path.join(os.path.dirname(__file__), "..", "input_data", "sky_lines", "ESO-UVES")
-    all_wavelengths = np.empty(1)
-    all_fwmh = np.empty(1)
-    all_flux = np.empty(1)
+    
+    line_wavelength = np.empty(1)
+    line_fwhm = np.empty(1)
+    line_flux = np.empty(1)
+
     for file in files:
+        if not os.path.isfile(file):
+            raise NameError(f"File {file} could not be found")
         with fits.open(os.path.join(data_path, "gident_{}.tfits".format(file))) as f:
             wave, fwhm, flux = f[1].data['LAMBDA_AIR'], f[1].data['FWHM'], f[1].data['FLUX']
-            all_wavelengths = np.hstack((all_wavelengths, wave))
-            all_fwmh = np.hstack((all_fwmh, fwhm))
-            all_flux = np.hstack((all_flux, flux))
-    sort_pos = np.argsort(all_wavelengths[1:])
-    return all_wavelengths[1:][sort_pos], all_fwmh[1:][sort_pos], all_flux[1:][sort_pos]
+            line_wavelength = np.hstack((line_wavelength, wave))
+            line_fwhm = np.hstack((line_fwhm, fwhm))
+            line_flux = np.hstack((line_flux, flux))
+    # Sort lines in terms of wavelenth
+    sort_pos = np.argsort(line_wavelength[1:])
+    return line_wavelength[1:][sort_pos], line_fwhm[1:][sort_pos], line_flux[1:][sort_pos]
 
-
+# =============================================================================
+# Sky models
+# =============================================================================
+# TODO: convert this class to an ABC
 class SkyModel(object):
     """
-    Abstract class of Sky models
-    # TODO: Convert this class to a Correction object
+    Abstract class of a sky emission model.
+
     Attributes
     ----------
-    intensity: 1D or 2D array, default None
-
+    wavelength:
+        TODO
+    intensity:
+        TODO 1D or 2D array, default None
+    variance:
+        TODO
+    verbose:
+        Print messages during the execution.
     Methods
     -------
-    substract_sky
-
-    Examples
-    --------
+    substract
+    substract_PCA
     """
+    verbose = True
 
     def __init__(self, **kwargs):
+        self.wavelength = kwargs.get('wavelength', None)
         self.intensity = kwargs.get('intensity', None)
         self.variance = kwargs.get('variance', None)
+        self.verbose = kwargs.get('verbose', True)
 
-    def substract_sky(self, rss, verbose=False):
+    def substract(self, data, variance, axis=-1, verbose=False):
         """Substracts the sky_model to all fibres in the rss
 
         Parameters
         ----------
-        rss: RSS
-            RSS object to which substract sky.
-        verbose
-
+        data: (np.ndarray)
+            Data array for which the sky will be substracted
+        variance: (np.ndarray)
+            Array of variance data to include errors on determining the sky.
+        axis: (np.ndarray)
+            Spectral direction of data
         Returns
         -------
-        rss_out: RSS
-            Sky substracted RSS
+        data_subs: (np.ndarray)
+        var_subs: (np.ndarray)
         """
-        # Set print verbose
-        vprint.verbose = verbose
-        # Copy input RSS for storage the changes implemented in the task
-        rss_out = copy.deepcopy(rss)
-        # Substract sky in all fibers
-        rss_out.intensity_corrected -= self.intensity[np.newaxis, :] * rss.info['exptime']
-        rss_out.variance_corrected += self.variance[np.newaxis, :] * rss.info['exptime'] ** 2
-        rss_out.log['sky'] = "Sky emission substracted"
-        vprint("  Intensities corrected for sky emission and stored in self.intensity_corrected !")
-        # history.append("  Intensities corrected for the sky emission")
-        return rss_out
+        # TODO
+        # if data.ndim != self.intensity.ndim:
+        data_subs = data - self.intensity
+        var_subs = variance + self.variance
+        return data_subs, var_subs
+
+    def substract_PCA():
+        # TODO: Implement PCA substraction method
+        pass
+    
+    def vprint(self, *messages):
+        """Print a message"""
+        if self.verbose:
+            print("[SkyModel] ", *messages)
+
 
 
 class SkyOffset(SkyModel):
     """
     Sky model based on a single RSS offset sky exposure
+
+    Description
+    -----------
+    This class builds a sky emission model from individual sky exposures.
+
+    Attributes
+    ----------
+    - dc:
+        Data container used to estimate the sky
+    - exptime:
+        Data container net exposure time
     """
-    def __init__(self, rss):
+    def __init__(self, dc):
         """
 
         Parameters
@@ -104,92 +194,127 @@ class SkyOffset(SkyModel):
         rss: RSS
             Raw Stacked Spectra corresponding to the offset-sky exposure.
         """
-        self.rss = rss
-        self.exptime = rss.info['exptime']
+        self.dc = dc
+        self.exptime = dc.info['exptime']
         super().__init__()
 
     def estimate_sky(self):
-        pct = np.nanpercentile(self.rss.intensity_corrected, [16, 50, 84], axis=0
-                               ) / self.exptime
-        self.intensity = pct[1]
-        self.variance = (pct[2] * 0.5 - pct[1] * 0.5)**2
-
-
-class SkyLibrary(SkyModel):
-    """
-    Sky model based on several RSS files from which a set of sky spectra will be estimates.
-    """
-
-    def __init__(self, rss):
-        self.rss = rss
-        super().__init__()
-
-    def estimate_sky(self):
-        # TODO: compute percentiles of sky to create intensity and variance
-        # TODO: Include the possibility of creating 1D or 2D models.
-        pass
+        self.intensity, self.variance = BackgroundEstimator.percentile(
+            self.dc.intensity_corrected, percentiles=[16, 50, 84])
+        self.intensity, self.variance = (
+            self.intensity / self.exptime,
+            self.variance / self.exptime)
 
 
 class SkyFromObject(SkyModel):
     """
-    Sky model based on a single RSS science frame
+    Sky model based on a single Data Container.
+
+    Description
+    -----------
+    This class builds a sky emission model using the data
+    from a given Data Container that includes the contribution
+    of an additional source (i.e. star/galaxy).
+
+    Attributes
+    ----------
+
     """
-    def __init__(self, rss):
-        self.sky_cont = None
-        self.sky_lines = None
-        self.sky_lines_fwhm = None
-        self.sky_lines_f = None
-        self.rss = rss
-        self.exptime = rss.info['exptime']
-        self.lines_mask = np.ones_like(self.rss.wavelength, dtype=bool)
-        super().__init__()
+    bckgr = None
+    bckgr_sigma = None
+    continuum = None
 
-    def estimate_sky(self):
-        """TODO"""
-        percentiles = np.nanpercentile(self.rss.intensity_corrected, [16, 50, 84], axis=0
-                                       ) / self.exptime
-        # TODO: compute percentiles of sky to create intensity and variance
-        # TODO: Include the possibility of creating 1D or 2D models.
-        return percentiles
+    def __init__(self, dc,
+                 bckgr_estimator='mad',
+                 bckgr_params=None,
+                 source_mask_nsigma=3,
+                 remove_cont=False,
+                 cont_estimator='median',
+                 cont_estimator_args=None):
+        """
+        Params
+        ------
+        - dc:
+            Input DataContainer object
+        - bckgr_estimator: (str, default='mad')
+            Background estimator method to be used.
+        - bckgr_params: (dict, default=None)
+        - remove_cont: (bool, default=False)
+            If True, the continuum will be removed.
+        """
+        self.vprint("Creating SkyModel from input Data Container")
+        # Data container
+        self.dc = dc
+        # Background estimator
+        self.vprint("Estimating sky background contribution...")
+        self.estimate_background(bckgr_estimator, bckgr_params, source_mask_nsigma)
+        if remove_cont:
+            self.vprint("Removing background continuum")
+            self.remove_continuum(cont_estimator, cont_estimator_args)
 
-    def estimate_sky_hist(self):
-        """TODO"""
-        mode_sky = np.zeros_like(self.rss.wavelength)
-        bin_edges = np.logspace(-3, 5, 201)
-        bins = (bin_edges[:-1] + bin_edges[1:]) / 2
-        hist_sky = np.zeros((mode_sky.size, bins.size))
-        for i in range(self.rss.wavelength.size):
-            f = self.rss.intensity_corrected[:, i] / self.exptime
-            h, _ = np.histogram(f, bins=bin_edges)
-            mode_sky[i] = np.nansum(h**5 * bins * np.diff(bin_edges)
-                                    ) / np.nansum(h**5 * np.diff(bin_edges))
-            hist_sky[i] = h
-        return mode_sky, hist_sky, bins
+        super().__init__(wavelength=self.dc.wavelength,
+                         intensity=self.bckgr,
+                         variance=self.bckgr_sigma**2)
 
-    def fit_continuum(self, spectra, err=None, deg=3):
-        print("[SkyFromObject] Estimating sky continuum")
-        if self.lines_mask is None:
-            self.load_sky_lines()
-        if err is not None:
-            w = 1/err
+    def estimate_background(self, bckgr_estimator, bckgr_params=None, source_mask_nsigma=3):
+        """Estimate the background.
+        
+        Parameters
+        ----------
+        - bckgr_estimator: (str)
+            Background estimator method. Currently available:
+            - mad (median absolute deviation),
+            - percentile (median percentile +/- (84th - 16th) * 0.5).
+            For details see BackgroundEstimator class.
+        Returns
+        -------
+        - background: (np.ndarray)
+            Estimated background
+        - background_sigma: (np.ndarray)
+            Estimated background standard deviation
+        """
+        if bckgr_params is None:
+            bckgr_params = {}
+
+        if hasattr(BackgroundEstimator, bckgr_estimator):
+            bckgr_estimator = getattr(BackgroundEstimator, bckgr_estimator)
         else:
-            w = np.ones_like(spectra)
-        finite = np.isfinite(spectra) & np.isfinite(w)
-        n = spectra[self.lines_mask].size
-        dof = n - (deg + 1)
-        #while True:
-        p = np.polyfit(self.rss.wavelength[self.lines_mask & finite], spectra[self.lines_mask & finite],
-                       deg=deg, w=w[self.lines_mask & finite])
-        pol = np.poly1d(p)
-        chi = (spectra[self.lines_mask & finite] - pol(self.rss.wavelength)[self.lines_mask & finite]
-                   ) * w[self.lines_mask & finite]
-        reduced_chi2 = np.sum(chi**2) / dof
-        sky_cont = pol(self.rss.wavelength)
-        #mask_cont = (spectra - sky_cont) / sky_cont < 0
-        #sky_cont[mask_cont] = np.sqrt(spectra[mask_cont] * sky_cont[mask_cont])
-        self.sky_cont = sky_cont
+            raise NameError(f"Input background estimator {bckgr_estimator} does not exist")        
 
-    def fit_emission_lines(self, cont_clean_spec, errors=None, window_size=100, resampling_wave=0.1, **fit_kwargs):
+        data = self.dc.intensity_corrected.copy()
+
+        if source_mask_nsigma is not None:
+            self.vprint(f"Applying sigma-clipping mask (n-sigma={source_mask_nsigma})")
+            source_mask = data > self.bckgr + source_mask_nsigma * self.bckgr_sigma
+            data[source_mask] = np.nan
+            self.bckgr, self.bckgr_sigma = bckgr_estimator(data, **bckgr_params)
+        else:
+            self.bckgr, self.bckgr_sigma = bckgr_estimator(data, **bckgr_params)
+        return self.bckgr, self.bckgr_sigma
+
+    def remove_continuum(self, cont_estimator="median", cont_estimator_args=None):
+        """Remove the continuum from the background model.
+        
+        Parameters
+        ----------
+        - method: (str)
+            Method used to estimate the continuum signal.
+        """
+        if cont_estimator_args is None:
+            cont_estimator_args = {}
+        if self.bckgr is not None:
+            if hasattr(ContinuumEstimator, cont_estimator):
+                estimator = getattr(ContinuumEstimator, cont_estimator)
+            else:
+                raise NameError(
+                    f"{cont_estimator} does not correspond to any available continuum method")
+            self.continuum = estimator(self.bckgr, **cont_estimator_args)
+            self.bckgr -= self.continuum
+        else:
+            raise AttributeError("background model has not been computed")
+
+    def fit_emission_lines(self, cont_clean_spec, errors=None, window_size=100,
+                           resampling_wave=0.1, **fit_kwargs):
         """
 
         Parameters
@@ -206,28 +331,33 @@ class SkyFromObject(SkyModel):
         """
         if errors is None:
             errors = np.ones_like(cont_clean_spec)
+        # Mask non-finite values
+        finite_mask = np.isfinite(cont_clean_spec)
         # Initial guess of line gaussian amplitudes
-        p0_amplitude = np.interp(self.sky_lines, self.rss.wavelength, cont_clean_spec)
+        p0_amplitude = np.interp(self.sky_lines,
+                                 self.dc.wavelength[finite_mask],
+                                 cont_clean_spec[finite_mask])
         p0_amplitude = np.clip(p0_amplitude, a_min=0, a_max=None)
         # Fitter function
         fit_g = fitting.LevMarLSQFitter()
         # Initialize the model with a dummy gaussian
         emission_model = models.Gaussian1D(amplitude=0, mean=0, stddev=0)
-        emission_spectra = np.zeros_like(self.rss.wavelength)
+        emission_spectra = np.zeros_like(self.dc.wavelength)
         # Select window steps
-        wavelength_windows = np.arange(self.rss.wavelength.min(), self.rss.wavelength.max(), window_size)
+        wavelength_windows = np.arange(self.dc.wavelength.min(), self.dc.wavelength.max(), window_size)
         # Ensure the last element corresponds to the last wavelength point of the RSS
-        wavelength_windows[-1] = self.rss.wavelength.max()
+        wavelength_windows[-1] = self.dc.wavelength.max()
         print("Fitting all emission lines ({}) to continuum-substracted sky spectra".format(self.sky_lines.size))
         # Loop over each spectral window
         for wl_min, wl_max in zip(wavelength_windows[:-1], wavelength_windows[1:]):
             print("Starting fit in the wavelength range [{:.1f}, {:.1f}]".format(wl_min, wl_max))
             mask_lines = (self.sky_lines >= wl_min) & (self.sky_lines < wl_max)
-            mask = (self.rss.wavelength >= wl_min) & (self.rss.wavelength < wl_max)
+            mask = (self.dc.wavelength >= wl_min
+                    ) & (self.dc.wavelength < wl_max) & finite_mask
             # Oversample wavelength array to prevent fitting crash for excess of lines
-            wave = np.arange(self.rss.wavelength[mask][0], self.rss.wavelength[mask][-1], resampling_wave)
-            obs = np.interp(wave, self.rss.wavelength[mask], cont_clean_spec[mask])
-            err = np.interp(wave, self.rss.wavelength[mask], errors[mask])
+            wave = np.arange(self.dc.wavelength[mask][0], self.dc.wavelength[mask][-1], resampling_wave)
+            obs = np.interp(wave, self.dc.wavelength[mask], cont_clean_spec[mask])
+            err = np.interp(wave, self.dc.wavelength[mask], errors[mask])
             if mask_lines.any():
                 print("> Line to Fit {:.1f}".format(self.sky_lines[mask_lines][0]))
                 window_model = models.Gaussian1D(
@@ -244,25 +374,27 @@ class SkyFromObject(SkyModel):
                                                       'stddev': (sigma/2, 5)})
                     window_model += model
                 g = fit_g(window_model, wave, obs, weights=1/err, **fit_kwargs)
-                emission_spectra += g(self.rss.wavelength)
+                emission_spectra += g(self.dc.wavelength)
                 emission_model += g
         return emission_model, emission_spectra
 
-    def load_sky_lines(self, path_to_table=None, default=True, lines_pct=84., **kwargs):
+    def load_sky_lines(self, path_to_table=None, lines_pct=84., **kwargs):
         """TODO"""
         if path_to_table is not None:
-            path_to_table = os.path.join(os.path.dirname(__file__), 'input_data', 'sky_lines', path_to_table)
-            self.sky_lines, self.sky_lines_fwhm, self.sky_lines_f = np.loadtxt(path_to_table, usecols=(0, 1, 2),
-                                                                               unpack=True, **kwargs)
-        elif default:
+            path_to_table = os.path.join(os.path.dirname(__file__),
+                                         'input_data', 'sky_lines',
+                                         path_to_table)
+            self.sky_lines, self.sky_lines_fwhm, self.sky_lines_f = np.loadtxt(
+                path_to_table, usecols=(0, 1, 2), unpack=True, **kwargs)
+        else:
             self.sky_lines, self.sky_lines_fwhm, self.sky_lines_f = uves_sky_lines()
         # Select only lines within the RSS spectral range
-        common_lines = (self.sky_lines >= self.rss.wavelength[0]) & (self.sky_lines <= self.rss.wavelength[-1])
-        self.sky_lines, self.sky_lines_fwhm, self.sky_lines_f = (self.sky_lines[common_lines],
-                                                                 self.sky_lines_fwhm[common_lines],
-                                                                 self.sky_lines_f[common_lines])
+        common_lines = (self.sky_lines >= self.dc.wavelength[0]) & (self.sky_lines <= self.dc.wavelength[-1])
+        self.sky_lines, self.sky_lines_fwhm, self.sky_lines_f = (
+            self.sky_lines[common_lines], self.sky_lines_fwhm[common_lines],
+            self.sky_lines_f[common_lines])
         # Bin lines unresolved for RSS data
-        delta_lambda = np.median(np.diff(self.rss.wavelength))
+        delta_lambda = np.median(np.diff(self.dc.wavelength))
         unresolved_lines = np.where(np.diff(self.sky_lines) <= delta_lambda)[0]
         while len(unresolved_lines) > 0:
             self.sky_lines[unresolved_lines] = (self.sky_lines[unresolved_lines]
@@ -280,17 +412,63 @@ class SkyFromObject(SkyModel):
         self.sky_lines = np.delete(self.sky_lines, faint)
         self.sky_lines_fwhm = np.delete(self.sky_lines_fwhm, faint)
         self.sky_lines_f = np.delete(self.sky_lines_f, faint)
-        for line, fwhm in zip(self.sky_lines, self.sky_lines_fwhm):
-            # Mask lines up to 2-sigma
-            self.lines_mask[(self.rss.wavelength > line - 5)
-                            & (self.rss.wavelength < line + 5)] = False
 
-
-class SkySubstraction(CorrectionBase):
-    # TODO
-    pass
 # =============================================================================
-# Telluric CorrectionBase
+# Sky Substraction Correction
+# =============================================================================
+
+class SkyCorrection(CorrectionBase):
+    """Correction for removing sky emission from a datacube."""
+    name = "SkyCorrection"
+    verbose = True
+
+    def __init__(self, skymodel):
+        self.skymodel = skymodel
+
+    def plot_correction(self, data_cont, data_cont_corrected, **kwargs):
+        fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(10, 10),
+                                sharex=True, sharey=True)
+        if "im_args" in kwargs.keys():
+            im_args = kwargs['im_args']
+        else:
+            im_args = dict(aspect='auto', interpolation='none',
+                           cmap='nipy_spectral',
+                           vmin=np.nanpercentile(data_cont.intensity_corrected, 1),
+                           vmax=np.nanpercentile(data_cont.intensity_corrected, 99))
+        ax = axs[0]
+        ax.set_title("Input")
+        ax.imshow(data_cont.intensity_corrected, **im_args)
+        ax = axs[1]
+        ax.set_title("Sky emission substracted")
+        mappable = ax.imshow(data_cont_corrected.intensity_corrected, **im_args)
+        
+        cax = ax.inset_axes((-1.2, -.1, 2.2, 0.02))
+        plt.colorbar(mappable, cax=cax, orientation="horizontal")
+        
+        plt.close(fig)
+        return fig
+        
+    def apply(self, dc, verbose=True, plot=False, **plot_kwargs):
+        # Set print verbose
+        self.verbose = verbose
+        # Copy input RSS for storage the changes implemented in the task
+        dc_out = copy.deepcopy(dc)
+        self.corr_print("Applying sky substraction")
+        dc_out.intensity_corrected, dc_out.variance_corrected = self.skymodel.substract(
+            dc_out.intensity_corrected, dc_out.variance_corrected)
+        self.log_correction(dc_out, status='applied')
+        
+        if plot:
+            if not dc_out.intensity_corrected.ndim == 2:
+                # TODO: Include 3D plots
+                self.corr_print("Plots can only be produed for 2D Data containers (RSS)")
+            fig = self.plot_correction(dc, dc_out, **plot_kwargs)
+        else:
+            fig = None
+        return dc_out, fig
+
+# =============================================================================
+# Telluric Correction
 # =============================================================================
 class Tellurics(CorrectionBase):
     """
@@ -477,9 +655,9 @@ class Tellurics(CorrectionBase):
         plt.close(fig)
         return fig
 
-    def apply(self, rss, verbose=False, is_combined_cube=False):
+    def apply(self, rss, verbose=True, is_combined_cube=False):
         # Set print verbose
-        vprint.verbose = verbose
+        self.verbose = verbose
         # Copy input RSS for storage the changes implemented in the task
         rss_out = copy.deepcopy(rss)
         self.corr_print("Applying telluric correction to this star...")
