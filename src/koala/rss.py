@@ -257,8 +257,8 @@ def read_rss(file_path,
 
     file_name = os.path.basename(file_path)
 
-    vprint.verbose = verbose
-    vprint("\n> Reading RSS file", file_name, "created with", instrument, "...")
+    vprint("\n> Reading RSS file", file_name, "created with", instrument, "...",
+           verbose=verbose)
 
     #  Open fits file. This assumes that RSS objects are written to file as .fits.
     with fits.open(file_path) as rss_fits:
@@ -268,9 +268,10 @@ def read_rss(file_path,
         # Bad pixel verbose summary
         vprint("\n  Number of spectra in this RSS =", len(all_intensities),
             ",  number of good spectra =", len(intensity),
-            " ,  number of bad spectra =", len(bad_fibres_list))
+            " ,  number of bad spectra =", len(bad_fibres_list),
+            verbose=verbose)
         if bad_fibres_list is not None:
-            vprint("  Bad fibres =", bad_fibres_list)
+            vprint("  Bad fibres =", bad_fibres_list, verbose=verbose)
 
         # Read errors if exist a dedicated axis
         if variance_axis is not None:
@@ -278,7 +279,7 @@ def read_rss(file_path,
             variance = np.delete(all_variances, bad_fibres_list, 0)
 
         else:
-            vprint("\n  WARNING! Variance extension not found in fits file!")
+            vprint("\n  WARNING! Variance extension not found in fits file!", verbose=verbose)
             variance = np.full_like(intensity, fill_value=np.nan)
 
     # Create wavelength from wcs
@@ -311,6 +312,39 @@ def read_rss(file_path,
                fibre_table=fibre_table,
                info=info
                )
+
+def combine_rss(list_of_rss, combine_method='nansum'):
+    """Combine an input list of DataContainers into a new DataContainer."""
+
+    all_intensities = []
+    all_variances = []
+    for rss in list_of_rss:
+        intensity = rss.intensity_corrected.copy()
+        variance = rss.variance_corrected.copy()
+        # Ensure nans
+        finite_mask = np.isfinite(intensity) & np.isfinite(variance)
+        intensity[~finite_mask] = np.nan
+        variance[~finite_mask] = np.nan
+
+        all_intensities.append(intensity)
+        all_variances.append(variance)
+    
+    if hasattr(np, combine_method):
+        combine_function = getattr(np, combine_method)
+        new_intensity = combine_function(all_intensities, axis=0)
+        new_variance = combine_function(all_variances, axis=0)
+    else:
+        raise NotImplementedError("Implement user-defined combining methods")
+    
+    # TODO: Update the metadata as well
+    new_rss = RSS(intensity=new_intensity, intensity_corrected=new_intensity,
+                  variance=new_variance, variance_corrected=new_variance,
+                  wavelength=rss.wavelength, log=rss.log, header=rss.header, fibre_table=rss.fibre_table,
+                  info=rss.info)
+    return new_rss
+    
+
+    
 
 # Mr Krtxo \(ﾟ▽ﾟ)/
 
