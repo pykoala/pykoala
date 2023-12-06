@@ -3,6 +3,8 @@ from matplotlib import pyplot as plt
 from matplotlib.gridspec import  GridSpec
 import os
 
+from koala.corrections.throughput import Throughput
+
 #TODO: This is not working
 plt.style.use(
     os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -18,12 +20,15 @@ def qc_throughput(throughput):
 
     Parameters
     ----------
-    - throughput: (np.ndarray)
+    - throughput: (np.ndarray or throughput.Throughput)
 
     Returns
     -------
     - fig
     """
+    if type(throughput) is Throughput:
+        throughput = throughput.throughput_data
+
     fig = plt.figure(figsize=(10, 8))
     gs = fig.add_gridspec(3, 4, wspace=0.15, hspace=0.35)
 
@@ -45,7 +50,7 @@ def qc_throughput(throughput):
     fibre_idx = np.random.randint(low=0, high=throughput.shape[0], size=3)
     for idx in fibre_idx:
         ax.plot(throughput[idx], label='Fibre {}'.format(idx), lw=0.7, alpha=0.8)
-    ax.set_ylim(0.5, 1.5)
+    ax.set_ylim(0.75, 1.25)
     ax.set_xlabel("Spectral pixel")
     ax.legend(ncol=3)
 
@@ -55,7 +60,7 @@ def qc_throughput(throughput):
         ax.plot(throughput[:, idx].squeeze(),
                 label='Wave col {}'.format(idx), lw=0.7,
                 alpha=0.8)
-    ax.set_ylim(0.5, 1.5)
+    ax.set_ylim(0.75, 1.25)
     ax.set_xlabel("Fibre number")
     ax.legend(ncol=3)
     return fig

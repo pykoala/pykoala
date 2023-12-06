@@ -1,5 +1,5 @@
 """
-This module contains a colelction of ancilliary functions which are either partially implemented or not fully implemented. 
+This module contains a collection of ancilliary functions which are either partially implemented or not fully implemented. 
 Currently this acts as a placeholder for functions that were in the original non-modular version of PyKOALA which have
 not been included in the modular version
 """
@@ -16,6 +16,14 @@ from scipy import optimize
 # =============================================================================
 from astropy.io import fits
 # =============================================================================
+
+def vprint(*arg, **kwargs):
+    """
+    Prints the arguments only if verbose=True.
+    """
+    if kwargs['verbose']:
+        print(*arg)
+
 
 # =============================================================================
 # Ancillary Functions - RSS Related
@@ -79,75 +87,6 @@ rss_info_template = dict(name=None,  # Name of the object
                          pos_angle=None,  # Instrument position angle
                          airmass=None  # Airmass
                          )
-
-
-def vprint(*arg):
-    """
-    Prints the arguments only if vprint.verbose is previously setted True.
-    """
-    vprint.verbose
-    if vprint.verbose:
-        for i in arg:
-            print(i,end=' ')
-
-
-def interpolate_nan(spectrum):
-    """
-    Replace any NaN value in a spectrum by interpolating non-NaNs sideways.
-    """
-    
-    inds = np.arange(spectrum.shape[0])
-    good = np.where(np.isfinite(spectrum))
-    f = interpolate.interp1d(inds[good], spectrum[good],bounds_error=False)
-    filled_spectrum = np.where(np.isfinite(spectrum),spectrum,f(inds))
-    return filled_spectrum
-
-
-def nearest(array, value):
-    """
-    Returns the index of the element in <array> nearest to <value>.
-    
-    """
-    array = np.asarray(array)
-    idx = (np.abs(array - value)).argmin()
-    return idx
-
-# Originally a method of RSS
-
-def cut_wave(rss,
-             wave,
-             wave_index=-1,
-             #plot=False,
-             #ymax="",
-             ):
-    """
-
-    Parameters
-    ----------
-    wave : wavelength to be cut
-        DESCRIPTION.
-    plot : TYPE, optional
-        DESCRIPTION. The default is False.
-    ymax : TYPE, optional
-        DESCRIPTION. The default is "".
-
-    Returns
-    -------
-    corte_wave : TYPE
-        DESCRIPTION.
-
-    """
-    w = rss.wavelength
-    if wave_index == -1:
-        _w_ = np.abs(w - wave)
-        w_min = np.nanmin(_w_)
-        wave_index = _w_.tolist().index(w_min)
-    else:
-        wave = w[wave_index]
-    corte_wave = rss.intensity_corrected[:, wave_index]
-
-    return corte_wave
-
 
 def running_mean(x, n_window):
     """
@@ -263,14 +202,28 @@ def growth_curve_2d(image, x0=None, y0=None):
 
 
 def interpolate_image_nonfinite(image):
+    """Use scipy.interpolate.NearestNDInterpolator to replace NaN values.
+
+    Parameters
+    ----------
+    - image: (np.ndarray)
+        2D array to be interpolated
+    Returnrs
+    --------
+    - interpolated_image: (np.ndarray)
+    """
+    if image.ndim != 2:
+        raise ArithmeticError(f"Input image must have 2D not {image.ndim}")
+
     x, y = np.meshgrid(
         np.arange(0, image.shape[1], 1),
         np.arange(0, image.shape[0], 1))
     mask = np.isfinite(image)
     interp = interpolate.NearestNDInterpolator(
         list(zip(x[mask], y[mask])), image[mask])
-    image = interp(x, y)
-    return image
+    interp_image = interp(x, y)
+    return interp_image
+
 # ----------------------------------------------------------------------------------------------------------------------
 # Models and fitting
 # ----------------------------------------------------------------------------------------------------------------------
