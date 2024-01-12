@@ -512,6 +512,8 @@ class TelluricCorrection(CorrectionBase):
     def __init__(self,
                  data_container=None,
                  telluric_correction_file=None,
+                 telluric_correction=None,
+                 wavelength=None,
                  n_fibres=10,
                  verbose=True,
                  frac=0.5):
@@ -523,7 +525,7 @@ class TelluricCorrection(CorrectionBase):
 
         # Store basic data
         if self.data_container is not None:
-
+            self.corr_print("Estimating telluric correction using input observation")
             self.data_container = data_container
             self.wlm = self.data_container.wavelength
 
@@ -541,7 +543,12 @@ class TelluricCorrection(CorrectionBase):
             self.bad_pixels_mask = np.isfinite(self.spectra) & np.isfinite(self.spectra_var
                                                                            ) & (self.spectra / self.spectra_var > 0)
         elif telluric_correction_file is not None:
+            self.corr_print(f"Reading telluric correction from input file {telluric_correction_file}")
             self.wlm, self.telluric_correction = np.loadtxt(telluric_correction_file, unpack=True)
+        elif telluric_correction is not None and wavelength is not None:
+            self.corr_print("Using user-provided telluric correction")
+            self.telluric_correction = telluric_correction
+            self.wlm = wavelength
         else:
             raise TelluricNoFileError()
 
@@ -685,9 +692,16 @@ class TelluricCorrection(CorrectionBase):
         plt.close(fig)
         return fig
 
-    def apply(self, rss, verbose=True, is_combined_cube=False):
+    def apply(self, rss, verbose=True, is_combined_cube=False, update=True):
         # Set print verbose
         self.verbose = verbose
+
+        # Check wavelength
+        if not rss.wavelength.size == self.wlm.size or not np.allclose(rss.wavelength, self.wlm, equal_nan=True):
+            self.corr_vprint("Interpolating correction to input wavelength")
+            self.interpolate_model(rss.wavelength, update=update)
+
+            
         # Copy input RSS for storage the changes implemented in the task
         rss_out = copy.deepcopy(rss)
         self.corr_print("Applying telluric correction to this star...")
@@ -696,9 +710,28 @@ class TelluricCorrection(CorrectionBase):
         self.log_correction(rss, status='applied')
         return rss_out
 
+    def interpolate_model(self, wavelength, update=True):
+        """Interpolate the telluric correction model to the input wavelength array."""
+        telluric_correction = np.interp(wavelength, self.wlm, self.telluric_correction, left=1, right=1)
+        if update:
+            self.teluric_correction = telluric_correction
+            self.wlm = wavelength
+        return telluric_correction
+
     def save(self, filename='telluric_correction.txt', **kwargs):
         """Save telluric correction function to text file."""
         self.corr_print(f"Saving telluric correction into file {filename}")
         np.savetxt(filename, np.array([self.wlm, self.telluric_correction]).T, **kwargs)
 
+def combine_telluric_corrections(list_of_telcorr, ref_wavelength):
+    """Combine a list of input telluric corrections."""
+    print("Combining input telluric corrections")    
+    telluric_corrections = np.zeros((len(list_of_telcorr), ref_wavelength.size))
+    for i, telcorr in enumerate(list_of_telcorr):
+        telluric_corrections[i] = telcorr.interpolate_model(ref_wavelength)
+
+    telluric_correction = np.nanmedian(telluric_corrections, axis=0)
+    return TelluricCorrection(telluric_correction=telluric_correction, wavelength=ref_wavelength, verbose=False)
+    
+        
 # Mr Krtxo \(ﾟ▽ﾟ)/
