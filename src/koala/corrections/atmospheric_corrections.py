@@ -22,7 +22,7 @@ from koala.corrections.correction import CorrectionBase
 
 
 # =============================================================================
-class AtmosphericExtinction(CorrectionBase):
+class AtmosphericExtCorrection(CorrectionBase):
     """Atmospheric Extinction Correction.
 
     Description

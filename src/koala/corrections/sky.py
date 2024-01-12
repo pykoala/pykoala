@@ -500,7 +500,7 @@ class SkySubsCorrection(CorrectionBase):
 # =============================================================================
 # Telluric Correction
 # =============================================================================
-class Tellurics(CorrectionBase):
+class TelluricCorrection(CorrectionBase):
     """
     Telluric correction produced by atmosphere absorption. # TODO
     """
@@ -698,6 +698,7 @@ class Tellurics(CorrectionBase):
 
     def save(self, filename='telluric_correction.txt', **kwargs):
         """Save telluric correction function to text file."""
+        self.corr_print(f"Saving telluric correction into file {filename}")
         np.savetxt(filename, np.array([self.wlm, self.telluric_correction]).T, **kwargs)
 
 # Mr Krtxo \(ﾟ▽ﾟ)/
