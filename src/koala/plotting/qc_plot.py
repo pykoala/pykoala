@@ -276,7 +276,8 @@ def qc_registration_centroids(images_list, centroids):
     
     radial_points = (images_list[0].shape[0]**2
                      + images_list[0].shape[1]**2)**0.5 / 2 / np.array([8, 4, 2])
-    vmin, vmax = np.nanpercentile(images_list, [5, 95])
+    # Account for images with different sizes
+    vmin, vmax = np.nanpercentile([im.flatten() for im in images_list], [5, 95])
     imargs = dict(vmin=vmin, vmax=vmax, cmap='viridis', interpolation='none')
 
     fig, axs = plt.subplots(nrows=1, ncols=len(images_list),
