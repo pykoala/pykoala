@@ -29,21 +29,6 @@ def vprint(*arg, **kwargs):
 # Ancillary Functions - RSS Related
 # =============================================================================
 
-#This has not been implemented. Is meant to return the range of RA and DEC from centre RA and DEC
-
-def coord_range(rss_list):
-    """
-    Returns the full extent of the coordinate range of a given set of RSS files 
-    """
-    ra = [rss.RA_centre_deg + rss.offset_RA_arcsec / 3600. for rss in rss_list]
-    ra_min = np.nanmin(ra)
-    ra_max = np.nanmax(ra)
-    dec = [rss.DEC_centre_deg + rss.offset_DEC_arcsec / 3600. for rss in rss_list]
-    dec_min = np.nanmin(dec)
-    dec_max = np.nanmax(dec)
-    return ra_min, ra_max, dec_min, dec_max
-
-
 def detect_edge(rss):
     """
     Detect the edges of a RSS. Returns the minimum and maximum wavelength that 
@@ -223,6 +208,23 @@ def interpolate_image_nonfinite(image):
         list(zip(x[mask], y[mask])), image[mask])
     interp_image = interp(x, y)
     return interp_image
+
+def make_white_image(datacube, wave_range=None, s_clip=3.0):
+    """Create a white image from an input datacube"""
+
+    if wave_range is not None:
+        wave_mask = (datacube.wavelength >= wave_range[0]) & (datacube.wavelength <= wave_range[1])
+    else:
+        wave_mask = np.ones_like(datacube.wavelength, dtype=bool)
+    
+    if s_clip is not None:
+        std_dev = np.nanstd(datacube.intensity_corrected, axis=0)
+        weights = datacube.intensity_corrected < s_clip * std_dev[np.newaxis]
+    else:
+        weights = np.ones_like(datacube.intensity_corrected)
+
+    white = np.nansum(datacube.intensity_corrected * weights, axis=0) / np.nansum(weights, axis=0)
+    return white
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Models and fitting
