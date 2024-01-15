@@ -18,7 +18,7 @@ from photutils.centroids import centroid_2dg, centroid_1dg, centroid_com
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from koala.ancillary import interpolate_image_nonfinite, make_white_image
+from koala.ancillary import interpolate_image_nonfinite, make_white_image_from_array
 from koala.plotting import qc_plot
 from koala.plotting.qc_plot import qc_registration, qc_moffat, qc_registration_crosscorr
 from koala.cubing import Cube, build_cube, interpolate_rss
@@ -355,30 +355,34 @@ def register_centroid(data_set, wave_range=None,
                 data, pixel_size_arcsec=quick_cube_pix_size,
                 kernel_size_arcsec=1.,
                 datacube=datacube)
-            image = make_white_image(datacube, wave_range=wave_range, s_clip=3.0)
+
+            image = make_white_image_from_array(datacube, wavelength=data.wavelength,
+                                                wave_range=wave_range, s_clip=3.0)
         elif type(data) is Cube:
-            image = make_white_image(data, wave_range=wave_range, s_clip=3.0)
+            image = data.get_white_image(wave_range=wave_range, s_clip=3.0)
             image /= np.nansum(image)
 
         # Select a subbox
-        image = image[subbox[0][0]:subbox[0][1], subbox[1][0]: subbox[1][1]]
-        
+        image = image[subbox[0][0]:subbox[0][1],
+                      subbox[1][0]: subbox[1][1]]
+
         # Mask bad values
         image = interpolate_image_nonfinite(image)
         images.append(image)
         # Find centroid
         centroids.append(np.array(centroider(image)))
 
+
     ref_centre = (data_set[0].info['cen_ra'], data_set[0].info['cen_dec'])
     # Update the coordinats of the rest of frames
     for i, data in enumerate(data_set[1:]):
         print("[Registration] Object: ", data.info['name'])
-        shift = centroids[0] - centroids[i]
+        shift = centroids[0] - centroids[i+1]
         # Convert the shift in pixels to arcseconds
         shift *= quick_cube_pix_size
         print(f"[Registration] Shift found: {shift} (arcsec)")
-        new_fib_offset_coord = (data.info['fib_ra_offset'] - shift[1],
-                                data.info['fib_dec_offset'] - shift[0])
+        new_fib_offset_coord = (data.info['fib_ra_offset'] + shift[0],
+                                data.info['fib_dec_offset'] + shift[1])
         data.update_coordinates(new_centre=ref_centre,
                                 new_fib_offset_coord=new_fib_offset_coord)
         
@@ -410,6 +414,7 @@ def cross_correlate_images(list_of_images, oversample=100):
 
     results = []
     for i in range(len(list_of_images) - 1):
+        # The shift ordering is consistent with the input image shape
         shift, error, diffphase = phase_cross_correlation(
             list_of_images[0], list_of_images[i+1],
             upsample_factor=100)
@@ -417,7 +422,7 @@ def cross_correlate_images(list_of_images, oversample=100):
     return results
 
 def register_crosscorr(data_set, ref_image=0,
-                       oversample=100, quick_cube_pix_size=0.2,
+                       oversample=100, quick_cube_pix_size=0.3,
                        wave_range=None, plot=False):
     """ Register a collection of data (either RSS or Cube) corresponding to stars.
 
@@ -466,10 +471,11 @@ def register_crosscorr(data_set, ref_image=0,
                 data, pixel_size_arcsec=quick_cube_pix_size,
                 kernel_size_arcsec=1.,
                 datacube=datacube)
-            image = make_white_image(datacube, wave_range=wave_range, s_clip=3.0)
+            image = make_white_image_from_array(datacube, data.wavelength,
+                                                wave_range=wave_range, s_clip=3.0)
     
         elif type(data) is Cube:
-            image = make_white_image(data, wave_range=wave_range, s_clip=3.0)
+            image = data.get_white_image(wave_range=wave_range, s_clip=3.0)
 
         # Mask NaN values
         image = interpolate_image_nonfinite(image)
@@ -480,12 +486,12 @@ def register_crosscorr(data_set, ref_image=0,
     # Update the coordinats of the rest of frames
     for i, data in enumerate(data_set[1:]):
         print("[Registration] Object: ", data.info['name'])
-        shift = results[i][0]
+        shift = results[i][0].copy()
         # Convert the shift in pixels to arcseconds
         shift *= quick_cube_pix_size
         print(f"[Registration] Shift found: {shift} (arcsec)")
-        new_fib_offset_coord = (data.info['fib_ra_offset'] - shift[0],
-                                data.info['fib_dec_offset'] - shift[1])
+        new_fib_offset_coord = (data.info['fib_ra_offset'] + shift[1],
+                                data.info['fib_dec_offset'] + shift[0])
         data.update_coordinates(new_centre=ref_centre,
                                 new_fib_offset_coord=new_fib_offset_coord)
         
@@ -537,7 +543,7 @@ def register_manual(data_set, offset_set, absolute=False):
 # =============================================================================
 # 
 # =============================================================================
-def register_interactive(data_set, quick_cube_pix_size=0.2):
+def register_interactive(data_set, quick_cube_pix_size=0.2, wave_range=None):
     """
     Fully manual registration via interactive plot
     """
@@ -569,11 +575,12 @@ def register_interactive(data_set, quick_cube_pix_size=0.2):
                 data, pixel_size_arcsec=quick_cube_pix_size,
                 kernel_size_arcsec=1.,
                 datacube=datacube)
-            image = make_white_image(datacube, wave_range=wave_range, s_clip=3.0)
+            image = make_white_image_from_array(datacube, data.wavelength,
+                                                wave_range=wave_range, s_clip=3.0)
             image_pix_size = quick_cube_pix_size
 
         elif type(data) is Cube:
-            image = make_white_image(data, wave_range=wave_range, s_clip=3.0)
+            image = data.get_white_image(wave_range=wave_range, s_clip=3.0)
             image_pix_size = data.info['pixel_size_arcsec']
 
         # Mask NaN values

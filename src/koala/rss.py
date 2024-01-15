@@ -75,17 +75,22 @@ class RSS(DataContainer):
             TODO - this is NOT an exhaustive list. Please update when new attributes are encountered       
     """
     def __init__(self,
-                 intensity,
-                 wavelength,
-                 variance,
-                 mask,
-                 intensity_corrected,
-                 variance_corrected,
-                 log,
-                 header,
-                 fibre_table,
-                 info
+                 intensity=None,
+                 wavelength=None,
+                 variance=None,
+                 mask=None,
+                 intensity_corrected=None,
+                 variance_corrected=None,
+                 log=None,
+                 header=None,
+                 fibre_table=None,
+                 info=None
                  ):
+
+        if intensity_corrected is None:
+            intensity_corrected = intensity
+        if variance_corrected is None:
+            variance_corrected = variance
 
         super().__init__(intensity=intensity,
                          intensity_corrected=intensity_corrected,

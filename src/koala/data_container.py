@@ -41,10 +41,16 @@ class DataContainer(object):
         self.intensity_units = kwargs.get("intensity_units", None)
         # Information and masking
         self.info = kwargs.get("info", dict())
+        if self.info is None:
+            self.info = dict()
         self.log = kwargs.get("log", dict(corrections=dict()))
+        if self.log is None:
+            self.log = dict()
         self.mask = kwargs.get("mask", None)
         self.mask_map = kwargs.get("mask_map", None)
 
+        self.fill_info()
+    
     def save_log(self):
         #TODO
         pass
@@ -52,6 +58,11 @@ class DataContainer(object):
     def save_info(self):
         #TODO
         pass
+
+    def fill_info(self):
+        """Check the keywords of info and fills them with placeholders."""
+        if 'name' not in self.info.keys():
+            self.info['name'] = 'N/A'
 
     def is_in_info(self, key):
         """Check if a given keyword is stored in the info variable."""

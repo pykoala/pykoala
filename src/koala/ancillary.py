@@ -17,6 +17,12 @@ from scipy import optimize
 from astropy.io import fits
 # =============================================================================
 
+# =============================================================================
+# PyKOALA modules
+# =============================================================================
+from koala.cubing import Cube
+
+
 def vprint(*arg, **kwargs):
     """
     Prints the arguments only if verbose=True.
@@ -209,22 +215,12 @@ def interpolate_image_nonfinite(image):
     interp_image = interp(x, y)
     return interp_image
 
-def make_white_image(datacube, wave_range=None, s_clip=3.0):
-    """Create a white image from an input datacube"""
 
-    if wave_range is not None:
-        wave_mask = (datacube.wavelength >= wave_range[0]) & (datacube.wavelength <= wave_range[1])
-    else:
-        wave_mask = np.ones_like(datacube.wavelength, dtype=bool)
-    
-    if s_clip is not None:
-        std_dev = np.nanstd(datacube.intensity_corrected, axis=0)
-        weights = datacube.intensity_corrected < s_clip * std_dev[np.newaxis]
-    else:
-        weights = np.ones_like(datacube.intensity_corrected)
-
-    white = np.nansum(datacube.intensity_corrected * weights, axis=0) / np.nansum(weights, axis=0)
-    return white
+def make_white_image_from_array(data_array, wavelength=None, **args):
+    """Create a white image from a 3D data array."""
+    print(f"Creating a Cube of dimensions: {data_array.shape}")
+    cube = Cube(intensity=data_array, wavelength=wavelength)
+    return cube.get_white_image()
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Models and fitting

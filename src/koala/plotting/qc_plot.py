@@ -218,16 +218,7 @@ def qc_registration(rss_list, **kwargs):
 def qc_registration_crosscorr(images_list, cross_corr_results):
     """TODO..."""
     # Set reference points to illustrate the shifts
-    ref_points = np.array([
-        [images_list[0].shape[0] / 2, images_list[0].shape[1] / 2],
-        [0, 0],
-        [0, images_list[0].shape[1]],
-        [images_list[0].shape[0], 0],
-        [images_list[0].shape[0], images_list[0].shape[1]]
-        ])
-    
-    radial_points = (images_list[0].shape[0]**2
-                     + images_list[0].shape[1]**2)**0.5 / 2 / np.array([8, 4, 2])
+
     vmin, vmax = np.nanpercentile(images_list, [5, 95])
     imargs = dict(vmin=vmin, vmax=vmax, cmap='viridis', interpolation='none')
 
@@ -237,27 +228,18 @@ def qc_registration_crosscorr(images_list, cross_corr_results):
     
     axs[0].set_title("Reference image")
     mappable = axs[0].imshow(images_list[0], **imargs)
-    # Reference points
-    for point in ref_points:
-        axs[0].plot(point[1], point[0], c='r', marker='+')
-    for radius in radial_points:
-        circle = plt.Circle((ref_points[0][1], ref_points[0][0]),
-                             radius, color='r', fill=False)
-        axs[0].add_patch(circle)
+
+    centre = (images_list[0].shape[1] / 2, images_list[0].shape[0] / 2)
     # Plot the rest of images
     for i, im in enumerate(images_list[1:]):
         shift = cross_corr_results[i][0]
         ax = axs[i + 1]
         mappable = ax.imshow(images_list[i + 1], **imargs)
-        for point in ref_points:
-            ax.plot(point[1] - shift[1], point[0] - shift[0],
-                        c='r', marker='+')
-        for radius in radial_points:
-            circle = plt.Circle((ref_points[0][1] - shift[1],
-                                 ref_points[0][0] - shift[0]),
-                                 radius, color='r',
-                                fill=False)
-            ax.add_patch(circle)
+        ax.arrow(*centre, - shift[1], - shift[0], color='r', width=1)
+        ax.annotate(f"Shif: {shift[0]:.2f}, {shift[1]:.2f}", xy=(0.05, 0.95),
+                    color='red',
+                    xycoords='axes fraction', va='top', ha='left')
+
     cax = ax.inset_axes((1.05, 0, 0.05, 1))
     plt.colorbar(mappable, cax=cax)
     plt.close(fig)
@@ -265,17 +247,6 @@ def qc_registration_crosscorr(images_list, cross_corr_results):
 
 def qc_registration_centroids(images_list, centroids):
     """TODO..."""
-    # Set reference points to illustrate the shifts
-    ref_points = np.array([
-        [images_list[0].shape[0] / 2, images_list[0].shape[1] / 2],
-        [0, 0],
-        [0, images_list[0].shape[1]],
-        [images_list[0].shape[0], 0],
-        [images_list[0].shape[0], images_list[0].shape[1]]
-        ])
-    
-    radial_points = (images_list[0].shape[0]**2
-                     + images_list[0].shape[1]**2)**0.5 / 2 / np.array([8, 4, 2])
     # Account for images with different sizes
     vmin, vmax = np.nanpercentile([im.flatten() for im in images_list], [5, 95])
     imargs = dict(vmin=vmin, vmax=vmax, cmap='viridis', interpolation='none')
@@ -287,28 +258,19 @@ def qc_registration_centroids(images_list, centroids):
     axs[0].set_title("Reference image")
     mappable = axs[0].imshow(images_list[0], **imargs)
     # Reference points
-    for point in ref_points:
-        axs[0].plot(point[1], point[0], c='r', marker='+')
-    for radius in radial_points:
-        circle = plt.Circle((ref_points[0][1], ref_points[0][0]),
-                             radius, color='r', fill=False)
-        axs[0].add_patch(circle)
-    axs[0].plot(*centroids[0], '^', color='fuchsia')
+
+    axs[0].plot(*centroids[0], '+', color='fuchsia', label='Reference point')
+    axs[0].legend()
     # Plot the rest of images
     for i, im in enumerate(images_list[1:]):
-        shift = centroids[0] - centroids[i]
+        shift = centroids[i + 1] - centroids[0]
         ax = axs[i + 1]
-        mappable = ax.imshow(images_list[i + 1], **imargs)
-        for point in ref_points:
-            ax.plot(point[1] - shift[1], point[0] - shift[0],
-                        c='r', marker='+')
-        for radius in radial_points:
-            circle = plt.Circle((ref_points[0][1] - shift[1],
-                                 ref_points[0][0] - shift[0]),
-                                 radius, color='r',
-                                fill=False)
-            ax.add_patch(circle)
-        ax.plot(*centroids[i], '^', color='fuchsia')
+        mappable = ax.imshow(im, **imargs)
+        ax.plot(*centroids[0], '+', color='fuchsia')
+        ax.arrow(*centroids[0], *shift, color='r', width=1)
+        ax.annotate(f"Shif: {shift[0]:.2f}, {shift[1]:.2f}", xy=(0.05, 0.95),
+                    color='red',
+                    xycoords='axes fraction', va='top', ha='left')
     cax = ax.inset_axes((1.05, 0, 0.05, 1))
     plt.colorbar(mappable, cax=cax)
     plt.close(fig)

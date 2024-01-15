@@ -328,13 +328,18 @@ class Cube(DataContainer):
     
     
     """
+    n_wavelength = None
+    n_cols = None
+    n_rows = None
+    x_size_arcsec = None
+    y_size_arcsec = None
 
     def __init__(self, parent_rss=None, rss_mask=None, intensity=None, variance=None,
                  intensity_corrected=None, variance_corrected=None, wavelength=None,
                  info=None, **kwargs):
-        if intensity_corrected is None:
+        if intensity_corrected is None and intensity is not None:
             intensity_corrected = intensity.copy()
-        if variance_corrected is None:
+        if variance_corrected is None and variance is not None:
             variance_corrected = variance.copy()
 
         super(Cube, self).__init__(intensity=intensity,
@@ -349,18 +354,21 @@ class Cube(DataContainer):
         self.wavelength = wavelength
         # Cube information
         self.info = info
-        self.n_wavelength, self.n_rows, self.n_cols = self.intensity.shape
-        self.x_size_arcsec = self.n_cols * self.info['pixel_size_arcsec']
-        self.y_size_arcsec = self.n_rows * self.info['pixel_size_arcsec']
-        # Store the spaxel offset position
-        self.info['spax_ra_offset'], self.info['spax_dec_offset'] = (
-            np.arange(-self.x_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
-                      self.x_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
-                      self.info['pixel_size_arcsec']),
-            np.arange(-self.y_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
-                      self.y_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
-                      self.info['pixel_size_arcsec']))
 
+        if self.intensity is not None:
+            self.n_wavelength, self.n_rows, self.n_cols = self.intensity.shape
+        if self.info is not None and 'pixel_size_arcsec' in self.info.keys():
+            self.x_size_arcsec = self.n_cols * self.info['pixel_size_arcsec']
+            self.y_size_arcsec = self.n_rows * self.info['pixel_size_arcsec']
+            # Store the spaxel offset position
+            self.info['spax_ra_offset'], self.info['spax_dec_offset'] = (
+                np.arange(-self.x_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
+                        self.x_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
+                        self.info['pixel_size_arcsec']),
+                np.arange(-self.y_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
+                        self.y_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
+                        self.info['pixel_size_arcsec']))
+    
     def get_centre_of_mass(self, wavelength_step=1, stat=np.median, power=1.0):
         """Compute the center of mass of the data cube."""
         x = np.arange(0, self.n_cols, 1)
@@ -389,7 +397,27 @@ class Cube(DataContainer):
         pos = np.searchsorted(cumulative_intensity, frac)
         return cumulative_intensity[pos]
 
-    def wcs_metadata(self):
+    def get_white_image(self, wave_range=None, s_clip=3.0):
+        """Create a white image."""
+        if wave_range is not None and self.wavelength is not None:
+            wave_mask = (self.wavelength >= wave_range[0]) & (self.wavelength <= wave_range[1])
+        else:
+            wave_mask = np.ones(self.intensity.shape[0], dtype=bool)
+        
+        if s_clip is not None:
+            std_dev = np.nanstd(self.intensity_corrected[wave_mask], axis=0)
+            median = np.nanmedian(self.intensity_corrected[wave_mask], axis=0)
+
+            weights = (
+                (self.intensity_corrected[wave_mask] <= median[np.newaxis] + s_clip * std_dev[np.newaxis])
+                & (self.intensity_corrected[wave_mask] >= median[np.newaxis] - s_clip * std_dev[np.newaxis]))
+        else:
+            weights = np.ones_like(self.intensity_corrected[wave_mask])
+
+        white_image = np.nansum(self.intensity_corrected * weights, axis=0) / np.nansum(weights, axis=0)
+        return white_image
+
+    def get_wcs(self):
         """TODO..."""
         # TODO!!!!
         w = WCS(naxis=3)
@@ -405,9 +433,13 @@ class Cube(DataContainer):
                            np.arange(0, self.wavelength.size), self.wavelength)
                        ]
         w.wcs.ctype = ["RA---TAN", "DEC--TAN", "WAVE"]
-        header = w.to_header()
-        return header
+        self.wcs = w
+        return self.wcs
 
+    def wcs_metadata(self):
+        """Get the Cube WCS metadata"""
+        return self.get_wcs().to_header()
+    
     def to_fits(self, fname=None, primary_hdr_kw=None):
         """ TODO...
         include --
