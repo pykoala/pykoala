@@ -248,7 +248,7 @@ def qc_registration_crosscorr(images_list, cross_corr_results):
 def qc_registration_centroids(images_list, centroids):
     """TODO..."""
     # Account for images with different sizes
-    vmin, vmax = np.nanpercentile([im.flatten() for im in images_list], [5, 95])
+    vmin, vmax = np.nanpercentile(np.hstack([im.flatten() for im in images_list]), [5, 95])
     imargs = dict(vmin=vmin, vmax=vmax, cmap='viridis', interpolation='none')
 
     fig, axs = plt.subplots(nrows=1, ncols=len(images_list),
