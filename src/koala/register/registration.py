@@ -18,7 +18,7 @@ from photutils.centroids import centroid_2dg, centroid_1dg, centroid_com
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from koala.ancillary import interpolate_image_nonfinite
+from koala.ancillary import interpolate_image_nonfinite, make_white_image_from_array
 from koala.plotting import qc_plot
 from koala.plotting.qc_plot import qc_registration, qc_moffat, qc_registration_crosscorr
 from koala.cubing import Cube, build_cube, interpolate_rss
@@ -333,13 +333,6 @@ def register_centroid(data_set, wave_range=None,
     images = []
     centroids = []
     for data in data_set:
-
-        if wave_range is not None:
-            wave_mask = (data.wavelength >= wave_range[0]) & (
-                data.wavelength <= wave_range[1])
-        else:
-            wave_mask = np.ones_like(data.wavelength, dtype=bool)
-
         if type(data) is RSS:
             print(
                 "[Registration]  Data provided in RSS format --> creating a dummy datacube")
@@ -362,15 +355,17 @@ def register_centroid(data_set, wave_range=None,
                 data, pixel_size_arcsec=quick_cube_pix_size,
                 kernel_size_arcsec=1.,
                 datacube=datacube)
-            image = np.nanmean(datacube[wave_mask], axis=0)
-    
+
+            image = make_white_image_from_array(datacube, wavelength=data.wavelength,
+                                                wave_range=wave_range, s_clip=3.0)
         elif type(data) is Cube:
-            image = np.nanmean(data.intensity[wave_mask, :, :], axis=0)
+            image = data.get_white_image(wave_range=wave_range, s_clip=3.0)
             image /= np.nansum(image)
 
         # Select a subbox
-        image = image[subbox[0][0]:subbox[0][1], subbox[1][0]: subbox[1][1]]
-        
+        image = image[subbox[0][0]:subbox[0][1],
+                      subbox[1][0]: subbox[1][1]]
+
         # Mask bad values
         image = interpolate_image_nonfinite(image)
         images.append(image)
@@ -381,12 +376,12 @@ def register_centroid(data_set, wave_range=None,
     # Update the coordinats of the rest of frames
     for i, data in enumerate(data_set[1:]):
         print("[Registration] Object: ", data.info['name'])
-        shift = centroids[0] - centroids[i]
+        shift = centroids[0] - centroids[i+1]
         # Convert the shift in pixels to arcseconds
         shift *= quick_cube_pix_size
         print(f"[Registration] Shift found: {shift} (arcsec)")
-        new_fib_offset_coord = (data.info['fib_ra_offset'] - shift[1],
-                                data.info['fib_dec_offset'] - shift[0])
+        new_fib_offset_coord = (data.info['fib_ra_offset'] + shift[0],
+                                data.info['fib_dec_offset'] + shift[1])
         data.update_coordinates(new_centre=ref_centre,
                                 new_fib_offset_coord=new_fib_offset_coord)
         
@@ -418,6 +413,7 @@ def cross_correlate_images(list_of_images, oversample=100):
 
     results = []
     for i in range(len(list_of_images) - 1):
+        # The shift ordering is consistent with the input image shape
         shift, error, diffphase = phase_cross_correlation(
             list_of_images[0], list_of_images[i+1],
             upsample_factor=100)
@@ -425,7 +421,7 @@ def cross_correlate_images(list_of_images, oversample=100):
     return results
 
 def register_crosscorr(data_set, ref_image=0,
-                       oversample=100, quick_cube_pix_size=0.2,
+                       oversample=100, quick_cube_pix_size=0.3,
                        wave_range=None, plot=False):
     """ Register a collection of data (either RSS or Cube) corresponding to stars.
 
@@ -451,29 +447,26 @@ def register_crosscorr(data_set, ref_image=0,
 
     plots = []
     images = []
-    for data in data_set:
 
-        if wave_range is not None:
-            wave_mask = (data.wavelength >= wave_range[0]) & (
-                data.wavelength <= wave_range[1])
-        else:
-            wave_mask = np.ones_like(data.wavelength, dtype=bool)
-
-        if type(data) is RSS:
-            print(
-                "[Registration]  Data provided in RSS format --> creating a dummy datacube")
-            cube_size_arcsec = (
-                data.info['fib_ra_offset'].max(
-                ) - data.info['fib_ra_offset'].min(),
-                data.info['fib_dec_offset'].max()
-                - data.info['fib_dec_offset'].min())
-            x, y = np.meshgrid(
+    # Define a fixed cube shape based on the reference image
+    cube_size_arcsec = (
+                data_set[ref_image].info['fib_ra_offset'].max(
+                ) - data_set[ref_image].info['fib_ra_offset'].min(),
+                data_set[ref_image].info['fib_dec_offset'].max()
+                - data_set[ref_image].info['fib_dec_offset'].min())
+    x, y = np.meshgrid(
                 np.arange(- cube_size_arcsec[1] / 2 + quick_cube_pix_size / 2,
                           cube_size_arcsec[1] / 2 + quick_cube_pix_size / 2,
                           quick_cube_pix_size),
                 np.arange(- cube_size_arcsec[0] / 2 + quick_cube_pix_size / 2,
                           cube_size_arcsec[0] / 2 + quick_cube_pix_size / 2,
                           quick_cube_pix_size))
+
+    for data in data_set:
+        if type(data) is RSS:
+            print(
+                "[Registration]  Data provided in RSS format --> creating a dummy datacube")
+            
             datacube = np.zeros((data.wavelength.size, *x.shape))
     
             # Interpolate RSS to a datacube
@@ -481,35 +474,27 @@ def register_crosscorr(data_set, ref_image=0,
                 data, pixel_size_arcsec=quick_cube_pix_size,
                 kernel_size_arcsec=1.,
                 datacube=datacube)
-            image = np.nanmean(datacube[wave_mask], axis=0)
-            mask = np.isfinite(image)
-            image[~mask] = 0
-            # NN interpolation of NaN values ----------------------------------
-            # print("[Registration] Nearest-neightbour interpolation of NaN's")
-            # interp = NearestNDInterpolator(
-            #     list(zip(x[mask], y[mask])), image[mask])
-            # image = interp(x, y)
-            # -----------------------------------------------------------------
-            # from scipy.ndimage import gaussian_filter
-            # image = gaussian_filter(image, 2 / quick_cube_pix_size)
-            images.append(image)
+            image = make_white_image_from_array(datacube, data.wavelength,
+                                                wave_range=wave_range, s_clip=3.0)
     
         elif type(data) is Cube:
-            image = np.nanmean(data.intensity[wave_mask, :, :], axis=0)
-            image /= np.nansum(image)
-            images.append(image)
+            image = data.get_white_image(wave_range=wave_range, s_clip=3.0)
+
+        # Mask NaN values
+        image = interpolate_image_nonfinite(image)
+        images.append(image)
 
     results = cross_correlate_images(images, oversample=oversample)
     ref_centre = (data_set[0].info['cen_ra'], data_set[0].info['cen_dec'])
     # Update the coordinats of the rest of frames
     for i, data in enumerate(data_set[1:]):
         print("[Registration] Object: ", data.info['name'])
-        shift = results[i][0]
+        shift = results[i][0].copy()
         # Convert the shift in pixels to arcseconds
         shift *= quick_cube_pix_size
         print(f"[Registration] Shift found: {shift} (arcsec)")
-        new_fib_offset_coord = (data.info['fib_ra_offset'] - shift[0],
-                                data.info['fib_dec_offset'] - shift[1])
+        new_fib_offset_coord = (data.info['fib_ra_offset'] + shift[1],
+                                data.info['fib_dec_offset'] + shift[0])
         data.update_coordinates(new_centre=ref_centre,
                                 new_fib_offset_coord=new_fib_offset_coord)
         
@@ -561,13 +546,53 @@ def register_manual(data_set, offset_set, absolute=False):
 # =============================================================================
 # 
 # =============================================================================
-def register_interactive(data_set):
+def register_interactive(data_set, quick_cube_pix_size=0.2, wave_range=None):
     """
     Fully manual registration via interactive plot
     """
     import matplotlib
     from matplotlib import pyplot as plt
-    # matplotlib.use("QtAgg")
+
+    images = []
+
+    for data in data_set:
+        if type(data) is RSS:
+            print(
+                "[Registration]  Data provided in RSS format --> creating a dummy datacube")
+            cube_size_arcsec = (
+                data.info['fib_ra_offset'].max(
+                ) - data.info['fib_ra_offset'].min(),
+                data.info['fib_dec_offset'].max()
+                - data.info['fib_dec_offset'].min())
+            x, y = np.meshgrid(
+                np.arange(- cube_size_arcsec[1] / 2 + quick_cube_pix_size / 2,
+                          cube_size_arcsec[1] / 2 + quick_cube_pix_size / 2,
+                          quick_cube_pix_size),
+                np.arange(- cube_size_arcsec[0] / 2 + quick_cube_pix_size / 2,
+                          cube_size_arcsec[0] / 2 + quick_cube_pix_size / 2,
+                          quick_cube_pix_size))
+            datacube = np.zeros((data.wavelength.size, *x.shape))
+    
+            # Interpolate RSS to a datacube
+            datacube, _, _ = interpolate_rss(
+                data, pixel_size_arcsec=quick_cube_pix_size,
+                kernel_size_arcsec=1.,
+                datacube=datacube)
+            image = make_white_image_from_array(datacube, data.wavelength,
+                                                wave_range=wave_range, s_clip=3.0)
+            image_pix_size = quick_cube_pix_size
+
+        elif type(data) is Cube:
+            image = data.get_white_image(wave_range=wave_range, s_clip=3.0)
+            image_pix_size = data.info['pixel_size_arcsec']
+
+        # Mask NaN values
+        image = interpolate_image_nonfinite(image)
+        images.append(image)
+
+    ### Start the interactive GUI ###
+    # Close previus figures
+    plt.close()
     plt.ion()
     centres = []
 
@@ -585,6 +610,7 @@ def register_interactive(data_set):
         ax.scatter(data_set[0].info["fib_ra_offset"], data_set[0].info["fib_dec_offset"],
                    c=np.nanmedian(data_set[0].intensity_corrected, axis=1))
     plt.show()
+    plt.ioff()
     return centres
 
 # Mr Krtxo \(ﾟ▽ﾟ)/

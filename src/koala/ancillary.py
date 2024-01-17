@@ -17,6 +17,12 @@ from scipy import optimize
 from astropy.io import fits
 # =============================================================================
 
+# =============================================================================
+# PyKOALA modules
+# =============================================================================
+from koala.cubing import Cube
+
+
 def vprint(*arg, **kwargs):
     """
     Prints the arguments only if verbose=True.
@@ -28,21 +34,6 @@ def vprint(*arg, **kwargs):
 # =============================================================================
 # Ancillary Functions - RSS Related
 # =============================================================================
-
-#This has not been implemented. Is meant to return the range of RA and DEC from centre RA and DEC
-
-def coord_range(rss_list):
-    """
-    Returns the full extent of the coordinate range of a given set of RSS files 
-    """
-    ra = [rss.RA_centre_deg + rss.offset_RA_arcsec / 3600. for rss in rss_list]
-    ra_min = np.nanmin(ra)
-    ra_max = np.nanmax(ra)
-    dec = [rss.DEC_centre_deg + rss.offset_DEC_arcsec / 3600. for rss in rss_list]
-    dec_min = np.nanmin(dec)
-    dec_max = np.nanmax(dec)
-    return ra_min, ra_max, dec_min, dec_max
-
 
 def detect_edge(rss):
     """
@@ -223,6 +214,13 @@ def interpolate_image_nonfinite(image):
         list(zip(x[mask], y[mask])), image[mask])
     interp_image = interp(x, y)
     return interp_image
+
+
+def make_white_image_from_array(data_array, wavelength=None, **args):
+    """Create a white image from a 3D data array."""
+    print(f"Creating a Cube of dimensions: {data_array.shape}")
+    cube = Cube(intensity=data_array, wavelength=wavelength)
+    return cube.get_white_image()
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Models and fitting
