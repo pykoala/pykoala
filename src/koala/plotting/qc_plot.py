@@ -224,22 +224,24 @@ def qc_registration_crosscorr(images_list, cross_corr_results):
 
     fig, axs = plt.subplots(nrows=1, ncols=len(images_list),
                           figsize=(4 * len(images_list), 4))
-
+    plt.suptitle("QC cross-correlation-based image registration")
     
     axs[0].set_title("Reference image")
     mappable = axs[0].imshow(images_list[0], **imargs)
 
+    # Reference image centre will be used as visual reference
     centre = (images_list[0].shape[1] / 2, images_list[0].shape[0] / 2)
+    axs[0].plot(*centre, 'r+')
     # Plot the rest of images
     for i, im in enumerate(images_list[1:]):
         shift = cross_corr_results[i][0]
         ax = axs[i + 1]
         mappable = ax.imshow(images_list[i + 1], **imargs)
         ax.arrow(*centre, - shift[1], - shift[0], color='r', width=1)
-        ax.annotate(f"Shif: {shift[0]:.2f}, {shift[1]:.2f}", xy=(0.05, 0.95),
+        ax.plot(centre[0] - shift[1], centre[1] - shift[0])
+        ax.annotate(f"Shif (row, col): {shift[0]:.2f}, {shift[1]:.2f}", xy=(0.05, 0.95),
                     color='red',
                     xycoords='axes fraction', va='top', ha='left')
-
     cax = ax.inset_axes((1.05, 0, 0.05, 1))
     plt.colorbar(mappable, cax=cax)
     plt.close(fig)
@@ -254,7 +256,7 @@ def qc_registration_centroids(images_list, centroids):
     fig, axs = plt.subplots(nrows=1, ncols=len(images_list),
                           figsize=(4 * len(images_list), 4))
 
-    
+    plt.suptitle("QC centroid-based image registration")
     axs[0].set_title("Reference image")
     mappable = axs[0].imshow(images_list[0], **imargs)
     # Reference points
@@ -266,7 +268,8 @@ def qc_registration_centroids(images_list, centroids):
         shift = centroids[i + 1] - centroids[0]
         ax = axs[i + 1]
         mappable = ax.imshow(im, **imargs)
-        ax.plot(*centroids[0], '+', color='fuchsia')
+        ax.plot(centroids[0][0] + shift[0],
+                centroids[0][1] + shift[1], '+', color='fuchsia')
         ax.arrow(*centroids[0], *shift, color='r', width=1)
         ax.annotate(f"Shif: {shift[0]:.2f}, {shift[1]:.2f}", xy=(0.05, 0.95),
                     color='red',

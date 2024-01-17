@@ -372,7 +372,6 @@ def register_centroid(data_set, wave_range=None,
         # Find centroid
         centroids.append(np.array(centroider(image)))
 
-
     ref_centre = (data_set[0].info['cen_ra'], data_set[0].info['cen_dec'])
     # Update the coordinats of the rest of frames
     for i, data in enumerate(data_set[1:]):
@@ -448,22 +447,26 @@ def register_crosscorr(data_set, ref_image=0,
 
     plots = []
     images = []
-    for data in data_set:
-        if type(data) is RSS:
-            print(
-                "[Registration]  Data provided in RSS format --> creating a dummy datacube")
-            cube_size_arcsec = (
-                data.info['fib_ra_offset'].max(
-                ) - data.info['fib_ra_offset'].min(),
-                data.info['fib_dec_offset'].max()
-                - data.info['fib_dec_offset'].min())
-            x, y = np.meshgrid(
+
+    # Define a fixed cube shape based on the reference image
+    cube_size_arcsec = (
+                data_set[ref_image].info['fib_ra_offset'].max(
+                ) - data_set[ref_image].info['fib_ra_offset'].min(),
+                data_set[ref_image].info['fib_dec_offset'].max()
+                - data_set[ref_image].info['fib_dec_offset'].min())
+    x, y = np.meshgrid(
                 np.arange(- cube_size_arcsec[1] / 2 + quick_cube_pix_size / 2,
                           cube_size_arcsec[1] / 2 + quick_cube_pix_size / 2,
                           quick_cube_pix_size),
                 np.arange(- cube_size_arcsec[0] / 2 + quick_cube_pix_size / 2,
                           cube_size_arcsec[0] / 2 + quick_cube_pix_size / 2,
                           quick_cube_pix_size))
+
+    for data in data_set:
+        if type(data) is RSS:
+            print(
+                "[Registration]  Data provided in RSS format --> creating a dummy datacube")
+            
             datacube = np.zeros((data.wavelength.size, *x.shape))
     
             # Interpolate RSS to a datacube
