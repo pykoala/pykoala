@@ -4,7 +4,7 @@
 import numpy as np
 from scipy.optimize import curve_fit
 from scipy.ndimage import gaussian_filter1d
-from scipy.interpolate import interp1d
+from scipy.interpolate import interp1d, UnivariateSpline
 from scipy.signal import savgol_filter
 from scipy.ndimage import gaussian_filter1d
 from photutils.centroids import centroid_2dg
@@ -193,7 +193,7 @@ class FluxCalibration(CorrectionBase):
                              wave_range=None, wave_window=None,
                              profile=cumulative_1d_moffat,
                              bounds='auto',
-                             plot=False, **fitter_args):
+                             plot=True, **fitter_args):
         """
         Extract the stellar flux from an RSS or Cube.
 
@@ -235,7 +235,7 @@ class FluxCalibration(CorrectionBase):
                         + " -> Wavelength range={}\n".format(wave_range)
                         + " -> Wavelength window={}\n".format(wave_window))
 
-        # Obtaining the data
+        # Formatting the data
         if type(data_container) is RSS:
             self.corr_print("Extracting flux from RSS")
             data = data_container.intensity_corrected.copy()
@@ -252,19 +252,29 @@ class FluxCalibration(CorrectionBase):
             x, y = x.flatten(), y.flatten()
 
         data = data[wave_mask, :]
-        # Loop over all spectral slices
+        
+        # Declare variables
         residuals = []
         profile_popt = []
         profile_var = []
         running_wavelength = []
         raw_flux = []
+        # Fitting tolerance and number of evaluations
+        if 'ftol' not in fitter_args.keys():
+            fitter_args['ftol'] = 0.001
+            fitter_args['xtol'] = 0.001
+            fitter_args['gtol'] = 0.001
+        if 'max_nfev' not in fitter_args.keys():
+            fitter_args['max_nfev'] = 10000
+ 
+        # Loop over all spectral slices
         self.corr_print("...Fitting wavelength chuncks...")
         for lambda_ in range(0, wavelength.size, wave_window):
             wave_slice = slice(lambda_, lambda_ + wave_window, 1)
-            mean_wave = np.nanmean(wavelength[wave_slice])
+            mean_wave = np.nanmedian(wavelength[wave_slice])
             slice_data = data[wave_slice]
-            # Compute the mean value only considering good values (i.e. excluding NaN)
-            slice_data = np.nanmean(slice_data, axis=0)
+            # Compute the median value only considering good values (i.e. excluding NaN)
+            slice_data = np.nanmedian(slice_data, axis=0)
             if not np.isfinite(slice_data).any():
                 self.corr_print("Chunk at {}+-{} contains no useful data"
                                 .format(mean_wave, wave_window))
@@ -277,31 +287,9 @@ class FluxCalibration(CorrectionBase):
             x0, y0 = centre_of_mass(slice_data, x, y)
             y_min, y_max = y.min(), y.max()
             x_min, x_max = x.min(), x.max()
-            # -- Centroid (THIS PRODUCES ERRORS ON THE MOFFAT FIT)
-            # self.corr_print("Estimating the centroid using 2D gaussian fit")
-            # amplitude = np.nansum(slice_data)
-            # x_var, y_var = centre_of_mass(slice_data, (x - x0)**2, (y - y0)**2)
-            # p0 = (np.nansum(slice_data) / 2, x0, y0, x_var**0.5, y_var**0.5, 0)
-            # self.corr_print(r"Initial guess:\nA={}, x_mean={}, y_mean={}, x_stddev={}, y_stddev={}, offset={}".format(*p0))
-            # gaussian_bounds = (
-            #     [0, x_min, y_min, 0.5, 0.5, 0],
-            #     [amplitude, x_max, y_max, x_max - x_min, y_max - y_min, np.nansum(slice_data)])
-
-            # try:
-            #     pos_popt, pos_cov = curve_fit(gaussian_2d, (x, y), slice_data,
-            #                                   p0=p0, bounds=gaussian_bounds,
-            #                                   maxfev=1e7)
-            #     self.corr_print("Fit results", pos_popt, pos_cov.diagonal())
-            #     x0, y0 = pos_popt[1], pos_popt[2]
-            # except Exception:
-            #    self.corr_print("Fitting unsuccessful -> using COM")
-              # --
-            # --------------------- Make growth curve -------------------------
+            # Make the growth curve
             r2, growth_c = growth_curve_1d(slice_data, x - x0, y - y0)
             raw_flux.append(growth_c[-1])
-            # -----------------------------------------------------------------
-            # all_r2.append(r2)
-            # all_growth.append(growth_c)
             # Fit a light profile
             try:
                 if bounds == 'auto':
@@ -364,7 +352,7 @@ class FluxCalibration(CorrectionBase):
 
         """
         if flux_units is None:
-            flux_units = self.calib_units
+            flux_units = 1 / self.response_units
         if name is not None:
             name = name.lower()
             if name[0] != 'f' or 'feige' in name:
@@ -387,7 +375,7 @@ class FluxCalibration(CorrectionBase):
 
     @staticmethod
     def get_response_curve(wave, obs_spectra, ref_spectra,
-                           pol_deg=None, gauss_smooth_sigma=None, plot=False,
+                           pol_deg=None, spline=False, gauss_smooth_sigma=None, plot=False,
                            mask_absorption=True):
         """
         Compute the response curve (spectral throughput) from a given observed spectrum and a reference function.
@@ -424,26 +412,25 @@ class FluxCalibration(CorrectionBase):
                                     obs_spectra[lines_mask])
             ref_spectra = np.interp(wave, wave[lines_mask],
                                     ref_spectra[lines_mask])
-        cum_response = np.cumsum(obs_spectra / ref_spectra * np.diff(wave_edges))
+        raw_response = obs_spectra / ref_spectra
+        
         # Gaussian smoothing
         if gauss_smooth_sigma is not None:
             sigma_pixels = gauss_smooth_sigma / np.mean(dwave)
-            cum_response = gaussian_filter1d(
-                cum_response, sigma=sigma_pixels)
+            raw_response = gaussian_filter1d(
+                raw_response, sigma=sigma_pixels)
 
         # Polynomial interpolation
         if pol_deg is not None:
-            p_fit = np.polyfit(wave, cum_response, deg=pol_deg)
-            cum_r_polfit = np.poly1d(p_fit)
-            response = cum_r_polfit.deriv(m=1)
+            p_fit = np.polyfit(wave, raw_response, deg=pol_deg)
+            response = np.poly1d(p_fit)
         # Linear interpolation
+        elif spline:
+            response = UnivariateSpline(wave, raw_response)
         else:
-            cum_response = np.insert(cum_response, 0, cum_response[0] - (cum_response[1] - cum_response[0]) / 2)
-            r = np.diff(cum_response) / np.diff(wave_edges)
-            response = interp1d(wave, r, fill_value=0, bounds_error=False)
+            response = interp1d(wave, raw_response, fill_value=0, bounds_error=False)
             # Spline fit
             # response = UnivariateSpline(wave, obs_spectra / ref_spectra)
-
         if plot:
             fig = plt.figure(figsize=(8, 4))
             ax = fig.add_subplot(111)
@@ -525,7 +512,7 @@ class FluxCalibration(CorrectionBase):
     def save_response(self, fname, response, wavelength, units=None):
         # TODO Include response units in header
         if units is None:
-            units = self.calib_units
+            units = self.response_units
         np.savetxt(fname, np.array([wavelength, response]).T,
                    header='Spectral Response curve \n wavelength (AA), R ({} counts / [erg/s/cm2/AA])'
                    .format(1 / units))
