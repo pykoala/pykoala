@@ -193,7 +193,7 @@ class FluxCalibration(CorrectionBase):
                              wave_range=None, wave_window=None,
                              profile=cumulative_1d_moffat,
                              bounds='auto',
-                             plot=True, **fitter_args):
+                             plot=False, **fitter_args):
         """
         Extract the stellar flux from an RSS or Cube.
 
@@ -375,7 +375,7 @@ class FluxCalibration(CorrectionBase):
 
     @staticmethod
     def get_response_curve(wave, obs_spectra, ref_spectra,
-                           pol_deg=None, spline=False, gauss_smooth_sigma=None, plot=False,
+                           pol_deg=None, spline=False, spline_args={}, gauss_smooth_sigma=None, plot=False,
                            mask_absorption=True):
         """
         Compute the response curve (spectral throughput) from a given observed spectrum and a reference function.
@@ -426,7 +426,7 @@ class FluxCalibration(CorrectionBase):
             response = np.poly1d(p_fit)
         # Linear interpolation
         elif spline:
-            response = UnivariateSpline(wave, raw_response)
+            response = UnivariateSpline(wave, raw_response, **spline_args)
         else:
             response = interp1d(wave, raw_response, fill_value=0, bounds_error=False)
             # Spline fit
