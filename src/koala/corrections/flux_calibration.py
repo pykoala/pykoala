@@ -30,19 +30,50 @@ from koala.ancillary import (centre_of_mass, cumulative_1d_moffat,
 
 class FluxCalibration(CorrectionBase):
     """
-    This class contains the methods for extracting and applying an absolute flux calibration.
+    This module contains the methods for extracting and applying an absolute flux calibration.
+
+    Description
+    -----------
+
+
+    Attributes
+    ----------
+
+    Methods
+    -------
+
+    Example
+    -------
     """
     name = "FluxCalibration"
-    verbose = False
+    verbose = True
+    calib_spectra = None
+    calib_wave = None
 
-    def __init__(self, data_container=None, extract_spectra=None, extract_args=None, ):
+    response = None
+    resp_wave = None
+    response_units = 1e16  # erg/s/cm2/AA
+
+    def __init__(self, path_to_response=None, verbose=True):
         self.corr_print("Initialising Flux Calibration (Spectral Throughput)")
-        self.calib_spectra = None
-        self.calib_wave = None
-        self.calib_units = 1e-16
+        self.verbose = verbose
+            
+
+        if path_to_response is not None:
+            self.corr_print(f"Loading response from file {path_to_response}")
+            self.resp_wave, self.response = np.loadtxt(path_to_response, unpack=True)
+
+    def interpolate_model(self, wavelength, update=True):
+        """Interpolate the spectral response to the input wavelength array."""
+        self.corr_print("Interpolating spectral response to input wavelength array")
+        response = np.interp(wavelength, self.resp_wave, self.response, right=0., left=0.)
+        if update:
+            self.response = response
+            self.resp_wave = wavelength
+        return response
 
     def auto(self, data, calib_stars, extract_args=None,
-             response_params=None, save=None, fnames=None):
+             response_params=None, save=None, fnames=None, combine=False):
         """Automatic calibration process for extracting the calibration response curve from a set of stars.
 
         Parameters
@@ -113,6 +144,7 @@ class FluxCalibration(CorrectionBase):
             resp_curve, resp_fig = self.get_response_curve(
                 result['mean_wave'], result['optimal'][:, 0], interp_s,
                 **response_params)
+            flux_cal_results[name]['wavelength'] = data[i].wavelength.copy()
             flux_cal_results[name]['response'] = resp_curve(
                 data[i].wavelength.copy())
             flux_cal_results[name]['response_fig'] = resp_fig
@@ -123,6 +155,14 @@ class FluxCalibration(CorrectionBase):
                     fname=os.path.join(save, 'response_' + name),
                     response=resp_curve(data[i].wavelength),
                     wavelength=data[i].wavelength)
+        if combine:
+            self.master_flux_auto(flux_cal_results)
+            if save:
+                self.save_response(
+                    fname=os.path.join(save, 'master_response'),
+                    response=self.response,
+                    wavelength=self.resp_wave)
+
         return flux_cal_results
     
     def master_flux_auto(self, flux_cal_results):
@@ -132,11 +172,21 @@ class FluxCalibration(CorrectionBase):
         FluxCalibration.auto
         """
         self.corr_print("Mastering response function")
-        throughput_response = []
+        reference_wavelength = None
+        spectral_response = []
         for star, star_res in flux_cal_results.items():
-            throughput_response.append(star_res['response'])
+            if reference_wavelength is None:
+                reference_wavelength = star_res['wavelength']
+            # Update model with the star values
+            self.response = star_res['response']
+            self.resp_wave = star_res['wavelength']
+            spectral_response.append(
+                self.interpolate_model(reference_wavelength))
 
-        master_resp = np.nanmedian(throughput_response, axis=0)
+        self.corr_print("Obtaining median spectral response")
+        master_resp = np.nanmedian(spectral_response, axis=0)
+        self.response = master_resp
+        self.resp_wave = reference_wavelength
         return master_resp
 
     def extract_stellar_flux(self, data_container,
@@ -428,7 +478,7 @@ class FluxCalibration(CorrectionBase):
                       .format(file, names[-1]))
         return np.array(names), files
 
-    def apply(self, response, data_container, response_units='1e-16 erg/s/cm2/aa'):
+    def apply(self, data_container, response=None, response_units=None):
         """Apply a spectral response function to a Data Container object.
         If the object has already been calibrated an exception will be raised.
 
@@ -439,23 +489,44 @@ class FluxCalibration(CorrectionBase):
         data_container: DataContainer
             Data to be calibrated.
         """
-        print("[Flux Calib.] Applying response function to {}".format(data_container.info['name']))
+
         if data_container.is_corrected(self.name):
             raise CalibrationError()
+        
+        if response is None:
+            if self.response is None:
+                raise NameError("Spectral response function not provided")
+            # Check that the model is sampled in the same wavelength grid
+            if not data_container.wavelength.size == self.resp_wave.size or not np.allclose(
+                data_container.wavelength, self.resp_wave, equal_nan=True):
+                response = self.interpolate_model(data_container.wavelength)
+                response_units = self.response_units
+            else:
+                response = self.response
+                response_units = self.response_units
+        
+        # Account for the DataContainer data dimensions
+        print(np.max(response))
+        if type(data_container) is Cube:
+            self.corr_print("Applying Flux Calibration to input Cube")
+            response = response[:, np.newaxis, np.newaxis]
+        elif type(data_container) is RSS:
+            self.corr_print("Applying Flux Calibration to input RSS")
+            response = response[np.newaxis, :]
         else:
-            response = np.expand_dims(
-                response, axis=tuple(
-                    range(1, data_container.intensity_corrected.ndim)))
-            data_container.intensity_corrected /= response
-            data_container.variance_corrected /= response ** 2
-            self.log_correction(data_container, status='applied',
-                                units=response_units)
+            raise NameError(f"Unrecognised DataContainer of type : {type(data_container)}")
+        # Apply the correction
+        data_container.intensity_corrected /= response
+        data_container.variance_corrected /= response**2
+        self.log_correction(data_container, status='applied',
+                            units=response_units)
+        return data_container
 
     def save_response(self, fname, response, wavelength, units=None):
         # TODO Include response units in header
         if units is None:
             units = self.calib_units
-        np.savetxt(fname + '_transfer_function.dat', np.array([wavelength, response]).T,
+        np.savetxt(fname, np.array([wavelength, response]).T,
                    header='Spectral Response curve \n wavelength (AA), R ({} counts / [erg/s/cm2/AA])'
                    .format(1 / units))
 

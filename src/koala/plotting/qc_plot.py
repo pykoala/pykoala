@@ -86,7 +86,7 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
     # sn_pixel = cube.intensity_corrected / cube.variance_corrected ** 0.5
     # p_snr = np.nanpercentile(sn_pixel, pct, axis=(1, 2))
 
-    fig = plt.figure(figsize=(10, 10))
+    fig = plt.figure(figsize=(12, 12))
     print("[QCPLOT] Cube QC plot for: ", cube.info['name'])
     plt.suptitle(cube.info['name'])
     gs = fig.add_gridspec(5, 4, wspace=0.15, hspace=0.25)
@@ -100,15 +100,32 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
         ax.set_title(r"$\lambda@{:.1f}$".format(cube.wavelength[wl_idx]),
                      fontdict=dict(color=wl_col[i]))
         ax.imshow(cube.intensity_corrected[wl_idx], aspect='auto', origin='lower',
-                  cmap='cividis')
-    mapax = fig.add_subplot(gs[0, -1])
-    mapax.set_title("Mean")
-    mean_intensity = np.nanmean(cube.intensity_corrected, axis=0)
+                  interpolation='none', cmap='cividis')
+        ax = fig.add_subplot(gs[1, i:i+1])
+        mappable = ax.imshow(cube.intensity_corrected[wl_idx] / cube.variance_corrected[wl_idx]**0.5,
+        interpolation='none', aspect='auto', origin='lower', cmap='jet')
+        plt.colorbar(mappable, ax=ax)
+    
+    mean_intensity = np.nanmedian(cube.intensity_corrected, axis=0)
+    mean_variance = np.nanmedian(cube.variance_corrected, axis=0)
     mean_intensity[~np.isfinite(mean_intensity)] = 0
     mean_instensity_pos = np.argsort(mean_intensity.flatten())
-    mapax.imshow(mean_intensity, aspect='auto',
+    mapax = fig.add_subplot(gs[1, -1])
+    mappable = mapax.imshow(mean_intensity / mean_variance**0.5, aspect='auto',
+                 interpolation='none', origin='lower', cmap='jet')
+    plt.colorbar(mappable, ax=mapax, label='SNR')
+    mapax = fig.add_subplot(gs[0, -1])
+    mapax.set_title("Median")
+    mapax.imshow(mean_intensity, aspect='auto', interpolation='none',
                  origin='lower', cmap='cividis')
-    # Spectra -------
+    # ------ Spectra -------
+    if cube.log is not None and 'FluxCalibration' in cube.log.keys():
+        units = 1 / float(cube.log['FluxCalibration']['units'])
+        units_label = r"(erg/s/cm2/AA)"
+    else:
+        units = 1.
+        units_label = '(ADU)'
+
     pos_col = ['purple', 'orange', 'cyan']
     x_spaxel_idx = np.random.randint(low=0,
                                      high=cube.intensity_corrected.shape[1],
@@ -121,16 +138,23 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
                  dtype=int)]
     x_spaxel_idx, y_spaxel_idx = np.unravel_index(spaxel_entries,
                                                   shape=mean_intensity.shape)
-    ax = fig.add_subplot(gs[1:3, :])
+    ax = fig.add_subplot(gs[2:3, :])
     for x_idx, y_idx, i in zip(x_spaxel_idx, y_spaxel_idx, range(3)):
-        ax.plot(cube.wavelength, cube.intensity_corrected[:, x_idx, y_idx], lw=0.8,
+        ax.plot(cube.wavelength, cube.intensity_corrected[:, x_idx, y_idx] * units, lw=0.8,
                 color=pos_col[i])
         mapax.plot(y_idx, x_idx, marker='+', ms=8, mew=2, lw=2, color=pos_col[i])
     for i, wl in enumerate(cube.wavelength[wl_spaxel_idx]):
         ax.axvline(wl, color=wl_col[i], zorder=-1, alpha=0.8)
-    ax.set_yscale('log')
+    ax.axhline(0, alpha=0.2, color='r')
+    ylim = np.nanpercentile(
+        cube.intensity_corrected[np.isfinite(cube.intensity_corrected)] * units, [40, 60])
+    ylim[1] *= 10
+    ylim[0] *= 0.1
+    ax.set_ylim()
+    ax.set_yscale('symlog', linthresh=1)
     ax.set_xlabel(r"Wavelength ($\AA$)")
-    ax.set_ylabel("Flux")
+    ax.set_ylabel("Flux " + units_label)
+
     # SNR ------------
     ax = fig.add_subplot(gs[3:5, :], sharex=ax)
     for x_idx, y_idx, i in zip(x_spaxel_idx, y_spaxel_idx, range(3)):
