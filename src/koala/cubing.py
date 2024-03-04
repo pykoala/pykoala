@@ -231,9 +231,8 @@ def interpolate_rss(rss, pixel_size_arcsec=0.7, kernel_size_arcsec=2.0,
 
 
 def build_cube(rss_set, reference_coords, cube_size_arcsec,
-               offset=(0, 0), reference_pa=0,
                kernel_size_arcsec=2.0, pixel_size_arcsec=0.7,
-               adr_x_set=None, adr_y_set=None, **cube_info):
+               adr_ra_set=None, adr_dec_set=None, **cube_info):
                
     """Create a Cube from a set of Raw Stacked Spectra (RSS).
 
@@ -244,17 +243,16 @@ def build_cube(rss_set, reference_coords, cube_size_arcsec,
     reference_coords: (2,) tuple
         Reference coordinates (RA, DEC) in *degrees* for aligning each RSS using
         RSS.info['cen_ra'], RSS.info['cen_dec'].
-    offset: #TODO
-    cube_size_arcsec: (2,) tuple
-        Cube physical size in *arcseconds* in the form (DEC, RA).
-    reference_pa: float
-        Reference position angle in *degrees*.
+    offset: (2-element tuple) 
+        Arbitrary offset in 
+    cube_size_arcsec: (2-element tuple) 
+        Cube physical size in *arcseconds* in the form (RA, DEC).
     kernel_size_arcsec: float, default=1.1
         Interpolator kernel physical size in *arcseconds*.
     pixel_size_arcsec: float, default=0.7
         Cube pixel physical size in *arcseconds*.
-    adr_x_set: # TODO
-    adr_y_set: # TODO
+    adr_ra_set: # TODO
+    adr_dec_set: # TODO
 
     Returns
     -------
@@ -263,9 +261,12 @@ def build_cube(rss_set, reference_coords, cube_size_arcsec,
     """
     print('[Cubing] Starting cubing process')
     # Use defined cube size to generated number of spaxel columns and rows
-    n_cols = int(cube_size_arcsec[1] / pixel_size_arcsec)
-    n_rows = int(cube_size_arcsec[0] / pixel_size_arcsec)
+    n_cols = int(cube_size_arcsec[0] / pixel_size_arcsec)
+    n_rows = int(cube_size_arcsec[1] / pixel_size_arcsec)
     # Create empty cubes for data, variance and weights - these will be filled and returned
+    print("[Cubing] Initialising new datacube with dimensions: "
+              + f"({cube_size_arcsec[0]}, {cube_size_arcsec[1]}) arcsec -->"
+              + f"({n_rows}, {n_cols}) pixels (0=Dec, 1=Ra)")
     datacube = np.zeros((rss_set[0].wavelength.size, n_rows, n_cols),
                         dtype=np.float32)
     datacube_var = np.zeros_like(datacube)
@@ -277,10 +278,10 @@ def build_cube(rss_set, reference_coords, cube_size_arcsec,
 
     # For each RSS two arrays containing the ADR over each axis might be provided
     # otherwise they will be set to None
-    if adr_x_set is None:
-        adr_x_set = [None] * len(rss_set)
-    if adr_y_set is None:
-        adr_y_set = [None] * len(rss_set)
+    if adr_ra_set is None:
+        adr_ra_set = [None] * len(rss_set)
+    if adr_dec_set is None:
+        adr_dec_set = [None] * len(rss_set)
 
     for i, rss in enumerate(rss_set):
         copy_rss = copy.deepcopy(rss)
@@ -288,28 +289,14 @@ def build_cube(rss_set, reference_coords, cube_size_arcsec,
         # Offset between RSS WCS and reference frame in arcseconds
         # offset = ((copy_rss.info['cen_ra'] - reference_coords[0]) * 3600,
         #           (copy_rss.info['cen_dec'] - reference_coords[1]) * 3600)
-        
-        # Transform the coordinates of RSS
-        cos_alpha = np.cos(np.deg2rad(copy_rss.info['pos_angle'] - reference_pa))
-        sin_alpha = np.sin(np.deg2rad(copy_rss.info['pos_angle'] - reference_pa))
-        
-        offset = (offset[0] * cos_alpha - offset[1] * sin_alpha,
-                  offset[0] * sin_alpha + offset[1] * cos_alpha)
-        
-        if adr_x_set[i] is not None and adr_y_set[i] is not None:
-            adr_x = adr_x_set[i] * cos_alpha - adr_y_set[i] * sin_alpha
-            adr_y = adr_x_set[i] * sin_alpha + adr_y_set[i] * cos_alpha
+
+        if adr_ra_set[i] is not None and adr_dec_set[i] is not None:
+            adr_ra = adr_ra_set[i]
+            adr_dec = adr_dec_set[i]
         else:
-            adr_x = None
-            adr_y = None
-        print("[Cubing] {}-th RSS fibre (transformed) offset with respect reference pos: "
-              .format(i+1), offset, ' arcsec')
-        new_ra = (copy_rss.info['fib_ra_offset'] * cos_alpha - copy_rss.info['fib_dec_offset'] * sin_alpha
-                  ) #- offset[0]
-        new_dec = (copy_rss.info['fib_ra_offset'] * sin_alpha + copy_rss.info['fib_dec_offset'] * cos_alpha
-                   ) #- offset[1]
-        copy_rss.info['fib_ra_offset'] = new_ra
-        copy_rss.info['fib_dec_offset'] = new_dec
+            adr_ra = None
+            adr_dec = None
+
         # Interpolate RSS to data cube
         datacube_weight_before = datacube_weight.copy()
         datacube, datacube_var, datacube_weight = interpolate_rss(
@@ -318,7 +305,7 @@ def build_cube(rss_set, reference_coords, cube_size_arcsec,
             kernel_size_arcsec=kernel_size_arcsec,
             cube_size_arcsec=cube_size_arcsec,
             datacube=datacube, datacube_var=datacube_var, datacube_weight=datacube_weight,
-            adr_x=adr_x, adr_y=adr_y)
+            adr_ra=adr_ra, adr_dec=adr_dec)
         rss_mask[i] = datacube_weight - datacube_weight_before
         rss_mask[i] /= np.nanmax(rss_mask[i])
         del datacube_weight_before, copy_rss
@@ -327,7 +314,7 @@ def build_cube(rss_set, reference_coords, cube_size_arcsec,
     datacube /= pixel_exptime
     datacube_var /= pixel_exptime**2
     # Create cube meta data
-    info = dict(pixel_size_arcsec=pixel_size_arcsec, reference_coords=reference_coords, reference_pa=reference_pa,
+    info = dict(pixel_size_arcsec=pixel_size_arcsec, reference_coords=reference_coords,
                 pixel_exptime=pixel_exptime, kernel_size_arcsec=kernel_size_arcsec, **cube_info)
     cube = Cube(rss_mask=rss_mask, intensity=datacube, variance=datacube_var,
                 wavelength=rss.wavelength, info=info)
