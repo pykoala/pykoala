@@ -233,6 +233,7 @@ def interpolate_rss(rss, pixel_size_arcsec=0.7, kernel_size_arcsec=2.0,
 
 
 def build_cube(rss_set, cube_size_arcsec,
+               reference_position=(0.0, 0.0),
                kernel_size_arcsec=2.0, pixel_size_arcsec=0.7,
                adr_set=None, **cube_info):
                
@@ -302,9 +303,49 @@ def build_cube(rss_set, cube_size_arcsec,
     # Create cube meta data
     info = dict(pixel_size_arcsec=pixel_size_arcsec,
                 pixel_exptime=pixel_exptime, kernel_size_arcsec=kernel_size_arcsec, **cube_info)
-    cube = Cube(rss_mask=rss_mask, intensity=datacube, variance=datacube_var,
-                wavelength=rss.wavelength, info=info)
+    # Create WCS information
+    wcs = build_wcs(
+        datacube_shape=datacube.shape, reference_position=reference_position,
+        spatial_pix_size=pixel_size_arcsec,
+        wave_init=rss.wavelength[0], spectra_pix_size=rss.wavelength[1] - rss.wavelength[0])
+
+    hdul = build_hdul(intensity=datacube, variance=datacube_var, wcs=wcs)
+
+    cube = Cube(hdul=hdul)
     return cube
+
+def build_wcs(datacube_shape, reference_position, spatial_pix_size,
+              spectra_pix_size, wave_init):
+    """Create a WCS using cubing information"""
+    print("[Cubing] Constructing cube WCS")
+    w = WCS(naxis=3)
+    w.wcs.crpix = [datacube_shape[1] / 2, datacube_shape[0] / 2, 0]
+    w.wcs.cdelt = np.array([spatial_pix_size / 3600,
+                            spatial_pix_size / 3600,
+                            spectra_pix_size])
+    w.wcs.crval = [*reference_position, wave_init]
+    w.wcs.ctype = ["RA---TAN", "DEC--TAN", "WAVE"]
+    return w
+
+
+def build_hdul(intensity, variance, primary_header_info=None, wcs=None):
+    primary = fits.PrimaryHDU()
+    primary.header['HISTORY'] = 'PyKOALA creation date: {}'.format(datetime.now().strftime("%d_%m_%Y_%H_%M_%S"))
+    if primary_header_info is not None:
+        for k, v in primary_header_info.items():
+            primary.header[k] = v
+    # TODO: fill with relevant information
+    if wcs is not None:
+        data_header = wcs.to_header()
+    else:
+        data_header = None
+    hdul = fits.HDUList([
+    primary, 
+    fits.ImageHDU(name='FLUX', data=intensity, header=data_header),
+    fits.ImageHDU(name='VARIANCE', data=variance, header=data_header)])
+
+    return hdul
+
 
 
 # =============================================================================
@@ -330,29 +371,37 @@ class Cube(DataContainer):
     x_size_arcsec = None
     y_size_arcsec = None
 
-    def __init__(self, parent_rss=None, rss_mask=None, intensity=None, variance=None,
-                 intensity_corrected=None, variance_corrected=None, wavelength=None,
-                 info=None, **kwargs):
-        if intensity_corrected is None and intensity is not None:
-            intensity_corrected = intensity.copy()
-        if variance_corrected is None and variance is not None:
-            variance_corrected = variance.copy()
+    def __init__(self, hdul=None, file_path=None, 
+                 hdul_extensions_map=None):
 
-        super(Cube, self).__init__(intensity=intensity,
-                                   intensity_corrected=intensity_corrected,
-                                   variance=variance,
-                                   variance_corrected=variance_corrected,
-                                   info=info, **kwargs)
-        self.parent_rss = parent_rss
-        self.rss_mask = rss_mask
-        self.intensity = intensity
-        self.variance = variance
-        self.wavelength = wavelength
-        # Cube information
-        self.info = info
+        if hdul is not None:
+            if hdul_extensions_map is None:
+                self.hdul_extensions_map = {"FLUX": "FLUX", "VARIANCE": "VARIANCE"}
+            else:
+                self.hdul_extensions_map = hdul
+            print("[Cube] Initialising cube with input HDUL")
+            self.hdul = hdul
+            self.parse_info_from_header()
+        elif file_path is not None:
+            self.load_hdul(file_path)
+        self.get_wcs_from_header()
+        
+    
+        # super(Cube, self).__init__(intensity=self.intensity,
+        #                            intensity_corrected=intensity_corrected,
+        #                            variance=self.variance,
+        #                            variance_corrected=variance_corrected,
+        #                            info=info, **kwargs)
+        # self.intensity = intensity
+        # self.variance = variance
+        # self.wavelength = wavelength
+        # # Cube information
+        # self.info = info
+        self.intensity = self.intensity_corrected
+        self.variance = self.variance_corrected
+        self.n_wavelength, self.n_rows, self.n_cols = self.intensity.shape
+        self.get_wavelength()
 
-        if self.intensity is not None:
-            self.n_wavelength, self.n_rows, self.n_cols = self.intensity.shape
         if self.info is not None and 'pixel_size_arcsec' in self.info.keys():
             self.ra_size_arcsec = self.n_cols * self.info['pixel_size_arcsec']
             self.dec_size_arcsec = self.n_rows * self.info['pixel_size_arcsec']
@@ -365,6 +414,54 @@ class Cube(DataContainer):
                         self.dec_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
                         self.info['pixel_size_arcsec']))
 
+    @property
+    def intensity_corrected(self):
+        return self.hdul[self.hdul_extensions_map['FLUX']].data
+    
+    @intensity_corrected.setter
+    def intensity_corrected(self, intensity_corr):
+        print("[Cube] Updating HDUL flux")
+        self.hdul[self.hdul_extensions_map['FLUX']].data = intensity_corr
+
+    @property
+    def variance_corrected(self):
+        return self.hdul[self.hdul_extensions_map['VARIANCE']].data
+
+    @variance_corrected.setter
+    def variance_corrected(self, variance_corr):
+        print("[Cube] Updating HDUL variance")
+        self.hdul[self.hdul_extensions_map['VARIANCE']].data = variance_corr
+
+    def parse_info_from_header(self):
+        """Look into the primary header for pykoala information."""
+        print("[Cube] Looking for information in the primary header")
+        self.info = {}
+        self.log = {'corrections': {}}
+        self.fill_info()
+        print("NOT IMPLEMENTED")
+        # TODO
+        pass
+
+    def load_hdul(self, path_to_file):
+        print(f"[Cube] Loading HDUL {path_to_file}")
+        self.hdul = fits.open(path_to_file)
+        pass
+
+    def close_hdul(self):
+        if self.hdul is not None:
+            print(f"[Cube] Closing HDUL")
+            self.hdul.close()
+
+    def get_wcs_from_header(self):
+        """Create a WCS from HDUL header."""
+        print("[Cube] Constructing WCS")
+        self.wcs = WCS(self.hdul[self.hdul_extensions_map['FLUX']].header)
+
+    def get_wavelength(self):
+        print("[Cube] Constructing wavelength array")
+        self.wavelength = self.wcs.spectral.array_index_to_world_values(
+            np.arange(self.n_wavelength))
+        
     def get_centre_of_mass(self, wavelength_step=1, stat=np.median, power=1.0):
         """Compute the center of mass of the data cube."""
         x = np.arange(0, self.n_cols, 1)
