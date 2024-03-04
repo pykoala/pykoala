@@ -22,7 +22,15 @@ from scipy.special import erf
 # -------------------------------------------
 
 def gaussian_kernel(z, norm=False):
-    """Cumulative gaussian kernel function."""
+    """1D Cumulative gaussian kernel function.
+
+    Params
+    ------
+    z: (np.ndarray)
+        Array of points where the kernel will be evaluated.
+    norm: (bool, default=False)
+        If true, the output will be forced to be normalized.
+    """
     c = 0.5 * (1 + erf(z / np.sqrt(2)))
     w = np.diff(c)
     if norm:
@@ -30,6 +38,15 @@ def gaussian_kernel(z, norm=False):
     return w
 
 def cubic_kernel(z, norm=False):
+    """1D Cumulative cubic kernel function.
+    
+    Params
+    ------
+    z: (np.ndarray)
+        Array of points where the kernel will be evaluated.
+    norm: (bool, default=False)
+        If true, the output will be forced to be normalized.
+    """
     c = (3. * z - z ** 3 + 2.) / 4
     w = np.diff(c)
     if norm:
@@ -38,10 +55,10 @@ def cubic_kernel(z, norm=False):
 
 def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
                       offset_cols, offset_rows, pixel_size, kernel_size_pixels,
-                      adr_x=None, adr_y=None, adr_pixel_frac=0.05,
+                      adr_cols=None, adr_rows=None, adr_pixel_frac=0.05,
                       kernel_func=cubic_kernel):
 
-    """ Interpolates fibre spectra and variance to data cube.
+    """ Interpolates fibre spectra and variance to a 3D data cube.
 
     Parameters
     ----------
@@ -56,17 +73,17 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
     cube_weight: (k, n, m) np.ndarray (float)
         Cube to store fibre spectral weights.
     offset_cols: int
-        offset columns pixels (m) with respect to Cube.
+        offset columns pixels (m) with respect to the cube array centre.
     offset_rows: int
-        offset rows pixels (n) with respect to Cube.
+        offset rows pixels (n) with respect to to the cube array centre.
     pixel_size: float
-        Cube pixel size in arcseconds.
+        Datacube pixel size in arcseconds.
     kernel_size_pixels: float
         Smoothing kernel size in pixels.
-    adr_x: (k,) np.array(float), optional, default=None
-        Atmospheric Differential Refraction (ADR) of each wavelength point along x-axis (m) expressed in pixels.
-    adr_y: (k,) np.array(float), optional, default=None
-        Atmospheric Differential Refraction of each wavelength point along y-axis (n) expressed in pixels.
+    adr_cols: (k,) np.array(float), optional, default=None
+        Atmospheric Differential Refraction (ADR) of each wavelength point along x (ra)-axis (m) expressed in pixels.
+    adr_rows: (k,) np.array(float), optional, default=None
+        Atmospheric Differential Refraction of each wavelength point along y (dec) -axis (n) expressed in pixels.
     adr_pixel_frac: float, optional, default=0.05
         ADR Pixel fraction used to bin the spectral pixels. For each bin, the median ADR correction will be used to
         correct the range of wavelength.
@@ -82,18 +99,17 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
     cube_weight:
         Original datacube weights with the fibre data interpolated.
     """
-    if adr_x is None and adr_y is None:
-        adr_x = np.zeros_like(fib_spectra)
-        adr_y = np.zeros_like(fib_spectra)
-        spectral_window = 0
+    if adr_rows is None and adr_cols is None:
+        adr_rows = np.zeros_like(fib_spectra)
+        adr_cols = np.zeros_like(fib_spectra)
+        spectral_window = fib_spectra.size
     else:
         # Estimate spectral window
         spectral_window = int(np.min(
-            (adr_pixel_frac / np.abs(adr_x[0] - adr_x[-1]),
-             adr_pixel_frac / np.abs(adr_y[0] - adr_y[-1]))
+            (adr_pixel_frac / np.abs(adr_cols[0] - adr_cols[-1]),
+             adr_pixel_frac / np.abs(adr_rows[0] - adr_rows[-1]))
         ) * fib_spectra.size)
-    if spectral_window == 0:
-        spectral_window = fib_spectra.size
+
     # Set NaNs to 0 and discard pixels
     nan_pixels = ~np.isfinite(fib_spectra)
     fib_spectra[nan_pixels] = 0.
@@ -104,51 +120,51 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
     # Loop over wavelength pixels
     for wl_range in range(0, fib_spectra.size, spectral_window):
         # ADR correction for spectral window
-        median_adr_x = np.nanmedian(adr_x[wl_range: wl_range + spectral_window])
-        median_adr_y = np.nanmedian(adr_y[wl_range: wl_range + spectral_window])
+        median_adr_cols = np.nanmedian(adr_cols[wl_range: wl_range + spectral_window])
+        median_adr_rows = np.nanmedian(adr_rows[wl_range: wl_range + spectral_window])
 
-        # Kernel for columns (x)
-        kernel_centre_x = .5 * cube.shape[2] + offset_cols - median_adr_x / pixel_size
-        x_min = max(int(kernel_centre_x - kernel_size_pixels), 0)
-        x_max = min(int(kernel_centre_x + kernel_size_pixels) + 1, cube.shape[2] + 1)
-        # Kernel for rows (y)
-        n_points_x = x_max - x_min
-        kernel_centre_y = .5 * cube.shape[1] + offset_rows - median_adr_y / pixel_size
-        y_min = max(int(kernel_centre_y - kernel_size_pixels), 0)
-        y_max = min(int(kernel_centre_y + kernel_size_pixels) + 1, cube.shape[1] + 1)
-        n_points_y = y_max - y_min
+        # Kernel along columns direction (x, ra)
+        kernel_centre_cols = .5 * cube.shape[2] + offset_cols - median_adr_cols/ pixel_size
+        cols_min = max(int(kernel_centre_cols - kernel_size_pixels), 0)
+        cols_max = min(int(kernel_centre_cols + kernel_size_pixels) + 1, cube.shape[2] + 1)
+        n_points_cols = cols_max - cols_min
+        # Kernel along rows direction (y, dec)
+        kernel_centre_rows = .5 * cube.shape[1] + offset_rows - median_adr_rows / pixel_size
+        rows_min = max(int(kernel_centre_rows - kernel_size_pixels), 0)
+        rows_max = min(int(kernel_centre_rows + kernel_size_pixels) + 1, cube.shape[1] + 1)
+        n_points_rows = rows_max - rows_min
 
-        if (n_points_x < 1) | (n_points_y < 1):
+        if (n_points_cols < 1) | (n_points_rows < 1):
             # print("OUT FOV")
             continue
 
-        x = np.linspace(x_min - kernel_centre_x, x_max - kernel_centre_x,
-                        n_points_x) / kernel_size_pixels
-        y = np.linspace(y_min - kernel_centre_y, y_max - kernel_centre_y,
-                        n_points_y) / kernel_size_pixels
+        cols = np.linspace(cols_min - kernel_centre_cols, cols_max - kernel_centre_cols,
+                           n_points_cols) / kernel_size_pixels
+        rows = np.linspace(rows_min - kernel_centre_rows, rows_max - kernel_centre_rows,
+                           n_points_rows) / kernel_size_pixels
         # Ensure weight normalization
-        if x_min > 0:
-            x[0] = -1.
-        if x_max < cube.shape[2] + 1:
-            x[-1] = 1.
-        if y_min > 0:
-            y[0] = -1.
-        if y_max < cube.shape[1] + 1:
-            y[-1] = 1.
+        if cols_min > 0:
+            cols[0] = -1.
+        if cols_max < cube.shape[2] + 1:
+            cols[-1] = 1.
+        if rows_min > 0:
+            rows[0] = -1.
+        if rows_max < cube.shape[1] + 1:
+            rows[-1] = 1.
 
-        weight_x = kernel_func(x)
-        weight_y = kernel_func(y)
+        weight_cols = kernel_func(cols)
+        weight_rows = kernel_func(rows)
 
         # Kernel weight matrix
-        w = weight_y[np.newaxis, :, np.newaxis] * weight_x[np.newaxis, np.newaxis, :]
+        w = weight_rows[np.newaxis, :, np.newaxis] * weight_cols[np.newaxis, np.newaxis, :]
         # Add spectra to cube
-        cube[wl_range: wl_range + spectral_window, y_min:y_max - 1, x_min:x_max - 1] += (
+        cube[wl_range: wl_range + spectral_window, rows_min:rows_max - 1, cols_min:cols_max - 1] += (
                 fib_spectra[wl_range: wl_range + spectral_window, np.newaxis, np.newaxis]
                 * w)
-        cube_var[wl_range: wl_range + spectral_window, y_min:y_max - 1, x_min:x_max - 1] += (
+        cube_var[wl_range: wl_range + spectral_window, rows_min:rows_max - 1, cols_min:cols_max - 1] += (
                 fib_variance[wl_range: wl_range + spectral_window, np.newaxis, np.newaxis]
                 * w)
-        cube_weight[wl_range: wl_range + spectral_window, y_min:y_max - 1, x_min:x_max - 1] += (
+        cube_weight[wl_range: wl_range + spectral_window, rows_min:rows_max - 1, cols_min:cols_max - 1] += (
                 pixel_weights[wl_range: wl_range + spectral_window, np.newaxis, np.newaxis]
                 * w)
     return cube, cube_var, cube_weight
@@ -157,21 +173,26 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
 def interpolate_rss(rss, pixel_size_arcsec=0.7, kernel_size_arcsec=2.0,
                     cube_size_arcsec=None, datacube=None,
                     datacube_var=None, datacube_weight=None,
-                    adr_x=None, adr_y=None):
+                    adr_ra=None, adr_dec=None):
 
-    """ Converts a PyKoala RSS object to a datacube via interpolating fibers to cube
+    """Perform fibre interpolation using a RSS into to a 3D datacube.
 
     Parameters
     ----------
-    rss 
-    pixel_size_arcsec
-    kernel_size_arcsec
-    cube_size_arcsec
+    rss: (RSS)
+        Target RSS to be interpolated.
+    pixel_size_arcsec: (float, default=0.7)
+        Cube square pixel size in arcseconds.
+    kernel_size_arcsec: (float, default=2.0)
+        Smoothing kernel scale in arcseconds.
+    cube_size_arcsec: (2-element tuple)
+        Size of the cube (RA, DEC) expressed in arcseconds.
+        Note: the final shape of the cube will be (wave, dec, ra).
     datacube
     datacube_var
     datacube_weight
-    adr_x
-    adr_y
+    adr_ra
+    adr_dec
 
     Returns
     -------
@@ -182,27 +203,30 @@ def interpolate_rss(rss, pixel_size_arcsec=0.7, kernel_size_arcsec=2.0,
     """
     # Initialise cube data containers (flux, variance, fibre weights)
     if datacube is None:
-        n_cols = int(cube_size_arcsec[1] / pixel_size_arcsec)
-        n_rows = int(cube_size_arcsec[0] / pixel_size_arcsec)
+        n_cols = int(cube_size_arcsec[0] / pixel_size_arcsec)
+        n_rows = int(cube_size_arcsec[1] / pixel_size_arcsec)
         datacube = np.zeros((rss.wavelength.size, n_rows, n_cols))
-        print("[Cubing] Creating new datacube with dimensions: ", datacube.shape)
+        print("[Cubing] Creating new datacube with dimensions: "
+              + f"({cube_size_arcsec[0]}, {cube_size_arcsec[1]}) arcsec -->"
+              + f"({n_rows}, {n_cols}) pixels (0=Dec, 1=Ra)")
     if datacube_var is None:
         datacube_var = np.zeros_like(datacube)
     if datacube_weight is None:
         datacube_weight = np.zeros_like(datacube)
     # Kernel pixel size for interpolation
     kernel_size_pixels = kernel_size_arcsec / pixel_size_arcsec
-    # Loop over all RSS fibres
+    print(f"[Cubing] Smoothing kernel scale: {kernel_size_pixels:.0f} (pixels)")
+    # Interpolate all RSS fibres
     for fibre in range(rss.intensity_corrected.shape[0]):
-        offset_rows = rss.info['fib_dec_offset'][fibre] / pixel_size_arcsec  # pixel offset
-        offset_cols = rss.info['fib_ra_offset'][fibre] / pixel_size_arcsec   # pixel offset
+        offset_dec_pix = rss.info['fib_dec_offset'][fibre] / pixel_size_arcsec  # pixel offset
+        offset_ra_pix = rss.info['fib_ra_offset'][fibre] / pixel_size_arcsec   # pixel offset
         # Interpolate fibre to cube
         datacube, datacube_var, datacube_weight = interpolate_fibre(
             fib_spectra=rss.intensity_corrected[fibre].copy(),
             fib_variance=rss.variance_corrected[fibre].copy(),
             cube=datacube, cube_var=datacube_var, cube_weight=datacube_weight,
-            offset_cols=offset_cols, offset_rows=offset_rows, pixel_size=pixel_size_arcsec,
-            kernel_size_pixels=kernel_size_pixels, adr_x=adr_x, adr_y=adr_y)
+            offset_cols=offset_dec_pix, offset_rows=offset_ra_pix, pixel_size=pixel_size_arcsec,
+            kernel_size_pixels=kernel_size_pixels, adr_ra=adr_ra, adr_dec=adr_dec)
     return datacube, datacube_var, datacube_weight
 
 
