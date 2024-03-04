@@ -87,18 +87,19 @@ def uves_sky_lines():
         Array containing the flux of each line expressed in 1e-16 ergs/s/A/cm^2/arcsec^2
     """
     # Prefix of each table
-    files = ["346", "437", "580L", "580U", "800U", "860L", "860U"]
+    prefix = ["346", "437", "580L", "580U", "800U", "860L", "860U"]
     # Path to tables
     data_path = os.path.join(os.path.dirname(__file__), "..", "input_data", "sky_lines", "ESO-UVES")
-    
+
     line_wavelength = np.empty(1)
     line_fwhm = np.empty(1)
     line_flux = np.empty(1)
 
-    for file in files:
+    for p in prefix:
+        file = os.path.join(data_path, f"gident_{p}.tfits")
         if not os.path.isfile(file):
-            raise NameError(f"File {file} could not be found")
-        with fits.open(os.path.join(data_path, "gident_{}.tfits".format(file))) as f:
+            raise NameError(f"File '{file}' could not be found")
+        with fits.open(file) as f:
             wave, fwhm, flux = f[1].data['LAMBDA_AIR'], f[1].data['FWHM'], f[1].data['FLUX']
             line_wavelength = np.hstack((line_wavelength, wave))
             line_fwhm = np.hstack((line_fwhm, fwhm))
