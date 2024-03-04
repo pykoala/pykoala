@@ -39,7 +39,7 @@ def cubic_kernel(z, norm=False):
 def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
                       offset_cols, offset_rows, pixel_size, kernel_size_pixels,
                       adr_x=None, adr_y=None, adr_pixel_frac=0.05,
-                      kernel=cubic_kernel):
+                      kernel_func=cubic_kernel):
 
     """ Interpolates fibre spectra and variance to data cube.
 
@@ -67,9 +67,11 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
         Atmospheric Differential Refraction (ADR) of each wavelength point along x-axis (m) expressed in pixels.
     adr_y: (k,) np.array(float), optional, default=None
         Atmospheric Differential Refraction of each wavelength point along y-axis (n) expressed in pixels.
-    adr_pixel_frac: float, optional, default=0.1
+    adr_pixel_frac: float, optional, default=0.05
         ADR Pixel fraction used to bin the spectral pixels. For each bin, the median ADR correction will be used to
         correct the range of wavelength.
+    kernel_func: (method)
+        1D kernel function to interpolate the data. Default is cubic kernel.
 
     Returns
     -------
@@ -92,11 +94,12 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
         ) * fib_spectra.size)
     if spectral_window == 0:
         spectral_window = fib_spectra.size
-    # Set NaNs to 0
-    bad_wavelengths = ~np.isfinite(fib_spectra)
-    fib_spectra[bad_wavelengths] = 0.
-    ones = np.ones_like(fib_spectra)
-    ones[bad_wavelengths] = 0.
+    # Set NaNs to 0 and discard pixels
+    nan_pixels = ~np.isfinite(fib_spectra)
+    fib_spectra[nan_pixels] = 0.
+
+    pixel_weights = np.ones_like(fib_spectra)
+    pixel_weights[nan_pixels] = 0.
 
     # Loop over wavelength pixels
     for wl_range in range(0, fib_spectra.size, spectral_window):
@@ -133,10 +136,8 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
         if y_max < cube.shape[1] + 1:
             y[-1] = 1.
 
-        weight_x = kernel(x)
-        weight_y = kernel(y)
-        #weight_x = np.diff((3. * x - x ** 3 + 2.) / 4)
-        #weight_y = np.diff((3. * y - y ** 3 + 2.) / 4)
+        weight_x = kernel_func(x)
+        weight_y = kernel_func(y)
 
         # Kernel weight matrix
         w = weight_y[np.newaxis, :, np.newaxis] * weight_x[np.newaxis, np.newaxis, :]
@@ -148,7 +149,7 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
                 fib_variance[wl_range: wl_range + spectral_window, np.newaxis, np.newaxis]
                 * w)
         cube_weight[wl_range: wl_range + spectral_window, y_min:y_max - 1, x_min:x_max - 1] += (
-                ones[wl_range: wl_range + spectral_window, np.newaxis, np.newaxis]
+                pixel_weights[wl_range: wl_range + spectral_window, np.newaxis, np.newaxis]
                 * w)
     return cube, cube_var, cube_weight
 
