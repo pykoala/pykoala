@@ -225,8 +225,10 @@ def interpolate_rss(rss, pixel_size_arcsec=0.7, kernel_size_arcsec=2.0,
             fib_spectra=rss.intensity_corrected[fibre].copy(),
             fib_variance=rss.variance_corrected[fibre].copy(),
             cube=datacube, cube_var=datacube_var, cube_weight=datacube_weight,
-            offset_cols=offset_dec_pix, offset_rows=offset_ra_pix, pixel_size=pixel_size_arcsec,
-            kernel_size_pixels=kernel_size_pixels, adr_ra=adr_ra, adr_dec=adr_dec)
+            offset_cols=offset_ra_pix, offset_rows=offset_dec_pix,
+            pixel_size=pixel_size_arcsec,
+            kernel_size_pixels=kernel_size_pixels,
+            adr_cols=adr_ra, adr_rows=adr_dec)
     return datacube, datacube_var, datacube_weight
 
 
@@ -246,8 +248,9 @@ def build_cube(rss_set, cube_size_arcsec,
         Interpolator kernel physical size in *arcseconds*.
     pixel_size_arcsec: float, default=0.7
         Cube pixel physical size in *arcseconds*.
-    adr_ra_set: # TODO
-    adr_dec_set: # TODO
+    adr_set: (list, default=None)
+        List containing the ADR correction for every RSS (it can contain None)
+        in the form: [(ADR_ra_1, ADR_dec_1), (ADR_ra_2, ADR_dec_2), (None, None)]
 
     Returns
     -------
@@ -260,7 +263,7 @@ def build_cube(rss_set, cube_size_arcsec,
     n_rows = int(cube_size_arcsec[1] / pixel_size_arcsec)
     # Create empty cubes for data, variance and weights - these will be filled and returned
     print("[Cubing] Initialising new datacube with dimensions: "
-              + f"(ra={cube_size_arcsec[0]}, dec={cube_size_arcsec[1]}) arcsec -->"
+              + f"(ra={cube_size_arcsec[0]}, dec={cube_size_arcsec[1]}) arcsec --> "
               + f"({n_rows}, {n_cols}) pixels (0=Dec, 1=Ra)")
     datacube = np.zeros((rss_set[0].wavelength.size, n_rows, n_cols),
                         dtype=np.float32)
@@ -320,8 +323,6 @@ class Cube(DataContainer):
     wavelength
     info
 
-    
-    
     """
     n_wavelength = None
     n_cols = None
@@ -353,17 +354,17 @@ class Cube(DataContainer):
         if self.intensity is not None:
             self.n_wavelength, self.n_rows, self.n_cols = self.intensity.shape
         if self.info is not None and 'pixel_size_arcsec' in self.info.keys():
-            self.x_size_arcsec = self.n_cols * self.info['pixel_size_arcsec']
-            self.y_size_arcsec = self.n_rows * self.info['pixel_size_arcsec']
+            self.ra_size_arcsec = self.n_cols * self.info['pixel_size_arcsec']
+            self.dec_size_arcsec = self.n_rows * self.info['pixel_size_arcsec']
             # Store the spaxel offset position
             self.info['spax_ra_offset'], self.info['spax_dec_offset'] = (
-                np.arange(-self.x_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
-                        self.x_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
+                np.arange(-self.ra_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
+                        self.ra_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
                         self.info['pixel_size_arcsec']),
-                np.arange(-self.y_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
-                        self.y_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
+                np.arange(-self.dec_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
+                        self.dec_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
                         self.info['pixel_size_arcsec']))
-    
+
     def get_centre_of_mass(self, wavelength_step=1, stat=np.median, power=1.0):
         """Compute the center of mass of the data cube."""
         x = np.arange(0, self.n_cols, 1)
@@ -413,22 +414,21 @@ class Cube(DataContainer):
         return white_image
 
     def get_wcs(self):
-        """TODO..."""
-        # TODO!!!!
+        """Create an astropy.wcs.WCS object using the cube properties."""
+        print("[Cube] Constructing WCS")
         w = WCS(naxis=3)
-        w.wcs.crpix = [self.n_rows / 2, self.n_cols / 2,
-                       self.wavelength.size / 2]
+        w.wcs.crpix = [self.n_cols / 2, self.n_rows / 2,
+                       0]
         w.wcs.cdelt = np.array([
-            self.info['pixel_size_arcsec'] / 3600,
-            self.info['pixel_size_arcsec'] / 3600,
+            self.info.get('pixel_size_arcsec', 1.0) / 3600,
+            self.info.get('pixel_size_arcsec', 1.0) / 3600,
             np.diff(self.wavelength).mean()])
-        w.wcs.crval = [*self.info['reference_coords'],
-                       np.interp(
-                           w.wcs.crpix[2],
-                           np.arange(0, self.wavelength.size), self.wavelength)
-                       ]
+        w.wcs.crval = [self.info.get('cen_ra', 0.0),
+                       self.info.get('cen_dec', 0.0),
+                       self.wavelength[0]]
         w.wcs.ctype = ["RA---TAN", "DEC--TAN", "WAVE"]
         self.wcs = w
+        print("[Cube] WCS: ", w)
         return self.wcs
 
     def wcs_metadata(self):
@@ -473,6 +473,6 @@ class Cube(DataContainer):
         hdul = fits.HDUList(hdu_list)
         hdul.writeto(fname, overwrite=True)
         hdul.close()
-        print("[Saving] Cube saved at:\n {}".format(fname))
+        print("[Cube] Cube saved at:\n {}".format(fname))
 
 # Mr Krtxo \(ﾟ▽ﾟ)/

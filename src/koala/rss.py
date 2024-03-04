@@ -121,22 +121,24 @@ class RSS(DataContainer):
         y_com: np.array(float)
             Array containing the COM in the y-axis (DEC, rows).
         """
-        x = self.info['fib_ra_offset']
-        y = self.info['fib_dec_offset']
-        x_com = np.empty(self.wavelength.size)
-        y_com = np.empty(self.wavelength.size)
+        ra_offset = self.info['fib_ra_offset']
+        dec_offset = self.info['fib_dec_offset']
+        ra_offset_com = np.empty(self.wavelength.size)
+        dec_offset_com = np.empty(self.wavelength.size)
         for wave_range in range(0, self.wavelength.size, wavelength_step):
-            x_com[wave_range: wave_range + wavelength_step] = np.nansum(
-                self.intensity_corrected[:, wave_range: wave_range + wavelength_step]**power * x[:, np.newaxis],
+            # Mean across all fibres
+            ra_offset_com[wave_range: wave_range + wavelength_step] = np.nansum(
+                self.intensity_corrected[:, wave_range: wave_range + wavelength_step]**power * ra_offset[:, np.newaxis],
                 axis=0) / np.nansum(self.intensity_corrected[:, wave_range: wave_range + wavelength_step]**power,
                                     axis=0)
-            x_com[wave_range: wave_range + wavelength_step] = stat(x_com[wave_range: wave_range + wavelength_step])
-            y_com[wave_range: wave_range + wavelength_step] = np.nansum(
-                self.intensity_corrected[:, wave_range: wave_range + wavelength_step]**power * y[:, np.newaxis],
+            # Statistic (e.g., median, mean) per wavelength bin
+            ra_offset_com[wave_range: wave_range + wavelength_step] = stat(ra_offset_com[wave_range: wave_range + wavelength_step])
+            dec_offset_com[wave_range: wave_range + wavelength_step] = np.nansum(
+                self.intensity_corrected[:, wave_range: wave_range + wavelength_step]**power * dec_offset[:, np.newaxis],
                 axis=0) / np.nansum(self.intensity_corrected[:, wave_range: wave_range + wavelength_step]**power,
                                     axis=0)
-            y_com[wave_range: wave_range + wavelength_step] = stat(y_com[wave_range: wave_range + wavelength_step])
-        return x_com, y_com
+            dec_offset_com[wave_range: wave_range + wavelength_step] = stat(dec_offset_com[wave_range: wave_range + wavelength_step])
+        return ra_offset_com, dec_offset_com
 
     def update_coordinates(self, new_fib_offset_coord=None, new_centre=None, new_pos_angle=None):
         """Update fibre coordinates.

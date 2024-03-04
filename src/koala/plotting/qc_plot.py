@@ -1,5 +1,6 @@
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.colors import LogNorm
 from matplotlib.gridspec import  GridSpec
 import os
 
@@ -177,13 +178,14 @@ def qc_cubing(cube, ):
 # Star profile
 # =============================================================================
 
-def qc_moffat(intensity, x, y, fit_model):
+def qc_moffat(intensity, ra_offset, dec_offset, fit_model):
     """#TODO"""
 
-    r = np.sqrt((x-fit_model.x_0.value)**2 + (y-fit_model.y_0.value)**2)
+    r = np.sqrt(
+        (ra_offset - fit_model.x_0.value)**2 + (dec_offset - fit_model.y_0.value)**2)
     r = r.flatten()
     I = intensity.flatten()
-    I_hat = fit_model(x, y).flatten()
+    I_hat = fit_model(ra_offset, dec_offset).flatten()
 
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111)
@@ -195,20 +197,28 @@ def qc_moffat(intensity, x, y, fit_model):
     inax.set_ylabel(r'$\frac{I-\hat{I}}{I}$', fontsize=17)
     inax.set_xlabel(r'$|r-\hat{r}_0|$ (arcsec)', fontsize=15)
     inax.set_ylim(-0.099, 2)
-    #inax.set_ylim(-1, 100)
+    # Input data
     inax = ax.inset_axes((0, 0.0, 0.5, 0.5))
-    c = inax.pcolormesh(x, y, np.log10(intensity), cmap='nipy_spectral')
-    inax.plot(fit_model.x_0.value, fit_model.y_0.value, 'k+', ms=14, mew=2)
+    c = inax.pcolormesh(ra_offset, dec_offset,
+                        np.log10(intensity), cmap='nipy_spectral')
+    inax.plot(fit_model.x_0.value, fit_model.y_0.value, 'k+', ms=14, mew=2,
+              label=f'centre ({fit_model.x_0.value:.1f}, {fit_model.y_0.value:.1f}) arcsec')
     plt.colorbar(mappable=c, ax=inax, orientation='horizontal', anchor=(0, -1),
                  label=r"$\log_{10}(I)$")
-    inax.tick_params(bottom=False, left=False, labelbottom=False, labelleft=False)
+    inax.legend()
+    inax.set_ylabel("DEC offset (arcsec)")
+    inax.set_xlabel("RA offset (arcsec)")
+    
     inax = ax.inset_axes((0.55, 0.0, 0.5, 0.5))
-    c = inax.pcolormesh(x, y, np.log10(intensity/fit_model(x, y)),
+    c = inax.pcolormesh(ra_offset, dec_offset,
+                        np.log10(intensity/I_hat.reshape(intensity.shape)),
                     vmin=-.5, vmax=.5, cmap='seismic')
     inax.plot(fit_model.x_0.value, fit_model.y_0.value, 'k+', ms=14, mew=2)
     plt.colorbar(mappable=c, ax=inax, orientation='horizontal', anchor=(0, -1),
                  label=r"$\log_{10}(I/\hat{I})$")
-    inax.tick_params(bottom=False, left=False, labelbottom=False, labelleft=False)
+    inax.set_ylabel("DEC offset (arcsec)")
+    inax.set_xlabel("RA offset (arcsec)")
+
     ax.axis("off")
 
     return fig
@@ -219,24 +229,32 @@ def qc_moffat(intensity, x, y, fit_model):
 def qc_registration(rss_list, **kwargs):
     n_rss = len(rss_list)
     fig, axs = plt.subplots(nrows=1, ncols=n_rss+1,
-                            figsize=(4*n_rss + 1, 4))
-    axs[0].set_title("Input overlap")
+                            figsize=(4*(n_rss + 1), 4),
+                            gridspec_kw=dict(hspace=0.50))
+    axs[0].set_title("Input RSS overlap")
+    axs[0].set_xlabel("RA (deg)")
+    axs[0].set_ylabel("DEC (deg)")
+
     cmap = plt.get_cmap('jet', n_rss)
     for i, rss in enumerate(rss_list):
-        axs[0].scatter(rss.info['ori_fib_ra_offset'] + rss.info['ori_cen_ra'] * 3600,
-                   rss.info['ori_fib_dec_offset'] + rss.info['ori_cen_dec'] * 3600,
-                   marker='o', ec=cmap(i / (n_rss - 1)), c='none',
+        axs[0].scatter(rss.info['ori_fib_ra_offset'] / 3600 + rss.info['ori_cen_ra'],
+                       rss.info['ori_fib_dec_offset'] / 3600 + rss.info['ori_cen_dec'],
+                       marker='o', ec=cmap(i / (n_rss - 1)), c='none',
                    #alpha=1/n_rss
                    )
+        axs[i+1].set_title(f"Re-centered RSS-{i+1}" + "\n"
+                           f"(ra, dec) shift: {rss.info['cen_ra'] * 3600:.2f}, {rss.info['cen_dec'] * 3600:.2f} ('')")
         axs[i+1].scatter(rss.info['fib_ra_offset'],
                    rss.info['fib_dec_offset'],
                    c=np.nansum(rss.intensity_corrected, axis=1),
+                   norm=LogNorm(),
                    marker='o', cmap='Greys_r',
                    )
-        axs[i+1].axvline(0, c='r', lw=0.5)
-        axs[i + 1].axhline(0, c='r', lw=0.5)
+        axs[i+1].axvline(0, c=cmap(i / (n_rss - 1)), lw=1.5)
+        axs[i + 1].axhline(0, c=cmap(i / (n_rss - 1)), lw=1.5)
         axs[i + 1].set_xlabel("RA Offset (arcsec)")
-        axs[i + 1].set_xlabel("DEC Offset (arcsec)")
+        axs[i + 1].set_ylabel("DEC Offset (arcsec)")
+
     return fig
 
 def qc_registration_crosscorr(images_list, cross_corr_results):
