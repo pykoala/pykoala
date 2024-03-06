@@ -25,7 +25,7 @@ from koala.corrections.correction import CorrectionBase
 from koala.rss import RSS
 from koala.cubing import Cube
 # Original
-from koala.onedspec import smooth_spectrum # TODO: Remove
+from koala.ancillary import smooth_spectrum
 
 # =============================================================================
 # Background estimators
