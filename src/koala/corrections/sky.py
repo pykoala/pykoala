@@ -112,6 +112,7 @@ def uves_sky_lines():
 # Sky models
 # =============================================================================
 # TODO: convert this class to an ABC
+
 class SkyModel(object):
     """
     Abstract class of a sky emission model.
