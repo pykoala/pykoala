@@ -222,6 +222,101 @@ def make_white_image_from_array(data_array, wavelength=None, **args):
     cube = Cube(intensity=data_array, wavelength=wavelength)
     return cube.get_white_image()
 
+# TODO: refactor
+def smooth_spectrum(wlm, s, wave_min=0, wave_max=0, step=50, exclude_wlm=[[0,0]], order=7,    
+                    weight_fit_median=0.5, plot=False, verbose=False, fig_size=12): 
+    """
+    THIS IS NOT EXACTLY THE SAME THING THAT applying signal.medfilter()
+    
+    This needs to be checked, updated, and combine (if needed) with task fit_smooth_spectrum.
+    The task gets the median value in steps of "step", gets an interpolated spectrum, 
+    and fits a 7-order polynomy.
+    
+    It returns fit_median + fit_median_interpolated (each multiplied by their weights).
+    
+    Tasks that use this:  get_telluric_correction
+    """
+
+    if verbose: print("\n> Computing smooth spectrum...")
+
+    if wave_min == 0 : wave_min = wlm[0]
+    if wave_max == 0 : wave_max = wlm[-1]
+        
+    running_wave = []    
+    running_step_median = []
+    cuts=np.int( (wave_max - wave_min) /step)
+   
+    exclude = 0 
+    corte_index=-1
+    for corte in range(cuts+1):
+        next_wave= wave_min+step*corte
+        if next_wave < wave_max:
+            if next_wave > exclude_wlm[exclude][0] and next_wave < exclude_wlm[exclude][1]:
+               if verbose: print("  Skipping ",next_wave, " as it is in the exclusion range [",exclude_wlm[exclude][0],",",exclude_wlm[exclude][1],"]")    
+
+            else:
+                corte_index=corte_index+1
+                running_wave.append (next_wave)
+                region = np.where((wlm > running_wave[corte_index]-step/2) & (wlm < running_wave[corte_index]+step/2))              
+                running_step_median.append (np.nanmedian(s[region]) )
+                if next_wave > exclude_wlm[exclude][1]:
+                    exclude = exclude + 1
+                    #if verbose and exclude_wlm[0] != [0,0] : print "--- End exclusion range ",exclude 
+                    if exclude == len(exclude_wlm) :  exclude = len(exclude_wlm)-1  
+                        
+    running_wave.append (wave_max)
+    region = np.where((wlm > wave_max-step) & (wlm < wave_max+0.1))
+    running_step_median.append (np.nanmedian(s[region]) )
+    
+    # Check not nan
+    _running_wave_=[]
+    _running_step_median_=[]
+    for i in range(len(running_wave)):
+        if np.isnan(running_step_median[i]):
+            if verbose: print("  There is a nan in ",running_wave[i])
+        else:
+            _running_wave_.append (running_wave[i])
+            _running_step_median_.append (running_step_median[i])
+    
+    fit = np.polyfit(_running_wave_, _running_step_median_, order)
+    pfit = np.poly1d(fit)
+    fit_median = pfit(wlm)
+    
+    interpolated_continuum_smooth = interpolate.splrep(_running_wave_, _running_step_median_, s=0.02)
+    fit_median_interpolated = interpolate.splev(wlm, interpolated_continuum_smooth, der=0)
+     
+    if plot:       
+        plt.figure(figsize=(fig_size, fig_size/2.5)) 
+        plt.plot(wlm,s, alpha=0.5)
+        plt.plot(running_wave,running_step_median, "+", ms=15, mew=3)
+        plt.plot(wlm, fit_median, label="fit median")
+        plt.plot(wlm, fit_median_interpolated, label="fit median_interp")
+        plt.plot(wlm, weight_fit_median*fit_median + (1-weight_fit_median)*fit_median_interpolated, label="weighted")
+        #extra_display = (np.nanmax(fit_median)-np.nanmin(fit_median)) / 10
+        #plt.ylim(np.nanmin(fit_median)-extra_display, np.nanmax(fit_median)+extra_display)
+        ymin = np.nanpercentile(s,1)
+        ymax=  np.nanpercentile(s,99)
+        rango = (ymax-ymin)
+        ymin = ymin - rango/10.
+        ymax = ymax + rango/10. 
+        plt.ylim(ymin,ymax)
+        plt.xlim(wlm[0]-10, wlm[-1]+10)
+        plt.minorticks_on()
+        plt.legend(frameon=False, loc=1, ncol=1)
+
+        plt.axvline(x=wave_min, color='k', linestyle='--')
+        plt.axvline(x=wave_max, color='k', linestyle='--')
+
+        plt.xlabel("Wavelength [$\mathrm{\AA}$]")
+        
+        if exclude_wlm[0][0] != 0:
+            for i in range(len(exclude_wlm)):
+                plt.axvspan(exclude_wlm[i][0], exclude_wlm[i][1], color='r', alpha=0.1)                      
+        plt.show()
+        plt.close()
+        print('  Weights for getting smooth spectrum:  fit_median =',weight_fit_median,'    fit_median_interpolated =',(1-weight_fit_median))
+
+    return weight_fit_median*fit_median + (1-weight_fit_median)*fit_median_interpolated #   (fit_median+fit_median_interpolated)/2      # Decide if fit_median or fit_median_interpolated
 # ----------------------------------------------------------------------------------------------------------------------
 # Models and fitting
 # ----------------------------------------------------------------------------------------------------------------------
