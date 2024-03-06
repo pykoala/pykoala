@@ -385,8 +385,7 @@ class Cube(DataContainer):
         elif file_path is not None:
             self.load_hdul(file_path)
         self.get_wcs_from_header()
-        
-    
+
         # super(Cube, self).__init__(intensity=self.intensity,
         #                            intensity_corrected=intensity_corrected,
         #                            variance=self.variance,
