@@ -1,7 +1,7 @@
 """
 Parent CorrectionBase class
 """
-from koala.exceptions.exceptions import CorrectionClassError
+from pykoala.exceptions.exceptions import CorrectionClassError
 from abc import ABC, abstractmethod
 
 

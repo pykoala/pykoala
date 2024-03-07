@@ -19,13 +19,13 @@ from astropy.modeling import models, fitting
 # KOALA packages
 # =============================================================================
 # Modular
-from koala.ancillary import vprint
-from koala.exceptions.exceptions import TelluricNoFileError
-from koala.corrections.correction import CorrectionBase
-from koala.rss import RSS
-from koala.cubing import Cube
+from pykoala.ancillary import vprint
+from pykoala.exceptions.exceptions import TelluricNoFileError
+from pykoala.corrections.correction import CorrectionBase
+from pykoala.rss import RSS
+from pykoala.cubing import Cube
 # Original
-from koala.ancillary import smooth_spectrum
+from pykoala.ancillary import smooth_spectrum
 
 # =============================================================================
 # Background estimators

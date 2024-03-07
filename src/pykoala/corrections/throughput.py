@@ -15,9 +15,9 @@ from scipy.ndimage import gaussian_filter
 # KOALA packages
 # =============================================================================
 # Modular
-from koala.corrections.correction import CorrectionBase
-from koala.rss import RSS
-from koala import ancillary
+from pykoala.corrections.correction import CorrectionBase
+from pykoala.rss import RSS
+from pykoala import ancillary
 
 class Throughput(object):
     def __init__(self, path=None, throughput_data=None, throughput_error=None):

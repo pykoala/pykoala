@@ -20,7 +20,7 @@ from astropy.io import fits
 # =============================================================================
 # PyKOALA modules
 # =============================================================================
-from koala.cubing import Cube
+from pykoala.cubing import Cube
 
 
 def vprint(*arg, **kwargs):

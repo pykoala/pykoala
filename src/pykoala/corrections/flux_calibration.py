@@ -19,11 +19,11 @@ import os
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from koala.exceptions.exceptions import ClassError, FitError, CalibrationError
-from koala.corrections.correction import CorrectionBase
-from koala.rss import RSS
-from koala.cubing import Cube
-from koala.ancillary import (centre_of_mass, cumulative_1d_moffat,
+from pykoala.exceptions.exceptions import ClassError, FitError, CalibrationError
+from pykoala.corrections.correction import CorrectionBase
+from pykoala.rss import RSS
+from pykoala.cubing import Cube
+from pykoala.ancillary import (centre_of_mass, cumulative_1d_moffat,
                              growth_curve_1d, flux_conserving_interpolation,
                              mask_lines, gaussian_2d)
 

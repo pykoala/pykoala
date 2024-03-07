@@ -13,8 +13,8 @@ from astropy.wcs import WCS
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from koala.data_container import DataContainer
-from koala import __version__
+from pykoala.data_container import DataContainer
+from pykoala import __version__
 from scipy.special import erf
 
 # -------------------------------------------

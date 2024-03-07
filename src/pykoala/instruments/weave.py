@@ -19,8 +19,8 @@ from astropy import units as u
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from koala.ancillary import vprint, rss_info_template  # Template to create the info variable 
-from koala.rss import RSS
+from pykoala.ancillary import vprint, rss_info_template  # Template to create the info variable 
+from pykoala.rss import RSS
 
 def weave_rss(filename):
     '''Read a WEAVE "single exposure" file (i.e. row-stacked spectra for just one arm)'''

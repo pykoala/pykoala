@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools >= 61.0", "versioneer[toml]"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pykoala"
+dynamic = ["version"]
+authors = [
+  { name="Pablo Corcho-Caballero", email="p.corcho.caballero@rug.nl" },
+  { name="Ángel R. López-Sánchez", email="angel.lopez-sanchez@mq.edu.au" },
+  { name="Yago Ascasibar", email="yago.ascasibar@uam.es" }
+]
+description = "Data reduction tools for IFS data."
+readme = "README.md"
+keywords = ["astronomy", "IFS", "data reduction"]
+license = {text = "BSD-3-Clause"}
+classifiers = [
+    'Development Status :: 3 - Alpha',
+    'Intended Audience :: Science/Research',
+    'License :: OSI Approved :: BSD License',
+    'Topic :: Scientific/Engineering',
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "astropy>=5.3.4",
+        "matplotlib>=3.7.2",
+        "numpy>=1.24.0",
+        "scipy>=1.2.3",
+        "synphot",
+        'future',
+]
+requires-python = ">=3.7"
+
+[project.urls]
+Homepage = "https://github.com/pykoala/koala"
+Issues = "https://github.com/pykoala/koala/issues"

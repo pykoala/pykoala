@@ -18,12 +18,12 @@ from photutils.centroids import centroid_2dg, centroid_1dg, centroid_com
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from koala.ancillary import interpolate_image_nonfinite, make_white_image_from_array
-from koala.plotting import qc_plot
-from koala.plotting.qc_plot import qc_registration, qc_moffat, qc_registration_crosscorr
-from koala.cubing import Cube, build_cube, interpolate_rss
-from koala.rss import RSS
-from koala.exceptions.exceptions import FitError
+from pykoala.ancillary import interpolate_image_nonfinite, make_white_image_from_array
+from pykoala.plotting import qc_plot
+from pykoala.plotting.qc_plot import qc_registration, qc_moffat, qc_registration_crosscorr
+from pykoala.cubing import Cube, build_cube, interpolate_rss
+from pykoala.rss import RSS
+from pykoala.exceptions.exceptions import FitError
 
 def make_dummy_cube_from_rss(rss, cube_size):
     """Create an empty datacube array from an input RSS."""
