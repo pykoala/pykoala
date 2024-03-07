@@ -16,8 +16,8 @@ from astropy.wcs import WCS
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from koala.ancillary import vprint, rss_info_template  # Template to create the info variable 
-from koala.rss import read_rss
+from pykoala.ancillary import vprint, rss_info_template  # Template to create the info variable 
+from pykoala.rss import read_rss
 
 
 def airmass_from_header(header):

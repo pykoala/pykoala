@@ -4,7 +4,7 @@ from matplotlib.colors import LogNorm
 from matplotlib.gridspec import  GridSpec
 import os
 
-from koala.corrections.throughput import Throughput
+from pykoala.corrections.throughput import Throughput
 
 #TODO: This is not working
 plt.style.use(

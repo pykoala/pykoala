@@ -14,14 +14,14 @@ import versioneer
 
 
 setuptools.setup(
-    name = "pykoala-ifs",
+    name = "pykoala",
     version = versioneer.get_version(),
     packages = setuptools.find_packages('src'),
     package_dir = {'': 'src'},
     install_requires = [
-        "astropy>=2.0.16",
-        "matplotlib>=2.2.3",
-        "numpy>=1.16.6",
+        "astropy>=5.3.4",
+        "matplotlib>=3.7.2",
+        "numpy>=1.24.0",
         "scipy>=1.2.3",
         "synphot",
         'future',

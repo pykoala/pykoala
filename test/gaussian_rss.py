@@ -1,4 +1,4 @@
-from koala.rss import RSS
+from pykoala.rss import RSS
 
 import numpy as np
 

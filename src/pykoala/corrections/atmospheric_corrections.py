@@ -16,9 +16,9 @@ import os
 # =============================================================================
 # Modular
 # from koala.ancillary import vprint
-from koala.rss import RSS
-from koala.cubing import Cube
-from koala.corrections.correction import CorrectionBase
+from pykoala.rss import RSS
+from pykoala.cubing import Cube
+from pykoala.corrections.correction import CorrectionBase
 
 
 # =============================================================================
