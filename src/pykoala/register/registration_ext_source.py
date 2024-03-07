@@ -5,10 +5,10 @@ This module contains the tools for registering extended sources.
 # =============================================================================
 # Basics packages
 # =============================================================================
-from koala.plotting.qc_plot import qc_registracion, qc_moffat
-from koala.cubing import Cube, build_cube, interpolate_rss
-from koala.rss import RSS
-from koala.exceptions.exceptions import FitError
+from pykoala.plotting.qc_plot import qc_registracion, qc_moffat
+from pykoala.cubing import Cube, build_cube, interpolate_rss
+from pykoala.rss import RSS
+from pykoala.exceptions.exceptions import FitError
 import numpy as np
 from photutils.centroids import centroid_2dg, centroid_1dg, centroid_com
 import warnings
