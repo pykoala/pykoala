@@ -17,8 +17,7 @@ from astropy.wcs import WCS
 # KOALA packages
 # =============================================================================
 from pykoala.ancillary import vprint, rss_info_template  # Template to create the info variable 
-from pykoala.rss import read_rss
-
+from pykoala.rss import RSS
 
 def airmass_from_header(header):
     """
@@ -110,6 +109,80 @@ def py_koala_fibre_table(fibre_table):
 
     return py_koala_spaxels_table
 
+def read_rss(file_path,
+             wcs,
+             intensity_axis=0,
+             variance_axis=1,
+             bad_fibres_list=None,
+             instrument=None,
+             verbose=False,
+             log=None,
+             header=None,
+             fibre_table=None,
+             info=None
+             ):
+    """TODO."""
+    # Blank dictionary for the log
+    if log is None:
+        log = {'read': {'comment': None, 'index': None},
+               'mask from file': {'comment': None, 'index': 0},
+               'blue edge': {'comment': None, 'index': 1},
+               'red edge': {'comment': None, 'index': 2},
+               'cosmic': {'comment': None, 'index': 3},
+               'extreme negative': {'comment': None, 'index': 4},
+               'wavelength fix': {'comment': None, 'index': None, 'sol': []}}
+    if header is None:
+        # Blank Astropy Header object for the RSS header
+        # Example how to add header value at the end
+        # blank_header.append(('DARKCORR', 'OMIT', 'Dark Image Subtraction'), end=True)
+        header = fits.header.Header(cards=[], copy=False)
+
+    file_name = os.path.basename(file_path)
+
+    vprint("\n> Reading RSS file", file_name, "created with", instrument, "...",
+           verbose=verbose)
+
+    #  Open fits file. This assumes that RSS objects are written to file as .fits.
+    with fits.open(file_path) as rss_fits:
+        # Read intensity using rss_fits_file[0]
+        all_intensities = np.array(rss_fits[intensity_axis].data, dtype=np.float32)
+        intensity = np.delete(all_intensities, bad_fibres_list, 0)
+        # Bad pixel verbose summary
+        vprint("\n  Number of spectra in this RSS =", len(all_intensities),
+            ",  number of good spectra =", len(intensity),
+            " ,  number of bad spectra =", len(bad_fibres_list),
+            verbose=verbose)
+        if bad_fibres_list is not None:
+            vprint("  Bad fibres =", bad_fibres_list, verbose=verbose)
+
+        # Read errors if exist a dedicated axis
+        if variance_axis is not None:
+            all_variances = rss_fits[variance_axis].data
+            variance = np.delete(all_variances, bad_fibres_list, 0)
+
+        else:
+            vprint("\n  WARNING! Variance extension not found in fits file!", verbose=verbose)
+            variance = np.full_like(intensity, fill_value=np.nan)
+
+    # Create wavelength from wcs
+    nrow, ncol = wcs.array_shape
+    wavelength_index = np.arange(ncol)
+    wavelength = wcs.dropaxis(1).wcs_pix2world(wavelength_index, 0)[0]
+    # log
+    comment = ' '.join(['- RSS read from ', file_name])
+    log['read']['comment'] = comment
+    # First Header value added by the PyKoala routine
+    header.append(('DARKCORR', 'OMIT', 'Dark Image Subtraction'), end=True)
+
+    # Blank mask (all 0, i.e. making nothing) of the same shape of the data
+    mask = np.zeros_like(intensity)
+
+    return RSS(intensity=intensity,
+               variance=variance,
+               wavelength=wavelength,
+               info=info,
+               log=log,
+               )
 
 def koala_rss(path_to_file):
     """
@@ -131,13 +204,8 @@ def koala_rss(path_to_file):
     info = rss_info_template.copy()  # Avoid missing some key
     info['name'] = koala_header['OBJECT']
     info['exptime'] = koala_header['EXPOSED']
-    info['obj_ra'] = None
-    info['obj_dec'] = None
-    info['cen_ra'] = np.rad2deg(koala_header['RACEN'])
-    info['cen_dec'] = np.rad2deg(koala_header['DECCEN'])
-    info['pos_angle'] = koala_header['TEL_PA']
-    info['fib_ra_offset'] = koala_fibre_table.data['Delta_RA']
-    info['fib_dec_offset'] = koala_fibre_table.data['Delta_DEC']
+    info['fib_ra'] = np.rad2deg(koala_header['RACEN']) + koala_fibre_table.data['Delta_RA'] / 3600
+    info['fib_dec'] = np.rad2deg(koala_header['DECCEN']) + koala_fibre_table.data['Delta_DEC'] / 3600
     info['airmass'] = airmass_from_header(koala_header)
     # Read RSS file into a PyKoala RSS object
     rss = read_rss(path_to_file, wcs=koala_wcs,

@@ -241,8 +241,8 @@ class FluxCalibration(CorrectionBase):
             data = data_container.intensity_corrected.copy()
             # Invert the matrix to get the wavelength dimension as 0.
             data = data.T
-            x = data_container.info['fib_ra_offset']
-            y = data_container.info['fib_dec_offset']
+            x = data_container.info['fib_ra']
+            y = data_container.info['fib_dec']
         elif type(data_container) is Cube:
             self.corr_print("Extracting flux from Cube")
             data = data_container.intensity.copy()

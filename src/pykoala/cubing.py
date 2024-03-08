@@ -218,8 +218,8 @@ def interpolate_rss(rss, pixel_size_arcsec=0.7, kernel_size_arcsec=2.0,
     print(f"[Cubing] Smoothing kernel scale: {kernel_size_pixels:.0f} (pixels)")
     # Interpolate all RSS fibres
     for fibre in range(rss.intensity_corrected.shape[0]):
-        offset_dec_pix = rss.info['fib_dec_offset'][fibre] / pixel_size_arcsec  # pixel offset
-        offset_ra_pix = rss.info['fib_ra_offset'][fibre] / pixel_size_arcsec   # pixel offset
+        offset_dec_pix = rss.info['fib_dec'][fibre] / pixel_size_arcsec  # pixel offset
+        offset_ra_pix = rss.info['fib_ra'][fibre] / pixel_size_arcsec   # pixel offset
         # Interpolate fibre to cube
         datacube, datacube_var, datacube_weight = interpolate_fibre(
             fib_spectra=rss.intensity_corrected[fibre].copy(),

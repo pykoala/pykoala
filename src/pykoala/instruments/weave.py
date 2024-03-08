@@ -6,8 +6,6 @@ This script contains the wrapper functions to build a PyKoala RSS object from WE
 # Basics packages
 # =============================================================================
 import numpy as np
-import os
-import copy
 # =============================================================================
 # Astropy and associated packages
 # =============================================================================
@@ -19,7 +17,6 @@ from astropy import units as u
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from pykoala.ancillary import vprint, rss_info_template  # Template to create the info variable 
 from pykoala.rss import RSS
 
 def weave_rss(filename):
@@ -54,41 +51,16 @@ def weave_rss(filename):
         if count > main_count:
             main_target = name
     info['name'] = main_target  # Name of the object
-    target_fibres = np.where(fibtable['TARGNAME'] == name)
-
     info['exptime'] = header['EXPTIME']  # Total rss exposure time (seconds)
-    info['pos_angle'] = header['ROTSKYPA']  # Instrument position angle
     info['airmass'] = header['AIRMASS']  # Airmass
-
-    fibres = SkyCoord(fibtable['FIBRERA'], fibtable['FIBREDEC'], unit='deg')
-    centre_ra = np.nanmean(fibres.ra.deg[target_fibres])
-    centre_dec = np.nanmean(fibres.dec.deg[target_fibres])
-    info['obj_ra'] = centre_ra
-    info['obj_dec'] = centre_dec  # Celestial coordinates of the object (deg)
-    info['cen_ra'] = centre_ra
-    info['cen_dec'] = centre_dec  # Celestial coordinates of the pointing (deg)
-
-    w = WCS(naxis=2)
-    w.wcs.crpix = [1, 1]
-    w.wcs.cdelt = np.array([1./3600, 1./3600])
-    w.wcs.crval = [centre_ra, centre_dec]
-    print('centre', w.wcs.crval)
-    print('ra', np.min(fibtable['FIBRERA']), np.max(fibtable['FIBRERA']))
-    print('dec', np.min(fibtable['FIBREDEC']), np.max(fibtable['FIBREDEC']))
-    w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
-    fibres = w.world_to_pixel(fibres)
-    info['fib_ra_offset'] = fibres[0]
-    info['fib_dec_offset'] = fibres[1]  # Fibres' celestial offset
+    info['fib_ra'] = fibtable['FIBRERA']
+    info['fib_dec'] = fibtable['FIBREDEC']
     
     return RSS(intensity=intensity,
            wavelength=wavelength,
            variance=variance,
-           mask=np.zeros_like(intensity),
-           intensity_corrected=intensity.copy(),
-           variance_corrected=variance.copy(),
            log=log,
            header=header,
-           fibre_table=None,
            info=info
            )
 

@@ -72,10 +72,7 @@ def detect_edge(rss):
 # RSS info dictionary template
 rss_info_template = dict(name=None,  # Name of the object
                          exptime=None,  # Total rss exposure time (seconds)
-                         obj_ra=None, obj_dec=None,  # Celestial coordinates of the object (deg)
-                         cen_ra=None, cen_dec=None,  # Celestial coordinates of the pointing (deg)
-                         fib_ra_offset=None, fib_dec_offset=None,  # Fibres' celestial offset
-                         pos_angle=None,  # Instrument position angle
+                         fib_ra=None, fib_dec=None,  # Fibres' celestial offset
                          airmass=None  # Airmass
                          )
 

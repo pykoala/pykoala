@@ -237,15 +237,15 @@ def qc_registration(rss_list, **kwargs):
 
     cmap = plt.get_cmap('jet', n_rss)
     for i, rss in enumerate(rss_list):
-        axs[0].scatter(rss.info['ori_fib_ra_offset'] / 3600 + rss.info['ori_cen_ra'],
-                       rss.info['ori_fib_dec_offset'] / 3600 + rss.info['ori_cen_dec'],
+        axs[0].scatter(rss.info['ori_fib_ra'] / 3600 + rss.info['ori_cen_ra'],
+                       rss.info['ori_fib_dec'] / 3600 + rss.info['ori_cen_dec'],
                        marker='o', ec=cmap(i / (n_rss - 1)), c='none',
                    #alpha=1/n_rss
                    )
         axs[i+1].set_title(f"Re-centered RSS-{i+1}" + "\n"
                            f"(ra, dec) shift: {rss.info['cen_ra'] * 3600:.2f}, {rss.info['cen_dec'] * 3600:.2f} ('')")
-        axs[i+1].scatter(rss.info['fib_ra_offset'],
-                   rss.info['fib_dec_offset'],
+        axs[i+1].scatter(rss.info['fib_ra'],
+                   rss.info['fib_dec'],
                    c=np.nansum(rss.intensity_corrected, axis=1),
                    norm=LogNorm(),
                    marker='o', cmap='Greys_r',

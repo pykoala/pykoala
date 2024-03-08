@@ -28,9 +28,9 @@ from pykoala.exceptions.exceptions import FitError
 def make_dummy_cube_from_rss(rss, cube_size):
     """Create an empty datacube array from an input RSS."""
     cube_size_arcsec = (
-            rss.info['fib_ra_offset'].max(
-            ) - rss.info['fib_ra_offset'].min(),
-            rss.info['fib_dec_offset'].max() - rss.info['fib_dec_offset'].min())
+            rss.info['fib_ra'].max(
+            ) - rss.info['fib_ra'].min(),
+            rss.info['fib_dec'].max() - rss.info['fib_dec'].min())
     ra_offset, dec_offset = np.meshgrid(
         np.arange(- cube_size_arcsec[0] / 2 + cube_size / 2,
                     cube_size_arcsec[0] / 2 + cube_size / 2,
@@ -286,8 +286,8 @@ def register_stars(data_set, moffat=True, plot=False, com_power=5., **fit_args):
             print("[Registration] 2D Moffat fit results:\n", '-' * 50, '\n',
                   fit_model, '\n', '-' * 50, '\n')
             ra_cen_arcsec, dec_cen_arcsec = fit_model.x_0.value, fit_model.y_0.value
-            new_fib_offset_coord = (data.info['fib_ra_offset'] - ra_cen_arcsec,
-                                    data.info['fib_dec_offset'] - dec_cen_arcsec)
+            new_fib_offset_coord = (data.info['fib_ra'] - ra_cen_arcsec,
+                                    data.info['fib_dec'] - dec_cen_arcsec)
             data.update_coordinates(new_centre=(ra_cen_arcsec / 3600, dec_cen_arcsec / 3600),
                                     new_fib_offset_coord=new_fib_offset_coord)
             plots.append(moffat_fig)
@@ -296,8 +296,8 @@ def register_stars(data_set, moffat=True, plot=False, com_power=5., **fit_args):
                 power=com_power,
                 wavelength_step=data.wavelength.size)  # arcsec
             new_centre = (np.nanmedian(ra_offset_com), np.nanmedian(dec_offset_com))
-            new_fib_offset_coord = (data.info['fib_ra_offset'] - new_centre[0],
-                                    data.info['fib_dec_offset'] - new_centre[1])
+            new_fib_offset_coord = (data.info['fib_ra'] - new_centre[0],
+                                    data.info['fib_dec'] - new_centre[1])
             data.update_coordinates(new_centre=new_centre / 3600,  # deg
                                     new_fib_offset_coord=new_fib_offset_coord)
     if plot:
@@ -366,8 +366,8 @@ def register_centroid(data_set, wave_range=None,
         # Convert the shift in pixels to arcseconds
         shift *= quick_cube_pix_size
         print(f"[Registration] Shift found: {shift} (arcsec)")
-        new_fib_offset_coord = (data.info['fib_ra_offset'] + shift[0],
-                                data.info['fib_dec_offset'] + shift[1])
+        new_fib_offset_coord = (data.info['fib_ra'] + shift[0],
+                                data.info['fib_dec'] + shift[1])
         data.update_coordinates(new_centre=ref_centre,
                                 new_fib_offset_coord=new_fib_offset_coord)
     if plot:
@@ -466,8 +466,8 @@ def register_crosscorr(data_set, ref_image=0,
         # Convert the shift in pixels to arcseconds
         shift *= quick_cube_pix_size
         print(f"[Registration] Shift found: {shift} (arcsec)")
-        new_fib_offset_coord = (data.info['fib_ra_offset'] + shift[1],
-                                data.info['fib_dec_offset'] + shift[0])
+        new_fib_offset_coord = (data.info['fib_ra'] + shift[1],
+                                data.info['fib_dec'] + shift[0])
         data.update_coordinates(new_centre=ref_centre,
                                 new_fib_offset_coord=new_fib_offset_coord)        
     if plot:
@@ -531,10 +531,10 @@ def register_interactive(data_set, quick_cube_pix_size=0.2, wave_range=None):
             print(
                 "[Registration]  Data provided in RSS format --> creating a dummy datacube")
             cube_size_arcsec = (
-                data.info['fib_ra_offset'].max(
-                ) - data.info['fib_ra_offset'].min(),
-                data.info['fib_dec_offset'].max()
-                - data.info['fib_dec_offset'].min())
+                data.info['fib_ra'].max(
+                ) - data.info['fib_ra'].min(),
+                data.info['fib_dec'].max()
+                - data.info['fib_dec'].min())
             x, y = np.meshgrid(
                 np.arange(- cube_size_arcsec[1] / 2 + quick_cube_pix_size / 2,
                           cube_size_arcsec[1] / 2 + quick_cube_pix_size / 2,
@@ -578,7 +578,7 @@ def register_interactive(data_set, quick_cube_pix_size=0.2, wave_range=None):
     cid = fig.canvas.mpl_connect('button_press_event', mouse_event)
     for i in range(n_rss):
         ax = fig.add_subplot(1, n_rss, i + 1)
-        ax.scatter(data_set[0].info["fib_ra_offset"], data_set[0].info["fib_dec_offset"],
+        ax.scatter(data_set[0].info["fib_ra"], data_set[0].info["fib_dec"],
                    c=np.nanmedian(data_set[0].intensity_corrected, axis=1))
     plt.show()
     plt.ioff()
