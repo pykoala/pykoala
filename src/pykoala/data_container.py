@@ -18,9 +18,7 @@ class DataContainer(object):
     Attributes
     ----------
     intensity
-    intensity_corrected
     variance
-    variance_corrected
     intensity_units
     info
     log
@@ -35,9 +33,7 @@ class DataContainer(object):
     def __init__(self, **kwargs):
         # Data
         self.intensity = kwargs.get("intensity", None)
-        self.intensity_corrected = kwargs.get("intensity_corrected", None)
         self.variance = kwargs.get("variance", None)
-        self.variance_corrected = kwargs.get("variance", None)
         self.intensity_units = kwargs.get("intensity_units", None)
         # Information and masking
         self.info = kwargs.get("info", dict())
@@ -46,9 +42,6 @@ class DataContainer(object):
         self.log = kwargs.get("log", dict(corrections=dict()))
         if self.log is None:
             self.log = dict()
-        self.mask = kwargs.get("mask", None)
-        self.mask_map = kwargs.get("mask_map", None)
-
         self.fill_info()
     
     def save_log(self):
