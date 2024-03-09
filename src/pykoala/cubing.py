@@ -10,6 +10,7 @@ from datetime import datetime
 # =============================================================================
 from astropy.io import fits
 from astropy.wcs import WCS
+from astropy.coordinates import SkyCoord
 # =============================================================================
 # KOALA packages
 # =============================================================================
@@ -54,7 +55,7 @@ def cubic_kernel(z, norm=False):
     return w
 
 def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
-                      offset_cols, offset_rows, pixel_size, kernel_size_pixels,
+                      pix_pos_cols, pix_pos_rows, kernel_size_pixels,
                       adr_cols=None, adr_rows=None, adr_pixel_frac=0.05,
                       kernel_func=cubic_kernel):
 
@@ -72,9 +73,9 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
         Cube to interpolate fibre variance.
     cube_weight: (k, n, m) np.ndarray (float)
         Cube to store fibre spectral weights.
-    offset_cols: int
+    pix_pos_cols: int
         offset columns pixels (m) with respect to the cube array centre.
-    offset_rows: int
+    pix_pos_rows: int
         offset rows pixels (n) with respect to to the cube array centre.
     pixel_size: float
         Datacube pixel size in arcseconds.
@@ -124,12 +125,12 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
         median_adr_rows = np.nanmedian(adr_rows[wl_range: wl_range + spectral_window])
 
         # Kernel along columns direction (x, ra)
-        kernel_centre_cols = .5 * cube.shape[2] + offset_cols - median_adr_cols/ pixel_size
+        kernel_centre_cols = pix_pos_cols - median_adr_cols
         cols_min = max(int(kernel_centre_cols - kernel_size_pixels), 0)
         cols_max = min(int(kernel_centre_cols + kernel_size_pixels) + 1, cube.shape[2] + 1)
         n_points_cols = cols_max - cols_min
         # Kernel along rows direction (y, dec)
-        kernel_centre_rows = .5 * cube.shape[1] + offset_rows - median_adr_rows / pixel_size
+        kernel_centre_rows = pix_pos_rows - median_adr_rows
         rows_min = max(int(kernel_centre_rows - kernel_size_pixels), 0)
         rows_max = min(int(kernel_centre_rows + kernel_size_pixels) + 1, cube.shape[1] + 1)
         n_points_rows = rows_max - rows_min
@@ -170,10 +171,9 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
     return cube, cube_var, cube_weight
 
 
-def interpolate_rss(rss, pixel_size_arcsec=0.7, kernel_size_arcsec=2.0,
-                    cube_size_arcsec=None, datacube=None,
-                    datacube_var=None, datacube_weight=None,
-                    adr_ra=None, adr_dec=None):
+def interpolate_rss(rss, wcs, kernel_size_arcsec=2.0,
+                    datacube=None, datacube_var=None, datacube_weight=None,
+                    adr_ra_arcsec=None, adr_dec_arcsec=None):
 
     """Perform fibre interpolation using a RSS into to a 3D datacube.
 
@@ -203,38 +203,50 @@ def interpolate_rss(rss, pixel_size_arcsec=0.7, kernel_size_arcsec=2.0,
     """
     # Initialise cube data containers (flux, variance, fibre weights)
     if datacube is None:
-        n_cols = int(cube_size_arcsec[0] / pixel_size_arcsec)
-        n_rows = int(cube_size_arcsec[1] / pixel_size_arcsec)
-        datacube = np.zeros((rss.wavelength.size, n_rows, n_cols))
-        print("[Cubing] Creating new datacube with dimensions: "
-              + f"({cube_size_arcsec[0]}, {cube_size_arcsec[1]}) arcsec -->"
-              + f"({n_rows}, {n_cols}) pixels (0=Dec, 1=Ra)")
+        datacube = np.zeros(wcs.array_shape)
+        print(f"[Cubing] Creating new datacube with dimensions: {wcs.array_shape}")
     if datacube_var is None:
         datacube_var = np.zeros_like(datacube)
     if datacube_weight is None:
         datacube_weight = np.zeros_like(datacube)
     # Kernel pixel size for interpolation
-    kernel_size_pixels = kernel_size_arcsec / pixel_size_arcsec
+    pixel_size = wcs.pixel_scale_matrix.diagonal()[1:].mean()
+    pixel_size *= 3600
+    kernel_size_pixels = kernel_size_arcsec / pixel_size
+    if adr_dec_arcsec is not None:
+        adr_dec_pixel = adr_dec_arcsec / pixel_size
+    else:
+        adr_dec_pixel = None
+    if adr_ra_arcsec is not None:
+        adr_ra_pixel = adr_ra_arcsec / pixel_size
+    else:
+        adr_ra_pixel = None
+
     print(f"[Cubing] Smoothing kernel scale: {kernel_size_pixels:.0f} (pixels)")
     # Interpolate all RSS fibres
-    for fibre in range(rss.intensity_corrected.shape[0]):
-        offset_dec_pix = rss.info['fib_dec'][fibre] / pixel_size_arcsec  # pixel offset
-        offset_ra_pix = rss.info['fib_ra'][fibre] / pixel_size_arcsec   # pixel offset
+    # Obtain fibre position in the detector
+    fibre_pixel_pos_cols, fibre_pixel_pos_rows = wcs.celestial.world_to_pixel(
+        SkyCoord(rss.info['fib_ra'], rss.info['fib_dec'], unit='deg')
+        )
+    for fibre in range(rss.intensity.shape[0]):
+        print("Fibre: ", fibre)
+        offset_ra_pix = fibre_pixel_pos_cols[fibre]
+        offset_dec_pix = fibre_pixel_pos_rows[fibre]
+        print("Pixel pos: ", offset_ra_pix, offset_dec_pix)
         # Interpolate fibre to cube
         datacube, datacube_var, datacube_weight = interpolate_fibre(
-            fib_spectra=rss.intensity_corrected[fibre].copy(),
-            fib_variance=rss.variance_corrected[fibre].copy(),
+            fib_spectra=rss.intensity[fibre].copy(),
+            fib_variance=rss.variance[fibre].copy(),
             cube=datacube, cube_var=datacube_var, cube_weight=datacube_weight,
-            offset_cols=offset_ra_pix, offset_rows=offset_dec_pix,
-            pixel_size=pixel_size_arcsec,
+            pix_pos_cols=offset_ra_pix, pix_pos_rows=offset_dec_pix,
             kernel_size_pixels=kernel_size_pixels,
-            adr_cols=adr_ra, adr_rows=adr_dec)
+            adr_cols=adr_ra_pixel, adr_rows=adr_dec_pixel)
     return datacube, datacube_var, datacube_weight
 
 
-def build_cube(rss_set, cube_size_arcsec,
-               reference_position=(0.0, 0.0),
-               kernel_size_arcsec=2.0, pixel_size_arcsec=0.7,
+def build_cube(rss_set, 
+               wcs=None, wcs_params=None,
+               kernel_size_arcsec=2.0,
                adr_set=None, **cube_info):
                
     """Create a Cube from a set of Raw Stacked Spectra (RSS).
@@ -259,15 +271,14 @@ def build_cube(rss_set, cube_size_arcsec,
          Cube created by interpolating the set of RSS.
     """
     print('[Cubing] Starting cubing process')
-    # Use defined cube size to generated number of spaxel columns and rows
-    n_cols = int(cube_size_arcsec[0] / pixel_size_arcsec)
-    n_rows = int(cube_size_arcsec[1] / pixel_size_arcsec)
+    if wcs is None and wcs_params is None:
+        raise ValueError("User must provide either wcs or wcs_params values.")
+    if wcs is None and wcs_params is not None:
+        wcs = WCS(wcs_params)
+
     # Create empty cubes for data, variance and weights - these will be filled and returned
-    print("[Cubing] Initialising new datacube with dimensions: "
-              + f"(ra={cube_size_arcsec[0]}, dec={cube_size_arcsec[1]}) arcsec --> "
-              + f"({n_rows}, {n_cols}) pixels (0=Dec, 1=Ra)")
-    datacube = np.zeros((rss_set[0].wavelength.size, n_rows, n_cols),
-                        dtype=np.float32)
+    print(f"[Cubing] Initialising new datacube with dimensions: {wcs.array_shape}")
+    datacube = datacube = np.zeros(wcs.array_shape)
     datacube_var = np.zeros_like(datacube)
     datacube_weight = np.zeros_like(datacube)
     # Create an RSS mask that will contain the contribution of each RSS in the datacube
@@ -288,11 +299,10 @@ def build_cube(rss_set, cube_size_arcsec,
         datacube_weight_before = datacube_weight.copy()
         datacube, datacube_var, datacube_weight = interpolate_rss(
             copy_rss,
-            pixel_size_arcsec=pixel_size_arcsec,
+            wcs=wcs,
             kernel_size_arcsec=kernel_size_arcsec,
-            cube_size_arcsec=cube_size_arcsec,
             datacube=datacube, datacube_var=datacube_var, datacube_weight=datacube_weight,
-            adr_ra=adr_set[i][0], adr_dec=adr_set[i][1])
+            adr_ra_arcsec=adr_set[i][0], adr_dec_arcsec=adr_set[i][1])
         rss_mask[i] = datacube_weight - datacube_weight_before
         rss_mask[i] /= np.nanmax(rss_mask[i])
         del datacube_weight_before, copy_rss
@@ -301,31 +311,41 @@ def build_cube(rss_set, cube_size_arcsec,
     datacube /= pixel_exptime
     datacube_var /= pixel_exptime**2
     # Create cube meta data
-    info = dict(pixel_size_arcsec=pixel_size_arcsec,
-                pixel_exptime=pixel_exptime, kernel_size_arcsec=kernel_size_arcsec, **cube_info)
+    # TODO: save the pixel exptime info in a file or somewhere else,
+    info = dict(pixel_exptime=pixel_exptime, kernel_size_arcsec=kernel_size_arcsec, **cube_info)
     # Create WCS information
-    wcs = build_wcs(
-        datacube_shape=datacube.shape, reference_position=reference_position,
-        spatial_pix_size=pixel_size_arcsec,
-        wave_init=rss.wavelength[0], spectra_pix_size=rss.wavelength[1] - rss.wavelength[0])
-
     hdul = build_hdul(intensity=datacube, variance=datacube_var, wcs=wcs)
-
-    cube = Cube(hdul=hdul)
+    cube = Cube(hdul=hdul, info=info)
     return cube
 
 def build_wcs(datacube_shape, reference_position, spatial_pix_size,
-              spectra_pix_size, wave_init):
-    """Create a WCS using cubing information"""
+              spectra_pix_size, radesys='ICRS    ', equinox=2000.0):
+    """Create a WCS using cubing information.
+    
+    Parameters
+    ----------
+    - datacube_shape: (tuple)
+        Pixel shape of the datacube (wavelength, ra, dec).
+    - reference_position: (tuple)
+        Values corresponding to the origin of the wavelength axis, and sky position of the central pixel.
+    - spatial_pix_size: (float)
+        Pixel size along the spatial direction.
+    - spectra_pix_size: (float)
+        Pixel size along the spectral direction.
+        
+    """
     print("[Cubing] Constructing cube WCS")
-    w = WCS(naxis=3)
-    w.wcs.crpix = [datacube_shape[1] / 2, datacube_shape[0] / 2, 0]
-    w.wcs.cdelt = np.array([spatial_pix_size / 3600,
-                            spatial_pix_size / 3600,
-                            spectra_pix_size])
-    w.wcs.crval = [*reference_position, wave_init]
-    w.wcs.ctype = ["RA---TAN", "DEC--TAN", "WAVE"]
-    return w
+    wcs_dict = {
+    'RADECSYS': radesys, 'EQUINOX': equinox,
+    'CTYPE1': 'RA---TAN', 'CUNIT1': 'deg', 'CDELT1': spatial_pix_size, 'CRPIX1': datacube_shape[1] / 2,
+    'CRVAL1': reference_position[1], 'NAXIS1': datacube_shape[1],
+    'CTYPE2': 'DEC--TAN', 'CUNIT2': 'deg', 'CDELT2': spatial_pix_size, 'CRPIX2': datacube_shape[2] / 2,
+    'CRVAL2': reference_position[2], 'NAXIS2': datacube_shape[2],
+    'CTYPE3': 'WAVE    ', 'CUNIT3': 'Angstrom', 'CDELT3': spectra_pix_size, 'CRPIX3': 0,
+    'CRVAL3': reference_position[0], 'NAXIS3': datacube_shape[0]}
+    wcs = WCS(wcs_dict)
+    print("[Cubing] WCS: ", wcs)
+    return wcs
 
 
 def build_hdul(intensity, variance, primary_header_info=None, wcs=None):
@@ -372,6 +392,8 @@ class Cube(DataContainer):
     y_size_arcsec = None
 
     def __init__(self, hdul=None, file_path=None, 
+                 info=None,
+                 log=None,
                  hdul_extensions_map=None):
 
         if hdul is not None:
