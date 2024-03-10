@@ -78,14 +78,6 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
     -------
     - fig: (plt.Figure)
     """
-    # collapsed_cube = np.nanmean(cube.intensity_corrected, axis=0)
-    # collapsed_spectra = np.nansum(cube.intensity_corrected, axis=(1, 2))
-    # collapsed_variance = np.nansum(cube.variance_corrected, axis=(1, 2))
-    # p_spectra = np.nanpercentile(cube.intensity_corrected, pct,
-    #                              axis=(1, 2))
-    #
-    # sn_pixel = cube.intensity_corrected / cube.variance_corrected ** 0.5
-    # p_snr = np.nanpercentile(sn_pixel, pct, axis=(1, 2))
 
     fig = plt.figure(figsize=(12, 12))
     print("[QCPLOT] Cube QC plot for: ", cube.info['name'])
@@ -93,22 +85,22 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
     gs = fig.add_gridspec(5, 4, wspace=0.15, hspace=0.25)
     # Maps -----
     wl_spaxel_idx = np.sort(np.random.randint(low=0,
-                                      high=cube.intensity_corrected.shape[0],
+                                      high=cube.intensity.shape[0],
                                       size=3))
     wl_col = ['b', 'g', 'r']
     for wl_idx, i in zip(wl_spaxel_idx, range(3)):
         ax = fig.add_subplot(gs[0, i:i+1])
         ax.set_title(r"$\lambda@{:.1f}$".format(cube.wavelength[wl_idx]),
                      fontdict=dict(color=wl_col[i]))
-        ax.imshow(cube.intensity_corrected[wl_idx], aspect='auto', origin='lower',
+        ax.imshow(cube.intensity[wl_idx], aspect='auto', origin='lower',
                   interpolation='none', cmap='cividis')
         ax = fig.add_subplot(gs[1, i:i+1])
-        mappable = ax.imshow(cube.intensity_corrected[wl_idx] / cube.variance_corrected[wl_idx]**0.5,
+        mappable = ax.imshow(cube.intensity[wl_idx] / cube.variance[wl_idx]**0.5,
         interpolation='none', aspect='auto', origin='lower', cmap='jet')
         plt.colorbar(mappable, ax=ax)
     
-    mean_intensity = np.nanmedian(cube.intensity_corrected, axis=0)
-    mean_variance = np.nanmedian(cube.variance_corrected, axis=0)
+    mean_intensity = np.nanmedian(cube.intensity, axis=0)
+    mean_variance = np.nanmedian(cube.variance, axis=0)
     mean_intensity[~np.isfinite(mean_intensity)] = 0
     mean_instensity_pos = np.argsort(mean_intensity.flatten())
     mapax = fig.add_subplot(gs[1, -1])
@@ -129,10 +121,10 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
 
     pos_col = ['purple', 'orange', 'cyan']
     x_spaxel_idx = np.random.randint(low=0,
-                                     high=cube.intensity_corrected.shape[1],
+                                     high=cube.intensity.shape[1],
                                      size=3)
     y_spaxel_idx = np.random.randint(low=0,
-                                     high=cube.intensity_corrected.shape[2],
+                                     high=cube.intensity.shape[2],
                                      size=3)
     spaxel_entries = mean_instensity_pos[
         np.array(mean_instensity_pos.size / 100 * np.array(spax_pct),
@@ -141,14 +133,14 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
                                                   shape=mean_intensity.shape)
     ax = fig.add_subplot(gs[2:3, :])
     for x_idx, y_idx, i in zip(x_spaxel_idx, y_spaxel_idx, range(3)):
-        ax.plot(cube.wavelength, cube.intensity_corrected[:, x_idx, y_idx] * units, lw=0.8,
+        ax.plot(cube.wavelength, cube.intensity[:, x_idx, y_idx] * units, lw=0.8,
                 color=pos_col[i])
         mapax.plot(y_idx, x_idx, marker='+', ms=8, mew=2, lw=2, color=pos_col[i])
     for i, wl in enumerate(cube.wavelength[wl_spaxel_idx]):
         ax.axvline(wl, color=wl_col[i], zorder=-1, alpha=0.8)
     ax.axhline(0, alpha=0.2, color='r')
     ylim = np.nanpercentile(
-        cube.intensity_corrected[np.isfinite(cube.intensity_corrected)] * units, [40, 60])
+        cube.intensity[np.isfinite(cube.intensity)] * units, [40, 60])
     ylim[1] *= 10
     ylim[0] *= 0.1
     ax.set_ylim()
@@ -160,7 +152,7 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
     ax = fig.add_subplot(gs[3:5, :], sharex=ax)
     for x_idx, y_idx, i in zip(x_spaxel_idx, y_spaxel_idx, range(3)):
         ax.plot(cube.wavelength,
-                cube.intensity_corrected[:, x_idx, y_idx] / cube.variance_corrected[:, x_idx, y_idx]**0.5, lw=0.8,
+                cube.intensity[:, x_idx, y_idx] / cube.variance[:, x_idx, y_idx]**0.5, lw=0.8,
                 color=pos_col[i],
                 label=f"Spaxel rank={spax_pct[i]}")
     ax.legend()
@@ -246,7 +238,7 @@ def qc_registration(rss_list, **kwargs):
                            f"(ra, dec) shift: {rss.info['cen_ra'] * 3600:.2f}, {rss.info['cen_dec'] * 3600:.2f} ('')")
         axs[i+1].scatter(rss.info['fib_ra'],
                    rss.info['fib_dec'],
-                   c=np.nansum(rss.intensity_corrected, axis=1),
+                   c=np.nansum(rss.intensity, axis=1),
                    norm=LogNorm(),
                    marker='o', cmap='Greys_r',
                    )
@@ -289,33 +281,29 @@ def qc_registration_crosscorr(images_list, cross_corr_results):
     plt.close(fig)
     return fig
 
-def qc_registration_centroids(images_list, centroids):
+def qc_registration_centroids(images_list, wcs_list, offsets, ref_pos):
     """TODO..."""
     # Account for images with different sizes
     vmin, vmax = np.nanpercentile(np.hstack([im.flatten() for im in images_list]), [5, 95])
     imargs = dict(vmin=vmin, vmax=vmax, cmap='viridis', interpolation='none')
 
-    fig, axs = plt.subplots(nrows=1, ncols=len(images_list),
-                          figsize=(4 * len(images_list), 4))
-
+    ncols=len(images_list)
+    fig = plt.Figure(figsize=(4 * ncols, 4))
     plt.suptitle("QC centroid-based image registration")
-    axs[0].set_title("Reference image")
-    mappable = axs[0].imshow(images_list[0], **imargs)
-    # Reference points
+    for i in range(ncols):
+        ax = fig.add_subplot(1, ncols, i + 1 , projection=wcs_list[i])
+    
+        mappable = ax.imshow(images_list[i], **imargs)
+        ax.scatter(ref_pos.ra, ref_pos.dec, marker='*',
+                   ec='r', label='Reference', transform=ax.get_transform('world'))
+        ax.scatter(ref_pos.ra - offsets[i][0], ref_pos.dec - offsets[i][1], marker='o',
+                   ec='k', label='Centroid', transform=ax.get_transform('world'))
 
-    axs[0].plot(*centroids[0], '+', color='fuchsia', label='Reference point')
-    axs[0].legend()
-    # Plot the rest of images
-    for i, im in enumerate(images_list[1:]):
-        shift = centroids[i + 1] - centroids[0]
-        ax = axs[i + 1]
-        mappable = ax.imshow(im, **imargs)
-        ax.plot(centroids[0][0] + shift[0],
-                centroids[0][1] + shift[1], '+', color='fuchsia')
-        ax.arrow(*centroids[0], *shift, color='r', width=1)
-        ax.annotate(f"Shif: {shift[0]:.2f}, {shift[1]:.2f}", xy=(0.05, 0.95),
+        ax.annotate(f"Offset (ra, dec):\n {offsets[i][0].to('arcsec').value:.2f}, {offsets[i][1].to('arcsec').value:.2f} arcsec",
+                    xy=(0.05, 0.95),
                     color='red',
                     xycoords='axes fraction', va='top', ha='left')
+    ax.legend(bbox_to_anchor=(0.5, 1.1), loc='lower center')
     cax = ax.inset_axes((1.05, 0, 0.05, 1))
     plt.colorbar(mappable, cax=cax)
     plt.close(fig)
