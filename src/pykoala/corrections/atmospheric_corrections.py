@@ -100,12 +100,12 @@ class AtmosphericExtCorrection(CorrectionBase):
 
         # Apply the correction
         if type(data_container) is Cube:
-            extinction = np.expand_dims(extinction, axis=tuple(range(1, data_container.intensity_corrected.ndim)))
+            extinction = np.expand_dims(extinction, axis=tuple(range(1, data_container.intensity.ndim)))
         elif type(data_container) is RSS:
             extinction = np.expand_dims(extinction, axis=0)
 
-        data_container_out.intensity_corrected *= extinction
-        data_container_out.variance_corrected *= extinction**2
+        data_container_out.intensity *= extinction
+        data_container_out.variance *= extinction**2
         self.log_correction(data_container_out, status='applied',
                             comment=comment)
         return data_container_out
@@ -121,7 +121,7 @@ def get_adr(data_container, max_adr=0.5, pol_deg=2, plot=False):
     com = []
     for i in range(1, 5):
         com.append(data_container.get_centre_of_mass(power=i))
-    com = np.array(com)
+    com = np.array(com) * 3600
     com -= np.nanmedian(com, axis=2)[:, :, np.newaxis]
     median_com = np.nanmedian(
         com, axis=0) - np.nanmedian(com, axis=(0, 2))[:, np.newaxis]

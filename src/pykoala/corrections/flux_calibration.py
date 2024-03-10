@@ -238,7 +238,7 @@ class FluxCalibration(CorrectionBase):
         # Formatting the data
         if type(data_container) is RSS:
             self.corr_print("Extracting flux from RSS")
-            data = data_container.intensity_corrected.copy()
+            data = data_container.intensity.copy()
             # Invert the matrix to get the wavelength dimension as 0.
             data = data.T
             x = data_container.info['fib_ra']
@@ -247,8 +247,8 @@ class FluxCalibration(CorrectionBase):
             self.corr_print("Extracting flux from Cube")
             data = data_container.intensity.copy()
             data = data.reshape((data.shape[0], data.shape[1] * data.shape[2]))
-            x, y = np.meshgrid(data_container.info['spax_ra_offset'],
-                               data_container.info['spax_dec_offset'])
+            x, y = np.meshgrid(np.arange(data_container.n_cols),
+                               np.arange(data_container.n_rows))
             x, y = x.flatten(), y.flatten()
 
         data = data[wave_mask, :]
@@ -503,8 +503,8 @@ class FluxCalibration(CorrectionBase):
         else:
             raise NameError(f"Unrecognised DataContainer of type : {type(data_container)}")
         # Apply the correction
-        data_container.intensity_corrected /= response
-        data_container.variance_corrected /= response**2
+        data_container.intensity /= response
+        data_container.variance /= response**2
         self.log_correction(data_container, status='applied',
                             units=response_units)
         return data_container

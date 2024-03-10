@@ -108,7 +108,7 @@ class ThroughputCorrection(CorrectionBase):
 
         fluxes = []
         for rss in rss_set:
-            f = rss.intensity_corrected / rss.info['exptime']
+            f = rss.intensity / rss.info['exptime']
             fluxes.append(f)
         # Combine
         combined_flux = stat_func(fluxes, axis=0)
@@ -164,7 +164,7 @@ class ThroughputCorrection(CorrectionBase):
         # =============================================================================
         rss_out = copy.deepcopy(rss)
 
-        rss_out.intensity_corrected = rss_out.intensity_corrected / throughput.throughput_data
-        rss_out.variance_corrected = rss_out.variance_corrected / throughput.throughput_data**2
+        rss_out.intensity = rss_out.intensity / throughput.throughput_data
+        rss_out.variance = rss_out.variance / throughput.throughput_data**2
         self.log_correction(rss, status='applied')
         return rss_out

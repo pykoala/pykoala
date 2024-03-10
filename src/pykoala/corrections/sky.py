@@ -209,7 +209,7 @@ class SkyOffset(SkyModel):
 
     def estimate_sky(self):
         self.intensity, self.variance = BackgroundEstimator.percentile(
-            self.dc.intensity_corrected, percentiles=[16, 50, 84])
+            self.dc.intensity, percentiles=[16, 50, 84])
         self.intensity, self.variance = (
             self.intensity / self.exptime,
             self.variance / self.exptime)
@@ -290,7 +290,7 @@ class SkyFromObject(SkyModel):
         else:
             raise NameError(f"Input background estimator {bckgr_estimator} does not exist")        
 
-        data = self.dc.intensity_corrected.copy()
+        data = self.dc.intensity.copy()
 
         if data.ndim == 3:
             if "axis" not in bckgr_params.keys():
@@ -461,14 +461,14 @@ class SkySubsCorrection(CorrectionBase):
         else:
             im_args = dict(aspect='auto', interpolation='none',
                            cmap='nipy_spectral',
-                           vmin=np.nanpercentile(data_cont.intensity_corrected, 1),
-                           vmax=np.nanpercentile(data_cont.intensity_corrected, 99))
+                           vmin=np.nanpercentile(data_cont.intensity, 1),
+                           vmax=np.nanpercentile(data_cont.intensity, 99))
         ax = axs[0]
         ax.set_title("Input")
-        ax.imshow(data_cont.intensity_corrected, **im_args)
+        ax.imshow(data_cont.intensity, **im_args)
         ax = axs[1]
         ax.set_title("Sky emission substracted")
-        mappable = ax.imshow(data_cont_corrected.intensity_corrected, **im_args)
+        mappable = ax.imshow(data_cont_corrected.intensity, **im_args)
         
         cax = ax.inset_axes((-1.2, -.1, 2.2, 0.02))
         plt.colorbar(mappable, cax=cax, orientation="horizontal")
@@ -483,15 +483,15 @@ class SkySubsCorrection(CorrectionBase):
         dc_out = copy.deepcopy(dc)
         self.corr_print("Applying sky substraction")
         if pca:
-            dc_out.intensity_corrected, dc_out.variance_corrected = self.skymodel.substract_pca(
-            dc_out.intensity_corrected, dc_out.variance_corrected)
+            dc_out.intensity, dc_out.variance = self.skymodel.substract_pca(
+            dc_out.intensity, dc_out.variance)
         else:
-            dc_out.intensity_corrected, dc_out.variance_corrected = self.skymodel.substract(
-                 dc_out.intensity_corrected, dc_out.variance_corrected)
+            dc_out.intensity, dc_out.variance = self.skymodel.substract(
+                 dc_out.intensity, dc_out.variance)
         self.log_correction(dc_out, status='applied')
         
         if plot:
-            if not dc_out.intensity_corrected.ndim == 2:
+            if not dc_out.intensity.ndim == 2:
                 # TODO: Include 3D plots
                 self.corr_print("Plots can only be produed for 2D Data containers (RSS)")
             fig = self.plot_correction(dc, dc_out, **plot_kwargs)
@@ -534,13 +534,13 @@ class TelluricCorrection(CorrectionBase):
             if self.data_container.__class__ is Cube:
                 self.spectra = self.data_container.get_integrated_light_frac(frac=frac)
             elif self.data_container.__class__ is RSS:
-                integrated_fibre = np.nansum(self.data_container.intensity_corrected, axis=1)
+                integrated_fibre = np.nansum(self.data_container.intensity, axis=1)
                 # The n-brightest fibres
                 self.brightest_fibres = integrated_fibre.argsort()[-n_fibres:]
                 self.spectra = np.nansum(
-                    self.data_container.intensity_corrected[self.brightest_fibres], axis=0)
+                    self.data_container.intensity[self.brightest_fibres], axis=0)
                 self.spectra_var = np.nansum(
-                    self.data_container.variance_corrected[self.brightest_fibres], axis=0)
+                    self.data_container.variance[self.brightest_fibres], axis=0)
 
             self.bad_pixels_mask = np.isfinite(self.spectra) & np.isfinite(self.spectra_var
                                                                            ) & (self.spectra / self.spectra_var > 0)
@@ -646,7 +646,7 @@ class TelluricCorrection(CorrectionBase):
         # self.telluric_correction[~mask] = pol_fit(self.wlm[~mask]) / (self.spectra[~mask])
         # Linear interpolation
         # std = std(star_flux) * tellurics \propto star_flux * tellurics
-        std = np.nanstd(self.data_container.intensity_corrected, axis=0)
+        std = np.nanstd(self.data_container.intensity, axis=0)
         stellar = np.interp(self.wlm, self.wlm[mask & self.bad_pixels_mask],
                             std[mask & self.bad_pixels_mask])
         # self.telluric_correction[~mask] = stellar[~mask] / self.spectra[~mask]
@@ -670,17 +670,17 @@ class TelluricCorrection(CorrectionBase):
         else:
             ax.set_title("Telluric correction using fibres {} (blue) and {} (red)"
                          .format(self.brightest_fibres[0], self.brightest_fibres[1]))
-            ax.plot(self.wlm, self.data_container.intensity_corrected[self.brightest_fibres[0]], color="b",
+            ax.plot(self.wlm, self.data_container.intensity[self.brightest_fibres[0]], color="b",
                     label='Original', lw=3, alpha=0.8)
-            ax.plot(self.wlm, self.data_container.intensity_corrected[self.brightest_fibres[0]] * self.telluric_correction,
+            ax.plot(self.wlm, self.data_container.intensity[self.brightest_fibres[0]] * self.telluric_correction,
                     color="g", alpha=1, lw=0.8, label='Telluric corrected')
-            ax.plot(self.wlm, self.data_container.intensity_corrected[self.brightest_fibres[1]], color="r",
+            ax.plot(self.wlm, self.data_container.intensity[self.brightest_fibres[1]], color="r",
                     label='Original', lw=3, alpha=0.8)
             ax.plot(self.wlm,
-                    self.data_container.intensity_corrected[self.brightest_fibres[1]] * self.telluric_correction,
+                    self.data_container.intensity[self.brightest_fibres[1]] * self.telluric_correction,
                     color="purple", alpha=1, lw=.8, label='Telluric corrected')
-            ax.set_ylim(np.nanpercentile(self.data_container.intensity_corrected[self.brightest_fibres[[0, 1]]], 1),
-                        np.nanpercentile(self.data_container.intensity_corrected[self.brightest_fibres[[0, 1]]], 99))
+            ax.set_ylim(np.nanpercentile(self.data_container.intensity[self.brightest_fibres[[0, 1]]], 1),
+                        np.nanpercentile(self.data_container.intensity[self.brightest_fibres[[0, 1]]], 99))
         ax.legend(ncol=2)
         ax.axvline(x=wave_min, color='k', linestyle='--')
         ax.axvline(x=wave_max, color='k', linestyle='--')
@@ -707,8 +707,8 @@ class TelluricCorrection(CorrectionBase):
         # Copy input RSS for storage the changes implemented in the task
         rss_out = copy.deepcopy(rss)
         self.corr_print("Applying telluric correction to this star...")
-        rss_out.intensity_corrected *= self.telluric_correction
-        rss_out.variance_corrected *= self.telluric_correction**2
+        rss_out.intensity *= self.telluric_correction
+        rss_out.variance *= self.telluric_correction**2
         self.log_correction(rss, status='applied')
         return rss_out
 
