@@ -29,7 +29,7 @@ class CorrectionBase(ABC):
         self._verbose = verbose
 
     @abstractmethod
-    def apply(self, correction, data_container):
+    def apply(self):
         raise NotImplementedError("Each class needs to implement this method")
 
     def corr_print(self, msg, *args):
