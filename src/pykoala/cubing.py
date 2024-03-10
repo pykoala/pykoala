@@ -229,10 +229,8 @@ def interpolate_rss(rss, wcs, kernel_size_arcsec=2.0,
         SkyCoord(rss.info['fib_ra'], rss.info['fib_dec'], unit='deg')
         )
     for fibre in range(rss.intensity.shape[0]):
-        print("Fibre: ", fibre)
         offset_ra_pix = fibre_pixel_pos_cols[fibre]
         offset_dec_pix = fibre_pixel_pos_rows[fibre]
-        print("Pixel pos: ", offset_ra_pix, offset_dec_pix)
         # Interpolate fibre to cube
         datacube, datacube_var, datacube_weight = interpolate_fibre(
             fib_spectra=rss.intensity[fibre].copy(),
@@ -322,6 +320,10 @@ def build_wcs(datacube_shape, reference_position, spatial_pix_size,
               spectra_pix_size, radesys='ICRS    ', equinox=2000.0):
     """Create a WCS using cubing information.
     
+    Description
+    -----------
+    Integer pixel values fall at the center of pixels. 
+
     Parameters
     ----------
     - datacube_shape: (tuple)
@@ -344,7 +346,6 @@ def build_wcs(datacube_shape, reference_position, spatial_pix_size,
     'CTYPE3': 'WAVE    ', 'CUNIT3': 'Angstrom', 'CDELT3': spectra_pix_size, 'CRPIX3': 0,
     'CRVAL3': reference_position[0], 'NAXIS3': datacube_shape[0]}
     wcs = WCS(wcs_dict)
-    print("[Cubing] WCS: ", wcs)
     return wcs
 
 
