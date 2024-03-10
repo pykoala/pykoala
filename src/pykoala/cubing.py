@@ -201,7 +201,7 @@ def interpolate_rss(rss, wcs, kernel_size_arcsec=2.0,
     datacube_weight
 
     """
-    # Initialise cube data containers (flux, variance, fibre weights)
+    # Initialise cube data containers (intensity, variance, fibre weights)
     if datacube is None:
         datacube = np.zeros(wcs.array_shape)
         print(f"[Cubing] Creating new datacube with dimensions: {wcs.array_shape}")
@@ -336,7 +336,6 @@ def build_wcs(datacube_shape, reference_position, spatial_pix_size,
         Pixel size along the spectral direction.
         
     """
-    print("[Cubing] Constructing cube WCS")
     wcs_dict = {
     'RADECSYS': radesys, 'EQUINOX': equinox,
     'CTYPE1': 'RA---TAN', 'CUNIT1': 'deg', 'CDELT1': spatial_pix_size, 'CRPIX1': datacube_shape[1] / 2,
@@ -362,7 +361,7 @@ def build_hdul(intensity, variance, primary_header_info=None, wcs=None):
         data_header = None
     hdul = fits.HDUList([
     primary, 
-    fits.ImageHDU(name='FLUX', data=intensity, header=data_header),
+    fits.ImageHDU(name='INTENSITY', data=intensity, header=data_header),
     fits.ImageHDU(name='VARIANCE', data=variance, header=data_header)])
 
     return hdul
@@ -380,8 +379,8 @@ class Cube(DataContainer):
     rss_mask
     intensity
     variance
-    intensity_corrected
-    variance_corrected
+    intensity
+    variance
     wavelength
     info
 
@@ -395,11 +394,11 @@ class Cube(DataContainer):
     def __init__(self, hdul=None, file_path=None, 
                  info=None,
                  log=None,
-                 hdul_extensions_map=None):
+                 hdul_extensions_map=None, **kwargs):
 
         if hdul is not None:
             if hdul_extensions_map is None:
-                self.hdul_extensions_map = {"FLUX": "FLUX", "VARIANCE": "VARIANCE"}
+                self.hdul_extensions_map = {"INTENSITY": "INTENSITY", "VARIANCE": "VARIANCE"}
             else:
                 self.hdul_extensions_map = hdul
             print("[Cube] Initialising cube with input HDUL")
@@ -409,48 +408,27 @@ class Cube(DataContainer):
             self.load_hdul(file_path)
         self.get_wcs_from_header()
 
-        # super(Cube, self).__init__(intensity=self.intensity,
-        #                            intensity_corrected=intensity_corrected,
-        #                            variance=self.variance,
-        #                            variance_corrected=variance_corrected,
-        #                            info=info, **kwargs)
-        # self.intensity = intensity
-        # self.variance = variance
-        # self.wavelength = wavelength
-        # # Cube information
-        # self.info = info
-        self.intensity = self.intensity_corrected
-        self.variance = self.variance_corrected
+        super(Cube, self).__init__(intensity=self.intensity,
+                                   variance=self.variance,
+                                   info=info, **kwargs)
         self.n_wavelength, self.n_rows, self.n_cols = self.intensity.shape
         self.get_wavelength()
 
-        if self.info is not None and 'pixel_size_arcsec' in self.info.keys():
-            self.ra_size_arcsec = self.n_cols * self.info['pixel_size_arcsec']
-            self.dec_size_arcsec = self.n_rows * self.info['pixel_size_arcsec']
-            # Store the spaxel offset position
-            self.info['spax_ra_offset'], self.info['spax_dec_offset'] = (
-                np.arange(-self.ra_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
-                        self.ra_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
-                        self.info['pixel_size_arcsec']),
-                np.arange(-self.dec_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
-                        self.dec_size_arcsec / 2 + self.info['pixel_size_arcsec'] / 2,
-                        self.info['pixel_size_arcsec']))
-
     @property
-    def intensity_corrected(self):
-        return self.hdul[self.hdul_extensions_map['FLUX']].data
+    def intensity(self):
+        return self.hdul[self.hdul_extensions_map['INTENSITY']].data
     
-    @intensity_corrected.setter
-    def intensity_corrected(self, intensity_corr):
-        print("[Cube] Updating HDUL flux")
-        self.hdul[self.hdul_extensions_map['FLUX']].data = intensity_corr
+    @intensity.setter
+    def intensity(self, intensity_corr):
+        print("[Cube] Updating HDUL INTENSITY")
+        self.hdul[self.hdul_extensions_map['INTENSITY']].data = intensity_corr
 
     @property
-    def variance_corrected(self):
+    def variance(self):
         return self.hdul[self.hdul_extensions_map['VARIANCE']].data
 
-    @variance_corrected.setter
-    def variance_corrected(self, variance_corr):
+    @variance.setter
+    def variance(self, variance_corr):
         print("[Cube] Updating HDUL variance")
         self.hdul[self.hdul_extensions_map['VARIANCE']].data = variance_corr
 
@@ -477,12 +455,12 @@ class Cube(DataContainer):
     def get_wcs_from_header(self):
         """Create a WCS from HDUL header."""
         print("[Cube] Constructing WCS")
-        self.wcs = WCS(self.hdul[self.hdul_extensions_map['FLUX']].header)
+        self.wcs = WCS(self.hdul[self.hdul_extensions_map['INTENSITY']].header)
 
     def get_wavelength(self):
         print("[Cube] Constructing wavelength array")
-        self.wavelength = self.wcs.spectral.array_index_to_world_values(
-            np.arange(self.n_wavelength))
+        self.wavelength = self.wcs.spectral.array_index_to_world(
+            np.arange(self.n_wavelength)).to('angstrom').value
         
     def get_centre_of_mass(self, wavelength_step=1, stat=np.median, power=1.0):
         """Compute the center of mass of the data cube."""
@@ -503,7 +481,7 @@ class Cube(DataContainer):
 
     def get_integrated_light_frac(self, frac=0.5):
         """Compute the integrated spectra that accounts for a given fraction of the total intensity."""
-        collapsed_intensity = np.nansum(self.intensity_corrected, axis=0)
+        collapsed_intensity = np.nansum(self.intensity, axis=0)
         sort_intensity = np.sort(collapsed_intensity, axis=(0, 1))
         # Sort from highes to lowest luminosity
         sort_intensity = np.flip(sort_intensity, axis=(0, 1))
@@ -520,16 +498,16 @@ class Cube(DataContainer):
             wave_mask = np.ones(self.intensity.shape[0], dtype=bool)
         
         if s_clip is not None:
-            std_dev = np.nanstd(self.intensity_corrected[wave_mask], axis=0)
-            median = np.nanmedian(self.intensity_corrected[wave_mask], axis=0)
+            std_dev = np.nanstd(self.intensity[wave_mask], axis=0)
+            median = np.nanmedian(self.intensity[wave_mask], axis=0)
 
             weights = (
-                (self.intensity_corrected[wave_mask] <= median[np.newaxis] + s_clip * std_dev[np.newaxis])
-                & (self.intensity_corrected[wave_mask] >= median[np.newaxis] - s_clip * std_dev[np.newaxis]))
+                (self.intensity[wave_mask] <= median[np.newaxis] + s_clip * std_dev[np.newaxis])
+                & (self.intensity[wave_mask] >= median[np.newaxis] - s_clip * std_dev[np.newaxis]))
         else:
-            weights = np.ones_like(self.intensity_corrected[wave_mask])
+            weights = np.ones_like(self.intensity[wave_mask])
 
-        white_image = np.nansum(self.intensity_corrected * weights, axis=0) / np.nansum(weights, axis=0)
+        white_image = np.nansum(self.intensity * weights, axis=0) / np.nansum(weights, axis=0)
         return white_image
 
     def get_wcs(self):
@@ -585,8 +563,8 @@ class Cube(DataContainer):
 
         # Create a list of HDU
         hdu_list = [primary]
-        # Change headers for variance and flux
-        hdu_list.append(fits.ImageHDU(data=self.intensity, name='FLUX', header=self.wcs_metadata()))
+        # Change headers for variance and INTENSITY
+        hdu_list.append(fits.ImageHDU(data=self.intensity, name='INTENSITY', header=self.wcs_metadata()))
         hdu_list.append(fits.ImageHDU(data=self.variance, name='VARIANCE', header=hdu_list[-1].header))
         # Save fits
         hdul = fits.HDUList(hdu_list)
