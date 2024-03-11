@@ -20,7 +20,7 @@ from astropy.io import fits
 # =============================================================================
 # PyKOALA modules
 # =============================================================================
-from pykoala.cubing import Cube
+from pykoala.cubing import Cube, build_wcs, build_cube
 
 
 def vprint(*arg, **kwargs):
@@ -72,13 +72,33 @@ def detect_edge(rss):
 # RSS info dictionary template
 rss_info_template = dict(name=None,  # Name of the object
                          exptime=None,  # Total rss exposure time (seconds)
-                         obj_ra=None, obj_dec=None,  # Celestial coordinates of the object (deg)
-                         cen_ra=None, cen_dec=None,  # Celestial coordinates of the pointing (deg)
-                         fib_ra_offset=None, fib_dec_offset=None,  # Fibres' celestial offset
-                         pos_angle=None,  # Instrument position angle
+                         fib_ra=None, fib_dec=None,  # Fibres' celestial offset
                          airmass=None  # Airmass
                          )
 
+def make_dummy_cube_from_rss(rss, spa_pix_arcsec=0.5, kernel_pix_arcsec=1.0):
+    """Create an empty datacube array from an input RSS."""
+    min_ra, max_ra = np.nanmin(rss.info['fib_ra']), np.nanmax(rss.info['fib_ra'])
+    min_dec, max_dec = np.nanmin(rss.info['fib_dec']), np.nanmax(rss.info['fib_dec'])
+    datacube_shape = (rss.wavelength.size,
+                   int((max_ra - min_ra) * 3600 / spa_pix_arcsec),
+                   int((max_dec - min_dec) * 3600 / spa_pix_arcsec))
+    ref_position = (rss.wavelength[0], (min_ra + max_ra) / 2, (min_dec + max_dec) / 2)
+    spatial_pixel_size = spa_pix_arcsec / 3600
+    spectral_pixel_size = rss.wavelength[1] - rss.wavelength[0]
+
+    wcs = build_wcs(datacube_shape=datacube_shape,
+                    reference_position=ref_position,
+                    spatial_pix_size=spatial_pixel_size,
+                    spectra_pix_size=spectral_pixel_size,
+                )
+    cube = build_cube([rss], pixel_size_arcsec=spa_pix_arcsec, wcs=wcs,
+                      kernel_size_arcsec=kernel_pix_arcsec)
+    return cube
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Arithmetic operations
+# ----------------------------------------------------------------------------------------------------------------------
 def running_mean(x, n_window):
     """
     This function calculates the running mean of an array.
@@ -98,11 +118,6 @@ def running_mean(x, n_window):
     """
     cumsum = np.cumsum(np.insert(x, 0, 0))
     return (cumsum[n_window:] - cumsum[:-n_window]) / n_window
-
-
-# ----------------------------------------------------------------------------------------------------------------------
-# Arithmetic operations
-# ----------------------------------------------------------------------------------------------------------------------
 
 
 def flux_conserving_interpolation(new_wavelength, wavelength, spectra, **interp_args):

@@ -2,22 +2,17 @@
 # Basics packages
 # =============================================================================
 import numpy as np
-import copy
 import os
-import matplotlib.pyplot as plt
-from matplotlib import colors
 
 # =============================================================================
 # Astropy and associated packages
 # =============================================================================
 from astropy.io import fits
-from astropy.nddata import bitfield_to_boolean_mask
 # =============================================================================
 # KOALA packages
 # =============================================================================
 # Modular
 from pykoala.ancillary import vprint
-from pykoala.exceptions import exceptions as excp
 from pykoala.data_container import DataContainer
 
 
@@ -33,74 +28,39 @@ class RSS(DataContainer):
     Attributes
     ----------
     intensity: numpy.ndarray(float)
-        Intensity :math:``I_lambda`` per unit wavelength.
-        Axis 0 corresponds to fiber ID
-        Axis 1 Corresponds to spectral dimension
-    wavelength: numpy.ndarray(float)
-        Wavelength, in Angstrom
+        Intensity :math:``I_lambda``.
+        Axis 0 corresponds to spectral dimension
+        Axis 1 Corresponds to fibre ID
     variance: numpy.ndarray(float)
-        Variance :math:`sigma^2_lambda` per unit wavelength
-        (note the square in the definition of the variance).
-    mask : numpy.ndarray(float)
-        Bit mask that records the pixels with individual corrections performed 
-        by the various processes:
-            Mask value      CorrectionBase
-            -----------     ----------------
-            1               Readed from file
-            2               Blue edge
-            4               Red edge
-            8               NaNs mask
-            16              Cosmic rays
-            32              Extreme negative
-            
-    intensity_corrected: numpy.ndarray(float)
-        Intensity with all the corresponding corrections applied (see log).
-    variance_corrected: numpy.ndarray(float)
-        Variance with all the corresponding corrections applied (see log).
+        Variance :math:`sigma^2_lambda`.
+        (note the square in the definition of the variance). Must have the
+        same dimensions as `intensity`
+    wavelength: numpy.ndarray(float)
+        Wavelength, expressed in Angstrom. It must have the same dimensions
+        as `intensity` along axis 0.
+    info : dict
+        Dictionary containing RSS information.
+        Important dictionary keys:
+            info['fib_ra'] - original RA fiber position
+            info['fib_dec'] - original DEC fiber position
+            info['exptime'] - exposure time in seconds
+            info['airmass'] - mean airmass during observation
+            info['name'] - Name reference
     log : dict
         Dictionary containing a log of the processes applied on the rss.   
-    header : astropy.io.fits.header.Header object 
-        The header associated with data.
-    fibre_table : astropy.io.fits.hdu.table.BinTableHDU object
-        Bin table containing fibre metadata.
-    info : dict
-        Dictionary containing RSS basic information.
-        Important dictionary keys:
-            info['fib_ra_offset'] - original RA fiber offset 
-            info['fib_dec_offset'] - original DEC fiber offset
-            info['cen_ra'] - WCS RA center coordinates
-            info['cen_dec'] - WCA DEC center coordinates
-            info['pos_angle'] - original position angle (PA) 
-
-            TODO - this is NOT an exhaustive list. Please update when new attributes are encountered       
     """
     def __init__(self,
                  intensity=None,
                  wavelength=None,
                  variance=None,
-                 mask=None,
-                 intensity_corrected=None,
-                 variance_corrected=None,
+                 info=None,
                  log=None,
-                 header=None,
-                 fibre_table=None,
-                 info=None
                  ):
 
-        if intensity_corrected is None:
-            intensity_corrected = intensity
-        if variance_corrected is None:
-            variance_corrected = variance
-
-        super().__init__(intensity=intensity,
-                         intensity_corrected=intensity_corrected,
-                         variance=variance,
-                         variance_corrected=variance_corrected,
-                         info=info, mask=mask, log=log)
+        # Intialise base class
+        super().__init__(intensity=intensity, variance=variance, info=info, log=log)
         # Specific RSS attributes
         self.wavelength = wavelength
-        self.header = header
-        self.fibre_table = fibre_table
 
     def get_centre_of_mass(self, wavelength_step=1, stat=np.nanmedian, power=1.0):
         """Compute the center of mass (COM) based on the RSS fibre positions
@@ -121,71 +81,51 @@ class RSS(DataContainer):
         y_com: np.array(float)
             Array containing the COM in the y-axis (DEC, rows).
         """
-        ra_offset = self.info['fib_ra_offset']
-        dec_offset = self.info['fib_dec_offset']
-        ra_offset_com = np.empty(self.wavelength.size)
-        dec_offset_com = np.empty(self.wavelength.size)
+        ra = self.info["fib_ra"]
+        dec = self.info["fib_dec"]
+        ra_com = np.empty(self.wavelength.size)
+        dec_com = np.empty(self.wavelength.size)
         for wave_range in range(0, self.wavelength.size, wavelength_step):
             # Mean across all fibres
-            ra_offset_com[wave_range: wave_range + wavelength_step] = np.nansum(
-                self.intensity_corrected[:, wave_range: wave_range + wavelength_step]**power * ra_offset[:, np.newaxis],
-                axis=0) / np.nansum(self.intensity_corrected[:, wave_range: wave_range + wavelength_step]**power,
+            ra_com[wave_range: wave_range + wavelength_step] = np.nansum(
+                self.intensity[:, wave_range: wave_range + wavelength_step]**power * ra[:, np.newaxis],
+                axis=0) / np.nansum(self.intensity[:, wave_range: wave_range + wavelength_step]**power,
                                     axis=0)
             # Statistic (e.g., median, mean) per wavelength bin
-            ra_offset_com[wave_range: wave_range + wavelength_step] = stat(ra_offset_com[wave_range: wave_range + wavelength_step])
-            dec_offset_com[wave_range: wave_range + wavelength_step] = np.nansum(
-                self.intensity_corrected[:, wave_range: wave_range + wavelength_step]**power * dec_offset[:, np.newaxis],
-                axis=0) / np.nansum(self.intensity_corrected[:, wave_range: wave_range + wavelength_step]**power,
+            ra_com[wave_range: wave_range + wavelength_step] = stat(ra_com[wave_range: wave_range + wavelength_step])
+            dec_com[wave_range: wave_range + wavelength_step] = np.nansum(
+                self.intensity[:, wave_range: wave_range + wavelength_step]**power * dec[:, np.newaxis],
+                axis=0) / np.nansum(self.intensity[:, wave_range: wave_range + wavelength_step]**power,
                                     axis=0)
-            dec_offset_com[wave_range: wave_range + wavelength_step] = stat(dec_offset_com[wave_range: wave_range + wavelength_step])
-        return ra_offset_com, dec_offset_com
+            dec_com[wave_range: wave_range + wavelength_step] = stat(dec_com[wave_range: wave_range + wavelength_step])
+        return ra_com, dec_com
 
-    def update_coordinates(self, new_fib_offset_coord=None, new_centre=None, new_pos_angle=None):
+    def update_coordinates(self, new_fib_coord):
         """Update fibre coordinates.
+        TODO: This should not be a method of RSS but part of the Astrometry Correction.
 
         For each of the parameters provided (different from None), the coordinates will be updated while the original
         ones will be stored in the info dict with a new prefix 'ori_'.
 
         Parameters
         ----------
-        new_fib_offset_coord: (2, n) np.array(float), default=None
-            New fibre offset-coordinates for ra and dec axis, expressed in *arcseconds*.
-        new_centre: (2,)-tuple, default=None
-            New reference coordinates (RA, DEC) for the RSS, expressed in degrees.
-        new_pos_angle: float
-            New position angle in degrees (PA)
-
+        new_fib_coord: (2, n) np.array(float), default=None
+            New fibre coordinates for ra and dec axis, expressed in *deg*.
         Returns
         -------
         """
-        if new_fib_offset_coord is not None:
-            self.info['ori_fib_ra_offset'], self.info['ori_fib_dec_offset'] = (
-                self.info['fib_ra_offset'].copy(), self.info['fib_dec_offset'].copy())
-            self.info['fib_ra_offset'] = new_fib_offset_coord[0]
-            self.info['fib_dec_offset'] = new_fib_offset_coord[1]
-            self.log['update_coords'] = "Offset-coords updated"
-            print("[RSS] Offset-coords updated")
-        if new_centre is not None:
-            self.info['ori_cen_ra'], self.info['ori_cen_dec'] = (
-                self.info['cen_ra'].copy(), self.info['cen_dec'].copy())
-            self.info['cen_ra'] = new_centre[0]
-            self.info['cen_dec'] = new_centre[1]
-            self.log['update_coords'] = "Centre coords updated"
-            print("[RSS] Centre coords ({:.4f}, {:.4f}) updated to ({:.4f}, {:.4f})".format(
-                self.info['ori_cen_ra'], self.info['ori_cen_dec'],
-                self.info['cen_ra'], self.info['cen_dec']))
-        if new_pos_angle is not None:
-            self.info['ori_pos_angle'] = self.info['pos_angle'].copy()
-            self.info['pos_angle'] = new_pos_angle
-            self.log['update_coords'] = "Position angle {:.3} updated to {:.3}".format(self.info['ori_pos_angle'],
-                                                                                       self.info['pos_angle'])
-            print("[RSS] Position angle {:.3} updated to {:.3}".format(
-                self.info['ori_pos_angle'], self.info['pos_angle']))
+
+        self.info['ori_fib_ra'], self.info['ori_fib_dec'] = (self.info["fib_ra"].copy(),
+                                                             self.info["fib_dec"].copy())
+        self.info["fib_ra"] = new_fib_coord[0]
+        self.info["fib_dec"] = new_fib_coord[1]
+        self.log['update_coords'] = "Offset-coords updated"
+        print("[RSS] Offset-coords updated")
 
     # =============================================================================
     # Save an RSS object (corrections applied) as a separate .fits file
     # =============================================================================
-    def to_fits(self, name, layer='corrected', overwrite=False, checksum=False):
+    def to_fits(self, filename, overwrite=False, checksum=False):
         """
         Writes a RSS object to .fits
         
@@ -205,120 +145,18 @@ class RSS(DataContainer):
         Returns
         -------
         """
-        data = {'corrected': self.intensity_corrected, 'mask': self.mask}
-        primary_hdu = fits.PrimaryHDU(data=data[layer])
-        primary_hdu.header = self.header
+        # TODO: This needs to
+        primary_hdu = fits.PrimaryHDU(data=self.intensity)
+        # primary_hdu.header = self.header
         primary_hdu.verify('fix')
-    
-        if self.fibre_table is not None:
-            # The cen_ra and cen_dec attributes exist in the RSS object header self.header which is copied to primary_hdu.header above
-            # Essentially this step is redundant
-            self.fibre_table.header['CENRA'] = self.header['RACEN'] / (180 / np.pi)  # Must be in radians
-            self.fibre_table.header['CENDEC'] = self.header['DECCEN'] / (180 / np.pi)
-            hdu_list = fits.HDUList([primary_hdu, self.fibre_table])
-
-            # Write the fits using standard writeto with default settings and checksum
-            hdu_list.writeto(name, overwrite=overwrite, checksum=checksum)
-        else:
-            # Write the fits
-            primary_hdu.writeto(name=name, overwrite=overwrite, checksum=checksum)
-        
+        primary_hdu.writeto(name=filename, overwrite=overwrite, checksum=checksum)
         primary_hdu.close()
-        print(f"[RSS] File saved as {name}")
+        print(f"[RSS] File saved as {filename}")
 
 
 # =============================================================================
-# Reading RSS from .fits file - inverse opeation of to_fits method above
+# Combine RSS (e.g., flats, twilights)
 # =============================================================================
-
-"""
-TODO
-"""
-def read_rss(file_path,
-             wcs,
-             intensity_axis=0,
-             variance_axis=1,
-             bad_fibres_list=None,
-             instrument=None,
-             verbose=False,
-             log=None,
-             header=None,
-             fibre_table=None,
-             info=None
-             ):
-    """TODO."""
-    # Blank dictionary for the log
-    if log is None:
-        log = {'read': {'comment': None, 'index': None},
-               'mask from file': {'comment': None, 'index': 0},
-               'blue edge': {'comment': None, 'index': 1},
-               'red edge': {'comment': None, 'index': 2},
-               'cosmic': {'comment': None, 'index': 3},
-               'extreme negative': {'comment': None, 'index': 4},
-               'wavelength fix': {'comment': None, 'index': None, 'sol': []}}
-    if header is None:
-        # Blank Astropy Header object for the RSS header
-        # Example how to add header value at the end
-        # blank_header.append(('DARKCORR', 'OMIT', 'Dark Image Subtraction'), end=True)
-        header = fits.header.Header(cards=[], copy=False)
-
-    file_name = os.path.basename(file_path)
-
-    vprint("\n> Reading RSS file", file_name, "created with", instrument, "...",
-           verbose=verbose)
-
-    #  Open fits file. This assumes that RSS objects are written to file as .fits.
-    with fits.open(file_path) as rss_fits:
-        # Read intensity using rss_fits_file[0]
-        all_intensities = np.array(rss_fits[intensity_axis].data, dtype=np.float32)
-        intensity = np.delete(all_intensities, bad_fibres_list, 0)
-        # Bad pixel verbose summary
-        vprint("\n  Number of spectra in this RSS =", len(all_intensities),
-            ",  number of good spectra =", len(intensity),
-            " ,  number of bad spectra =", len(bad_fibres_list),
-            verbose=verbose)
-        if bad_fibres_list is not None:
-            vprint("  Bad fibres =", bad_fibres_list, verbose=verbose)
-
-        # Read errors if exist a dedicated axis
-        if variance_axis is not None:
-            all_variances = rss_fits[variance_axis].data
-            variance = np.delete(all_variances, bad_fibres_list, 0)
-
-        else:
-            vprint("\n  WARNING! Variance extension not found in fits file!", verbose=verbose)
-            variance = np.full_like(intensity, fill_value=np.nan)
-
-    # Create wavelength from wcs
-    nrow, ncol = wcs.array_shape
-    wavelength_index = np.arange(ncol)
-    wavelength = wcs.dropaxis(1).wcs_pix2world(wavelength_index, 0)[0]
-    # log
-    comment = ' '.join(['- RSS read from ', file_name])
-    log['read']['comment'] = comment
-    # First Header value added by the PyKoala routine
-    header.append(('DARKCORR', 'OMIT', 'Dark Image Subtraction'), end=True)
-
-    # Blank mask (all 0, i.e. making nothing) of the same shape of the data
-    mask = np.zeros_like(intensity)
-
-    # Blank corrected intensity (i.e. a copy of the data)
-    intensity_corrected = intensity.copy()
-
-    # Blank corrected variance (i.e a copy of the variance)
-    variance_corrected = variance.copy()
-
-    return RSS(intensity=intensity,
-               wavelength=wavelength,
-               variance=variance,
-               mask=mask,
-               intensity_corrected=intensity_corrected,
-               variance_corrected=variance_corrected,
-               log=log,
-               header=header,
-               fibre_table=fibre_table,
-               info=info
-               )
 
 def combine_rss(list_of_rss, combine_method='nansum'):
     """Combine an input list of DataContainers into a new DataContainer."""
@@ -326,8 +164,8 @@ def combine_rss(list_of_rss, combine_method='nansum'):
     all_intensities = []
     all_variances = []
     for rss in list_of_rss:
-        intensity = rss.intensity_corrected.copy()
-        variance = rss.variance_corrected.copy()
+        intensity = rss.intensity.copy()
+        variance = rss.variance.copy()
         # Ensure nans
         finite_mask = np.isfinite(intensity) & np.isfinite(variance)
         intensity[~finite_mask] = np.nan
@@ -342,12 +180,9 @@ def combine_rss(list_of_rss, combine_method='nansum'):
         new_variance = combine_function(all_variances, axis=0)
     else:
         raise NotImplementedError("Implement user-defined combining methods")
-    
     # TODO: Update the metadata as well
-    new_rss = RSS(intensity=new_intensity, intensity_corrected=new_intensity,
-                  variance=new_variance, variance_corrected=new_variance,
-                  wavelength=rss.wavelength, log=rss.log, header=rss.header, fibre_table=rss.fibre_table,
-                  info=rss.info)
+    new_rss = RSS(intensity=new_intensity, variance=new_variance,
+                  wavelength=rss.wavelength, log=rss.log, info=rss.info)
     return new_rss
     
 

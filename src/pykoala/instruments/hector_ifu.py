@@ -103,8 +103,8 @@ def hector_rss(path_to_file, bundle=''):
     info['cen_ra'] = np.rad2deg(header['RACEN'])
     info['cen_dec'] = np.rad2deg(header['DECCEN'])
     info['pos_angle'] = header.get('TEL_PA', 0)
-    info['fib_ra_offset'] = koala_fibre_table.data['Delta_RA']
-    info['fib_dec_offset'] = koala_fibre_table.data['Delta_DEC']
+    info['fib_ra'] = koala_fibre_table.data['Delta_RA']
+    info['fib_dec'] = koala_fibre_table.data['Delta_DEC']
     info['airmass'] = airmass_from_header(header)
     # Read RSS file into a PyKoala RSS object
     rss = read_rss(path_to_file, wcs=wcs,
