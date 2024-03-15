@@ -12,12 +12,14 @@ import copy
 # Astropy and associated packages
 # =============================================================================
 from astropy.io import fits
+#from astropy.wcs import WCS
 from astropy.wcs import WCS
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from pykoala.ancillary import vprint, rss_info_template  # Template to create the info variable 
+from pykoala.ancillary import vprint, vplot, rss_info_template  # Template to create the info variable 
 from pykoala.rss import RSS
+from pykoala.plotting.rss_plot import rss_image   #!!! ANGEL
 
 def airmass_from_header(header):
     """
@@ -184,15 +186,20 @@ def read_rss(file_path,
                log=log,
                )
 
-def koala_rss(path_to_file):
+def koala_rss(path_to_file, **kwargs):    #!!! Added **kwargs for verbose, plot
     """
     A wrapper function that converts a file (not an RSS object) to a koala RSS object
     The paramaters used to build the RSS object e.g. bad spaxels, header etc all come from the original (non PyKoala) .fits file
     """
+    vprint('\n> Converting RSS file',path_to_file,'to a koala RSS object...', **kwargs) #!!!
     header = fits.getheader(path_to_file, 0) + fits.getheader(path_to_file, 2)
     koala_header = py_koala_header(header)
     # WCS
-    koala_wcs = WCS(header)
+    koala_wcs = WCS(header, relax=False)   #!!!  Ángel Added relax = False to avoid annoying warning:
+    # WARNING: FITSFixedWarning: RADECSYS= 'FK5 ' / FK5 reference system 
+    # the RADECSYS keyword is deprecated, use RADESYSa. [astropy.wcs.wcs]
+    # Still not working... #!!! 
+    
     # Constructing Pykoala Spaxels table from 2dfdr spaxels table (data[2])
     fibre_table = fits.getdata(path_to_file, 2)
     koala_fibre_table = py_koala_fibre_table(fibre_table)
@@ -208,14 +215,20 @@ def koala_rss(path_to_file):
     info['fib_dec'] = np.rad2deg(koala_header['DECCEN']) + koala_fibre_table.data['Delta_DEC'] / 3600
     info['airmass'] = airmass_from_header(koala_header)
     # Read RSS file into a PyKoala RSS object
-    rss = read_rss(path_to_file, wcs=koala_wcs,
-                   bad_fibres_list=bad_fibres_list,
+    rss = read_rss(path_to_file, 
+                   wcs=koala_wcs,                         
+                   bad_fibres_list=bad_fibres_list,      
                    intensity_axis=0,
                    variance_axis=1,
-                   header=koala_header,
+                   header=koala_header,                  
                    fibre_table=koala_fibre_table,
                    info=info
                    )
+    
+    # Plot RSS image if requested  #!!!
+    if vplot(**kwargs): rss_image(rss, **kwargs)
+    
     return rss
 
-# Mr Krtxo \(ﾟ▽ﾟ)/
+
+# Mr Krtxo \(ﾟ▽ﾟ)/ + Ángel :-)
