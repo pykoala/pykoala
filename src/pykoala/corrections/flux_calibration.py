@@ -5,7 +5,6 @@ import numpy as np
 from scipy.optimize import curve_fit
 from scipy.ndimage import gaussian_filter1d
 from scipy.interpolate import interp1d, UnivariateSpline
-from scipy.signal import savgol_filter
 from scipy.ndimage import gaussian_filter1d
 from photutils.centroids import centroid_2dg
 import copy
@@ -19,13 +18,11 @@ import os
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from pykoala.exceptions.exceptions import ClassError, FitError, CalibrationError
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.rss import RSS
 from pykoala.cubing import Cube
 from pykoala.ancillary import (centre_of_mass, cumulative_1d_moffat,
-                             growth_curve_1d, flux_conserving_interpolation,
-                             mask_lines, gaussian_2d)
+                               flux_dens_conserving_interpolation, mask_lines)
 
 
 class FluxCalibration(CorrectionBase):
@@ -128,7 +125,7 @@ class FluxCalibration(CorrectionBase):
             self.corr_print("Loading template spectra")
 
             # Load standard star
-            w, s = self.read_calibration_star(name=calib_stars[i])
+            ref_wave, ref_spectra = self.read_calibration_star(name=calib_stars[i])
 
             # Extract flux from std star
             self.corr_print("Extracting stellar flux from data")
@@ -137,19 +134,20 @@ class FluxCalibration(CorrectionBase):
             flux_cal_results[name] = dict(extraction=result)
             # Interpolate to the observed wavelength
             self.corr_print("Interpolating template to observed wavelength")
-            interp_s = flux_conserving_interpolation(
-                new_wavelength=result['mean_wave'], wavelength=w, spectra=s)
+            mean_wave = np.nanmean(result['wave_edges'], axis=1)
+            result['mean_wave'] = mean_wave
+            interp_s = np.interp(mean_wave, ref_wave, ref_spectra)
+
             flux_cal_results[name]['interp'] = interp_s
             # Compute the response curve
             resp_curve, resp_fig = self.get_response_curve(
-                result['mean_wave'], result['optimal'][:, 0], interp_s,
+                mean_wave, result['optimal'][:, 0], interp_s,
                 **response_params)
             flux_cal_results[name]['wavelength'] = data[i].wavelength.copy()
             flux_cal_results[name]['response'] = resp_curve(
                 data[i].wavelength.copy())
             flux_cal_results[name]['response_fig'] = resp_fig
             self.corr_print("-> Saving response as {}".format(name))
-            # TODO: dump the flux_cal_results to a json / yaml file
             if save:
                 self.save_response(
                     fname=os.path.join(save, 'response_' + name),
@@ -239,104 +237,151 @@ class FluxCalibration(CorrectionBase):
         if type(data_container) is RSS:
             self.corr_print("Extracting flux from RSS")
             data = data_container.intensity.copy()
+            variance = data_container.variance.copy()
             # Invert the matrix to get the wavelength dimension as 0.
-            data = data.T
+            data, variance = data.T, variance.T
             x = data_container.info['fib_ra']
             y = data_container.info['fib_dec']
         elif type(data_container) is Cube:
-            self.corr_print("Extracting flux from Cube")
+            self.corr_print("Extracting flux from input Cube")
             data = data_container.intensity.copy()
             data = data.reshape((data.shape[0], data.shape[1] * data.shape[2]))
+            variance = data_container.variance.copy()
+            variance = variance.reshape((variance.shape[0], variance.shape[1] * variance.shape[2]))
             x, y = np.meshgrid(np.arange(data_container.n_cols),
                                np.arange(data_container.n_rows))
             x, y = x.flatten(), y.flatten()
+            x, y = data_container.wcs.celestial.pixel_to_world_values(x, y)
 
         data = data[wave_mask, :]
-        
+        variance = variance[wave_mask, :]
+
         # Declare variables
         residuals = []
         profile_popt = []
         profile_var = []
         running_wavelength = []
         raw_flux = []
+        cog = []
+        cog_var = []
         # Fitting tolerance and number of evaluations
         if 'ftol' not in fitter_args.keys():
             fitter_args['ftol'] = 0.001
             fitter_args['xtol'] = 0.001
             fitter_args['gtol'] = 0.001
         if 'max_nfev' not in fitter_args.keys():
-            fitter_args['max_nfev'] = 10000
+            fitter_args['max_nfev'] = 100000
  
         # Loop over all spectral slices
         self.corr_print("...Fitting wavelength chuncks...")
         for lambda_ in range(0, wavelength.size, wave_window):
             wave_slice = slice(lambda_, lambda_ + wave_window, 1)
-            mean_wave = np.nanmedian(wavelength[wave_slice])
+            wave_edges = [wavelength[wave_slice][0], wavelength[wave_slice][-1]]
             slice_data = data[wave_slice]
+            slice_var = variance[wave_slice]
             # Compute the median value only considering good values (i.e. excluding NaN)
             slice_data = np.nanmedian(slice_data, axis=0)
-            if not np.isfinite(slice_data).any():
-                self.corr_print("Chunk at {}+-{} contains no useful data"
-                                .format(mean_wave, wave_window))
+            slice_var = np.nanmedian(slice_var, axis=0) / np.sqrt(slice_var.shape[0])
+            slice_var[slice_var <= 0] = np.inf
+
+            if np.isfinite(slice_data).all():
+                self.corr_print("Chunk between {} to {} contains no useful data"
+                                .format(wave_edges[0], wave_edges[1]))
                 continue
-            # Positions without signal are set to 0.
-            slice_data = np.nan_to_num(slice_data, posinf=0., neginf=0.)
+            # Pixels without signal are set to 0.
+            mask = np.isfinite(slice_data) & np.isfinite(slice_var)
             ###################################################################
             # Computing the curve of growth
             ###################################################################
-            x0, y0 = centre_of_mass(slice_data, x, y)
-            y_min, y_max = y.min(), y.max()
-            x_min, x_max = x.min(), x.max()
+            x0, y0 = centre_of_mass(slice_data * mask, x, y)
             # Make the growth curve
-            r2, growth_c = growth_curve_1d(slice_data, x - x0, y - y0)
+            r2 = ((x - x0)**2 + (y - y0)**2) * 3600**2  # expressed in arcsec^2
+            r2_dummy = np.arange(0, 10**2, 0.5**2)
+            growth_c = np.array([np.nanmean(slice_data[mask & (r2 <= rad)]) * np.count_nonzero(r2 <= rad) for rad in r2_dummy])
+            growth_c_var = np.array([np.nanmean(slice_var[mask & (r2 <= rad)]) * np.count_nonzero(r2 <= rad) for rad in r2_dummy])
+            
+            cog_mask = np.isfinite(growth_c)
+            if not cog_mask.any():
+                self.corr_print("Chunk between {} to {} contains no useful data"
+                                .format(wave_edges[0], wave_edges[1]))
+                continue
+            r2 = r2_dummy
+            # r2, growth_c = growth_curve_1d(slice_data, x - x0, y - y0)
             raw_flux.append(growth_c[-1])
             # Fit a light profile
             try:
                 if bounds == 'auto':
                     self.corr_print("Automatic fit bounds")
-                    p_bounds = ([0, 0, 0], [growth_c[-1] * 2,
-                                            np.max((x_max - x_min, y_max - y_min)),
-                                            4])
+                    p_bounds = ([0, 0, 0], [growth_c[-1] * 2, r2_dummy.max(), 4])
                 else:
                     p_bounds = bounds
                 # Initial guess
-                p0=[growth_c[-1], np.min((x_max - x_min, y_max - y_min)) / 3, 1]
+                p0=[growth_c[-1], r2_dummy.mean(), 1.0]
                 # print("Bounds: ", bounds, "Initial guess: ", p0)
                 popt, pcov = curve_fit(
-                    profile, r2, growth_c, bounds=p_bounds,
+                    profile, r2[cog_mask], growth_c[cog_mask], bounds=p_bounds,
                     p0=p0,
                     **fitter_args)
                 # print(popt[0], growth_c[-1])
-            except FitError:
-                self.corr_print(
-                    "Fit at wavelength {:.1f} [{:.1f}-{:.1f}] ***unsuccessful***"
-                      .format(mean_wave, wavelength[wave_slice][0], wavelength[wave_slice][-1]))
-                raise FitError()
+            except Exception as e:
+                self.corr_print("There was a problem during the fit:\n", e)
+
             else:
+                cog.append(growth_c)
+                cog_var.append(growth_c_var)
                 profile_popt.append(popt)
                 profile_var.append(pcov.diagonal())
-                running_wavelength.append(mean_wave)
+                running_wavelength.append(wave_edges)
                 residuals.append(np.nanmean(growth_c - profile(r2, *popt)))
+
         if plot:
-            fig = plt.figure()
-            ax = fig.add_subplot(211)
-            mappable = ax.scatter(x, y, c=np.nanmean(data, axis=0),
-                                  cmap='Greys_r')
-            plt.colorbar(mappable, ax=ax, label='Flux')
+            fig, axs = plt.subplots(ncols=2, nrows=2, figsize=(8, 8), gridspec_kw=dict(hspace=0.4, wspace=0.4))
+            ax = axs[0, 0]
+            ax.set_title("Median intensity")
+            mappable = ax.scatter(x, y, c=np.log10(np.nanmedian(data, axis=0)),
+                                  cmap='nipy_spectral')
+            plt.colorbar(mappable, ax=ax, label=r'$\log_{10}$(intensity)')
             ax.plot(x0, y0, '+', ms=5, color='r')
 
-            ax = fig.add_subplot(212)
-            ax.plot(running_wavelength, residuals, '-o', color='k', lw=2)
+            ax = axs[1, 0]
+            cog = np.array(cog)
+            cog /= cog[:, -1][:, np.newaxis]
+            pct_cog = np.nanpercentile(cog, [16, 50, 84], axis=0)
+            for pct in pct_cog:
+                ax.plot(r2_dummy**0.5, pct)
+            ax.set_yscale('log')
+            ax.set_xscale('log')
+            ax.set_ylabel('Normalised Curve of Growth')
+            ax.set_xlabel('Distance to COM (arcsec)')
+            ax.grid(visible=True, which='both')
+            ax = axs[0, 1]
+            ax.plot(np.mean(running_wavelength, axis=1), residuals, '-o', color='k', lw=2)
             ax.set_ylabel('Mean residuals')
             ax.set_xlabel('Wavelength')
+
+            axs[1, 1].axis('off')
             plt.close(fig)
         else:
             fig = None
-        result = dict(mean_wave=np.array(running_wavelength),
+        result = dict(wave_edges=np.array(running_wavelength),
                       optimal=np.array(profile_popt),
                       variance=np.array(profile_var),
                       figure=fig)
         return result
+
+    @staticmethod
+    def list_available_stars(verbose=True):
+        """List all available spectrophotometric standard star files."""
+        files = os.listdir(os.path.join(os.path.dirname(__file__), '..',
+                                        'input_data', 'spectrophotometric_stars'))
+        files = np.sort(files)
+        names = []
+        for file in files:
+            names.append(file.split('.')[0].split('_')[0])
+            if verbose:
+                print(" - Standard star file: {}\n   · Name: {}"
+                      .format(file, names[-1]))
+        return np.array(names), files
 
     def read_calibration_star(self, name=None, path=None, flux_units=None):
         """
@@ -358,15 +403,16 @@ class FluxCalibration(CorrectionBase):
             if name[0] != 'f' or 'feige' in name:
                 name = 'f' + name
             all_names, all_files = self.list_available_stars(verbose=False)
-            match = np.where(all_names == name)[0]
-            if len(match) > 0:
-                self.corr_print("Input name {}, matches {}".format(name, all_names[match]))
+            matched_name = np.where(all_names == name, all_names)[0]
+            if len(matched_name) > 0:
+                if len(matched_name) > 1:
+                    self.corr_print("WARNING: More than one file found")
+                self.corr_print("Input name {}, matches {}".format(name, matched_name),
+                                f"\n Selecting {matched_name[-1]}")
                 path = os.path.join(os.path.dirname(__file__), '..',
                                     'input_data', 'spectrophotometric_stars',
-                                    all_files[match[-1]])
+                                    matched_name[-1])
                 self.calib_wave, self.calib_spectra = np.loadtxt(path, unpack=True, usecols=(0, 1))
-                if len(match) > 1:
-                    self.corr_print("WARNING: More than one file found")
             else:
                 raise FileNotFoundError("Calibration star: {} not found".format(name))
         if path is not None:
@@ -403,10 +449,12 @@ class FluxCalibration(CorrectionBase):
             containing the response function in terms of wavelength
 
         """
+        print("Computing spectrophotometric response")
         dwave = np.diff(wave)
         wave_edges = np.hstack((wave[0] - dwave[0] / 2, wave[:-1] + dwave / 2,
                                 wave[-1] + dwave[-1] / 2))
         if mask_absorption:
+            print("Masking lines")
             lines_mask = mask_lines(wave)
             obs_spectra = np.interp(wave, wave[lines_mask],
                                     obs_spectra[lines_mask])
@@ -433,37 +481,34 @@ class FluxCalibration(CorrectionBase):
             # response = UnivariateSpline(wave, obs_spectra / ref_spectra)
         if plot:
             fig = plt.figure(figsize=(8, 4))
-            ax = fig.add_subplot(111)
+            ax = fig.add_subplot(211)
             ax.annotate('{}-deg polynomial fit'.format(pol_deg), xy=(0.05, 0.95), xycoords='axes fraction',
                         va='top', ha='left')
             ax.annotate(r'Gaussian smoothin: $\sigma=${} AA'
                         .format(gauss_smooth_sigma),
                         xy=(0.05, 0.80), xycoords='axes fraction',
                         va='top', ha='left')
-            ax.plot(wave, obs_spectra / ref_spectra, 'k', lw=2, label='Obs/Ref')
+            ax.plot(wave, obs_spectra / ref_spectra, '.-', color='k', lw=2, label='Obs/Ref')
+            ax.plot(wave, raw_response, '.-', color='orange', lw=2, label='Filtered')
             ax.plot(wave, response(wave), 'r', label='Final response')
             ax.set_xlabel('Wavelength')
-            ax.set_ylabel(r'$R(\lambda) = F_{obs} / F_{ref}$', fontsize=16)
+            ax.set_title(r'$R(\lambda) [\rm counts\,s^{-1} / (erg\, s^{-1}\, cm^{-2}\, AA^{-1})]$', fontsize=16)
+            ax.set_ylabel(r'$R(\lambda)$', fontsize=16)
             ax.legend(loc='lower right')
+            ax.set_ylim(response(wave).min(), response(wave).max())
+
+            ax = fig.add_subplot(212)
+            ax.plot(wave,  ref_spectra, '.-', color='k', lw=2, label='Ref')
+            ax.plot(wave, obs_spectra / raw_response, '.-', color='orange', lw=2, label='Filtered')
+            ax.plot(wave, obs_spectra / response(wave), 'r', label='Final response')
+            ax.set_xlabel('Wavelength')
+            ax.set_ylabel(r'$F$', fontsize=16)
+            ax.set_ylim(ref_spectra.min(), ref_spectra.max())
+            ax.legend(ncol=1)
             plt.close(fig)
             return response, fig
         else:
             return response, None
-
-
-    @staticmethod
-    def list_available_stars(verbose=True):
-        """List all available spectrophotometric standard star files."""
-        files = os.listdir(os.path.join(os.path.dirname(__file__), '..',
-                                        'input_data', 'spectrophotometric_stars'))
-        files = np.sort(files)
-        names = []
-        for file in files:
-            names.append(file.split('.')[0].split('_')[0])
-            if verbose:
-                print(" - Standard star file: {}\n   · Name: {}"
-                      .format(file, names[-1]))
-        return np.array(names), files
 
     def apply(self, data_container, response=None, response_units=None):
         """Apply a spectral response function to a Data Container object.
@@ -477,9 +522,8 @@ class FluxCalibration(CorrectionBase):
             Data to be calibrated.
         """
 
-        if data_container.is_corrected(self.name):
-            raise CalibrationError()
-        
+        assert data_container.is_corrected(self.name), "Data already calibrated"
+
         if response is None:
             if self.response is None:
                 raise NameError("Spectral response function not provided")
