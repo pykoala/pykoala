@@ -69,7 +69,11 @@ class AstrometryCorrection(CorrectionBase):
             raise ArithmeticError("Input number of sources must be larger than 1")
 
         if object_name is not None:
-            reference_pos = SkyCoord.from_name(object_name)
+            try:
+                reference_pos = SkyCoord.from_name(object_name)
+            except Exception as e:
+                self.corr_print(e)
+                reference_pos = find_centroid_in_dc(data_set[0], **centroid_args)
         else:
             centroid_args['full_output'] = False
             reference_pos = find_centroid_in_dc(data_set[0], **centroid_args)
