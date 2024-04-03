@@ -21,8 +21,7 @@ import os
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.rss import RSS
 from pykoala.cubing import Cube
-from pykoala.ancillary import (centre_of_mass, cumulative_1d_moffat,
-                               flux_dens_conserving_interpolation, mask_lines)
+from pykoala.ancillary import (centre_of_mass, cumulative_1d_moffat, mask_lines)
 
 
 class FluxCalibration(CorrectionBase):
@@ -403,7 +402,8 @@ class FluxCalibration(CorrectionBase):
             if name[0] != 'f' or 'feige' in name:
                 name = 'f' + name
             all_names, all_files = self.list_available_stars(verbose=False)
-            matched_name = np.where(all_names == name, all_names)[0]
+            matched = np.where(all_names == name)[0]
+            matched_name = all_names[matched]
             if len(matched_name) > 0:
                 if len(matched_name) > 1:
                     self.corr_print("WARNING: More than one file found")
@@ -411,7 +411,7 @@ class FluxCalibration(CorrectionBase):
                                 f"\n Selecting {matched_name[-1]}")
                 path = os.path.join(os.path.dirname(__file__), '..',
                                     'input_data', 'spectrophotometric_stars',
-                                    matched_name[-1])
+                                    matched_name[-1] + ".dat")
                 self.calib_wave, self.calib_spectra = np.loadtxt(path, unpack=True, usecols=(0, 1))
             else:
                 raise FileNotFoundError("Calibration star: {} not found".format(name))
