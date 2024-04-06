@@ -83,7 +83,7 @@ class AstrometryCorrection(CorrectionBase):
             wcs_list = []
             centroid_list = []
 
-        self.corr_print("Reference star position: ", reference_pos)
+        self.corr_print("Reference position: ", reference_pos)
         offsets = []
         for data in data_set:
             if qc_plot:
