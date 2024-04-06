@@ -223,10 +223,10 @@ def find_centroid_in_dc(data_container, wave_range=None,
     image = image[subbox[0][0]:subbox[0][1],
                   subbox[1][0]: subbox[1][1]]
     # Mask bad values
-    image = interpolate_image_nonfinite(image)
-
+    # image = interpolate_image_nonfinite(image)
+    centroider_mask = ~ np.isfinite(image)
     # Find centroid
-    centroid_pixel  = np.array(centroider(image**com_power))
+    centroid_pixel  = np.array(centroider(image**com_power, centroider_mask))
     centroid_world = cube.wcs.celestial.pixel_to_world(*centroid_pixel)
     if not full_output:
         return centroid_world
