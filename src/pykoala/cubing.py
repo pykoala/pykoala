@@ -342,7 +342,7 @@ def build_wcs(datacube_shape, reference_position, spatial_pix_size,
     'CRVAL1': reference_position[1], 'NAXIS1': datacube_shape[1],
     'CTYPE2': 'DEC--TAN', 'CUNIT2': 'deg', 'CDELT2': spatial_pix_size, 'CRPIX2': datacube_shape[2] / 2,
     'CRVAL2': reference_position[2], 'NAXIS2': datacube_shape[2],
-    'CTYPE3': 'WAVE    ', 'CUNIT3': 'Angstrom', 'CDELT3': spectra_pix_size, 'CRPIX3': 0,
+    'CTYPE3': 'WAVE    ', 'CUNIT3': 'angstrom', 'CDELT3': spectra_pix_size, 'CRPIX3': 0,
     'CRVAL3': reference_position[0], 'NAXIS3': datacube_shape[0]}
     wcs = WCS(wcs_dict)
     return wcs
@@ -394,11 +394,12 @@ class Cube(DataContainer):
     def __init__(self, hdul=None, file_path=None, 
                  hdul_extensions_map=None, **kwargs):
 
-        if hdul is not None:
-            if hdul_extensions_map is None:
-                self.hdul_extensions_map = {"INTENSITY": "INTENSITY", "VARIANCE": "VARIANCE"}
-            else:
-                self.hdul_extensions_map = hdul
+        self.hdul = hdul
+        self.hdul_extensions_map = hdul_extensions_map
+
+        if self.hdul_extensions_map is None:
+            self.hdul_extensions_map = {"INTENSITY": "INTENSITY", "VARIANCE": "VARIANCE"}
+        if self.hdul is not None:
             print("[Cube] Initialising cube with input HDUL")
             self.hdul = hdul
         elif file_path is not None:
@@ -485,7 +486,7 @@ class Cube(DataContainer):
         pos = np.searchsorted(cumulative_intensity, frac)
         return cumulative_intensity[pos]
 
-    def get_white_image(self, wave_range=None, s_clip=3.0):
+    def get_white_image(self, wave_range=None, s_clip=3.0, frequency_density=False):
         """Create a white image."""
         if wave_range is not None and self.wavelength is not None:
             wave_mask = (self.wavelength >= wave_range[0]) & (self.wavelength <= wave_range[1])
@@ -502,31 +503,16 @@ class Cube(DataContainer):
         else:
             weights = np.ones_like(self.intensity[wave_mask])
 
-        white_image = np.nansum(self.intensity * weights, axis=0) / np.nansum(weights, axis=0)
+        if frequency_density:
+            freq_trans = self.wavelength**2 / 3e18
+        else:
+            freq_trans = np.ones_like(self.wavelength)
+
+        white_image = np.nansum(
+            self.intensity[wave_mask] * freq_trans[wave_mask, np.newaxis, np.newaxis] * weights, axis=0
+            ) / np.nansum(weights, axis=0)
         return white_image
 
-    def get_wcs(self):
-        """Create an astropy.wcs.WCS object using the cube properties."""
-        print("[Cube] Constructing WCS")
-        w = WCS(naxis=3)
-        w.wcs.crpix = [self.n_cols / 2, self.n_rows / 2,
-                       0]
-        w.wcs.cdelt = np.array([
-            self.info.get('pixel_size_arcsec', 1.0) / 3600,
-            self.info.get('pixel_size_arcsec', 1.0) / 3600,
-            np.diff(self.wavelength).mean()])
-        w.wcs.crval = [self.info.get('cen_ra', 0.0),
-                       self.info.get('cen_dec', 0.0),
-                       self.wavelength[0]]
-        w.wcs.ctype = ["RA---TAN", "DEC--TAN", "WAVE"]
-        self.wcs = w
-        print("[Cube] WCS: ", w)
-        return self.wcs
-
-    def wcs_metadata(self):
-        """Get the Cube WCS metadata"""
-        return self.get_wcs().to_header()
-    
     def to_fits(self, fname=None, primary_hdr_kw=None):
         """ TODO...
         include --
@@ -559,7 +545,7 @@ class Cube(DataContainer):
         # Create a list of HDU
         hdu_list = [primary]
         # Change headers for variance and INTENSITY
-        hdu_list.append(fits.ImageHDU(data=self.intensity, name='INTENSITY', header=self.wcs_metadata()))
+        hdu_list.append(fits.ImageHDU(data=self.intensity, name='INTENSITY', header=self.wcs.to_header()))
         hdu_list.append(fits.ImageHDU(data=self.variance, name='VARIANCE', header=hdu_list[-1].header))
         # Save fits
         hdul = fits.HDUList(hdu_list)
