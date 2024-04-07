@@ -522,7 +522,9 @@ class FluxCalibration(CorrectionBase):
             Data to be calibrated.
         """
 
-        assert data_container.is_corrected(self.name), "Data already calibrated"
+        if data_container.is_corrected(self.name):
+            print("Data already calibrated")
+            return data_container
 
         if response is None:
             if self.response is None:
@@ -537,7 +539,6 @@ class FluxCalibration(CorrectionBase):
                 response_units = self.response_units
         
         # Account for the DataContainer data dimensions
-        print(np.max(response))
         if type(data_container) is Cube:
             self.corr_print("Applying Flux Calibration to input Cube")
             response = response[:, np.newaxis, np.newaxis]
@@ -557,6 +558,7 @@ class FluxCalibration(CorrectionBase):
         # TODO Include response units in header
         if units is None:
             units = self.response_units
+        self.corr_print(f"Saving response function at :{fname}")
         np.savetxt(fname, np.array([wavelength, response]).T,
                    header='Spectral Response curve \n wavelength (AA), R ({} counts / [erg/s/cm2/AA])'
                    .format(1 / units))
