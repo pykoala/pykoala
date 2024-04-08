@@ -37,7 +37,7 @@ class CorrectionBase(ABC):
         if self.verbose:
             print("[Correction: {}] {}".format(self.name, msg), *args)
 
-    def log_correction(self, datacontainer, status='applied', **extra_kwargs):
+    def log_correction(self, datacontainer, status='applied', **extra_comments):
         """Log in the DataContainer the correction and additional info.
         
         Description
@@ -58,8 +58,8 @@ class CorrectionBase(ABC):
         if status != 'applied' and status != 'failed':
             raise KeyError("Correction log status can only be 'applied' or 'failed'")
         
-        datacontainer.log[self.name] = {'status': status}
-        for key, desc in extra_kwargs.items():
-            datacontainer.log[self.name][key] = desc
+        datacontainer.log(self.name, status, tag='correction')
+        for k, v in extra_comments.items():
+            datacontainer.log(self.name, k + " " + str(v), tag='correction')
 
         

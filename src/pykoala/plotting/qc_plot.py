@@ -112,12 +112,14 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
     mapax.imshow(mean_intensity, aspect='auto', interpolation='none',
                  origin='lower', cmap='cividis')
     # ------ Spectra -------
-    if cube.log is not None and 'FluxCalibration' in cube.log.keys():
-        units = 1 / float(cube.log['FluxCalibration']['units'])
-        units_label = r"(erg/s/cm2/AA)"
-    else:
-        units = 1.
-        units_label = '(ADU)'
+    units = 1.
+    units_label = '(counts)'
+    if cube.log is not None:
+        entries = cube.log.find_entry(title='FluxCalibration', comment='units')
+        for e in entries:
+            unit_str = e.comments.to_str(title=False).strip("units")
+            units = 1 / float(''.join(filter(str.isdigit, unit_str)))
+            units_label = ''.join(filter(str.isalpha, unit_str))
 
     pos_col = ['purple', 'orange', 'cyan']
     x_spaxel_idx = np.random.randint(low=0,
@@ -140,11 +142,12 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
         ax.axvline(wl, color=wl_col[i], zorder=-1, alpha=0.8)
     ax.axhline(0, alpha=0.2, color='r')
     ylim = np.nanpercentile(
-        cube.intensity[np.isfinite(cube.intensity)] * units, [40, 60])
-    ylim[1] *= 10
+        cube.intensity[np.isfinite(cube.intensity)] * units, [40, 95])
+    ylim[1] *= 20
     ylim[0] *= 0.1
-    ax.set_ylim()
-    ax.set_yscale('symlog', linthresh=1)
+    np.clip(ylim, a_min=0, a_max=None, out=ylim)
+    ax.set_ylim(ylim)
+    ax.set_yscale('symlog', linthresh=units * 0.1)
     ax.set_xlabel(r"Wavelength ($\AA$)")
     ax.set_ylabel("Flux " + units_label)
 

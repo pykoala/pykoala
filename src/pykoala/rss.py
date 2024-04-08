@@ -119,7 +119,7 @@ class RSS(DataContainer):
                                                              self.info["fib_dec"].copy())
         self.info["fib_ra"] = new_fib_coord[0]
         self.info["fib_dec"] = new_fib_coord[1]
-        self.log['update_coords'] = "Offset-coords updated"
+        self.log('update_coords', "Offset-coords updated")
         print("[RSS] Offset-coords updated")
 
     # =============================================================================

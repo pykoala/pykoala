@@ -410,7 +410,7 @@ class Cube(DataContainer):
 
         super(Cube, self).__init__(intensity=self.intensity,
                                    variance=self.variance,
-                                   info=info, **kwargs)
+                                   info=info, log=log, **kwargs)
         self.n_wavelength, self.n_rows, self.n_cols = self.intensity.shape
         self.get_wavelength()
 
@@ -435,12 +435,10 @@ class Cube(DataContainer):
     def parse_info_from_header(self):
         """Look into the primary header for pykoala information."""
         print("[Cube] Looking for information in the primary header")
-        self.info = {}
-        self.log = {'corrections': {}}
-        self.fill_info()
-        print("NOT IMPLEMENTED")
         # TODO
-        pass
+        self.info = {}
+        self.fill_info()
+        self.log.load_from_header(self.hdul[0])
 
     def load_hdul(self, path_to_file):
         print(f"[Cube] Loading HDUL {path_to_file}")

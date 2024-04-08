@@ -3,8 +3,7 @@ This module contains the parent class that represents the data used during the
 reduction process
 """
 
-from astropy.io import Header
-import numpy as np
+from astropy.io.fits import Header
 
 from pykoala.exceptions.exceptions import NoneAttrError
 
@@ -161,21 +160,26 @@ class HistoryLog(object):
                 else:
                     return True
         return False
-    
-    def get_tag(self, tag):
-        """Return all entries matching a given tag.
+
+    def find_entry(self, title='', comment='', tag=''):
+        """Return all entries matching a given title.
         
         Parameters
         ----------
-        - tag: (str)
-            Input tag used for the search
-
+        - title: (str, default='')
+            Entry title str.
+        - comment: (str, default='')
+            Entry comment str.
+        - tag: (str, default='')
+            Entry tag str.
         Returns
         -------
         - entries: (list)
-            List of entries associated to the input tag.
+            List of entries associated to the input title, comment and tag.
         """
-        return [entry for entry in self.log_entries if entry.tag == tag]
+        return [entry for entry in self.log_entries if (title in entry.title)
+         and (comment in entry.comments) and (tag in entry.tag)]
+
 
     def dump_to_header(self, header=None):
         """Write the log into a astropy.fits.Header.
@@ -277,18 +281,10 @@ class DataContainer(object):
         self.info = kwargs.get("info", dict())
         if self.info is None:
             self.info = dict()
-        self.log = kwargs.get("log", dict())
+        self.log = kwargs.get("log", HistoryLog())
         if self.log is None:
             self.log = dict()
         self.fill_info()
-    
-    def save_log(self):
-        #TODO
-        pass
-
-    def save_info(self):
-        #TODO
-        pass
 
     def fill_info(self):
         """Check the keywords of info and fills them with placeholders."""
@@ -305,18 +301,14 @@ class DataContainer(object):
             return False
 
     def is_corrected(self, correction):
-        if correction in self.log.keys():
-            if self.log[correction]['status'] == 'applied':
-                return True
+        """Check if a Correction has been applied by checking the HistoryLog."""
+        if self.log.is_entry(title=correction):
+            return True
         else:
             return False
 
     def dump_log_in_header(self, header):
-        for key, val in self.log.items():
-            if type(val) is dict:
-                for subkey, subval in val.items():
-                    header['_'.join((key, subkey))] = subval
-            else:
-                header[key] = val
-        return header
+        """Fill a FITS Header with the HistoryLog information."""
+        return self.log.dump_to_header(header)
+
 # Mr Krtxo \(ﾟ▽ﾟ)/
