@@ -51,7 +51,7 @@ class LogEntry(object):
         """Convert the entry into a string."""
         comments = "\n".join(self.comments)
         if title:
-            comments += f"{self.title}: "
+            comments = f"{self.title}: " + comments
         return comments
 
 class HistoryLog(object):
@@ -117,7 +117,7 @@ class HistoryLog(object):
                 entry = LogEntry(title=title, comments=comments, tag=tag)
             else:
                 raise NameError(
-                    "Unrecognisez input entry of type {entry.__class__}")
+                    "Unrecognized input entry of type {entry.__class__}")
             self.log_entries.append(entry)
 
     def log_entry(self, title, comments, tag=None):
