@@ -551,7 +551,7 @@ class FluxCalibration(CorrectionBase):
         data_container.intensity /= response
         data_container.variance /= response**2
         self.log_correction(data_container, status='applied',
-                            units=response_units)
+                            units=str(response_units) + ' counts / (erg/s/AA/cm2)')
         return data_container
 
     def save_response(self, fname, response, wavelength, units=None):
