@@ -115,9 +115,11 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
     units = 1.
     units_label = '(counts)'
     if cube.log is not None:
-        entries = cube.log.find_entry(title='FluxCalibration', comment='units')
+        entries = cube.log.find_entry(title='FluxCalibration', comment='units',
+                                      tag='correction')
+        print("Enrties found:", entries)
         for e in entries:
-            unit_str = e.comments.to_str(title=False).strip("units")
+            unit_str = e.to_str(title=False).strip("units")
             units = 1 / float(''.join(filter(str.isdigit, unit_str)))
             units_label = ''.join(filter(str.isalpha, unit_str))
 
