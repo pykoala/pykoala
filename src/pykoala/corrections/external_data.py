@@ -375,7 +375,7 @@ class AncillaryDataCorrection(CorrectionBase):
         ax.coords.grid(True, color='orange', ls='solid')
         ax.coords[0].set_format_unit('deg')
         mappable = ax.imshow(
-            -2.5 * np.log10(image['intensity'] / 3631 / image['pix_size']**2), **im_args)
+            -2.5 * np.log10(image['intensity'] / 3631 / image['pix_size']**2))
         plt.colorbar(mappable, ax=ax, label=r"$\rm \log_{10}(F_\nu / Jy / arcsec^2)$")
 
         ax.contour(np.log10(ref_image), transform=ax.get_transform(ref_wcs),
@@ -394,7 +394,7 @@ class AncillaryDataCorrection(CorrectionBase):
         ax.coords.grid(True, color='orange', ls='solid')
         ax.coords[0].set_format_unit('deg')
         mappable = ax.imshow(
-            -2.5 * np.log10(image['intensity'] / 3631 / image['pix_size']**2), **im_args)
+            -2.5 * np.log10(image['intensity'] / 3631 / image['pix_size']**2))
         plt.colorbar(mappable, ax=ax, label=r"$\rm \log_{10}(F_\nu / Jy / arcsec^2)$")
 
         ax.contour(np.log10(ref_image), transform=ax.get_transform(correc_wcs),
