@@ -240,8 +240,8 @@ class HistoryLog(object):
         if self.verbose:
             print("[Log] ", *mssg)
 
-    def __call__(self, title, comments):
-        self.log_entry(title, comments)
+    def __call__(self, *args, **kwargs):
+        self.log_entry(*args, **kwargs)
 
 
 class Parameter(object):
@@ -282,8 +282,6 @@ class DataContainer(object):
         if self.info is None:
             self.info = dict()
         self.log = kwargs.get("log", HistoryLog())
-        if self.log is None:
-            self.log = dict()
         self.fill_info()
 
     def fill_info(self):

@@ -392,8 +392,6 @@ class Cube(DataContainer):
     y_size_arcsec = None
 
     def __init__(self, hdul=None, file_path=None, 
-                 info=None,
-                 log=None,
                  hdul_extensions_map=None, **kwargs):
 
         if hdul is not None:
@@ -408,7 +406,7 @@ class Cube(DataContainer):
         self.get_wcs_from_header()
         super().__init__(intensity=self.intensity,
                          variance=self.variance,
-                         info=info, log=log, **kwargs)
+                         **kwargs)
         self.parse_info_from_header()
         self.n_wavelength, self.n_rows, self.n_cols = self.intensity.shape
         self.get_wavelength()
