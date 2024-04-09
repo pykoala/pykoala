@@ -403,14 +403,13 @@ class Cube(DataContainer):
                 self.hdul_extensions_map = hdul
             print("[Cube] Initialising cube with input HDUL")
             self.hdul = hdul
-            self.parse_info_from_header()
         elif file_path is not None:
             self.load_hdul(file_path)
         self.get_wcs_from_header()
-
-        super(Cube, self).__init__(intensity=self.intensity,
-                                   variance=self.variance,
-                                   info=info, log=log, **kwargs)
+        super().__init__(intensity=self.intensity,
+                         variance=self.variance,
+                         info=info, log=log, **kwargs)
+        self.parse_info_from_header()
         self.n_wavelength, self.n_rows, self.n_cols = self.intensity.shape
         self.get_wavelength()
 
@@ -436,9 +435,9 @@ class Cube(DataContainer):
         """Look into the primary header for pykoala information."""
         print("[Cube] Looking for information in the primary header")
         # TODO
-        self.info = {}
-        self.fill_info()
-        self.log.load_from_header(self.hdul[0])
+        #self.info = {}
+        #self.fill_info()
+        self.log.load_from_header(self.hdul[0].header)
 
     def load_hdul(self, path_to_file):
         print(f"[Cube] Loading HDUL {path_to_file}")
