@@ -59,7 +59,7 @@ class CorrectionBase(ABC):
             raise KeyError("Correction log status can only be 'applied' or 'failed'")
         
         datacontainer.log(self.name, status, tag='correction')
-        for k, v in extra_comments.items():
+        for (k, v) in extra_comments.items():
             datacontainer.log(self.name, k + " " + str(v), tag='correction')
 
         
