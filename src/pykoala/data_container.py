@@ -178,7 +178,7 @@ class HistoryLog(object):
             List of entries associated to the input title, comment and tag.
         """
         return [entry for entry in self.log_entries if (title in entry.title)
-         and (comment in entry.comments) and (tag in entry.tag)]
+         and (comment in entry.to_str(title=False)) and (tag in str(entry.tag))]
 
 
     def dump_to_header(self, header=None):
@@ -213,7 +213,7 @@ class HistoryLog(object):
         ----------
         - file: (str)
             Output file name.
-        
+
         Returns
         -------
         """
