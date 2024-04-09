@@ -148,8 +148,9 @@ class AstrometryCorrection(CorrectionBase):
             data_container.info['fib_ra'] += offset[0].to('deg').value
             data_container.info['fib_dec'] += offset[1].to('deg').value
 
-            self.log_correction(data_container, status='applied',
-                                offset=f"{offset[0].to('arcsec')}{offset[1].to('arcsec')}")
+            self.log_correction(
+                data_container, status='applied',
+                offset=f"{offset[0].to('arcsec')}{offset[1].to('arcsec')} arcsec")
         elif data_container.__class__ is Cube:
             pass
 

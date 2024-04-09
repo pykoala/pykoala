@@ -17,6 +17,7 @@ from astropy.wcs import WCS
 # KOALA packages
 # =============================================================================
 from pykoala.ancillary import vprint, rss_info_template  # Template to create the info variable 
+from pykoala.data_container import HistoryLog
 from pykoala.rss import RSS
 
 def airmass_from_header(header):
@@ -124,13 +125,7 @@ def read_rss(file_path,
     """TODO."""
     # Blank dictionary for the log
     if log is None:
-        log = {'read': {'comment': None, 'index': None},
-               'mask from file': {'comment': None, 'index': 0},
-               'blue edge': {'comment': None, 'index': 1},
-               'red edge': {'comment': None, 'index': 2},
-               'cosmic': {'comment': None, 'index': 3},
-               'extreme negative': {'comment': None, 'index': 4},
-               'wavelength fix': {'comment': None, 'index': None, 'sol': []}}
+        log = HistoryLog()
     if header is None:
         # Blank Astropy Header object for the RSS header
         # Example how to add header value at the end
@@ -144,6 +139,7 @@ def read_rss(file_path,
 
     #  Open fits file. This assumes that RSS objects are written to file as .fits.
     with fits.open(file_path) as rss_fits:
+        log('read', ' '.join(['- RSS read from ', file_name]))
         # Read intensity using rss_fits_file[0]
         all_intensities = np.array(rss_fits[intensity_axis].data, dtype=np.float32)
         intensity = np.delete(all_intensities, bad_fibres_list, 0)
@@ -168,9 +164,6 @@ def read_rss(file_path,
     nrow, ncol = wcs.array_shape
     wavelength_index = np.arange(ncol)
     wavelength = wcs.dropaxis(1).wcs_pix2world(wavelength_index, 0)[0]
-    # log
-    comment = ' '.join(['- RSS read from ', file_name])
-    log['read']['comment'] = comment
     # First Header value added by the PyKoala routine
     header.append(('DARKCORR', 'OMIT', 'Dark Image Subtraction'), end=True)
 
