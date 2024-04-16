@@ -47,6 +47,31 @@ class BackgroundEstimator:
         background_sigma = 1.4826 * mad
         return background, background_sigma
 
+    def linear(data, axis=0):
+        """Background estimator from linear fit (Work in progress)."""
+        print('>>> LINEAR FIT (WARNING: work in progress!)')
+        if data.ndim < 2:
+            raise ValueError("Dataset must have at least two dimensions")
+        else:
+            wl_axis = -1
+            axis = np.asarray(axis)
+            for ax in range(data.ndim):
+                if ax not in axis:
+                    wl_axis = ax
+            n_wavelength = data.shape[wl_axis]
+            n_spectra = data.size // n_wavelength
+            if wl_axis == 0:
+                spectra = data.reshape((n_wavelength, n_spectra))
+            elif wl_axis == data.ndim -1:
+                spectra = data.reshape((n_spectra, n_wavelength)).T
+            else:
+                raise ValueError('Wavelength axis not found!')
+        plow, background, pup = np.nanpercentile(spectra, [16, 50, 84], axis=1)
+        background_sigma = (pup - plow) / 2
+        print('>>>', data.shape, spectra.shape, background.shape)
+        total_flux = np.nansum(spectra)
+        return background, background_sigma
+        
     def mode(data, axis=0, n_bins=None, bin_range=None):
         #TODO
         raise NotImplementedError("Sorry not implemented :(")
