@@ -7,6 +7,7 @@ sky module containing...TODO
 import numpy as np
 import copy
 import os
+from time import time
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import scipy
@@ -15,6 +16,9 @@ import scipy
 # =============================================================================
 from astropy.io import fits
 from astropy.modeling import models, fitting
+from astropy.table import Table
+from astropy import stats
+from astropy import units as u
 # =============================================================================
 # KOALA packages
 # =============================================================================
@@ -22,6 +26,7 @@ from astropy.modeling import models, fitting
 from koala.ancillary import vprint
 from koala.exceptions.exceptions import TelluricNoFileError
 from koala.corrections.correction import CorrectionBase
+from koala.data_container import DataContainer
 from koala.rss import RSS
 from koala.cubing import Cube
 # Original
@@ -82,14 +87,85 @@ class BackgroundEstimator:
 # =============================================================================
 class ContinuumEstimator:
     # TODO: refactor and homogeneize
+    
     def medfilt_continuum(data, window_size=5):
         continuum = scipy.signal.medfilt(data, window_size)
         return continuum
 
+    
     def pol_continuum(data, wavelength, pol_order=3, **polfit_kwargs):
         fit = np.polyfit(data, wavelength, pol_order, **polfit_kwargs)
         polynomial = np.poly1d(fit)
         return polynomial(wavelength)
+
+    
+    default_min_separation = 10
+    @classmethod
+    def lower_envelope(self, x, y, min_separation=None):
+        '''
+        Fit lower envelope of a single spectrum:
+        1) Find local minima, with a minimum separation `min_separation`.
+        2) Interpolate linearly between them.
+        3) Add "typical" (~median) offset.
+        '''
+        if min_separation is None:
+            min_separation = self.default_min_separation
+        valleys = []
+        y[np.isnan(y)] = np.inf
+        for i in range(min_separation, y.size-min_separation-1):
+            if np.argmin(y[i-min_separation:i+min_separation+1]) == min_separation:
+                valleys.append(i)
+        y[~np.isfinite(y)] = np.nan
+
+        continuum = np.fmin(y, np.interp(x, x[valleys], y[valleys]))
+
+        offset = y - continuum
+        offset = np.nanpercentile(offset[offset > 0], np.linspace(1, 50, 51))
+        density = (np.arange(offset.size) + 1) / offset
+        offset = np.median(offset[density > np.max(density)/2])
+
+        return continuum+offset, offset
+
+
+class ContinuumModel:
+
+    def __init__(self, dc:DataContainer, min_separation=None):
+        self.update(dc, min_separation)
+        
+        
+    # TODO: Don't assume RSS format (intensity[spec_id, wavelength])
+    #       def update(self, dc:DataContainer, min_separation=None):
+    def update(self, dc:RSS, min_separation=None):
+        n_spectra = dc.intensity.shape[0]
+        self.intensity = np.zeros_like(dc.intensity)
+        self.scale = np.zeros(n_spectra)
+        
+        print(f"> Find continuum for {n_spectra} spectra:")
+        t0 = time()
+
+        for i in range(n_spectra):
+            self.intensity[i], self.scale[i] = ContinuumEstimator.lower_envelope(dc.wavelength, dc.intensity[i], min_separation)
+
+        print(f"  Done ({time()-t0:.3g} s)")
+        self.strong_sky_lines = self.detect_lines(dc)
+
+
+    def detect_lines(self, dc:DataContainer, n_sigmas=3):
+        SN = (dc.intensity - self.intensity) / self.scale[:, np.newaxis]
+        SN_p16, SN_p50, SN_p84 = np.nanpercentile(SN, [16, 50, 84], axis=0)
+
+        line_mask = SN_p16 - (n_sigmas-1)*(SN_p84-SN_p16)/2 > 0
+        line_mask[0] = False
+        line_mask[-1] = False
+
+        line_left = np.where(~line_mask[:-1] & line_mask[1:])[0]
+        line_right = np.where(line_mask[:-1] & ~line_mask[1:])[0]
+        line_right += 1
+        print(f'  {line_left.size} strong sky lines ({np.count_nonzero(line_mask)} out of {dc.wavelength.size} wavelengths)')
+        return Table((line_left, line_right), names=('left', 'right'))
+        
+    
+    
 
 # =============================================================================
 # Sky lines library
@@ -758,6 +834,66 @@ def combine_telluric_corrections(list_of_telcorr, ref_wavelength):
 
     telluric_correction = np.nanmedian(telluric_corrections, axis=0)
     return TelluricCorrection(telluric_correction=telluric_correction, wavelength=ref_wavelength, verbose=False)
-    
-        
+
+
+
+# =============================================================================
+# Self-calibration based on strong sky lines
+# =============================================================================
+class SkySelfCalibration(CorrectionBase):
+    """Wavelength calibration, throughput, and sky model based on strong sky lines."""
+    name = "SkySelfCalibration"
+    verbose = True
+
+    # TODO: Don't assume RSS format (intensity[spec_id, wavelength])
+    #       def __init__(self, dc:DataContainer, continuum:ContinuumModel):
+    def __init__(self, dc:RSS):
+        self.update(dc)
+
+    def update(self, dc:RSS):
+        self.dc = dc
+        self.biweight_sky(dc)
+        self.update_sky_lines(dc)
+
+
+    # TODO: use SkyModel as an argument to update()?
+    def biweight_sky(self, dc):
+        self.wavelength = dc.wavelength.to_value(u.Angstrom)
+        self.sky_intensity = stats.biweight.biweight_location(dc.intensity, axis=0)
+
+
+    def update_sky_lines(self, dc):
+        sky_cont, sky_err = ContinuumEstimator.lower_envelope(self.wavelength, self.sky_intensity)#, min_separation)
+        sky_lines = self.sky_intensity - sky_cont
+
+        self.continuum = ContinuumModel(dc)
+        self.continuum.strong_sky_lines.add_column(0., name='sky_wavelength')
+        self.continuum.strong_sky_lines.add_column(0., name='sky_intensity')
+        for line in self.continuum.strong_sky_lines:
+            wavelength = self.wavelength[line['left']:line['right']]
+            spectrum = sky_lines[line['left']:line['right']]
+            weight = spectrum
+            line['sky_wavelength'] = np.nansum(weight*wavelength) / np.nansum(weight)
+            line['sky_intensity'] = np.nanmean(spectrum)
+
+    def measure_lines(self, spec_id):
+        intensity = self.dc.intensity[spec_id]
+        continuum = self.continuum.intensity[spec_id]
+        line_wavelength = np.zeros(len(self.continuum.strong_sky_lines))
+        line_intensity = np.zeros(len(self.continuum.strong_sky_lines))
+        for i, line in enumerate(self.continuum.strong_sky_lines):
+            section_wavelength = self.wavelength[line['left']:line['right']]
+            section_intensity = (intensity - continuum)[line['left']:line['right']]
+            weight = section_intensity
+            line_wavelength[i] = np.nansum(weight*section_wavelength) / np.nansum(weight)
+            line_intensity[i] = np.nanmean(section_intensity)
+        return line_wavelength, line_intensity
+
+
+    def apply(self, rss, verbose=True, is_combined_cube=False, update=True):
+        # Set print verbose
+        self.verbose = verbose
+
+
+# =============================================================================
 # Mr Krtxo \(ﾟ▽ﾟ)/
