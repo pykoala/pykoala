@@ -218,12 +218,14 @@ class AncillaryDataCorrection(CorrectionBase):
         -------
         """
         self.corr_print("Querying image to external database")
+        # TODO: Include more options
         if survey != 'PS':
             raise NotImplementedError("Currently only PS queries available")
 
         im_pos, im_fov = self.get_dc_sky_footprint()
         im_pixel_size = int(
-            (np.max(im_fov) * 3600 + im_extra_size_arcsec)/ PSQuery.pixelsize_arcsec)
+            (np.max(im_fov) * 3600 + im_extra_size_arcsec
+             ) / PSQuery.pixelsize_arcsec)
         self.corr_print("Image center sky position (RA, DEC): ", im_pos)
         self.corr_print("Image size (pixels): ", im_pixel_size)
         tab = PSQuery.getimage(*im_pos, size=im_pixel_size, filters=filters)
@@ -244,32 +246,73 @@ class AncillaryDataCorrection(CorrectionBase):
             filename = PSQuery.download_image(row['url'], fname=output)
             if filename is not None:
                 intensity, wcs = PSQuery.read_ps_fits(filename)
-                self.images[f"PANSTARRS_PS1.{row['filter']}"] = {"intensity": intensity, "wcs":wcs,
-                                                                 "pix_size": PSQuery.pixelsize_arcsec}
+                self.images[f"PANSTARRS_PS1.{row['filter']}"] = {
+                    "intensity": intensity, "wcs":wcs,
+                    "pix_size": PSQuery.pixelsize_arcsec}
 
-    def get_dc_aperture_fluxes(self, dc_flux_units=None, aperture_diameter=1.25, sample_every=2):
-        """Compute aperture fluxes from the DataContainers"""
+    def get_dc_aperture_fluxes(self, filter_names, dc_intensity_units=None,
+                               aperture_diameter=1.25, sample_every=2):
+        """Compute aperture fluxes from the DataContainers
+        
+        Description
+        -----------
+        This method computes a set of aperture fluxes from an input data container.
+        If the input DC is a Cube, a grid of equally-spaced apertures will be
+        computed. If the input DC is a RSS, the fibre positions will be used as
+        reference apertures.
+
+        Parameters
+        ----------
+        - filter_names: list
+            A list of filter names to initialise a list of
+            `pst.observables.Filter` objects.
+        - dc_intensity_units: `astropy.units.Quantity`, default=1e-16 erg/s/AA/cm2
+            Intensity units of the DC.
+        - aperture_diameter: float
+            Diameter size of the circular apertures. In the case of an RSS, this
+            will match the size of the fibres.
+        - sample_every: int, default=2
+            Spatial aperture sampling in units of the aperture radius. If
+            `sample_every=2`, the aperture will be defined every two aperture
+            diameters in the image.
+
+        Returns
+        -------
+        - ref_data: dict
+            A dictionary containing the results of the computation
+            - synth_photo: The synthetic photometry of the DC, it can be a list
+            of fluxes (if the input DC is a RSS) or an image (if DC is a Cube).
+            For more details, see the method `get_synthetic_photometry`.
+            - synth_photo_err: Associated error fo `synth_photo`.
+            - wcs: WCS of the DC. If the DC is a RSS it will be None.
+            - coordinates: Celestial position of the apertures stored as a list
+            of `astropy.coordinates.Skycoord`.
+            - aperture_mask: A mask for invalid aperture fluxes.
+            - figs: A list of QC figures showing the .
+        """
         try:
             from pst.observables import Filter
         except:
             raise ImportError("PST package not found")
-        if dc_flux_units is None:
-            dc_flux_units= 1e-16 * u.erg / u.s / u.cm**2 / u.angstrom
+        if dc_intensity_units is None:
+            dc_intensity_units= 1e-16 * u.erg / u.s / u.cm**2 / u.angstrom
+
         self.ref_data = {}
-        for query_filter in self.images.keys():
-            self.ref_data[query_filter] = {'synth_photo': [], 'synth_photo_err': [],
-                                           'wcs': [],
-                                           'coordinates': [], 'aperture_flux': [],
-                                           'aperture_flux_err': [],
-                                           'aperture_mask': [],
-                                           'figs': []}
-            photometric_filter = Filter(filter_name=query_filter)
+        for photo_filter in filter_names:
+            self.ref_data[photo_filter] = {
+                'synth_photo': [], 'synth_photo_err': [],
+                'wcs': [],
+                'coordinates': [], 'aperture_flux': [],
+                'aperture_flux_err': [],
+                'aperture_mask': [],
+                'figs': []}
+            photometric_filter = Filter(filter_name=photo_filter)
+            # Compute the synthetic photometry on each DC
             for dc in self.data_containers:
                 synth_photo, synth_photo_err = self.get_synthetic_photometry(
-                    photometric_filter, dc, dc_flux_units)
-                self.ref_data[query_filter]['synth_photo'].append(synth_photo)
-                self.ref_data[query_filter]['wcs'].append(dc.wcs.celestial.deepcopy())
-                self.ref_data[query_filter]['synth_photo_err'].append(synth_photo_err)
+                    photometric_filter, dc, dc_intensity_units)
+                self.ref_data[photo_filter]['synth_photo'].append(synth_photo)
+                self.ref_data[photo_filter]['synth_photo_err'].append(synth_photo_err)
                 if isinstance(dc, Cube):
                     self.corr_print(
                         "Computing aperture fluxes using Cube synthetic photometry")
@@ -292,37 +335,66 @@ class AncillaryDataCorrection(CorrectionBase):
                         reference_table.center_aper_area.value)
                     # Compute standard error from the std
                     flux_in_ap_err = reference_table.sum_err
+                    self.ref_data[photo_filter]['wcs'].append(dc.wcs.celestial.deepcopy())
                 elif isinstance(dc, RSS):
                     self.corr_print("Using RSS synthetic photometry as apertures")
                     coordinates = SkyCoord(dc.info['fib_ra'], dc.info['fib_dec'])
                     flux_in_ap, flux_in_ap_err = synth_photo, synth_photo_err
+                    self.ref_data[photo_filter]['wcs'].append(None)
+
+                # Make a QC plot of the apertures
                 fig = self.make_plot_apertures(
-                    dc, synth_photo, synth_photo_err, coordinates, flux_in_ap, flux_in_ap_err)
-                self.ref_data[query_filter]['figs'].append(fig)
-                self.ref_data[query_filter]['coordinates'].append(coordinates)
-                self.ref_data[query_filter]['aperture_flux'].append(flux_in_ap)
-                self.ref_data[query_filter]['aperture_flux_err'].append(flux_in_ap_err)
-                self.ref_data[query_filter]['aperture_mask'].append(
+                    dc, synth_photo, synth_photo_err, coordinates, flux_in_ap,
+                    flux_in_ap_err)
+                # Store the results
+                self.ref_data[photo_filter]['figs'].append(fig)
+                self.ref_data[photo_filter]['coordinates'].append(coordinates)
+                self.ref_data[photo_filter]['aperture_flux'].append(flux_in_ap)
+                self.ref_data[photo_filter]['aperture_flux_err'].append(flux_in_ap_err)
+                self.ref_data[photo_filter]['aperture_mask'].append(
                     np.isfinite(flux_in_ap) & np.isfinite(flux_in_ap_err))
         return self.ref_data
     
-    def get_synthetic_photometry(self, filter, dc, dc_flux_units):
-        """Compute synthetic photometry using a DataContainer."""
+    def get_synthetic_photometry(self, filter, dc, dc_intensity_units):
+        """Compute synthetic photometry from a DataContainer.
+        
+        Description
+        -----------
+        This method extracts synthetic photometry using the spectral information
+        of a DataContainer.
+
+        Parameters
+        ----------
+        - filter: `pst.observables.Filter`
+            A Filter for computing the synthetic photometry from the spectra.
+        - dc: `DataContainer`
+            The input `DataContainer`.
+        - dc_intensity_units: `astropy.units.Quantity`
+            The units of the intensity of the DC.
+
+        Returns
+        -------
+        - synth_phot: `np.ndarray`
+            Array containing the flux estimates expressed in Jy.
+        - synth_phot_err:
+            Array containing the error associated to the flux estimate.
+        """
+        # interpolate the filter response curve to the DC wavelength grid.
         filter.interpolate(dc.wavelength)
         if isinstance(dc, Cube):
-            rss_intensity = dc.intensity.reshape(
+            spx_intensity = dc.intensity.reshape(
                     dc.intensity.shape[0], dc.intensity.shape[1] * dc.intensity.shape[2])
-            rss_var = dc.variance.reshape(rss_intensity.shape)
-            synth_photo = np.full(rss_intensity.shape[1], fill_value=np.nan)
-            synth_photo_err = np.full(rss_intensity.shape[1], fill_value=np.nan)
-            for ith, (intensity, var) in enumerate(zip(rss_intensity.T, rss_var.T)):
+            spx_var = dc.variance.reshape(spx_intensity.shape)
+            synth_photo = np.full(spx_intensity.shape[1], fill_value=np.nan)
+            synth_photo_err = np.full(spx_intensity.shape[1], fill_value=np.nan)
+            for ith, (intensity, var) in enumerate(zip(spx_intensity.T, spx_var.T)):
                 mask = np.isfinite(intensity) & np.isfinite(var)
                 if not mask.any():
                     continue
-                f_nu, f_nu_err = filter.get_fnu(intensity * dc_flux_units,
-                                                            var**0.5 * dc_flux_units)
-                synth_photo[ith] = f_nu.value
-                synth_photo_err[ith] = f_nu_err.value
+                f_nu, f_nu_err = filter.get_fnu(intensity * dc_intensity_units,
+                                                var**0.5 * dc_intensity_units)
+                synth_photo[ith] = f_nu.to('Jy').value
+                synth_photo_err[ith] = f_nu_err.to('Jy').value
             synth_photo = synth_photo.reshape(dc.intensity.shape[1:])
             synth_photo_err = synth_photo_err.reshape(dc.intensity.shape[1:])
         elif isinstance(dc, RSS):
@@ -332,14 +404,21 @@ class AncillaryDataCorrection(CorrectionBase):
                 mask = np.isfinite(intensity) & np.isfinite(var)
                 if not mask.any():
                     continue
-                f_nu, f_nu_err = filter.get_fnu(intensity * dc_flux_units,
-                                                            var**0.5 * dc_flux_units)
+                f_nu, f_nu_err = filter.get_fnu(intensity * dc_intensity_units,
+                                                            var**0.5 * dc_intensity_units)
                 synth_photo[ith] = f_nu.value
                 synth_photo_err[ith] = f_nu_err.value
 
         return synth_photo, synth_photo_err
 
-    def make_plot_apertures(self, dc, synth_phot, synth_phot_err, ap_coords, ap_flux, ap_flux_err):
+    def make_plot_apertures(self, dc, synth_phot, synth_phot_err, ap_coords,
+                            ap_flux, ap_flux_err):
+        """Plot the synthetic aperture fluxes measured from a DC.
+        
+        Description
+        -----------
+        This method creates a plot showing the synth
+        """
         if isinstance(dc, Cube):
             fig, axs = plt.subplots(ncols=2, nrows=2, sharex=True, sharey=True,
                                     subplot_kw={'projection': dc.wcs.celestial},
@@ -366,6 +445,9 @@ class AncillaryDataCorrection(CorrectionBase):
                 ax.coords.grid(True, color='orange', ls='solid')
                 ax.coords[0].set_format_unit('deg')
             plt.close(fig)
+        elif isinstance(dc, RSS):
+            pass
+
         return fig
     
     def make_plot_astrometry_offset(self, ref_image, ref_wcs, image, results):
