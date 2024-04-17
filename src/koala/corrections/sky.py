@@ -16,7 +16,7 @@ import scipy
 # =============================================================================
 from astropy.io import fits
 from astropy.modeling import models, fitting
-from astropy.table import Table
+from astropy.table import QTable
 from astropy import stats
 from astropy import units as u
 # =============================================================================
@@ -162,10 +162,41 @@ class ContinuumModel:
         line_right = np.where(line_mask[:-1] & ~line_mask[1:])[0]
         line_right += 1
         print(f'  {line_left.size} strong sky lines ({np.count_nonzero(line_mask)} out of {dc.wavelength.size} wavelengths)')
-        return Table((line_left, line_right), names=('left', 'right'))
+        return QTable((line_left, line_right), names=('left', 'right'))
         
     
+# =============================================================================
+# Line Spread Function
+# =============================================================================
+
+class LSF_estimator:
     
+    def __init__(self, wavelength_range, resolution):
+        self.delta_lambda = np.linspace(-wavelength_range, wavelength_range, int(np.ceil(2 * wavelength_range / resolution)) + 1)
+
+    def find_LSF(self, line_wavelengths, wavelength, intensity):
+        line_spectra = np.zeros((len(line_wavelengths), self.delta_lambda.size))
+        for i, line_wavelength in enumerate(line_wavelengths):
+            sed = np.interp(line_wavelength + self.delta_lambda, wavelength, intensity)
+            line_spectra[i] = self.normalise(sed)
+        return self.normalise(np.nanmedian(line_spectra, axis=0))
+
+    def normalise(self, x):
+        x -= stats.biweight.biweight_location(x) # subtract continuum
+        #x -= np.median(x)
+        norm = x[x.size//2] # normalise at centre
+        if norm > 0:
+            x /= norm
+        else:
+            x *= np.nan
+        return x
+
+    def find_FWHM(self, profile):
+        threshold = np.max(profile)/2
+        left = np.max(self.delta_lambda[(self.delta_lambda < 0) & (profile < threshold)])
+        right = np.min(self.delta_lambda[(self.delta_lambda > 0) & (profile < threshold)])
+        return right-left
+
 
 # =============================================================================
 # Sky lines library
@@ -852,42 +883,67 @@ class SkySelfCalibration(CorrectionBase):
 
     def update(self, dc:RSS):
         self.dc = dc
-        self.biweight_sky(dc)
-        self.update_sky_lines(dc)
+        self.biweight_sky()
+        self.update_sky_lines()
+        self.calibrate()
 
 
     # TODO: use SkyModel as an argument to update()?
-    def biweight_sky(self, dc):
-        self.wavelength = dc.wavelength.to_value(u.Angstrom)
-        self.sky_intensity = stats.biweight.biweight_location(dc.intensity, axis=0)
+    def biweight_sky(self):
+        #self.wavelength = self.dc.wavelength.to_value(u.Angstrom)
+        self.sky_intensity = stats.biweight.biweight_location(self.dc.intensity, axis=0)
 
 
-    def update_sky_lines(self, dc):
-        sky_cont, sky_err = ContinuumEstimator.lower_envelope(self.wavelength, self.sky_intensity)#, min_separation)
+    def update_sky_lines(self):
+        sky_cont, sky_err = ContinuumEstimator.lower_envelope(self.dc.wavelength, self.sky_intensity)#, min_separation)
         sky_lines = self.sky_intensity - sky_cont
 
-        self.continuum = ContinuumModel(dc)
-        self.continuum.strong_sky_lines.add_column(0., name='sky_wavelength')
+        self.continuum = ContinuumModel(self.dc)
+        self.continuum.strong_sky_lines.add_column(0.*u.Angstrom, name='sky_wavelength')
         self.continuum.strong_sky_lines.add_column(0., name='sky_intensity')
         for line in self.continuum.strong_sky_lines:
-            wavelength = self.wavelength[line['left']:line['right']]
+            wavelength = self.dc.wavelength[line['left']:line['right']]
             spectrum = sky_lines[line['left']:line['right']]
-            weight = spectrum
+            weight = spectrum**2
             line['sky_wavelength'] = np.nansum(weight*wavelength) / np.nansum(weight)
             line['sky_intensity'] = np.nanmean(spectrum)
+
+
+    # TODO: Don't assume RSS format (intensity[spec_id, wavelength])
+    def calibrate(self):
+        n_spectra = self.dc.intensity.shape[0]
+        self.wavelength_offset = np.zeros(n_spectra) * self.dc.wavelength[0] # dirty hack to specify units
+        self.wavelength_offset_err = np.zeros_like(self.wavelength_offset)
+        self.relative_throughput = np.zeros(n_spectra)
+        self.relative_throughput_err = np.zeros(n_spectra)
+        print(f"> Calibrating for {n_spectra} spectra:")
+        t0 = time()
+        for spec_id in range(n_spectra):
+            line_wavelength, line_intensity = self.measure_lines(spec_id)
+            y = line_wavelength - self.continuum.strong_sky_lines['sky_wavelength']
+            self.wavelength_offset[spec_id] = stats.biweight.biweight_location(y)
+            self.wavelength_offset_err[spec_id] = stats.biweight.biweight_scale(y)
+            y = line_intensity / self.continuum.strong_sky_lines['sky_intensity']
+            self.relative_throughput[spec_id] = stats.biweight.biweight_location(y)
+            self.relative_throughput_err[spec_id] = stats.biweight.biweight_scale(y)
+        print(f"  Done ({time()-t0:.3g} s)")
+
 
     def measure_lines(self, spec_id):
         intensity = self.dc.intensity[spec_id]
         continuum = self.continuum.intensity[spec_id]
-        line_wavelength = np.zeros(len(self.continuum.strong_sky_lines))
-        line_intensity = np.zeros(len(self.continuum.strong_sky_lines))
+        sky_wavelength = self.continuum.strong_sky_lines['sky_wavelength'].to_value(u.Angstrom)
+        line_wavelength = np.zeros_like(sky_wavelength)
+        sky_intensity = self.continuum.strong_sky_lines['sky_intensity']
+        line_intensity = np.zeros_like(sky_intensity)
+        wavelength = self.dc.wavelength.to_value(u.Angstrom)
         for i, line in enumerate(self.continuum.strong_sky_lines):
-            section_wavelength = self.wavelength[line['left']:line['right']]
+            section_wavelength = wavelength[line['left']:line['right']]
             section_intensity = (intensity - continuum)[line['left']:line['right']]
-            weight = section_intensity
+            weight = section_intensity**2
             line_wavelength[i] = np.nansum(weight*section_wavelength) / np.nansum(weight)
             line_intensity[i] = np.nanmean(section_intensity)
-        return line_wavelength, line_intensity
+        return line_wavelength*u.Angstrom, line_intensity
 
 
     def apply(self, rss, verbose=True, is_combined_cube=False, update=True):
