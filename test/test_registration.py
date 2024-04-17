@@ -1,7 +1,7 @@
 from gaussian_rss import koala_gauss_rss
 from matplotlib import pyplot as plt
-from koala.register import registration
-from koala.cubing import build_cube
+from pykoala.register import registration
+from pykoala.cubing import build_cube
 
 ### Create a set of KOALA RSS
 

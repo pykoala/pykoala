@@ -1,0 +1,132 @@
+#For documentation see: https://matplotlib.org/users/customizing.html
+
+# Author: M. Knabenhans
+# Date: June 29, 2018
+
+# Remark: This style sheet is based on the original matplotlibrc (e.g. found on the above mentioned web page).
+
+### LINES
+# See http://matplotlib.org/api/artist_api.html#module-matplotlib.lines for more
+# information on line properties.
+lines.linewidth   : 1.5			# line width in points
+
+### FONT
+#
+# font properties used by text.Text.  See
+# http://matplotlib.org/api/font_manager_api.html for more
+# information on font properties.  The 6 font properties used for font
+# matching are given below with their default values.
+#
+# The font.family property has five values: 'serif' (e.g., Times),
+# 'sans-serif' (e.g., Helvetica), 'cursive' (e.g., Zapf-Chancery),
+# 'fantasy' (e.g., Western), and 'monospace' (e.g., Courier).  Each of
+# these font families has a default list of font names in decreasing
+# order of priority associated with them.  When text.usetex is False,
+# font.family may also be one or more concrete font names.
+#
+# The font.style property has three values: normal (or roman), italic
+# or oblique.  The oblique style will be used for italic, if it is not
+# present.
+#
+# The font.variant property has two values: normal or small-caps.  For
+# TrueType fonts, which are scalable fonts, small-caps is equivalent
+# to using a font size of 'smaller', or about 83%% of the current font
+# size.
+#
+# The font.weight property has effectively 13 values: normal, bold,
+# bolder, lighter, 100, 200, 300, ..., 900.  Normal is the same as
+# 400, and bold is 700.  bolder and lighter are relative values with
+# respect to the current weight.
+#
+# The font.stretch property has 11 values: ultra-condensed,
+# extra-condensed, condensed, semi-condensed, normal, semi-expanded,
+# expanded, extra-expanded, ultra-expanded, wider, and narrower.  This
+# property is not currently implemented.
+#
+# The font.size property is the default font size for text, given in pts.
+# 10 pt is the standard value.
+#
+font.family         : serif
+font.style          : italic
+font.variant        : normal
+font.weight         : medium
+font.stretch        : normal
+# note that font.size controls default text sizes.  To configure
+# special text sizes tick labels, axes, labels, title, etc, see the rc
+# settings for axes and ticks. Special text sizes can be defined
+# relative to font.size, using the following values: xx-small, x-small,
+# small, medium, large, x-large, xx-large, larger, or smaller
+font.size            : 14.0
+font.serif           : Times
+
+### LaTeX customizations. See http://wiki.scipy.org/Cookbook/Matplotlib/UsingTex
+text.usetex         : True  # use latex for all text handling. The following fonts
+                              # are supported through the usual rc parameter settings:
+                              # new century schoolbook, bookman, times, palatino,
+                              # zapf chancery, charter, serif, sans-serif, helvetica,
+                              # avant garde, courier, monospace, computer modern roman,
+                              # computer modern sans serif, computer modern typewriter
+                              # If another font is desired which can loaded using the
+                              # LaTeX \usepackage command, please inquire at the
+                              # matplotlib mailing list
+
+text.latex.preamble : \usepackage{mathptmx} # IMPROPER USE OF THIS FEATURE WILL LEAD TO LATEX FAILURES
+                            # AND IS THEREFORE UNSUPPORTED. PLEASE DO NOT ASK FOR HELP
+                            # IF THIS FEATURE DOES NOT DO WHAT YOU EXPECT IT TO.
+                            # preamble is a comma separated list of LaTeX statements
+                            # that are included in the LaTeX document preamble.
+                            # An example:
+                            # text.latex.preamble : \usepackage{bm},\usepackage{euler}
+                            # The following packages are always loaded with usetex, so
+                            # beware of package collisions: color, geometry, graphicx,
+                            # type1cm, textcomp. Adobe Postscript (PSSNFS) font packages
+                            # may also be loaded, depending on your font settings
+
+
+### FIGURE
+figure.figsize   	 : 6.973848069738481, 4.310075139476229 ## figure size in inche
+figure.subplot.hspace: 0.15
+figure.subplot.wspace: 0.15
+
+### IMAGES
+image.cmap			: viridis
+### AXES
+# default face and edge color, default tick sizes,
+# default fontsizes for ticklabels, and so on.  See
+# http://matplotlib.org/api/axes_api.html#module-matplotlib.axes
+axes.linewidth      : 0.85     # edge linewidth
+axes.grid           : True   # display grid or not
+
+axes.xmargin        : .05  # x margin.  See `axes.Axes.margins`
+axes.ymargin        : .05  # y margin See `axes.Axes.margins`
+
+### TICKS
+# see http://matplotlib.org/api/axis_api.html#matplotlib.axis.Tick
+xtick.top            : True   # draw ticks on the top side
+xtick.bottom         : True   # draw ticks on the bottom side
+xtick.major.size     : 7      # major tick size in points
+xtick.minor.size     : 4      # minor tick size in points
+xtick.major.width    : 0.5    # major tick width in points
+xtick.minor.width    : 0.35    # minor tick width in points
+xtick.direction      : inout    # direction: in, out, or inout
+xtick.minor.visible  : True  # visibility of minor ticks on x-axis
+
+ytick.left           : True   # draw ticks on the left side
+ytick.right          : True  # draw ticks on the right side
+ytick.major.size     : 7      # major tick size in points
+ytick.minor.size     : 4      # minor tick size in points
+ytick.major.width    : 0.5    # major tick width in points
+ytick.minor.width    : 0.35    # minor tick width in points
+ytick.direction      : in    # direction: in, out, or inout
+ytick.minor.visible  : True  # visibility of minor ticks on y-axis
+
+### SAVING FORMAT
+# the default savefig params can be different from the display params
+# e.g., you may want a higher resolution, or to make the figure
+# background white
+savefig.format      : pdf      # png, ps, pdf, svg
+savefig.bbox        : tight    # 'tight' or 'standard'.
+                               # 'tight' is incompatible with pipe-based animation
+                               # backends but will workd with temporary file based ones:
+                               # e.g. setting animation.writer to ffmpeg will not work,
+                               # use ffmpeg_file instead

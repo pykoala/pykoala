@@ -1,7 +1,7 @@
 status = [
 #  "continuous-integration/travis-ci/push",
 #  "continuous-integration/appveyor/branch",
-  "pykoala.koala",
+  "pykoala.pykoala",
 #  "codecov/patch",
 #  "codecov/project",
 ]

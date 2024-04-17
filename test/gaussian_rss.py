@@ -1,4 +1,4 @@
-from koala.rss import RSS
+from pykoala.rss import RSS
 
 import numpy as np
 
@@ -15,8 +15,8 @@ def gaussian_rss(fibre_x_offset, fibre_y_offset, n_wave=1,
     intensity *= gauss_intensity / intensity.sum()
 
     return RSS(intensity=intensity, variance=intensity**2, wavelength=wavelength,
-               info=dict(fib_ra_offset=fibre_x_offset,
-                         fib_dec_offset=fibre_y_offset,
+               info=dict(fib_ra=fibre_x_offset,
+                         fib_dec=fibre_y_offset,
                          cen_ra=np.array(0.0), cen_dec=np.array(0.0)))
 
 def koala_gauss_rss(gauss_x_offset=0.0, gauss_y_offset=0.0, gauss_intensity=1.0, gauss_x_var=1.0, gauss_y_var=1.0, n_wave=1):
@@ -35,6 +35,6 @@ if __name__ == "__main__":
     
     from matplotlib import pyplot as plt
     plt.figure()
-    plt.scatter(rss.info['fib_ra_offset'],
-                rss.info['fib_dec_offset'], c=rss.intensity[:, 0])
+    plt.scatter(rss.info['fib_ra'],
+                rss.info['fib_dec'], c=rss.intensity[:, 0])
     plt.show()

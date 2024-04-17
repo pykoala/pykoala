@@ -44,15 +44,15 @@ except ImportError:
 
 # -- Project information -----------------------------------------------------
 
-project = 'koala'
-copyright = u'2020, Ángel López-Sánchez'
-author = u'Ángel López-Sánchez'
+project = 'pykoala'
+copyright = u'2024, Pablo Corcho-Caballero'
+author = u'Pablo Corcho-Caballero'
 
 # The full version, including alpha/beta/rc tags
-import koala
-version = '.'.join(koala.__version__.split(".")[0:2])
+import pykoala
+version = '.'.join(pykoala.__version__.split(".")[0:2])
 # The full version, including alpha/beta/rc tags.
-release = koala.__version__
+release = pykoala.__version__
 
 
 
@@ -96,7 +96,7 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'alabaster'
+html_theme = 'sphinx_rtd_theme'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

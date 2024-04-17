@@ -2,7 +2,7 @@ API Documentation
 =================
 
 
-.. automodule:: koala
+.. automodule:: pykoala
     :members:
     :inherited-members:
 
