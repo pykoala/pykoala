@@ -20,8 +20,6 @@ from astropy.io import fits
 # =============================================================================
 # PyKOALA modules
 # =============================================================================
-from pykoala.cubing import Cube, build_wcs, build_cube
-
 
 def vprint(*arg, **kwargs):
     """
@@ -68,37 +66,74 @@ def detect_edge(rss):
     max_index = wavelength.tolist().index(max_w)
     return min_w, min_index, max_w, max_index
 
+# ----------------------------------------------------------------------------------------------------------------------
+# WCS operations
+# ----------------------------------------------------------------------------------------------------------------------
 
-# RSS info dictionary template
-rss_info_template = dict(name=None,  # Name of the object
-                         exptime=None,  # Total rss exposure time (seconds)
-                         fib_ra=None, fib_dec=None,  # Fibres' celestial offset
-                         airmass=None  # Airmass
-                         )
 
-def make_dummy_cube_from_rss(rss, spa_pix_arcsec=0.5, kernel_pix_arcsec=1.0):
-    """Create an empty datacube array from an input RSS."""
-    min_ra, max_ra = np.nanmin(rss.info['fib_ra']), np.nanmax(rss.info['fib_ra'])
-    min_dec, max_dec = np.nanmin(rss.info['fib_dec']), np.nanmax(rss.info['fib_dec'])
-    datacube_shape = (rss.wavelength.size,
-                   int((max_ra - min_ra) * 3600 / spa_pix_arcsec),
-                   int((max_dec - min_dec) * 3600 / spa_pix_arcsec))
-    ref_position = (rss.wavelength[0], (min_ra + max_ra) / 2, (min_dec + max_dec) / 2)
-    spatial_pixel_size = spa_pix_arcsec / 3600
-    spectral_pixel_size = rss.wavelength[1] - rss.wavelength[0]
+def update_wcs_coords(wcs, ra_dec_val=None, ra_dec_offset=None):
+    """Update the celestial reference values of a WCS.
+    
+    Description
+    -----------
+    Update the celestial coordinates of a WCS using new central values of RA
+    and DEC or relative offsets expressed in degree.
 
-    wcs = build_wcs(datacube_shape=datacube_shape,
-                    reference_position=ref_position,
-                    spatial_pix_size=spatial_pixel_size,
-                    spectra_pix_size=spectral_pixel_size,
-                )
-    cube = build_cube([rss], pixel_size_arcsec=spa_pix_arcsec, wcs=wcs,
-                      kernel_size_arcsec=kernel_pix_arcsec)
-    return cube
+    Parameters
+    ----------
+    - wcs: asteropy.wcs.WCS
+        Target WCS to update.
+    - ra_dec_val: list or tupla, default=None
+        New CRVAL of RA and DEC.
+    - ra_dec_offset: list or tupla, default=None
+        Relative offset that will be applyied to CRVAL of RA and DEC axis. If
+        `ra_dec_val` is privided, this will be ignored.
+
+    Return
+    ------
+    - correct_wcs: astropy.wcs.WCS
+        A copy of the original WCS with the reference values updated.
+    """
+    correc_wcs = wcs.deepcopy()
+    if ra_dec_val is not None:
+        if "RA" in correc_wcs.wcs.ctype[0]:
+            correc_wcs.wcs.crval[0] = ra_dec_val[0]
+            correc_wcs.wcs.crval[1] = ra_dec_val[1]
+        elif "RA" in correc_wcs.wcs.ctype[1]:
+            correc_wcs.wcs.crval[0] = ra_dec_val[1]
+            correc_wcs.wcs.crval[1] = ra_dec_val[0]
+        else:
+            raise NameError(
+                "RA coordinate could not be found in the WCS coordinate types:"
+                + f"{correc_wcs.wcs.ctype[0]}, {correc_wcs.wcs.ctype[1]}")
+    elif ra_dec_offset is not None:
+        if "RA" in correc_wcs.wcs.ctype[0]:
+            correc_wcs.wcs.crval[0] = correc_wcs.wcs.crval[0] + ra_dec_offset[0]
+            correc_wcs.wcs.crval[1] = correc_wcs.wcs.crval[1] + ra_dec_offset[1]
+        elif "RA" in correc_wcs.wcs.ctype[1]:
+            correc_wcs.wcs.crval[0] = correc_wcs.wcs.crval[0] + ra_dec_offset[1]
+            correc_wcs.wcs.crval[1] = correc_wcs.wcs.crval[1] + ra_dec_offset[0]
+        else:
+            raise NameError(
+                "RA coordinate could not be found in the WCS coordinate types:"
+                + f"{correc_wcs.wcs.ctype[0]}, {correc_wcs.wcs.ctype[1]}")
+
+    return correc_wcs
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Arithmetic operations
 # ----------------------------------------------------------------------------------------------------------------------
+def med_abs_dev(x, axis=0):
+    mad = np.nanmedian(
+        np.abs(x - np.expand_dims(np.nanmedian(x, axis=axis), axis=axis)),
+        axis=axis)
+    return mad
+
+def std_from_mad(x, axis=0, k=1.4826):
+    mad = med_abs_dev(x, axis=axis)
+    return k * mad
+
 def running_mean(x, n_window):
     """
     This function calculates the running mean of an array.
@@ -230,12 +265,6 @@ def interpolate_image_nonfinite(image):
     interp_image = interp(x, y)
     return interp_image
 
-
-def make_white_image_from_array(data_array, wavelength=None, **args):
-    """Create a white image from a 3D data array."""
-    print(f"Creating a Cube of dimensions: {data_array.shape}")
-    cube = Cube(intensity=data_array, wavelength=wavelength)
-    return cube.get_white_image()
 
 # TODO: refactor
 def smooth_spectrum(wlm, s, wave_min=0, wave_max=0, step=50, exclude_wlm=[[0,0]], order=7,    
