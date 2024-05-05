@@ -100,25 +100,38 @@ class RSS(DataContainer):
             dec_com[wave_range: wave_range + wavelength_step] = stat(dec_com[wave_range: wave_range + wavelength_step])
         return ra_com, dec_com
 
-    def update_coordinates(self, new_fib_coord):
+    def update_coordinates(self, new_coords=None, offset=None):
         """Update fibre coordinates.
-        TODO: This should not be a method of RSS but part of the Astrometry Correction.
-
-        For each of the parameters provided (different from None), the coordinates will be updated while the original
-        ones will be stored in the info dict with a new prefix 'ori_'.
+        
+        Description
+        -----------
+        Update the fibre sky position by providing new locations of relative
+        offsets.
 
         Parameters
         ----------
-        new_fib_coord: (2, n) np.array(float), default=None
+        - new_fib_coord: (2, n) np.array(float), default=None
             New fibre coordinates for ra and dec axis, expressed in *deg*.
+        - new_fib_coord_offset: np.ndarray, default=None
+            Relative offset in *deg*. If `new_fib_coord` is provided, this will
+            be ignored.
+        
         Returns
         -------
+
         """
 
         self.info['ori_fib_ra'], self.info['ori_fib_dec'] = (self.info["fib_ra"].copy(),
                                                              self.info["fib_dec"].copy())
-        self.info["fib_ra"] = new_fib_coord[0]
-        self.info["fib_dec"] = new_fib_coord[1]
+        if new_coords is not None:
+            self.info["fib_ra"] = new_coords[0]
+            self.info["fib_dec"] = new_coords[1]
+        elif offset is not None:
+            self.info["fib_ra"] += offset[0]
+            self.info["fib_dec"] += offset[1]
+        else:
+            raise NameError(
+                "Either `new_fib_coord` or `new_fib_coord_offset` must be provided")
         self.log('update_coords', "Offset-coords updated")
         print("[RSS] Offset-coords updated")
 
