@@ -226,9 +226,9 @@ class HistoryLog(object):
     def get_entries_from_header(self, header):
         """Get entries created by PyKOALA from an input FITS Header."""
         list_of_entries = []
-        for title, comment in zip(header.comments['PYKOALA*'],
+        for title, key in zip(header.comments['PYKOALA*'],
                                   header['PYKOALA*']):
-            list_of_entries.append(LogEntry(title=title, comments=comment))
+            list_of_entries.append(LogEntry(title=title, comments=header[key]))
         return list_of_entries
 
     def load_from_header(self, header):
