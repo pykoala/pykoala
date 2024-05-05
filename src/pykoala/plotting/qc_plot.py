@@ -315,6 +315,29 @@ def qc_registration_centroids(images_list, wcs_list, offsets, ref_pos):
     return fig
 
 # =============================================================================
+# Astrometry
+# =============================================================================
+
+def qc_external_image(ref_image, ref_wcs, external_image, external_image_wcs):
+    fig = plt.figure(constrained_layout=True)
+    ax = fig.add_subplot(111, projection=external_image_wcs)
+
+    contourf_params = dict(cmap='Spectral', levels=[18, 19, 20, 21, 22, 23],
+                               vmin=19, vmax=23, extend='both')
+    contour_params = dict(levels=[18, 19, 20, 21, 22, 23],
+                          colors='k')
+
+    ax.coords.grid(True, color='orange', ls='solid')
+    ax.coords[0].set_format_unit('deg')
+    mappable = ax.contourf(external_image, **contourf_params)
+    plt.colorbar(mappable, ax=ax,
+                    label=r"$\rm \log_{10}(F_\nu / 3631 Jy / arcsec^2)$")
+    ax.contour(ref_image,
+                transform=ax.get_transform(ref_wcs), **contour_params)
+    plt.close(fig)
+    return fig
+
+# =============================================================================
 # Flux calibration
 # =============================================================================
 
