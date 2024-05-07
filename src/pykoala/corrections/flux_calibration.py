@@ -190,30 +190,34 @@ class FluxCalibration(CorrectionBase):
                              wave_range=None, wave_window=None,
                              profile=cumulative_1d_moffat,
                              bounds='auto',
+                             growth_r=np.arange(0, 10, 0.5),
                              plot=False, **fitter_args):
         """
         Extract the stellar flux from an RSS or Cube.
 
         Parameters
         ----------
-        data_container: RSS or Cube
-            Source for extracting the stellar flux
-        wave_range: list
-            wavelength range to use for
-        wave_window: int
-            wavelength window size for averaging the input flux.
-        profile: function, default=commulative_1d_moffat
+        - data_container: DataContainer
+            Source for extracting the stellar flux.
+        - wave_range: list
+            Wavelength range to use for the flux extraction.
+        - wave_window: int
+            Wavelength window size for averaging the input flux.
+        - profile: function, default=commulative_1d_moffat
             Profile function to model the cumulative ligth profile. Any function that accepts as first argument
             the square distance (r^2) and returns the cumulative profile can be used.
-        plot: bool, default=False
+        - growth_r: np.ndarray, default=np.arange(0, 10, 0.5)
+            Radial bins relative to the center of the star in arcseconds that
+            will be used to compute the curve of growth.
+        - plot: bool, default=False
             If True, for each wavelength step the fit will be shown in a plot.
-        fitter_args: kwargs
+        - fitter_args: kwargs
             extra arguments to be passed to scipy.optimize.curve_fit
 
 
         Returns
         -------
-        results: dict
+        - results: dict
             Dictionary containing the results from the fits:
                 - mean_wave: mean wavelength value for each fit.
                 - optimal: optimal parameters for the profile function.
@@ -227,6 +231,9 @@ class FluxCalibration(CorrectionBase):
         if wave_window is None:
             wave_window = 1
         wavelength = wavelength[wave_mask]
+
+        # Curve of growth radial bins
+        r2_dummy = growth_r**2
 
         self.corr_print("Extracting star flux.\n"
                         + " -> Wavelength range={}\n".format(wave_range)
@@ -295,7 +302,6 @@ class FluxCalibration(CorrectionBase):
             x0, y0 = centre_of_mass(slice_data * mask, x, y)
             # Make the growth curve
             r2 = ((x - x0)**2 + (y - y0)**2) * 3600**2  # expressed in arcsec^2
-            r2_dummy = np.arange(0, 10**2, 0.5**2)
             growth_c = np.array([np.nanmean(slice_data[mask & (r2 <= rad)]) * np.count_nonzero(r2 <= rad) for rad in r2_dummy])
             growth_c_var = np.array([np.nanmean(slice_var[mask & (r2 <= rad)]) * np.count_nonzero(r2 <= rad) for rad in r2_dummy])
             
@@ -316,12 +322,10 @@ class FluxCalibration(CorrectionBase):
                     p_bounds = bounds
                 # Initial guess
                 p0=[growth_c[-1], r2_dummy.mean(), 1.0]
-                # print("Bounds: ", bounds, "Initial guess: ", p0)
                 popt, pcov = curve_fit(
                     profile, r2[cog_mask], growth_c[cog_mask], bounds=p_bounds,
                     p0=p0,
                     **fitter_args)
-                # print(popt[0], growth_c[-1])
             except Exception as e:
                 self.corr_print("There was a problem during the fit:\n", e)
 
@@ -334,6 +338,7 @@ class FluxCalibration(CorrectionBase):
                 residuals.append(np.nanmean(growth_c - profile(r2, *popt)))
 
         if plot:
+            # TODO: This could be another function on this or the plotting module
             fig, axs = plt.subplots(ncols=2, nrows=2, figsize=(8, 8), gridspec_kw=dict(hspace=0.4, wspace=0.4))
             ax = axs[0, 0]
             ax.set_title("Median intensity")
