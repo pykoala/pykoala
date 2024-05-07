@@ -115,9 +115,11 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
     units = 1.
     units_label = '(counts)'
     if cube.log is not None:
-        entries = cube.log.find_entry(title='FluxCalibration', comment='units')
+        entries = cube.log.find_entry(title='FluxCalibration', comment='units',
+                                      tag='correction')
+        print("Enrties found:", entries)
         for e in entries:
-            unit_str = e.comments.to_str(title=False).strip("units")
+            unit_str = e.to_str(title=False).strip("units")
             units = 1 / float(''.join(filter(str.isdigit, unit_str)))
             units_label = ''.join(filter(str.isalpha, unit_str))
 
@@ -309,6 +311,29 @@ def qc_registration_centroids(images_list, wcs_list, offsets, ref_pos):
     ax.legend(bbox_to_anchor=(0.5, 1.1), loc='lower center')
     cax = ax.inset_axes((1.05, 0, 0.05, 1))
     plt.colorbar(mappable, cax=cax)
+    plt.close(fig)
+    return fig
+
+# =============================================================================
+# Astrometry
+# =============================================================================
+
+def qc_external_image(ref_image, ref_wcs, external_image, external_image_wcs):
+    fig = plt.figure(constrained_layout=True)
+    ax = fig.add_subplot(111, projection=external_image_wcs)
+
+    contourf_params = dict(cmap='Spectral', levels=[18, 19, 20, 21, 22, 23],
+                               vmin=19, vmax=23, extend='both')
+    contour_params = dict(levels=[18, 19, 20, 21, 22, 23],
+                          colors='k')
+
+    ax.coords.grid(True, color='orange', ls='solid')
+    ax.coords[0].set_format_unit('deg')
+    mappable = ax.contourf(external_image, **contourf_params)
+    plt.colorbar(mappable, ax=ax,
+                    label=r"$\rm \log_{10}(F_\nu / 3631 Jy / arcsec^2)$")
+    ax.contour(ref_image,
+                transform=ax.get_transform(ref_wcs), **contour_params)
     plt.close(fig)
     return fig
 

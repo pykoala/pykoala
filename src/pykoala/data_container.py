@@ -178,7 +178,7 @@ class HistoryLog(object):
             List of entries associated to the input title, comment and tag.
         """
         return [entry for entry in self.log_entries if (title in entry.title)
-         and (comment in entry.comments) and (tag in entry.tag)]
+         and (comment in entry.to_str(title=False)) and (tag in str(entry.tag))]
 
 
     def dump_to_header(self, header=None):
@@ -201,8 +201,9 @@ class HistoryLog(object):
             index = len(self.get_entries_from_header(header))
 
         for entry in self.log_entries:
-            header['PYKOALA' + index] = (
-                entry.comments.to_str(title=False), entry.title)
+            header['PYKOALA' + str(index)] = (
+                entry.to_str(title=False), entry.title)
+            index += 1
         return header
 
     def dump_to_text(self, file):
@@ -212,7 +213,7 @@ class HistoryLog(object):
         ----------
         - file: (str)
             Output file name.
-        
+
         Returns
         -------
         """
@@ -224,8 +225,11 @@ class HistoryLog(object):
 
     def get_entries_from_header(self, header):
         """Get entries created by PyKOALA from an input FITS Header."""
-        return map(LogEntry, zip(header.comments['PYKOALA*'],
-                                 header['PYKOALA*']))
+        list_of_entries = []
+        for title, key in zip(header.comments['PYKOALA*'],
+                                  header['PYKOALA*']):
+            list_of_entries.append(LogEntry(title=title, comments=header[key]))
+        return list_of_entries
 
     def load_from_header(self, header):
         """Load the Log from a FITS Header."""

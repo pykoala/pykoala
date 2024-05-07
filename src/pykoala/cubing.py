@@ -14,6 +14,7 @@ from astropy.coordinates import SkyCoord
 # =============================================================================
 # KOALA packages
 # =============================================================================
+from pykoala import ancillary
 from pykoala.data_container import DataContainer
 from pykoala import __version__
 from scipy.special import erf
@@ -342,7 +343,7 @@ def build_wcs(datacube_shape, reference_position, spatial_pix_size,
     'CRVAL1': reference_position[1], 'NAXIS1': datacube_shape[1],
     'CTYPE2': 'DEC--TAN', 'CUNIT2': 'deg', 'CDELT2': spatial_pix_size, 'CRPIX2': datacube_shape[2] / 2,
     'CRVAL2': reference_position[2], 'NAXIS2': datacube_shape[2],
-    'CTYPE3': 'WAVE    ', 'CUNIT3': 'Angstrom', 'CDELT3': spectra_pix_size, 'CRPIX3': 0,
+    'CTYPE3': 'WAVE    ', 'CUNIT3': 'angstrom', 'CDELT3': spectra_pix_size, 'CRPIX3': 0,
     'CRVAL3': reference_position[0], 'NAXIS3': datacube_shape[0]}
     wcs = WCS(wcs_dict)
     return wcs
@@ -394,12 +395,14 @@ class Cube(DataContainer):
     def __init__(self, hdul=None, file_path=None, 
                  hdul_extensions_map=None, **kwargs):
 
-        if hdul is not None:
-            if hdul_extensions_map is None:
-                self.hdul_extensions_map = {"INTENSITY": "INTENSITY", "VARIANCE": "VARIANCE"}
-            else:
-                self.hdul_extensions_map = hdul
-            print("[Cube] Initialising cube with input HDUL")
+        self.hdul = hdul
+        self.hdul_extensions_map = hdul_extensions_map
+
+        if self.hdul_extensions_map is None:
+            self.hdul_extensions_map = {"INTENSITY": "INTENSITY",
+                                        "VARIANCE": "VARIANCE"}
+        if self.hdul is not None:
+            print("[Cube] Initialising cube from input HDUL")
             self.hdul = hdul
         elif file_path is not None:
             self.load_hdul(file_path)
@@ -449,7 +452,7 @@ class Cube(DataContainer):
 
     def get_wcs_from_header(self):
         """Create a WCS from HDUL header."""
-        print("[Cube] Constructing WCS")
+        print("[Cube] Reading WCS")
         self.wcs = WCS(self.hdul[self.hdul_extensions_map['INTENSITY']].header)
 
     def get_wavelength(self):
@@ -485,15 +488,15 @@ class Cube(DataContainer):
         pos = np.searchsorted(cumulative_intensity, frac)
         return cumulative_intensity[pos]
 
-    def get_white_image(self, wave_range=None, s_clip=3.0):
+    def get_white_image(self, wave_range=None, s_clip=3.0, frequency_density=False):
         """Create a white image."""
         if wave_range is not None and self.wavelength is not None:
             wave_mask = (self.wavelength >= wave_range[0]) & (self.wavelength <= wave_range[1])
         else:
-            wave_mask = np.ones(self.intensity.shape[0], dtype=bool)
+            wave_mask = np.ones(self.wavelength.size, dtype=bool)
         
         if s_clip is not None:
-            std_dev = np.nanstd(self.intensity[wave_mask], axis=0)
+            std_dev = ancillary.std_from_mad(self.intensity[wave_mask], axis=0)
             median = np.nanmedian(self.intensity[wave_mask], axis=0)
 
             weights = (
@@ -502,45 +505,24 @@ class Cube(DataContainer):
         else:
             weights = np.ones_like(self.intensity[wave_mask])
 
-        white_image = np.nansum(self.intensity * weights, axis=0) / np.nansum(weights, axis=0)
+        if frequency_density:
+            freq_trans = self.wavelength**2 / 3e18
+        else:
+            freq_trans = np.ones_like(self.wavelength)
+
+        white_image = np.nansum(
+            self.intensity[wave_mask] * freq_trans[wave_mask, np.newaxis, np.newaxis] * weights, axis=0
+            ) / np.nansum(weights, axis=0)
         return white_image
 
-    def get_wcs(self):
-        """Create an astropy.wcs.WCS object using the cube properties."""
-        print("[Cube] Constructing WCS")
-        w = WCS(naxis=3)
-        w.wcs.crpix = [self.n_cols / 2, self.n_rows / 2,
-                       0]
-        w.wcs.cdelt = np.array([
-            self.info.get('pixel_size_arcsec', 1.0) / 3600,
-            self.info.get('pixel_size_arcsec', 1.0) / 3600,
-            np.diff(self.wavelength).mean()])
-        w.wcs.crval = [self.info.get('cen_ra', 0.0),
-                       self.info.get('cen_dec', 0.0),
-                       self.wavelength[0]]
-        w.wcs.ctype = ["RA---TAN", "DEC--TAN", "WAVE"]
-        self.wcs = w
-        print("[Cube] WCS: ", w)
-        return self.wcs
-
-    def wcs_metadata(self):
-        """Get the Cube WCS metadata"""
-        return self.get_wcs().to_header()
-    
     def to_fits(self, fname=None, primary_hdr_kw=None):
-        """ TODO...
-        include --
-           parent RSS information
-           filenames
-           exptimes
-           effective exptime?
-
-        """
+        """Save the Cube into a FITS file."""
         if fname is None:
-            fname = 'cube_{}.fits.gz'.format(datetime.now().strftime("%d_%m_%Y_%H_%M_%S"))
+            fname = 'cube_{}.fits.gz'.format(
+                datetime.now().strftime("%d_%m_%Y_%H_%M_%S"))
         if primary_hdr_kw is None:
             primary_hdr_kw = {}
-        
+
         # Create the PrimaryHDU with WCS information 
         primary = fits.PrimaryHDU()
         for key, val in primary_hdr_kw.items():
@@ -548,10 +530,9 @@ class Cube(DataContainer):
         
         
         # Include cubing information
-        primary.header['CREATED'] = datetime.now().strftime(
-            "%d_%m_%Y_%H_%M_%S"), "Cube creation date"
-        primary.header['KERNSIZE'] = self.info["kernel_size_arcsec"], "arcsec"
-        primary.header['pykoala'] = __version__, "PyKOALA version"
+        primary.header['pykoala0'] = __version__, "PyKOALA version"
+        primary.header['pykoala1'] = datetime.now().strftime(
+            "%d_%m_%Y_%H_%M_%S"), "creation date / last change"
 
         # Fill the header with the log information
         primary.header = self.dump_log_in_header(primary.header)
@@ -559,12 +540,52 @@ class Cube(DataContainer):
         # Create a list of HDU
         hdu_list = [primary]
         # Change headers for variance and INTENSITY
-        hdu_list.append(fits.ImageHDU(data=self.intensity, name='INTENSITY', header=self.wcs_metadata()))
-        hdu_list.append(fits.ImageHDU(data=self.variance, name='VARIANCE', header=hdu_list[-1].header))
+        hdu_list.append(fits.ImageHDU(
+            data=self.intensity, name='INTENSITY', header=self.wcs.to_header()))
+        hdu_list.append(fits.ImageHDU(
+            data=self.variance, name='VARIANCE', header=hdu_list[-1].header))
         # Save fits
         hdul = fits.HDUList(hdu_list)
         hdul.writeto(fname, overwrite=True)
         hdul.close()
         print("[Cube] Cube saved at:\n {}".format(fname))
+
+    def update_coordinates(self, new_coords=None, offset=None):
+        """Update the celestial coordinates of the Cube"""
+        updated_wcs = ancillary.update_wcs_coords(self.wcs.celestial,
+                                               ra_dec_val=new_coords,
+                                               ra_dec_offset=offset)
+        # Update only the celestial axes
+        print("Previous CRVAL: ", self.wcs.celestial.wcs.crval,
+              "\nNew CRVAL: ", updated_wcs.wcs.crval)
+        self.wcs.wcs.crval[:-1] = updated_wcs.wcs.crval
+        self.log('update_coords', "Offset-coords updated")
+
+def make_white_image_from_array(data_array, wavelength=None, **args):
+    """Create a white image from a 3D data array."""
+    print(f"Creating a Cube of dimensions: {data_array.shape}")
+    cube = Cube(intensity=data_array, wavelength=wavelength)
+    return cube.get_white_image()
+
+
+def make_dummy_cube_from_rss(rss, spa_pix_arcsec=0.5, kernel_pix_arcsec=1.0):
+    """Create an empty datacube array from an input RSS."""
+    min_ra, max_ra = np.nanmin(rss.info['fib_ra']), np.nanmax(rss.info['fib_ra'])
+    min_dec, max_dec = np.nanmin(rss.info['fib_dec']), np.nanmax(rss.info['fib_dec'])
+    datacube_shape = (rss.wavelength.size,
+                   int((max_ra - min_ra) * 3600 / spa_pix_arcsec),
+                   int((max_dec - min_dec) * 3600 / spa_pix_arcsec))
+    ref_position = (rss.wavelength[0], (min_ra + max_ra) / 2, (min_dec + max_dec) / 2)
+    spatial_pixel_size = spa_pix_arcsec / 3600
+    spectral_pixel_size = rss.wavelength[1] - rss.wavelength[0]
+
+    wcs = build_wcs(datacube_shape=datacube_shape,
+                    reference_position=ref_position,
+                    spatial_pix_size=spatial_pixel_size,
+                    spectra_pix_size=spectral_pixel_size,
+                )
+    cube = build_cube([rss], pixel_size_arcsec=spa_pix_arcsec, wcs=wcs,
+                      kernel_size_arcsec=kernel_pix_arcsec)
+    return cube
 
 # Mr Krtxo \(ﾟ▽ﾟ)/
