@@ -1,7 +1,7 @@
 # Other
 /deprecated
 # Tutorials stuff
-tutorials/products/Henize_2-10_cube.fits.gz
+tutorials/products/*.fits.gz
 tutorials/*.fits
 
 # Byte-compiled / optimized / DLL files
