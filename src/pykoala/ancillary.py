@@ -20,6 +20,7 @@ from scipy import optimize
 # PyKOALA modules
 # =============================================================================
 from pykoala.cubing import Cube, build_wcs, build_cube
+# %% ==========================================================================
 # =============================================================================
 # =============================================================================
 # =============================================================================
@@ -27,43 +28,55 @@ from pykoala.cubing import Cube, build_wcs, build_cube
 # =============================================================================
 # =============================================================================
 # =============================================================================
-def vprint(*arg, **kwargs):
-    """
-    Prints the arguments only if verbose=True.
-    """
-    try:
-        if kwargs['verbose']:
-            print(*arg)
-    except Exception:
-        do_nothing = 0                    #!!! Ángel: Una ayudita aquí... si no quiero que haga nada si falla, ¿qué pongo?
 # =============================================================================
 # =============================================================================
-def vplot(*arg, **kwargs):
-    """
-    Check kwarguments and return True if plot=True.
-    """
-    try:
-        if kwargs['plot']:
-            return True
-        else:
-            return False
-    except Exception:
-        return False
+def vprint(*args, verbose=False, **kwargs):
+    if verbose: print(*args)
 # =============================================================================
 # =============================================================================  
-def find_nearest(array, value):
-    array = np.asarray(array)
-    idx = (np.abs(array - value)).argmin()
-    return array[idx]
-def find_index_nearest(array, value):
-    array = np.asarray(array)
-    idx = (np.abs(array - value)).argmin()
-    return idx
+# def find_nearest(array, value):
+#     array = np.asarray(array)
+#     idx = (np.abs(array - value)).argmin()
+#     return array[idx]
+# def find_index_nearest(array, value):
+#     array = np.asarray(array)
+#     idx = (np.abs(array - value)).argmin()
+#     return idx
 # =============================================================================
 # =============================================================================
+def read_table(file, fmt):
+    """
+    Read data from and txt file (sorted by columns), the type of data 
+    (string, integer or float) MUST be given in "formato".
+    This routine will ONLY read the columns for which "formato" is defined.
+    E.g. for a txt file with 7 data columns, using formato=["f", "f", "s"] will only read the 3 first columns.
+    
+    Parameters
+    ----------
+    file: 
+        txt file to be read.
+    formato:
+        List with the format of each column of the data, using:\n
+        "i" for a integer\n
+        "f" for a float\n
+        "s" for a string (text)
+    
+    Example
+    -------
+    >>> el_center,el_fnl,el_name = read_table("lineas_c89_python.dat", ["f", "f", "s"] )
+    """    
+    data_len = len(fmt)
+    data = [[] for x in range(data_len)]
+    for i in range (0,data_len) :
+        try:
+            if fmt[i] == "i" : data[i]=np.loadtxt(file, skiprows=0, unpack=True, usecols=[i], dtype=int)
+            if fmt[i] == "s" : data[i]=np.loadtxt(file, skiprows=0, unpack=True, usecols=[i], dtype=str)
+            if fmt[i] == "f" : data[i]=np.loadtxt(file, skiprows=0, unpack=True, usecols=[i], dtype=float) 
+        except Exception:
+            pass       
+    return data
 
-
-
+# %% ==========================================================================
 # =============================================================================
 # Ancillary Functions - RSS Related
 # =============================================================================
