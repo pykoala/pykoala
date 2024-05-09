@@ -16,7 +16,7 @@ from astropy.wcs import WCS
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from pykoala.ancillary import vprint, rss_info_template  # Template to create the info variable 
+from pykoala.ancillary import vprint  # Template to create the info variable 
 from pykoala.rss import read_rss
 
 
@@ -95,7 +95,7 @@ def hector_rss(path_to_file, bundle=''):
     # List of bad spaxels from 2dfdr spaxels table
     # -1 to start in 0 rather than in 1
     # Create the dictionary containing relevant information
-    info = rss_info_template.copy()  # Avoid missing some key
+    info = {}
     info['name'] = header['OBJECT']
     info['exptime'] = header['EXPOSED']
     info['obj_ra'] = None
