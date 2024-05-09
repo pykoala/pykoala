@@ -14,8 +14,8 @@ from photutils.centroids import centroid_2dg, centroid_com
 from pykoala.exceptions.exceptions import ClassError, FitError, CalibrationError
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.rss import RSS
-from pykoala.cubing import Cube
-from pykoala.ancillary import centre_of_mass, make_dummy_cube_from_rss, interpolate_image_nonfinite
+from pykoala.cubing import Cube, make_dummy_cube_from_rss
+from pykoala.ancillary import interpolate_image_nonfinite
 from pykoala.plotting.qc_plot import qc_registration_centroids
 
 class AstrometryCorrection(CorrectionBase):
