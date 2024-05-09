@@ -254,132 +254,81 @@ class Parameter(object):
     """Class that represents some parameter and associated metadata"""
     def __init__(self) -> None:
         pass
-
-class GenericFlagMap(bitmask.BitFlagNameMap):
-    """PyKOALA generic BitMask flag map.
-    
-    Attributes
-    ----------
-    - CR: Cosmic ray (2)
-    - HP: Hot pixel (4)
-    - DP: Dark pixel (8)
-
-    Example
-    -------
-    Accessing the description of each BitFlag is possible by
-    `GenericFlagMap.FLAG_NAME.__doc__`
-    """
-    CR = 2, 'Cosmic ray'
-    HP = 4, 'Hot pixel'
-    DP = 8, 'Dark pixel'
     
 class DataMask(object):
-    """This class contains mask information of DataContainers.
+    """A mask to store the pixel flags of DataContainers.
     
     Description
     -----------
-    This class represents a bitmask of a data structure defined by a given
-    dimensionality shape.
+    A mask to store the pixel flags of DataContainers.
 
     Attributes
     ----------
-    - data: (np.ndarray)
-        The mask data values.
-    - flag_map: (astropy.bitmask.BitFlagNameMap)
-        A mapping between the flag names and their numerical values.
-
+    - flag_map: dict, default={"CR": 2, "HP": 4, "DP": 8}
+        A mapping between the flag names and their numerical values expressed
+        in powers of two.
+    - bitmask: (np.ndarray)
+        The array containing the bit pixel mask.
+    - masks: dict
+        A dictionary that stores the individual mask in the form of boolean arrays
+        for each flag name.
+    
     Methods
     -------
-    - get_flags
-    - add_flags
-    - get_mask
+    - flag_pixels
+    - get_flag_map_from_bitmask
+    - get_flag_map
     """
-    def __init__(self, shape, flag_map=GenericFlagMap):
+    def __init__(self, shape, flag_map={"CR": 2, "HP": 4, "DP": 8},
+                 flag_desc={"CR": "Cosmic ray", "HP": "Hot pixel", "DP": "Dark pixel"}):
         # Initialise the mask with all pixels being valid
-        self.data = np.zeros(shape, dtype=int)
         self.flag_map = flag_map
+        self.bitmask = np.zeros(shape, dtype=int)
+        self.masks = {}
+        for key in self.flag_map.keys():
+            self.masks[key] = np.zeros(shape, dtype=bool)
 
-    def get_flags(self):
-        """Return the current flags used in the mask."""
-        att = list(self.flag_map.__dict__)
-        return [a for a in att if "_" not in a]
+    def __decode_number(self, x):
+        """Decompose a number in powers of 2"""
+        powers = []
+        i = 1
+        while i <= x:
+            if i & x:
+                powers.append(i)
+            i <<= 1
+        return powers
 
-    def get_flag_values(self):
-        """Get the values associated to the flags"""
-        flags = self.get_flags()
-        values = {}
-        for flag in flags:
-            values[flag] = getattr(self.flag_map, flag).real
-        return values
+    def __is_flag(self, x, flag_code):
+        """Check if a pixel contains a given flag code."""
+        if flag_code in self.__decode_number(x):
+            return True
+        else:
+            return False
 
-    def get_description(self):
-        """Get the description of the BitFlags."""
-        flags = self.get_flags()
-        doc = {}
-        for flag in flags:
-            doc[flag] = getattr(self.flag_map, flag).__doc__
-        return doc
-
-    def add_flags(self, **extra_flags):
-        """Add a new flag to the mask."""
-        self.flag_map = bitmask.extend_bit_flag_map(
-            "DQ_MASK", self.flag_map, **extra_flags)
-
-    def get_mask(self, use_flags=None, use_bits=None, ignore_flags=None,
-                 ignore_bits=None, dtype=bool):
-        """Get a mask.
+    def flag_pixels(self, mask, flag_name):
+        """Add a pixel mask corresponding to a flag name.
         
-        Description
-        -----------
-        This method returns a mask computed by including or excluding a list
-        of bitmask values.
-
         Parameters
         ----------
-        - use_flags: (list, default=None)
-            A list of strings corresponding to the flag names to be included.
-        - use_bits: (list, default=None)
-            A list of bitmask values to be included in the mask. This is ignored
-            if `use_flags` is provided.
-        - ignore_flags: (list, default=None)
-            A list of strings corresponding to the flags to be excluded. Only
-            used if `use_flags` and `use_bits` are `None`.
-        - ignore_bits: (list, default=None)
-            A list of bitmask values to be excluded in the mask. This is ignored
-            if any of the other arguments is not `None`.
-        - dtype: (type, default=bool)
-            Data type of the output mask
-        Example
-        -------
-        ```
-        # Create a mask
-        mask = DataMask()
-        # Get a mask for all flagged pixels
-        total_mask = mask.get_mask()
-        # Get a mask only for pixels flagged as cosmic rays (CR)
-        cr_mask = mask.get_mask(use_flags=['CR'])
-        ```
+        - mask: np.ndarray
+            Input pixel flag. It must have the same shape as the bitmask.
         """
-        flags = self.get_flag_values()
-        flag_names = list(flags.keys())
-        flag_values = list(flags.values())
-        if use_flags is not None:
-            flags_to_ignore = [f for f in flag_names if f not in use_flags]
-        elif use_bits is not None:
-            flags_to_ignore = [f for f in flag_names if flag_values[
-                flag_names.index(f)] not in use_bits]
-        elif ignore_flags is not None:
-            flags_to_ignore = ignore_flags
-        elif ignore_bits is not None:
-            flags_to_ignore = [f for f in flag_names if flag_values[
-                flag_names.index(f)] in ignore_bits]
+        if flag_name not in self.flag_map:
+            raise NameError(f"Input flag name {flag_name} does not exist")
+        self.bitmask[mask] += self.flag_map[flag_name]
+        self.masks[flag_name] = mask
+
+    def get_flag_map_from_bitmask(self, flag_name):
+        flag_map = np.array(
+            [self.__is_flag(pix, self.flag_map[flag_name]) for pix in self.data.flatten()])
+        return flag_map.reshape(self.data.shape)
+
+    def get_flag_map(self, flag_name=None):
+        if flag_name is not None:
+            return self.masks[flag_name]
         else:
-            flags_to_ignore = []
-        print(flags_to_ignore)
-        return bitmask.bitfield_to_boolean_mask(self.data,
-                                                ignore_flags=flags_to_ignore,
-                                                flag_name_map=self.flag_map,
-                                                dtype=dtype)
+            return self.bitmask > 0
+
 
 class DataContainer(object):
     """
