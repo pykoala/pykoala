@@ -16,7 +16,7 @@ from astropy.wcs import WCS
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from pykoala.ancillary import vprint, rss_info_template  # Template to create the info variable 
+from pykoala.ancillary import vprint  # Template to create the info variable 
 from pykoala.data_container import HistoryLog
 from pykoala.rss import RSS
 
@@ -194,7 +194,7 @@ def koala_rss(path_to_file):
     bad_fibres_list = (fibre_table['SPEC_ID'][fibre_table['SELECTED'] == 0] - 1).tolist()
     # -1 to start in 0 rather than in 1
     # Create the dictionary containing relevant information
-    info = rss_info_template.copy()  # Avoid missing some key
+    info = {}
     info['name'] = koala_header['OBJECT']
     info['exptime'] = koala_header['EXPOSED']
     info['fib_ra'] = np.rad2deg(koala_header['RACEN']) + koala_fibre_table.data['Delta_RA'] / 3600
