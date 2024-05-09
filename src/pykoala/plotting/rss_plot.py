@@ -1,8 +1,24 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
-from pykoala.ancillary import vprint, find_index_nearest  
-from pykoala.plotting.plot_plot import plot_plot
+from pykoala.ancillary import vprint  
+from pykoala.plotting.plot_plot import plot_plot #, basic_statistics
+
+# Fuego color map
+#from matplotlib import pyplot as plt
+#import matplotlib.colors as colors
+
+fuego_color_map = colors.LinearSegmentedColormap.from_list("fuego", 
+                                                            ((0.25, 0, 0),  
+                                                            (0.5,0,0),    
+                                                            (1, 0, 0), 
+                                                            (1, 0.5, 0), 
+                                                            (1, 0.75, 0), 
+                                                            (1, 1, 0), 
+                                                            (1, 1, 1)), 
+                                                            N=256, gamma=1.0)
+fuego_color_map.set_bad('lightgray')  #('black')
+#plt.register_cmap(cmap=fuego_color_map)  
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -29,7 +45,7 @@ def plot_wavelength(rss, wavelength, r = False, **kwargs):
     if wavelength < n_wave and type(wavelength) is int:  # wavelength is an index
         wave_index = wavelength
     else:
-        wave_index= find_index_nearest(wavelength, w)
+        wave_index= np.searchsorted(w,wavelength)
            
     wave = w[wave_index]       
     corte_wave = rss.intensity[:, wave_index]
@@ -92,20 +108,16 @@ def plot_combined_spectrum(rss, list_spectra=None,  median=False, r = False, **k
     -------
     >>> star_spectrum = plot_spectrum(rss, list_spectra= [550:550], r = True)
     """
-    if list_spectra is None:
-        list_spectra = list(range(len(rss.intensity)))
+    if list_spectra is None:  list_spectra = list(range(len(rss.intensity)))
 
-    spectrum = np.zeros_like(rss.intensity[list_spectra[0]])
-    value_list = []
-
-    for fibre in list_spectra: value_list.append(rss.intensity[fibre])
+    value_list = [rss.intensity[fibre] for fibre in list_spectra]
     
     if median:
         spectrum = np.nanmedian(value_list, axis=0)
     else:
         spectrum = np.nansum(value_list, axis=0)
 
-    if kwargs.get("plot") is None: plot = True
+    plot= kwargs.get("plot", True)
  
     if plot:
         #vlines = [self.valid_wave_min, self.valid_wave_max]   #TODO  # It would be good to indicate the good wavelength range, but now these are not saved in RSS object
@@ -116,20 +128,20 @@ def plot_combined_spectrum(rss, list_spectra=None,  median=False, r = False, **k
                 kwargs["ptitle"] = "Combined spectrum using requested fibres"
         plot_plot(rss.wavelength, spectrum,  **kwargs)
                   
-    if r: return spectrum    
-        
+    if r: return spectrum       
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 def rss_image(rss, image=None, log=False, gamma=0,
-              cmap="seismic_r", clow=None, chigh=None, greyscale = False,
+              cmap="seismic_r", clow=None, chigh=None, percentile_min = 5, percentile_max=95,
+              greyscale = False, greyscale_r = False,
               xmin = None, xmax= None, wmin = None, wmax= None, fmin=0, fmax=None, 
-              title_fontsize=12, title=None,
+              title_fontsize=12, title=None, add_title = False,
               xlabel = "Wavelength vector", ylabel = "Fibre", 
               axes_label_fontsize=10, axes_ticksize=None, axes_fontsize=10, axes_thickness=0, 
               colorbar_label_fontsize = 10, colorbar_ticksize= 10, colorbar_rotation = 270,  
               colorbar_width_fraction=None, colorbar_pad=None, colorbar_labelpad=10,
               colorbar_label="Intensity [Arbitrary units]", 
-              fig_size=8, save_plot_in_file = None,
+              fig_size=8, save_plot_in_file = None, 
               **kwargs):
     """
     Plot image of rss coloured by variable. 
@@ -217,18 +229,19 @@ def rss_image(rss, image=None, log=False, gamma=0,
     # Check if image is given
     if image is None:
         image = rss.intensity
-
+        
     # Check color visualization
     norm=colors.LogNorm()
     if log is False: norm = colors.Normalize()
     if gamma > 0: norm=colors.PowerNorm(gamma=gamma)
     if greyscale: cmap = "binary_r" 
+    if greyscale_r: cmap = "binary" 
 
     #  Set color scale and map   
     if clow is None:
-        clow = np.nanpercentile(image, 5)
+        clow = np.nanpercentile(image, percentile_min)
     if chigh is None:
-        chigh = np.nanpercentile(image, 95)
+        chigh = np.nanpercentile(image, percentile_max)
     if cmap == "seismic_r" and log == False:
         max_abs = np.nanmax([np.abs(clow), np.abs(chigh)])
         clow = -max_abs
@@ -236,6 +249,11 @@ def rss_image(rss, image=None, log=False, gamma=0,
     if log and clow <=0:
         clow_=clow
         clow = np.nanmin(np.abs(image))
+        if clow == 0 : 
+            if chigh > 100 : 
+                clow = 1.0
+            else:
+                clow = 0.0001
         vprint("\n> Plotting image in log but the lowest value is {:.2f}, using the minimum positive value of {:.2e} instead.".format(clow_,clow), **kwargs)  
     
     # Show only a subregion if requested
@@ -244,10 +262,10 @@ def rss_image(rss, image=None, log=False, gamma=0,
     if xmax is None:
         xmax = len(rss.wavelength) 
     if wmin is not None:
-        xmin = find_index_nearest(rss.wavelength, wmin)
+        xmin = np.searchsorted(rss.wavelength, wmin)
         if xmin == 0 : wmin = rss.wavelength[0]
     if wmax is not None:
-        xmax = find_index_nearest(rss.wavelength, wmax)  
+        xmax = np.searchsorted(rss.wavelength, wmax)
         if xmax == len(rss.wavelength)-1 : wmax = rss.wavelength[-1]
     if wmin is not None and wmax is not None:
         extent1 = wmin
@@ -311,7 +329,10 @@ def rss_image(rss, image=None, log=False, gamma=0,
     
     # Include title
     if title is not None:
-        plt.title(str(title), fontsize=title_fontsize)
+        if add_title:
+            plt.title(rss.info['name'] + str(title), fontsize=title_fontsize)
+        else:
+            plt.title(str(title), fontsize=title_fontsize)
     else:
         plt.title(rss.info['name'] + " - RSS image", fontsize=title_fontsize)
         
@@ -322,7 +343,7 @@ def rss_image(rss, image=None, log=False, gamma=0,
         plt.axhline(y=fmax,linewidth=axes_thickness, color="k")    
         plt.axvline(x=xmax,linewidth=axes_thickness, color="k")   
 
-    # # Include colorbar well aligned with the map
+    # # Include colorbar well aligned with the map    
     if 0.8  <= aspect_ratio <= 1.2:
         bth = 0.05
         gap = 0.03
@@ -336,14 +357,291 @@ def rss_image(rss, image=None, log=False, gamma=0,
     cbar.ax.tick_params(labelsize=colorbar_ticksize)
     cbar.set_label(str(colorbar_label), rotation=colorbar_rotation, labelpad=colorbar_labelpad, fontsize=colorbar_label_fontsize)
 
+
     # Show or save final plot
     if save_plot_in_file is None:
-        plt.show()
-        plt.close() 
+            plt.show()
+            plt.close() 
     else:
        #if path != "" : save_file=full_path(save_file,path)
        plt.savefig(save_plot_in_file, bbox_inches='tight')
        plt.close() 
        vprint("  Figure saved in file",save_plot_in_file, **kwargs)
+
+
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+def compare_rss_images(rss, image_list=None, log=False, gamma=0,
+              cmap="seismic_r", clow=None, chigh=None, percentile_min = 5, percentile_max=95,
+              greyscale = False, greyscale_r = False,
+              xmin = None, xmax= None, wmin = None, wmax= None, fmin=0, fmax=None, 
+              title_fontsize=12, title=None, add_title = False,
+              xlabel = "Wavelength vector", ylabel = "Fibre", 
+              axes_label_fontsize=10, axes_ticksize=None, axes_fontsize=10, axes_thickness=0, 
+              colorbar_label_fontsize = 10, colorbar_ticksize= 10, colorbar_rotation = 270,  
+              colorbar_width_fraction=None, colorbar_pad=None, colorbar_labelpad=10,
+              colorbar_label="Intensity [Arbitrary units]", 
+              fig_size=[8,6], save_plot_in_file = None, 
+              **kwargs):
+    
+    
+    # Show only a subregion if requested
+    if xmin is None:
+        xmin = 0
+    if xmax is None:
+        xmax = len(rss.wavelength) 
+    if wmin is not None:
+        xmin = np.searchsorted(rss.wavelength, wmin)
+        if xmin == 0 : wmin = rss.wavelength[0]
+    if wmax is not None:
+        xmax = np.searchsorted(rss.wavelength, wmax)
+        if xmax == len(rss.wavelength)-1 : wmax = rss.wavelength[-1]
+    if wmin is not None and wmax is not None:
+        extent1 = wmin
+        extent2 = wmax
+        if xlabel == "Wavelength vector": xlabel="Wavelength [$\mathrm{\AA}$]"
+    else:
+        extent1 = xmin
+        extent2 = xmax
+    if fmax is None: 
+        fmax = len(rss.intensity)
+    else:
+        if fmax > len(rss.intensity) - 1 : fmax = len(rss.intensity)
+    extent3 = fmax
+    extent4 = fmin    
+    
+    # Check if we are saving in file to increase fig size
+    if save_plot_in_file is not None:
+        if type(fig_size) is not str: fig_size = fig_size * 3
+        title_fontsize = title_fontsize *2.1
+        axes_label_fontsize= axes_label_fontsize *2.1
+        axes_fontsize=axes_fontsize *1.7
+        colorbar_label_fontsize = colorbar_label_fontsize * 1.8
+        colorbar_ticksize = colorbar_ticksize * 2.8
+        axes_thickness = 2
+        if axes_ticksize == None: axes_ticksize = [10,1,5,1]
+
+    if type(fig_size) is str: 
+        if fig_size == "big":
+            fig_size=20
+            title_fontsize=22
+            axes_label_fontsize=18
+            axes_fontsize=15
+            colorbar_label_fontsize = 15
+            colorbar_ticksize = 14
+            axes_ticksize=[10,1,5,1]
+            axes_thickness =2
+     
+    if axes_ticksize == None: axes_ticksize = [5,1,2,1]
+
+
+    # Check position of colorbars
+    if colorbar_pad is None: colorbar_pad =0.05
+    if colorbar_width_fraction is None: colorbar_width_fraction =0.15
+    
+    # Start figure with sublots   
+    a = 1   # All horizontal
+    n_plots = len (image_list)
+    fig, axs = plt.subplots(a, n_plots , figsize=(fig_size[0], fig_size[1]),
+                            constrained_layout=True, sharey=True,
+                            sharex=True)
+    
+    if type(greyscale) is bool: greyscale = [greyscale]*n_plots
+    if type(greyscale_r) is bool: greyscale_r = [greyscale_r]*n_plots  
+    if type(gamma) is int or float : gamma = [gamma] *n_plots 
+    
+    i = 0  # Looping the plots
+    for col in range(n_plots):
+        #for row in range(a):  #### IF in the future we need to expand this...
+            
+        data = image_list[i][fmin:fmax,xmin:xmax]            
+        
+        # Check color visualization
+        norm=colors.LogNorm()
+        if log[i] is False: norm = colors.Normalize()
+        if gamma[i] > 0: norm=colors.PowerNorm(gamma=gamma[i])
+        if greyscale[i]: cmap[i] = "binary_r" 
+        if greyscale_r[i]: cmap[i] = "binary" 
+    
+        #  Set color scale and map   
+        if clow[i] is None:
+            clow[i] = np.nanpercentile(data, percentile_min)
+        if chigh[i] is None:
+            chigh[i] = np.nanpercentile(data, percentile_max)
+        if cmap[i] == "seismic_r" and log[i] == False:
+            max_abs = np.nanmax([np.abs(clow[i]), np.abs(chigh[i])])
+            clow[i] = -max_abs
+            chigh[i] = max_abs
+        if log[i] and clow[i] <=0:
+            clow[i] = np.nanmin(np.abs(data))
+            if clow[i] == 0 : 
+                if chigh[i] > 100 : 
+                    clow[i] = 1.0
+                else:
+                    clow[i] = 0.0001
+          
+        # Create subplot including minorticks
+        ax = axs[col]
+        pcm=ax.imshow(data, norm=norm, cmap=cmap[i], clim=(clow[i], chigh[i]), extent=(extent1, extent2, extent3, extent4))    
+        plt.minorticks_on()
+        plt.gca().invert_yaxis()   # Invert axis in y 
+        
+        plt.tick_params('both', length=axes_ticksize[0], width=axes_ticksize[1], which='major')
+        plt.tick_params('both', length=axes_ticksize[2], width=axes_ticksize[3], which='minor')
+        
+        # Include labels
+        ax.set_xlabel(xlabel,  fontsize=13)
+        ax.set_ylabel(ylabel, fontsize=13) 
+        ax.set_title(title[i])  ##, fontsize=title_fontsize)
+        
+        # Color bar
+        cax  = ax.inset_axes((1+colorbar_pad, 0, colorbar_width_fraction , 1))
+        cbar = fig.colorbar(pcm,cax=cax) 
+        #cbar.ax.tick_params(labelsize=colorbar_ticksize)
+        if colorbar_label[i] is not None: cbar.set_label(str(colorbar_label[i])) #, rotation=colorbar_rotation, labelpad=colorbar_labelpad, fontsize=colorbar_label_fontsize)
+
+        i=i+1 # Prepare for next plot
+
+    
+            
+    # Show or save final plot
+    if save_plot_in_file is None:
+            plt.show()
+            plt.close() 
+    else:
+       #if path != "" : save_file=full_path(save_file,path)
+       plt.savefig(save_plot_in_file, bbox_inches='tight')
+       plt.close() 
+       vprint("  Figure saved in file",save_plot_in_file, **kwargs)
+
+
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+def rss_map(rss, variable=None, list_spectra=None, 
+            instrument = None,
+            clow=None, chigh=None,
+            log=True, floor = None, gamma=0, cmap = None,
+            title=" - RSS map",  description = None,
+            xlabel = None, ylabel = None, 
+            color_bar_text="Integrated Flux [Arbitrary units]", 
+            figsize = 8, grid=False,
+            colorbar_labelpad = 10, colorbar_pad= None, colorbar_width_fraction= None,
+            save_plot_in_file = None,
+            **kwargs):
+    """
+    Plot map showing the offsets, coloured by variable.
+
+    Parameters
+    ----------
+    norm:
+        Normalization scale, default is lineal scale.
+        Lineal scale: norm=colors.Normalize()
+        Log scale:    norm=colors.LogNorm()
+        Power law:    norm=colors.PowerNorm(gamma=1./4.)
+    list_spectra : list of floats (default = none)
+        List of RSS spectra
+    title : string (default = " - RSS image")
+        Set plot title
+    color_bar_text : string (default = "Integrated Flux [Arbitrary units]")
+        Colorbar's label text
+    """
+    if variable is None: 
+        #if instrument == "koala": 
+        try:
+            variable = rss.koala.integrated_fibre
+        except Exception:
+        #else:
+            variable = rss.integrated_fibre    # TODO!! ÁNGEL: I REALLY THINK THIS SHOULD BE THERE...
+
+    if cmap is None: cmap = fuego_color_map
+
+    if gamma > 0: 
+        norm=colors.PowerNorm(gamma=gamma)
+    elif log:
+        norm=colors.LogNorm()     
+        min_value = np.nanmin(variable)
+        if min_value <= 0:
+            if floor is None:
+                floor = np.nanmin(np.abs(variable))
+                if floor == 0: floor = 0.1
+                variable = np.array([np.nan if x <= floor else x for x in variable])
+                negative_spaxels = np.count_nonzero(np.isnan(variable))
+                vprint(f"> WARNING: The image has {negative_spaxels} spaxels with <= 0 values, min_value = {min_value}, using nan for these...", **kwargs)
+            else:
+                variable = np.array([floor if x <= floor else x for x in variable])  
+                negative_spaxels = variable.tolist().count(floor)
+                vprint(f"> WARNING: The image has {negative_spaxels} spaxels with <= 0 values, min_value = {min_value}, using provided floor = {floor} for these...", **kwargs)
+            if clow is None: clow = floor
+    else:
+        norm = colors.Normalize()
+        
+    if clow is None: clow = np.nanmin(variable[list_spectra])
+    if chigh is None: chigh = np.nanmax(variable[list_spectra])
+
+    if list_spectra is None: list_spectra = list(range(len(rss.intensity)))
+
+    # Get coordinates
+    fib_ra = rss.info["fib_ra"]
+    fib_dec = rss.info["fib_dec"]
+    
+    # For KOALA we can read RA_cen & DEC_cen directly, for new rss it is not possible now as it is not saved
+    if instrument == "koala":
+        RA_cen = rss.koala.info["RA_cen"]
+        DEC_cen = rss.koala.info["DEC_cen"]
+    else:
+        RA_cen = np.nanmedian(fib_ra)   # Tested and basically the same numbers, differences of 0.002" - 0.011" with respect KOALA values. 
+        DEC_cen = np.nanmedian(fib_dec)
+
+    offset_RA_arcsec = (fib_ra - RA_cen) * 3600.
+    offset_DEC_arcsec = (fib_dec - DEC_cen) * 3600.
+
+    # Start figure
+    if np.isscalar(figsize) :
+        fig, ax = plt.subplots(figsize=(figsize, figsize))
+        aspect_ratio = 1.
+    else:
+        fig, ax = plt.subplots(figsize=(figsize[0], figsize[1]))
+        aspect_ratio = figsize[0] / figsize[1]
+        figsize = figsize[0]
+    
+    cax= ax.scatter(offset_RA_arcsec[list_spectra],
+                offset_DEC_arcsec[list_spectra],
+                c=variable[list_spectra], cmap=cmap, 
+                clim=(clow, chigh),
+                norm=norm,
+                s=20*figsize, marker="h")
+    if description is None:
+        ax.set_title(rss.info["name"] + title)   
+    else:
+        ax.set_title(str(description))   # description
+    ax.set_facecolor("lightgrey")
+    
+    plt.xlim(np.nanmin(offset_RA_arcsec) - 0.75, np.nanmax(offset_RA_arcsec) + 0.75)
+    plt.ylim(np.nanmin(offset_DEC_arcsec) - 0.75, np.nanmax(offset_DEC_arcsec) + 0.75)
+    plt.gca().invert_xaxis()   # RA is NEG to the right
+    if xlabel is None: xlabel ="$\Delta$ RA [arcsec]" 
+    if ylabel is None: ylabel="$\Delta$ DEC [arcsec]"
+    plt.xlabel(str(xlabel))
+    plt.ylabel(str(ylabel))    
+    plt.minorticks_on()
+    if grid: plt.grid(which='both')
+    
+    # Set colorbar
+    if colorbar_pad is None : colorbar_pad = 0.02
+    if colorbar_width_fraction is None: colorbar_width_fraction = 0.4        
+    cbar = fig.colorbar(cax, pad = colorbar_pad, aspect = figsize*aspect_ratio / colorbar_width_fraction ) #, width=figsize*colorbar_width_fraction) # colorbar_width_fraction
+    cbar.set_label(str(color_bar_text), rotation=90, labelpad=colorbar_labelpad)
+    cbar.ax.tick_params()
+    
+    # Show or save final plot
+    if save_plot_in_file is None:
+            plt.show()
+            plt.close() 
+    else:
+       plt.savefig(save_plot_in_file, bbox_inches='tight')
+       plt.close() 
+       vprint("  Figure saved in file",save_plot_in_file, **kwargs)
+
+
 
 # Ángel :-)
