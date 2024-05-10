@@ -20,6 +20,15 @@ from pykoala import __version__
 from scipy.special import erf
 
 class CubeStacking:
+    """Collection of cubing stacking methods.
+    
+    Description
+    -----------
+    Each method takes as input arguments a collection of cubes and variances,
+    either in the form of a list or as an array with the first dimension corresponding
+    to each cube, and additional keyword arguments.
+
+    """
     def sigma_clipping(cubes, variances, **kwargs):
         """Perform cube stacking using STD clipping."""
         nsigma = kwargs.get("nsigma", 3.0)
@@ -423,6 +432,7 @@ def build_cube_stacking(rss_set, wcs=None, wcs_params=None,
     stacking_method = kwargs.get("stack_method", CubeStacking.mad_clipping)
     stacking_args = kwargs.get("stack_method_args", {})
     print(f"[Cubing] Stacking individual cubes using {stacking_method.__name__}")
+    print(f"[Cubing] Additonal arguments for stacking: {stacking_args}")
 
     datacube, datacube_var = stacking_method(
         all_datacubes, all_var, **stacking_args)
