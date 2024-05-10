@@ -296,6 +296,12 @@ class DataMask(object):
     def flag_pixels(self, mask, flag_name):
         """Add a pixel mask corresponding to a flag name.
 
+        Description
+        -----------
+        Add a pixel mask layer in the bitmask. If the mask already contains
+        information about the same flag, it will be overriden by the
+        new values.
+
         Parameters
         ----------
         - mask: np.ndarray
