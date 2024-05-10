@@ -165,7 +165,7 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
                 * w)
         cube_var[wl_range: wl_range + spectral_window, rows_min:rows_max - 1, cols_min:cols_max - 1] += (
                 fib_variance[wl_range: wl_range + spectral_window, np.newaxis, np.newaxis]
-                * w)
+                * w**2)
         cube_weight[wl_range: wl_range + spectral_window, rows_min:rows_max - 1, cols_min:cols_max - 1] += (
                 pixel_weights[wl_range: wl_range + spectral_window, np.newaxis, np.newaxis]
                 * w)
