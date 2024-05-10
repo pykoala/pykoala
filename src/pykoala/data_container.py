@@ -4,7 +4,7 @@ reduction process
 """
 import numpy as np
 
-from astropy.io.fits import Header
+from astropy.io.fits import Header, ImageHDU
 from astropy.nddata import bitmask
 
 from pykoala.exceptions.exceptions import NoneAttrError
@@ -279,35 +279,23 @@ class DataMask(object):
     - get_flag_map_from_bitmask
     - get_flag_map
     """
-    def __init__(self, shape, flag_map={"CR": 2, "HP": 4, "DP": 8},
-                 flag_desc={"CR": "Cosmic ray", "HP": "Hot pixel", "DP": "Dark pixel"}):
+    def __init__(self, shape, flag_map=None):
+        if flag_map is None:
+            self.flag_map = {"BAD": (2, "Generic bad pixel flag")}
+        else:
+            self.flag_map = flag_map
         # Initialise the mask with all pixels being valid
-        self.flag_map = flag_map
         self.bitmask = np.zeros(shape, dtype=int)
         self.masks = {}
         for key in self.flag_map.keys():
             self.masks[key] = np.zeros(shape, dtype=bool)
 
-    def __decode_number(self, x):
-        """Decompose a number in powers of 2"""
-        powers = []
-        i = 1
-        while i <= x:
-            if i & x:
-                powers.append(i)
-            i <<= 1
-        return powers
-
-    def __is_flag(self, x, flag_code):
-        """Check if a pixel contains a given flag code."""
-        if flag_code in self.__decode_number(x):
-            return True
-        else:
-            return False
+    def __decode_bitmask(self, value):
+        return np.bitwise_and(self.bitmask, value) > 0
 
     def flag_pixels(self, mask, flag_name):
         """Add a pixel mask corresponding to a flag name.
-        
+
         Parameters
         ----------
         - mask: np.ndarray
@@ -315,20 +303,59 @@ class DataMask(object):
         """
         if flag_name not in self.flag_map:
             raise NameError(f"Input flag name {flag_name} does not exist")
-        self.bitmask[mask] += self.flag_map[flag_name]
+        # Check that the bitmask does not already contain this flag
+        bit_flag_map = self.get_flag_map_from_bitmask(flag_name)
+        self.bitmask[bit_flag_map] -= self.flag_map[flag_name][0]
+        self.bitmask[mask] += self.flag_map[flag_name][0]
+        # Store the individual boolean map
         self.masks[flag_name] = mask
 
     def get_flag_map_from_bitmask(self, flag_name):
-        flag_map = np.array(
-            [self.__is_flag(pix, self.flag_map[flag_name]) for pix in self.data.flatten()])
-        return flag_map.reshape(self.data.shape)
+        """Get the boolean mask for a given flag name from the bitmask."""
+        return self.__decode_bitmask(self.flag_map[flag_name][0])
 
     def get_flag_map(self, flag_name=None):
+        """Return the boolean mask that corresponds to the input flags.
+        
+        Parameters
+        ----------
+        - flag_name: str or iterable, default=None
+            The flags to be used for constructing the mask. It can be a single
+            flag name or an iterable. If None, the mask will comprise every flag
+            that is included on the bitmask.
+
+        Returns
+        -------
+        - mask: np.ndarray
+            An array containing the boolean values for every pixel.
+        """
         if flag_name is not None:
-            return self.masks[flag_name]
+            if type(flag_name) is str:
+                return self.masks[flag_name]
+            else:
+                mask = np.zeros_like(self.bitmask, dtype=bool)
+                for flag in flag_name:
+                    mask |= self.masks[flag]
+                return mask
         else:
             return self.bitmask > 0
 
+    def dump_to_hdu(self):
+        """Return a ImageHDU containig the mask information.
+        
+        Returns
+        -------
+        - hdu: ImageHDU
+            An ImageHDU containing the bitmask information.
+        """
+        header = Header()
+        header['COMMENT'] = "Each flag KEY is stored using the convention FLAG_KEY"
+        for flag_name, value in self.flag_map.items():
+            # Store the value and the description
+            header[f"FLAG_{flag_name}"] = value
+        header['COMMENT'] = "A value of 0 means unmasked"
+        hdu = ImageHDU(name='BITMASK', data=self.bitmask, header=header)
+        return hdu
 
 class DataContainer(object):
     """
@@ -363,6 +390,7 @@ class DataContainer(object):
             self.info = dict()
         self.log = kwargs.get("log", HistoryLog())
         self.fill_info()
+        self.mask = kwargs.get("mask", DataMask(shape=self.intensity.shape))
 
     def fill_info(self):
         """Check the keywords of info and fills them with placeholders."""
