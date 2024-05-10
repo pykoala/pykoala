@@ -544,6 +544,8 @@ class Cube(DataContainer):
             data=self.intensity, name='INTENSITY', header=self.wcs.to_header()))
         hdu_list.append(fits.ImageHDU(
             data=self.variance, name='VARIANCE', header=hdu_list[-1].header))
+        # Store the mask information
+        hdu_list.append(self.mask.dump_to_hdu())
         # Save fits
         hdul = fits.HDUList(hdu_list)
         hdul.writeto(fname, overwrite=True)
