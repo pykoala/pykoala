@@ -30,6 +30,7 @@ creating science-ready 3D data cubes using Raw Stacked Spectra (RSS) images crea
 PyKOALA has the following pre-requisites 
 
 ```
+- pip
 - numpy
 - scipy
 - astropy
@@ -41,8 +42,17 @@ PyKOALA has the following pre-requisites
 
 ## Installation
 
-...
+To install, first clone the repository:
 
+```
+git clone https://github.com/pykoala/koala.git
+```
+
+Second part is installing it in your local machine with pip:
+
+```
+cd koala ; pip install . 
+```
 
 ## Package structure
 
