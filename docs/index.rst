@@ -6,20 +6,12 @@
 Welcome to PyKoala's documentation!
 =================================
 
-Another header
-==============
 
-Here is some text explaining stuff. ::
-
-    print 'hello'
-    >> hello
-
-Guide
-^^^^^
 .. toctree::
     :maxdepth: 3
     :caption: Contents:
 
+    
     modules
     api
     license
