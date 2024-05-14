@@ -1,4 +1,4 @@
-pykoala package
+API Documentation
 ===============
 
 Subpackages

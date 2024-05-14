@@ -11,8 +11,6 @@ Welcome to PyKoala's documentation!
     :maxdepth: 2
     :caption: Contents:
 
-
-    modules
     api
     license
 
