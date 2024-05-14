@@ -11,6 +11,7 @@ Welcome to PyKoala's documentation!
     :maxdepth: 2
     :caption: Contents:
 
+    getting-started/index
     api
     license
 
