@@ -8,10 +8,10 @@ Welcome to PyKoala's documentation!
 
 
 .. toctree::
-    :maxdepth: 3
+    :maxdepth: 2
     :caption: Contents:
 
-    
+
     modules
     api
     license
