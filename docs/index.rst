@@ -6,6 +6,7 @@
 Welcome to PyKoala's documentation!
 =================================
 
+
 PyKOALA is a Python package to reduce KOALA+AAOmega integral field spectroscopy (IFS) data creating a data cube. It produces full calibrated (wavelength, flux and astrometry) data cubes ready for science.
 
 `KOALA`_, the Kilofibre Optical AAT Lenslet Array, is a wide-field, high efficiency, integral field unit used by the 

@@ -29,6 +29,7 @@ wheels/
 pip-wheel-metadata/
 share/python-wheels/
 *.egg-info/
+pyvenv.cfg
 .installed.cfg
 *.egg
 MANIFEST
