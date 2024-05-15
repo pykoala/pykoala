@@ -20,7 +20,7 @@ AAOmega spectrograph on the 3.9m AAT ([Anglo-Australian Telescope][aat_website])
 creating science-ready 3D data cubes using Raw Stacked Spectra (RSS) images created with [2dfdr][2dfdr_website].
 
 [koala_website]: https://aat.anu.edu.au/science/instruments/current/koala/overview
-[aat_website]: https://www.aao.gov.au/about-us/AAT
+[aat_website]: https://aat.anu.edu.au/about-us/AAT
 [2dfdr_website]: https://aat.anu.edu.au/science/instruments/current/AAOmega/reduction
 
 
