@@ -141,3 +141,6 @@ dmypy.json
 *.bak
 .DS_Store
 *.orig
+
+
+tutorials/ps_query_180.0001_0.0001_i.fits
