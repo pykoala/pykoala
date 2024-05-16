@@ -91,6 +91,9 @@ ipython_config.py
 
 # pyenv
 .python-version
+lib64/*
+lib/*
+include/*
 bin/*
 
 # pipenv
