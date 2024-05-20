@@ -3,6 +3,7 @@ This module contains the parent class that represents the data used during the
 reduction process
 """
 import numpy as np
+import copy
 
 from astropy.io.fits import Header, ImageHDU
 from astropy.nddata import bitmask
@@ -423,4 +424,7 @@ class DataContainer(object):
         """Fill a FITS Header with the HistoryLog information."""
         return self.log.dump_to_header(header)
 
+    def copy(self):
+        return copy.deepcopy(self)
+    
 # Mr Krtxo \(ﾟ▽ﾟ)/
