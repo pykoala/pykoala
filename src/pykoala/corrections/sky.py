@@ -26,7 +26,7 @@ from astropy import units as u
 from pykoala.ancillary import vprint
 from pykoala.exceptions.exceptions import TelluricNoFileError
 from pykoala.corrections.correction import CorrectionBase
-from koala.data_container import DataContainer
+from pykoala.data_container import DataContainer
 from pykoala.rss import RSS
 from pykoala.cubing import Cube
 # Original

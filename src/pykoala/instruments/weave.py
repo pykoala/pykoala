@@ -53,7 +53,7 @@ def weave_rss(filename):
            wavelength=wavelength,
            variance=variance,
            log=log,
-           header=header,
+           #header=header,
            info=info
            )
 
