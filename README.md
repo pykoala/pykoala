@@ -40,19 +40,14 @@ PyKOALA has the following pre-requisites
 ```
 
 
-## Installation
+## Download
 
-To install, first clone the repository:
+To get PyKOALA, clone the repository, using git:
 
 ```
 git clone https://github.com/pykoala/koala.git
 ```
 
-Second part is installing it in your local machine with pip:
-
-```
-cd koala ; pip install . 
-```
 
 ## Package structure
 
