@@ -42,16 +42,15 @@ default_cmap.set_bad('gray')
 
 
 # %%
-def colour_map(fig, ax, cblabel, data, cmap=default_cmap, norm=None, xlabel=None, x=None, ylabel=None, y=None):
+def colour_map(fig, ax, cblabel, data, cmap=default_cmap, norm=None, xlabel=None, x=None, ylabel=None, y=None, cbax=None):
     '''
     Plot a colour map (imshow) with axes and colour scales
     '''
-    
     if norm is None:
         percentiles = np.array([1, 16, 50, 84, 99])
         ticks = np.nanpercentile(data, percentiles)
         linthresh = np.median(data[data > 0])
-        norm = colors.SymLogNorm(vmin=ticks[0], vmax=ticks[-1], linthresh=linthresh)
+        norm = colors.SymLogNorm(vmin=2*ticks[0]-ticks[1], vmax=2*ticks[-1]-ticks[-2], linthresh=linthresh)
     else:
         ticks = None
     if y is None:
@@ -71,10 +70,14 @@ def colour_map(fig, ax, cblabel, data, cmap=default_cmap, norm=None, xlabel=None
     if ylabel is not None:
         ax.set_ylabel(ylabel)
 
-    cb = fig.colorbar(im, ax=ax, orientation='vertical', shrink=.9)
-    cb.ax.set_ylabel(cblabel)
+    if cbax is None:
+        cb = fig.colorbar(im, ax=ax, orientation='vertical', shrink=.9)
+    else:
+        cb = fig.colorbar(im, cax=cbax, orientation='vertical')
+    cb.ax.yaxis.set_label_position("left")
+    cb.set_label(cblabel)
     if ticks is not None:
         cb.ax.set_yticks(ticks=ticks, labels=[f'{value:.3g} ({percent})\%)' for value, percent in zip(ticks, percentiles)])
     cb.ax.tick_params(labelsize='small')
-    
+
     return im, cb
