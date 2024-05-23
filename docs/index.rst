@@ -19,10 +19,11 @@ creating science-ready 3D data cubes using Raw Stacked Spectra (RSS) images crea
 
 
 .. toctree::
-    :maxdepth: 2
+    :maxdepth: 1
     :caption: Contents:
 
     getting-started/index
+    developer-guide/index
     api
     license
 
