@@ -16,3 +16,8 @@ Clone a copy of your fork onto a local machine:
 
     git clone git@github.com:USERNAME/koala
 
+This gets a copy of the entire repository. Here replace USERNAME with your GitHub username.
+
+
+How to update your fork from the main PyKOALA repo
+--------------------------------------------------

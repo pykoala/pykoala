@@ -13,10 +13,12 @@ PyKOALA is a Python package to reduce KOALA+AAOmega integral field spectroscopy 
 AAOmega spectrograph on the 3.9m AAT `Anglo-Australian Telescope`_ at Siding Spring Observatory. **PyKOALA** is the forthcoming data reduction pipeline for 
 creating science-ready 3D data cubes using Raw Stacked Spectra (RSS) images created with `2dfdr`_.
 
+- Code repository: https://github.com/pykoala/koala
+
 .. _KOALA: https://aat.anu.edu.au/science/instruments/current/koala/overview
 .. _Anglo-Australian Telescope: https://www.aao.gov.au/about-us/AAT
 .. _2dfdr: https://aat.anu.edu.au/science/instruments/current/AAOmega/reduction
-
+ 
 
 .. toctree::
     :maxdepth: 1
