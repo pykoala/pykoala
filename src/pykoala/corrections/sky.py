@@ -24,6 +24,7 @@ from astropy import units as u
 # =============================================================================
 # Modular
 from pykoala.ancillary import vprint
+from pykoala.plotting.utils import new_figure, colour_map
 from pykoala.exceptions.exceptions import TelluricNoFileError
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.data_container import DataContainer
@@ -868,10 +869,92 @@ def combine_telluric_corrections(list_of_telcorr, ref_wavelength):
     return TelluricCorrection(telluric_correction=telluric_correction, wavelength=ref_wavelength, verbose=False)
 
 
-
 # =============================================================================
 # Self-calibration based on strong sky lines
 # =============================================================================
+
+class WaveletFilter(object):
+    '''
+    Given a Row-Stacked Spectra (RSS) object:
+    1. Estimate the FWHM of emission lines from the autocorrelation of the median (~ sky) spectrum.
+    2. Apply a (mexican top hat) wavelet filter to detect features on that scale (i.e. filter out the continuum).
+    3. Find regions actually dominated by sky lines (i.e. exclude lines from the target).
+    4. Estimate fibre throughput from norm (standard deviation).
+    5. Estimate wavelength offset of each fibre (in pixels) from cross-correlation with the sky.
+    '''
+    
+    def __init__(self, rss):
+        
+        assert isinstance(rss, RSS) == True
+        
+        # 1. Estimate the FWHM of emission lines from the autocorrelation of the median (~ sky) spectrum.
+        
+        x = np.nanmedian(rss.intensity, axis=0)  # median ~ sky spectrum
+        x -= np.nanmean(x)
+        x = scipy.signal.correlate(x, x, mode='same')
+        h = np.count_nonzero(x > 0.5*np.nanmax(x)) // 2
+        self.scale = 2*h + 1
+        print(f'> Wavelet filter scale: {self.scale} pixels')
+        
+        # 2. Apply a (mexican top hat) wavelet filter to detect features on that scale (i.e. filter out the continuum).
+        
+        x = np.nancumsum(rss.intensity, axis=1)
+        self.filtered = (x[:, 2*self.scale:-self.scale] - x[:, self.scale:-2*self.scale]) / self.scale
+        self.filtered -= (x[:,3*self.scale:] - x[:,:-3*self.scale]) / (3*self.scale)
+
+        # 3. Find regions actually dominated by sky lines (i.e. exclude lines from the target).
+        
+        self.sky_lo, self.sky, self.sky_hi = np.nanpercentile(self.filtered, [16, 50, 84], axis=0)
+        self.sky_weight = 1 - np.exp(-.5 * (self.sky / np.fmax((self.sky - self.sky_lo), (self.sky_hi - self.sky)))**2)
+        self.sky *= self.sky_weight
+        self.sky_lo *= self.sky_weight
+        self.sky_hi *= self.sky_weight
+        
+        # 4. Estimate fibre throughput from norm (standard deviation).
+        
+        self.filtered -= np.nanmean(self.filtered, axis=1)[:, np.newaxis] # should be irrelevant
+        self.filtered *= self.sky_weight
+        self.fibre_throughput = np.nanstd(self.filtered, axis=1)
+        self.filtered /= self.fibre_throughput[:, np.newaxis]
+
+        x = np.nanmedian(self.filtered / self.sky, axis=1)
+        self.filtered /= x[:, np.newaxis]
+        self.fibre_throughput /= x
+        self.fibre_throughput /= np.nanmedian(self.fibre_throughput)
+        
+        # 5. Estimate wavelength offset of each fibre (in pixels) from cross-correlation with the sky.
+        
+        self.wavelength = rss.wavelength[self.scale + h + 1 : -self.scale - h ].to_value(u.AA)  # only for plotting:
+        mid = rss.intensity.shape[1] // 2
+        s = self.scale * 2
+
+        x = scipy.signal.fftconvolve(self.filtered, self.sky[np.newaxis, ::-1], mode='same', axes=1)[:, mid-s:mid+s+1]
+        self.fibre_offset = np.nansum(np.arange(x.shape[1])[np.newaxis, :] * x**2, axis=1) / np.nansum(x**2, axis=1)
+        
+        
+    def qc_plots(self, show=False, save_as=None):
+        '''
+        Top: Filtered intensity for every fibre.
+        Centre: Sky-subtracted.
+        Bottom: Filtered sky.
+        '''
+        fig, axes = new_figure('wavelet_filter', nrows=3, ncols=2, sharey=False, gridspec_kw={'width_ratios': [1, .02], 'hspace': 0., 'wspace': .1})
+        im, cb = colour_map(fig, axes[0, 0], 'wavelet coefficient', self.filtered, x=self.wavelength, ylabel='spec_id', cbax=axes[0, 1])
+        im, cb = colour_map(fig, axes[1, 0], 'sky-subtracted', self.filtered - self.sky*self.sky_weight, x=self.wavelength, ylabel='spec_id', cbax=axes[1, 1])
+        ax = axes[-1, 0]
+        axes[-1, 1].axis('off')
+        ax.plot(self.wavelength, self.sky, 'k-', alpha=.5, label='sky (median coefficient)')
+        ax.fill_between(self.wavelength, self.sky_lo, self.sky_hi, color='k', alpha=0.1, label='uncertainty (16-84%)')
+        ax.plot(self.wavelength, self.sky/self.sky_weight, 'r:', alpha=.5, label='unweighted sky')
+        ax.set_xlabel('wavelength [pix]')
+        ax.set_ylabel(f'filtered (scale = {self.scale} pix)')
+        ax.legend()
+        if show:  # TODO: deal with ipympl
+            fig.show()
+        if save_as is not None:
+            fig.savefig(save_as)
+
+
 class SkySelfCalibration(CorrectionBase):
     """Wavelength calibration, throughput, and sky model based on strong sky lines."""
     name = "SkySelfCalibration"
@@ -954,3 +1037,4 @@ class SkySelfCalibration(CorrectionBase):
 
 # =============================================================================
 # Mr Krtxo \(ﾟ▽ﾟ)/
+#                                                       ... Paranoy@ Rulz! ;^D
