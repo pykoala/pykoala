@@ -38,4 +38,34 @@ Then install all required packages with:
 
     pip install -r requirements.txt ; pip install . 
 
-The second command will also install PyKOALA in the virtual environment.
+The second command will also install PyKOALA in the virtual environment. Furthermore, you can install any other Python modules with pip (seaborn, Bokeh, etc.)
+
+While the environment is active, you will see ``(venv_koala)`` before the system username: 
+
+.. figure:: ../figures/venv-activated.png
+
+When you are finished with the session in PyKOALA, you can deactivate the environment using:
+
+::
+
+    deactivate
+
+You do not need to reinstall the packages every time you activate it, they will be there anytime you reactivate it!
+
+Using VS Code in a virtual environment
+--------------------------------------
+
+If you use Visual Studio Code, you need to specify which environment you will use, even if it is already activated. 
+When working with Python scripts, select in the bottom right the installed version:     
+
+.. figure:: ../figures/vscode_bottom.png
+
+Once you do, at the top center a tab with the list of available environments will open, then select ``venv_koala`` (recommended version if possible):
+
+.. figure:: ../figures/vscode_venv.png
+
+When working with Jupyter notebooks in VS Code, you can select the environment in the top right buttom:
+
+.. figure:: ../figures/vscode_jupyter.png
+
+Once selected, the same tab with the environment list will appear. 

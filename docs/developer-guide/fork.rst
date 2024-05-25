@@ -7,7 +7,7 @@ How to fork
 -----------
 First, click “Fork this repository” on the main PyKOALA repository in github. You then have your own copy of Phantom in github.com/USERNAME/koala
 
-.. figure:: fork_buttom.png
+.. figure:: ../figures/fork_buttom.png
 
 How to work on your fork
 ------------------------
@@ -21,3 +21,5 @@ This gets a copy of the entire repository. Here replace USERNAME with your GitHu
 
 How to update your fork from the main PyKOALA repo
 --------------------------------------------------
+
+Make a
