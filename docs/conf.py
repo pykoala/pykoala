@@ -56,7 +56,7 @@ release = pykoala.__version__
 
 
 
-source_suffix = ['.rst', '.ipynb']
+source_suffix = '.rst'
 
 # The encoding of source files.
 #source_encoding = 'utf-8-sig'
