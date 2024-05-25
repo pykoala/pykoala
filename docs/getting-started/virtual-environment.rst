@@ -42,7 +42,7 @@ The second command will also install PyKOALA in the virtual environment. Further
 
 While the environment is active, you will see ``(venv_koala)`` before the system username: 
 
-.. figure:: ../figures/venv-activated.png
+.. figure:: ../_static/figures/venv-activated.png
 
 When you are finished with the session in PyKOALA, you can deactivate the environment using:
 
