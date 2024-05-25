@@ -2,7 +2,7 @@ Getting started
 ===============
 
 Quickstart
----------
+-----------
 
 1. :doc:`Get a copy <get-copy>` of the code.
 
@@ -18,5 +18,4 @@ Contents
     :maxdepth: 1
 
     get-copy
-    virtual-environment
-    
+    virtual-environment    
