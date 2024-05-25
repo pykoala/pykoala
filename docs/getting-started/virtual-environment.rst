@@ -58,14 +58,14 @@ Using VS Code in a virtual environment
 If you use Visual Studio Code, you need to specify which environment you will use, even if it is already activated. 
 When working with Python scripts, select in the bottom right the installed version:     
 
-.. figure:: ../figures/vscode_bottom.png
+.. figure:: ../_static/figures/vscode_bottom.png
 
 Once you do, at the top center a tab with the list of available environments will open, then select ``venv_koala`` (recommended version if possible):
 
-.. figure:: ../figures/vscode_venv.png
+.. figure:: ../_static/figures/vscode_venv.png
 
 When working with Jupyter notebooks in VS Code, you can select the environment in the top right buttom:
 
-.. figure:: ../figures/vscode_jupyter.png
+.. figure:: ../_static/figures/vscode_jupyter.png
 
 Once selected, the same tab with the environment list will appear. 
