@@ -364,7 +364,7 @@ def smooth_spectrum(wlm, s, wave_min=0, wave_max=0, step=50, exclude_wlm=[[0,0]]
 
 def vect_norm(a, b):
     """Compute the norm of two vectors."""
-    return np.sqrt(np.sum((a - b)**2, axis=-1))**0.5
+    return np.sqrt(np.sum((a - b)**2, axis=-1))
 
 
 def in_rectangle(pos, rectangle_pos):
@@ -417,14 +417,21 @@ def pixel_in_circle(pixel_pos, pixel_size, circle_pos, circle_radius):
     circle_area = np.pi * cr_s
 
     if n_inside == 1:
-        x_cross = np.array(
-            [circle_pos[0] + (cr_s - (vertex_in[1] - circle_pos[1])**2)**0.5,
-             vertex_in[1]])
-        y_cross = np.array([vertex_in[0],
-        circle_pos[1] + (cr_s - (vertex_in[0] - circle_pos[0])**2)**0.5])
-        arc_length = np.sum((x_cross - y_cross)**2)**0.5
+        x_cross = (cr_s - (vertex_in[1] - circle_pos[1])**2)**0.5
+        x_cross = np.array([[circle_pos[0] + x_cross, vertex_in[1]],
+                            [circle_pos[0] - x_cross, vertex_in[1]]])
+        xcross_pt = np.argmin(vect_norm(pixel_center[np.newaxis, :], x_cross))
+        x_cross = x_cross[xcross_pt]
+        
+        y_cross = (cr_s - (vertex_in[0] - circle_pos[0])**2)**0.5
+        y_cross = np.array([[vertex_in[0], circle_pos[1] + y_cross],
+                            [vertex_in[0], circle_pos[1] - y_cross]])
+        ycross_pt = np.argmin(vect_norm(pixel_center[np.newaxis, :], y_cross))
+        y_cross = y_cross[ycross_pt]
+        arc_length = vect_norm(x_cross, y_cross)
         phi = np.arccos(
             (2*circle_radius**2 - arc_length**2) / (2 * circle_radius**2))
+
         # Area of the triangle formed by the circle center and the intersection
         area_triangle = 0.5 * circle_radius**2 * np.sin(phi)
         area_sector = phi / 2 * circle_radius**2
@@ -439,34 +446,38 @@ def pixel_in_circle(pixel_pos, pixel_size, circle_pos, circle_radius):
         perpendicular_axis.remove(parallel_axis)
         dist = np.abs(vertex_in[0][perpendicular_axis
             ] - vertex_in[1][perpendicular_axis]).squeeze()
-        intersection_points = np.zeros((2, 2, 2))
+        intersection_points = np.zeros((2, 2))
         for i, v in enumerate(vertex_in):
             x_cross = (cr_s - (v[1] - circle_pos[1])**2)**0.5
-            x_cross = np.array([circle_pos[0] + x_cross, circle_pos[0] - x_cross])
-            xcross_pt = np.argmin([np.abs(v[0] - x_cross)])
+            x_cross = np.array([[circle_pos[0] + x_cross, v[1]],
+                                [circle_pos[0] - x_cross, v[1]]])
+            xcross_pt = np.argmin(vect_norm(pixel_center[np.newaxis, :], x_cross))
+            x_cross = x_cross[xcross_pt]
+            if in_rectangle(x_cross, pixel_vertices):
+                intersection_points[i] = x_cross
+                continue
             y_cross = (cr_s - (v[0] - circle_pos[0])**2)**0.5
-            y_cross = np.array([circle_pos[1] + y_cross, circle_pos[1] - y_cross])
-            ycross_pt = np.argmin([np.abs(v[1] - y_cross)])
+            y_cross = np.array([[v[0], circle_pos[1] + y_cross],
+                                [v[0], circle_pos[1] - y_cross]])
+            ycross_pt = np.argmin(vect_norm(pixel_center[np.newaxis, :], y_cross))
+            y_cross = y_cross[ycross_pt]
+            if in_rectangle(y_cross, pixel_vertices):
+                intersection_points[i] = y_cross
 
-            intersection_points[i] = (np.array([x_cross[xcross_pt], v[1]]),
-                                      np.array([v[0], y_cross[ycross_pt]])
-                                                )
         # Parallel sides of the trapezium
         a = np.abs(
             vertex_in[0][parallel_axis]
-            - intersection_points[0][parallel_axis][parallel_axis])
+            - intersection_points[0][parallel_axis])
         b = np.abs(
             vertex_in[1][parallel_axis]
-            - intersection_points[1][parallel_axis][parallel_axis])
+            - intersection_points[1][parallel_axis])
 
         area_trapezoid = dist * (a + b) / 2
-        arc_length = vect_norm(intersection_points[0][parallel_axis],
-                               intersection_points[1][parallel_axis])
+        arc_length = vect_norm(intersection_points[0], intersection_points[1])
         phi = np.arccos(
             (2*circle_radius**2 - arc_length**2) / (2 * circle_radius**2))
         area_triangle = 0.5 * cr_s * np.sin(phi)
         area_sector = phi / 2 * cr_s
-        
         area_pixel = area_sector - area_triangle + area_trapezoid
 
     elif n_inside == 3:
