@@ -2,6 +2,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
 from matplotlib.gridspec import  GridSpec
+from matplotlib.collections import PatchCollection
 import os
 
 from pykoala.corrections.throughput import Throughput
@@ -166,10 +167,63 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
     plt.close(fig)
     return fig
 
-def qc_cubing(cube, ):
+def qc_cubing(rss_weight_maps, exposure_times):
     """..."""
+    if exposure_times.ndim == 1:
+        exposure_times = (rss_weight_maps
+        * exposure_times[:, np.newaxis, np.newaxis, np.newaxis])
+    n_rss = rss_weight_maps.shape[0]
 
-    pass
+    p5, p95 = np.nanpercentile(rss_weight_maps, [.1 , 99.9])
+    w_im_args = dict(vmin=p5 * 0.9, vmax=p95 * 1.1, cmap='nipy_spectral',
+                     interpolation='none', origin='lower')
+
+    tp5, tp95 = np.nanpercentile(exposure_times, [5 , 95])
+    print("Mean exposure time: ", np.nanmean(exposure_times))
+    t_im_args = dict(vmin=tp5 * 1.1, vmax=tp95 * 1.1, cmap='gnuplot',
+                     interpolation='none', origin='lower')
+    fig, axs = plt.subplots(ncols=n_rss + 1, nrows=2, sharex=True,
+     sharey=True, constrained_layout=True)
+    for i in range(n_rss):
+        ax = axs[0, i]
+        ax.set_title(f"RSS - {i + 1}")
+        ax.imshow(np.nanmedian(rss_weight_maps[i], axis=0), **w_im_args)
+        ax = axs[1, i]
+        ax.imshow(np.nanmedian(exposure_times[i], axis=0), **t_im_args)
+
+    axs[0, -1].set_title("Mean")
+    mappable = axs[0, -1].imshow(np.nanmedian(np.nanmean(rss_weight_maps, axis=0), axis=0),
+                      **w_im_args)
+    plt.colorbar(mappable, ax=axs[0, -1], label='Median weight')
+    mappable = axs[1, -1].imshow(np.nanmedian(np.nanmean(exposure_times, axis=0), axis=0),
+                      **t_im_args)
+    plt.colorbar(mappable, ax=axs[1, -1], label='Median exp. time / pixel')
+    plt.close()
+    return fig
+
+def qc_fibres_on_fov(fov_size, pixel_colum_pos, pixel_row_pos,
+                     fibre_diam=1.25):
+    fig = plt.figure(constrained_layout=True)
+    ax = fig.add_subplot(111)
+    ax.set_xlim(np.min([-10, pixel_colum_pos.min() - 5]),
+                np.max([fov_size[1] + 10, pixel_colum_pos.max() + 5]))
+    ax.set_ylim(np.min([-10, pixel_row_pos.min() - 5]),
+                np.max([fov_size[0] + 10, pixel_row_pos.max() + 5]))
+    ax.set_xlabel("Column pixel (RA)")
+    ax.set_ylabel("Row pixel (DEC)")
+    ax.grid(visible=True, alpha=0.3)
+    
+    patches = [plt.Circle(xy=(c, r), radius=fibre_diam/2) for c, r in zip(
+        pixel_colum_pos, pixel_row_pos)]
+    p = PatchCollection(patches, facecolors='tomato', edgecolors='k', label='Fibre')
+    ax.add_collection(p)
+    patch = plt.Rectangle(xy=(-.5, -.5),
+                          width=fov_size[1] + 0.5,
+                          height=fov_size[0] + 0.5,
+                          fc='none', ec='k', lw=2, label='Cube FoV')
+    ax.add_patch(patch)
+    ax.legend(handles=[patch])
+    #plt.close()
 
 # =============================================================================
 # Star profile
