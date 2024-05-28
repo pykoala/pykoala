@@ -30,8 +30,31 @@ class CubeStacking:
     to each cube, and additional keyword arguments.
 
     """
-    def sigma_clipping(cubes, variances, **kwargs):
-        """Perform cube stacking using STD clipping."""
+    def sigma_clipping(cubes: np.ndarray, variances: np.ndarray, **kwargs):
+        """Perform cube stacking using STD clipping.
+        
+        Parameters
+        ----------
+        - cubes: np.ndarray
+            An array consisting of the collection of data to combine. The first
+            dimension must correspond to the individual elements (e.g. datacubes)
+            that will be combined. If the size of the first dimension is 1, it
+            will return `cubes[0]` withouth applying any combination.
+        - variances: np.ndarray
+            Array of variances associated to cubes.
+        - inv_var_weight: np.ndarray, optional
+            An array of weights to apply during the stacking.
+        
+        Returns
+        -------
+        - stacked_cube: np.ndarray
+            The result of stacking the data in cubes along axis 0.
+        - stacked_variance: np.ndarray
+            The result of stacking the variances along axis 0.
+        """
+        if cubes.shape[0] == 1:
+            return cubes[0], variances[0]
+
         nsigma = kwargs.get("nsigma", 3.0)
         sigma = np.nanstd(cubes, axis=0)
         mean =np.nanmean(cubes, axis=0)
@@ -47,8 +70,31 @@ class CubeStacking:
         stacked_variance = np.nansum(variances, axis=0) / cubes.shape[0]**2
         return stacked_cube, stacked_variance
 
-    def mad_clipping(cubes, variances, **kwargs):
-        """Perform cube stacking using MAD clipping."""
+    def mad_clipping(cubes: np.ndarray, variances: np.ndarray, **kwargs):
+        """Perform cube stacking using MAD clipping.
+        
+        Parameters
+        ----------
+        - cubes: np.ndarray
+            An array consisting of the collection of data to combine. The first
+            dimension must correspond to the individual elements (e.g. datacubes)
+            that will be combined. If the size of the first dimension is 1, it
+            will return `cubes[0]` withouth applying any combination.
+        - variances: np.ndarray
+            Array of variances associated to cubes.
+        - inv_var_weight: np.ndarray, optional
+            An array of weights to apply during the stacking.
+        
+        Returns
+        -------
+        - stacked_cube: np.ndarray
+            The result of stacking the data in cubes along axis 0.
+        - stacked_variance: np.ndarray
+            The result of stacking the variances along axis 0.
+        """
+        if cubes.shape[0] == 1:
+            return cubes[0], variances[0]
+
         nsigma = kwargs.get("nsigma", 3.0)
         sigma = ancillary.std_from_mad(cubes, axis=0)
         median =np.nanmedian(cubes, axis=0)
@@ -125,8 +171,8 @@ class GaussianKernel(InterpolationKernel):
 
     def kernel_2D(self, x_edges, y_edges):
         weights = (
-            self.kernel(x_edges)[:, np.newaxis]
-            * self.kernel(y_edges)[np.newaxis, :])
+            self.kernel_1D(x_edges)[:, np.newaxis]
+            * self.kernel_1D(y_edges)[np.newaxis, :])
         return weights
 
 class TopHatKernel(InterpolationKernel):
@@ -148,8 +194,8 @@ class TopHatKernel(InterpolationKernel):
 
     def kernel_2D(self, x_edges, y_edges):
         weights = (
-            self.kernel(x_edges)[:, np.newaxis]
-            * self.kernel(y_edges)[np.newaxis, :])
+            self.kernel_1D(x_edges)[:, np.newaxis]
+            * self.kernel_1D(y_edges)[np.newaxis, :])
         return weights
 
 class DrizzlingKernel(TopHatKernel):
@@ -351,99 +397,7 @@ def interpolate_rss(rss, wcs, kernel,
     return datacube, datacube_var, datacube_weight, qc_fig
 
 
-def build_cube(rss_set, 
-               wcs=None, wcs_params=None,
-               kernel=GaussianKernel,
-               kernel_size_arcsec=2.0,
-               kernel_truncation_radius=2.0,
-               adr_set=None, mask_flags=None, qc_plots=False,
-               **cube_info):
-               
-    """Create a Cube from a set of Raw Stacked Spectra (RSS).
-
-    Parameters
-    ----------
-    rss_set: list of RSS
-        List of Raw Stacked Spectra to interpolate.
-    cube_size_arcsec: (2-element tuple) 
-        Cube physical size in *arcseconds* in the form (RA, DEC).
-    kernel_size_arcsec: float, default=1.1
-        Interpolator kernel physical size in *arcseconds*.
-    pixel_size_arcsec: float, default=0.7
-        Cube pixel physical size in *arcseconds*.
-    adr_set: (list, default=None)
-        List containing the ADR correction for every RSS (it can contain None)
-        in the form: [(ADR_ra_1, ADR_dec_1), (ADR_ra_2, ADR_dec_2), (None, None)]
-
-    Returns
-    -------
-    cube: Cube
-         Cube created by interpolating the set of RSS.
-    """
-    print('[Cubing] Starting cubing process')
-    if wcs is None and wcs_params is None:
-        raise ValueError("User must provide either wcs or wcs_params values.")
-    if wcs is None and wcs_params is not None:
-        wcs = WCS(wcs_params)
-    plots = {}
-    # Initialise kernel
-    pixel_size = wcs.celestial.pixel_scale_matrix.diagonal().mean()
-    pixel_size *= 3600
-    kernel_scale = kernel_size_arcsec / pixel_size
-    print(
-        f"[Cubing] Initialising {kernel.__name__}"
-        + f"\n Scale: {kernel.scale:.1f} (pixels)"
-        + f"\n Truncation radius: {kernel_truncation_radius:.1f}")
-    kernel = kernel(pixel_scale_arcsec=pixel_size, scale=kernel_scale,
-                    truncation_radius=kernel_truncation_radius)
-
-    # Create empty cubes for data, variance and weights
-    print(f"[Cubing] Initialising datacube with dimensions: {wcs.array_shape}")
-    datacube = np.zeros(wcs.array_shape)
-    datacube_var = np.zeros_like(datacube)
-    datacube_weight = np.zeros_like(datacube)
-    # Create an RSS mask that will contain the contribution of each RSS in the datacube
-    rss_weight_map = np.zeros((len(rss_set), *datacube.shape))
-    exposure_times = np.zeros((len(rss_set)))
-
-    if adr_set is None:
-        adr_set = [(None, None)] * len(rss_set)
-
-    # Begin the interpolation
-    for i, rss in enumerate(rss_set):
-        copy_rss = rss.copy()
-        exposure_times[i] = copy_rss.info['exptime']
-        # Interpolate RSS to data cube
-        datacube_weight_before = datacube_weight.copy()
-        datacube, datacube_var, datacube_weight, rss_plots = interpolate_rss(
-            copy_rss,
-            wcs=wcs,
-            kernel=kernel,
-            datacube=datacube, datacube_var=datacube_var, datacube_weight=datacube_weight,
-            adr_ra_arcsec=adr_set[i][0], adr_dec_arcsec=adr_set[i][1],
-            mask_flags=mask_flags,
-            qc_plots=qc_plots)
-        plots[f'rss_{i+1}'] = rss_plots
-        rss_weight_map[i] = datacube_weight - datacube_weight_before
-        del datacube_weight_before, copy_rss
-
-    pixel_exptime = np.nansum(
-        rss_weight_map * exposure_times[:, np.newaxis, np.newaxis, np.newaxis],
-        axis=0)
-    if qc_plots:
-        plots[f'weights'] = qc_plot.qc_cubing(rss_weight_map, exposure_times)
-    datacube /= pixel_exptime
-    datacube_var /= pixel_exptime**2
-    # Create cube meta data
-    # TODO: save the pixel exptime info in a file or somewhere else,
-    info = dict(pixel_exptime=pixel_exptime, kernel_size_arcsec=kernel_size_arcsec, **cube_info)
-    # Create WCS information
-    hdul = build_hdul(intensity=datacube, variance=datacube_var, wcs=wcs)
-    cube = Cube(hdul=hdul, info=info)
-    return cube, plots
-
-
-def build_cube_stacking(rss_set, wcs=None, wcs_params=None,
+def build_cube(rss_set, wcs=None, wcs_params=None,
                         kernel=GaussianKernel,
                         kernel_size_arcsec=2.0,
                         kernel_truncation_radius=2.0,
@@ -523,9 +477,6 @@ def build_cube_stacking(rss_set, wcs=None, wcs_params=None,
         all_w[i] = datacube_weight_i
         all_exp[i] = datacube_weight_i * exposure_times[i]
 
-    if qc_plots:
-        # Compute the fibre coverage and exposure time maps
-        plots[f'weights'] = qc_plot.qc_cubing(all_w, all_exp)
     # Stacking
     stacking_method = kwargs.get("stack_method", CubeStacking.mad_clipping)
     stacking_args = kwargs.get("stack_method_args", {})
@@ -538,7 +489,11 @@ def build_cube_stacking(rss_set, wcs=None, wcs_params=None,
     # Create WCS information
     hdul = build_hdul(intensity=datacube, variance=datacube_var, wcs=wcs)
     cube = Cube(hdul=hdul, info=info)
-    return cube, plots
+    if qc_plots:
+        # Compute the fibre coverage and exposure time maps
+        plots[f'weights'] = qc_plot.qc_cubing(all_w, all_exp)
+        return cube, plots
+    return cube
 
 
 def build_wcs(datacube_shape, reference_position, spatial_pix_size,
