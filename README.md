@@ -20,7 +20,7 @@ AAOmega spectrograph on the 3.9m AAT ([Anglo-Australian Telescope][aat_website])
 creating science-ready 3D data cubes using Raw Stacked Spectra (RSS) images created with [2dfdr][2dfdr_website].
 
 [koala_website]: https://aat.anu.edu.au/science/instruments/current/koala/overview
-[aat_website]: https://www.aao.gov.au/about-us/AAT
+[aat_website]: https://aat.anu.edu.au/about-us/AAT
 [2dfdr_website]: https://aat.anu.edu.au/science/instruments/current/AAOmega/reduction
 
 
@@ -30,6 +30,7 @@ creating science-ready 3D data cubes using Raw Stacked Spectra (RSS) images crea
 PyKOALA has the following pre-requisites 
 
 ```
+- pip
 - numpy
 - scipy
 - astropy
@@ -41,8 +42,17 @@ PyKOALA has the following pre-requisites
 
 ## Installation
 
-...
+To install, first clone the repository:
 
+```
+git clone https://github.com/pykoala/koala.git
+```
+
+Second part is installing it in your local machine with pip:
+
+```
+cd koala ; pip install . 
+```
 
 ## Package structure
 
