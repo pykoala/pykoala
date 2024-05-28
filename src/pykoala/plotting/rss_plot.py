@@ -131,7 +131,7 @@ def plot_combined_spectrum(rss, list_spectra=None,  median=False, r = False, **k
     if r: return spectrum       
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def rss_image(rss, image=None, log=False, gamma=0,
+def rss_image(rss=None, image=None, log=False, gamma=0,
               cmap="seismic_r", clow=None, chigh=None, percentile_min = 5, percentile_max=95,
               greyscale = False, greyscale_r = False,
               xmin = None, xmax= None, wmin = None, wmax= None, fmin=0, fmax=None, 
@@ -226,9 +226,19 @@ def rss_image(rss, image=None, log=False, gamma=0,
     -------
     None.
     """
+    if rss is None and image is None: raise RuntimeError("No rss or image provided!!")
+    
     # Check if image is given
     if image is None:
         image = rss.intensity
+        
+    # Check if rss is given
+    if rss is None:
+        wavelength = np.arange(len(image[0]))
+        name = "IMAGE "
+    else:
+        wavelength = rss.wavelength
+        name = rss.info['name']
         
     # Check color visualization
     norm=colors.LogNorm()
@@ -260,13 +270,13 @@ def rss_image(rss, image=None, log=False, gamma=0,
     if xmin is None:
         xmin = 0
     if xmax is None:
-        xmax = len(rss.wavelength) 
+        xmax = len(wavelength) 
     if wmin is not None:
-        xmin = np.searchsorted(rss.wavelength, wmin)
-        if xmin == 0 : wmin = rss.wavelength[0]
+        xmin = np.searchsorted(wavelength, wmin)
+        if xmin == 0 : wmin = wavelength[0]
     if wmax is not None:
-        xmax = np.searchsorted(rss.wavelength, wmax)
-        if xmax == len(rss.wavelength)-1 : wmax = rss.wavelength[-1]
+        xmax = np.searchsorted(wavelength, wmax)
+        if xmax == len(wavelength)-1 : wmax = wavelength[-1]
     if wmin is not None and wmax is not None:
         extent1 = wmin
         extent2 = wmax
@@ -276,9 +286,9 @@ def rss_image(rss, image=None, log=False, gamma=0,
         extent2 = xmax
         
     if fmax is None: 
-        fmax = len(rss.intensity)
+        fmax = len(image)
     else:
-        if fmax > len(rss.intensity) - 1 : fmax = len(rss.intensity)
+        if fmax > len(image) - 1 : fmax = len(image)
     
     extent3 = fmax
     extent4 = fmin    
@@ -330,11 +340,11 @@ def rss_image(rss, image=None, log=False, gamma=0,
     # Include title
     if title is not None:
         if add_title:
-            plt.title(rss.info['name'] + str(title), fontsize=title_fontsize)
+            plt.title(name + str(title), fontsize=title_fontsize)
         else:
             plt.title(str(title), fontsize=title_fontsize)
     else:
-        plt.title(rss.info['name'] + " - RSS image", fontsize=title_fontsize)
+        plt.title(name + " - RSS image", fontsize=title_fontsize)
         
     # Making axes thicker if requested
     if axes_thickness > 0:

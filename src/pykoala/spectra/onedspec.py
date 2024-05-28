@@ -8,9 +8,10 @@ from synphot.models import Empirical1D
 from scipy.signal import medfilt
 
 developers = 'Developed by Angel Lopez-Sanchez, Pablo Corcho-Caballero,\
- Yago Ascasibar, Lluis Galbany, Barr Perez, Nathan Pidcock,\
- Diana Dalae, Giacomo Biviano, Adithya Gudalur Balasubramania,\
- Blake Staples, Taylah Beard, Matt Owers, James Tocknell et al.'
+ Yago Ascasibar, Miguel Gonzalez Bolivar, Felipe Jimenez-Ibarra,\
+ Matt Owers, Lluis Galbany, Barr Perez, Nathan Pidcock, Giacomo Biviano,\
+ Blake Staples, Adithya Gudalur Balasubramania, Diana Dalae,\
+ Taylah Beard, James Tocknell et al.'
 
 
 #import matplotlib.pyplot as plt
@@ -22,6 +23,9 @@ import numpy as np
 from scipy import interpolate, signal
 from scipy.optimize import curve_fit
 import scipy.signal as sig
+#from scipy.interpolate import CubicSpline
+#import csaps
+from scipy.interpolate import splrep, BSpline
 
 from random import uniform
 
@@ -69,9 +73,9 @@ del get_versions
 
 pc=3.086E18    # pc in cm
 C =299792.458  # c in km/s
-nebula_lines = [6300.3, 6312.10, 6363.78, 6548.03, 6562.82, 6583.41, 6678.15,
-                6716.47, 6730.85, 7065.28, 7135.78, 7318.39, 7329.66, 7751.1, 
-                9068.9] 
+#nebula_lines = [6300.3, 6312.10, 6363.78, 6548.03, 6562.82, 6583.41, 6678.15,
+#                6716.47, 6730.85, 7065.28, 7135.78, 7318.39, 7329.66, 7751.1, 
+#                9068.9] 
 
 
 
@@ -336,7 +340,8 @@ def spectrum_to_text_file(wavelength, flux, filename="spectrum.txt", verbose=Tru
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def spectrum_to_fits_file(wavelength, flux, filename="spectrum.fits", name="spectrum", exptime=1, CRVAL1_CDELT1_CRPIX1=[0,0,0]): 
+def spectrum_to_fits_file(wavelength, flux, filename="spectrum.fits", name="spectrum", 
+                          exptime=1, CRVAL1_CDELT1_CRPIX1=[0,0,0]): 
     """
     Routine to save a given 1D spectrum into a fits file.
     
@@ -2011,13 +2016,14 @@ def clip_spectrum_using_continuum(wavelength, spectrum, continuum=None, max_disp
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-def fit_clip(x, y, clip=0.4, index_fit = 2, kernel = 19, mask ="",                          
+def fit_clip(x, y, clip=0.4, index_fit = 2, kernel = 19, mask ="",                     
+             use_spline = False, smooth_spline = None,
              xmin=None,xmax=None,ymin=None,ymax=None,percentile_min=2, percentile_max=98, extra_y = 0.1,
-             ptitle=None, xlabel=None, ylabel = None, label="",
+             ptitle=None, xlabel=None, ylabel = None, label=None,
              hlines=[], vlines=[],chlines=[], cvlines=[], axvspan=[[0,0]], hwidth =1, vwidth =1,
              plot=True, verbose=True):
     """
-    This tasks performs a polynomic fits of order index_fit
+    This tasks performs a polynomic fits of order index_fit or a spline fit
     
 
     Parameters
@@ -2062,6 +2068,7 @@ def fit_clip(x, y, clip=0.4, index_fit = 2, kernel = 19, mask ="",
         
     if clip != 0 and kernel not in [0,1]:
     
+        #TODO: try to do the cliping better
         y_smooth = signal.medfilt(y, kernel)
         residuals = y - y_smooth
         residuals_std = np.std(residuals)
@@ -2071,19 +2078,35 @@ def fit_clip(x, y, clip=0.4, index_fit = 2, kernel = 19, mask ="",
         
         idx = np.isfinite(x) & np.isfinite(y_clipped)
         
-        fit  = np.polyfit(x[idx], y_clipped[idx], index_fit) 
-        pp=np.poly1d(fit)
-        y_fit=pp(x)
-        y_fit_clipped =pp(x[idx])
+        if use_spline:
+            pp = None
+            #pp = CubicSpline(x[idx], y_clipped[idx])
+            #pp = csaps.CubicSmoothingSpline(x[idx], y_clipped[idx], smooth=0)
+            if smooth_spline is None: smooth_spline = len(x[idx]/2)
+            tck_s = splrep(x[idx], y_clipped[idx],  s = smooth_spline) 
+            fit = tck_s
+            y_fit = BSpline(*tck_s)(x)
+            y_fit_clipped = BSpline(*tck_s)(x[idx])
+        else:
+            fit  = np.polyfit(x[idx], y_clipped[idx], index_fit) 
+            pp=np.poly1d(fit)
+            y_fit=pp(x)
+            y_fit_clipped =pp(x[idx])
    
         if verbose: 
-            print("\n> Fitting a polynomium of degree",index_fit,"using clip =",clip,"* std to smoothed spectrum with kernel = ",kernel,"...")
+            if use_spline:
+                print("\n> Fitting a spline function with s =",smooth_spline,"using clip =",clip,"* std to smoothed spectrum with kernel = ",kernel,"...")
+            else:
+                print("\n> Fitting a polynomium of degree",index_fit,"using clip =",clip,"* std to smoothed spectrum with kernel = ",kernel,"...")
             print("  Eliminated",len(x)-len(x[idx]),"outliers, the solution is: ",fit)
     
         if plot:
             if ptitle is None:
-                ptitle = "Polyfit of degree "+str(index_fit)+" using clip = "+str(clip)+" * std to smoothed spectrum with kernel = "+str(kernel)
-            if label == "":
+                if use_spline:
+                    ptitle = "Spline function with s ="+str(smooth_spline)+" using clip = "+str(clip)+" * std to smoothed spectrum with kernel = "+str(kernel)
+                else:
+                    ptitle = "Polyfit of degree "+str(index_fit)+" using clip = "+str(clip)+" * std to smoothed spectrum with kernel = "+str(kernel)
+            if label is None:
                 label =["Spectrum","Smoothed spectrum","Clipped spectrum","Fit"]
             
             plot_plot(x, [y,y_smooth, y_clipped, y_fit], psym=["+","-", "+","-"],
@@ -2096,15 +2119,30 @@ def fit_clip(x, y, clip=0.4, index_fit = 2, kernel = 19, mask ="",
         return fit, pp, y_fit, y_fit_clipped, x[idx], y_clipped[idx]   
     else:
         
-        fit  = np.polyfit(x, y, index_fit) 
-        pp=np.poly1d(fit)
-        y_fit=pp(x)
+        if use_spline:
+            if smooth_spline is None: smooth_spline = len(x/2)
+            tck_s = splrep(x, y,  s = smooth_spline) 
+            fit = tck_s
+            pp = None
+            y_fit = BSpline(*tck_s)(x)
+        else:
+            fit  = np.polyfit(x, y, index_fit) 
+            pp=np.poly1d(fit)
+            y_fit=pp(x)
         
-        if verbose: print("\n> Fitting a polynomium of degree",index_fit,"...")
+        
+        if verbose: 
+            if use_spline:
+                print("\n> Fitting a spline function with s =",smooth_spline,"...")
+            else:
+                print("\n> Fitting a polynomium of degree",index_fit,"...")
         
         if plot:
             if ptitle is None:
-                ptitle = "Polyfit of degree "+str(index_fit)
+                if use_spline:
+                    ptitle = "Polyfit of degree "+str(index_fit)
+                else:
+                    ptitle = "Spline function with s = "+str(smooth_spline)
             if label == "":
                 label =["Spectrum", "Fit"]
             plot_plot(x, [y, y_fit], psym=["+","-"],

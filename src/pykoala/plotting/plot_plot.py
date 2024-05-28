@@ -12,13 +12,15 @@ def plot_plot(x, y,  xmin=None,xmax=None,ymin=None,ymax=None,percentile_min=2, p
               #ptitle="Pretty plot", xlabel="Wavelength [$\mathrm{\AA}$]", ylabel="", 
               fcal=None, 
               psym=None, color=None, alpha=None, linewidth=1,  linestyle=None, markersize = 10,
-              vlines=[], hlines=[], chlines=[], cvlines=[], 
-              caxvspan = None, axvspan=None, #[[0,0]], 
-              hwidth =1, vwidth =1,
+              vlines=[], cvlines=[], svlines = [], wvlines=[], avlines=[], 
+              hlines=[], chlines=[], shlines = [], whlines=[], ahlines=[],
+              axvspan=None,  caxvspan = None,  aaxvspan = None,
               frameon = False, loc = 0, ncol = 6,   text=[],
               title_fontsize=12, label_axes_fontsize=10, axes_fontsize=10, tick_size=[5,1,2,1], axes_thickness =0,
               save_file=None, path=None, fig_size=9, warnings = True, verbose=True,
               show=True, statistics="", plot=True, **kwargs):
+    
+    
     
    """
    Plot this plot! An easy way of plotting plots in Python.
@@ -115,8 +117,8 @@ def plot_plot(x, y,  xmin=None,xmax=None,ymin=None,ymax=None,percentile_min=2, p
        title_fontsize=22
        tick_size=[10,1,5,1]
        axes_thickness =3
-       hwidth =2
-       vwidth =2
+       if wvlines is None and vlines is not None: wvlines = [2] * len(vlines)
+       if whlines is None and hlines is not None: whlines = [2] * len(hlines)
 
    if fig_size in ["very_big", "verybig", "vbig"]:
        fig_size=35
@@ -125,8 +127,8 @@ def plot_plot(x, y,  xmin=None,xmax=None,ymin=None,ymax=None,percentile_min=2, p
        title_fontsize=28 
        tick_size=[15,2,8,2]
        axes_thickness =3
-       hwidth =4 
-       vwidth =4
+       if wvlines is None and vlines is not None: wvlines = [4] * len(vlines)
+       if whlines is None and hlines is not None: whlines = [4] * len(hlines)
 
    if fig_size not in ["C","c","continue","Continue"]:
        if fig_size != 0 : 
@@ -256,41 +258,53 @@ def plot_plot(x, y,  xmin=None,xmax=None,ymin=None,ymax=None,percentile_min=2, p
            ylabel = "Flux [counts]"  
  
    plt.ylabel(ylabel, fontsize=label_axes_fontsize)
+   if label_ != "" : 
+       plt.legend(frameon=frameon, loc=loc, ncol=ncol)
    
+   # Plot horizontal lines
+   if len(shlines) != len(hlines):
+       for i in range(len(hlines)-len(shlines)):
+           shlines.append("--")  
    if len(chlines) != len(hlines):
        for i in range(len(hlines)-len(chlines)):
            chlines.append("k")  
-           
-   for i in range(len(hlines)):
-       if chlines[i] != "k":
-           hlinestyle="-"
-           halpha=0.8
-       else:
-           hlinestyle="--" 
-           halpha=0.3
-       plt.axhline(y=hlines[i], color=chlines[i], linestyle=hlinestyle, alpha=halpha, linewidth=hwidth)
-
+   if len(whlines) != len(hlines):
+       for i in range(len(hlines)-len(whlines)):
+           whlines.append(1)
+   if len(ahlines) != len(hlines):
+       for i in range(len(hlines)-len(ahlines)):
+           if chlines[i] != "k":
+               ahlines.append(0.8)
+           else:
+               ahlines.append(0.3)
+   for i in range(len(hlines)):        
+       plt.axhline(y=hlines[i], color=chlines[i], linestyle=shlines[i], alpha=ahlines[i], linewidth=whlines[i])
     
+   # Plot vertical lines 
+   if len(svlines) != len(vlines):
+       for i in range(len(vlines)-len(svlines)):
+           svlines.append("--")  
    if len(cvlines) != len(vlines):
        for i in range(len(vlines)-len(cvlines)):
            cvlines.append("k") 
+   if len(wvlines) != len(vlines):
+       for i in range(len(vlines)-len(wvlines)):
+           wvlines.append(1)
+   if len(avlines) != len(vlines):
+       for i in range(len(vlines)-len(avlines)):
+           if cvlines[i] != "k":
+               avlines.append(0.8)
+           else:
+               avlines.append(0.3)
+   for i in range(len(vlines)): 
+       plt.axvline(x=vlines[i], color=cvlines[i], linestyle=svlines[i], alpha=avlines[i], linewidth=wvlines[i])
     
-   for i in range(len(vlines)):
-       if cvlines[i] != "k":
-           vlinestyle="-"
-           valpha=0.8
-       else:
-           vlinestyle="--" 
-           valpha=0.3
-       plt.axvline(x=vlines[i], color=cvlines[i], linestyle=vlinestyle, alpha=valpha, linewidth=vwidth)
-    
-   if label_ != "" : 
-       plt.legend(frameon=frameon, loc=loc, ncol=ncol)
-       
+   # Plot horizontal ranges
    if axvspan is not None:
        if caxvspan is None:  caxvspan = ["orange" for item in axvspan]
+       if aaxvspan is None:  aaxvspan = [0.15 for item in axvspan]
        for i in range(len(axvspan)):
-           plt.axvspan(axvspan[i][0], axvspan[i][1], facecolor=caxvspan[i], alpha=0.15, zorder=3)   
+           plt.axvspan(axvspan[i][0], axvspan[i][1], facecolor=caxvspan[i], alpha=aaxvspan[i], zorder=3)   
            
    if len(text)  > 0:
         for i in range(len(text)):
@@ -302,7 +316,7 @@ def plot_plot(x, y,  xmin=None,xmax=None,ymin=None,ymax=None,percentile_min=2, p
            plt.close() 
    else:
        if path != None : save_file=os.path.join(path, save_file) 
-       plt.savefig(save_file)
+       plt.savefig(save_file,  dpi=300, bbox_inches='tight')
        plt.close() 
        if verbose: print("  Figure saved in file",save_file)
    

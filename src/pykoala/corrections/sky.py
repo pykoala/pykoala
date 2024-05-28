@@ -163,6 +163,9 @@ class SkyModel(object):
         elif data.ndim == 2 and self.intensity.ndim == 1:
             skymodel_intensity = self.intensity[np.newaxis, :]
             skymodel_var = self.intensity[np.newaxis, :]
+        elif data.ndim == 2 and self.intensity.ndim == 2:
+            skymodel_intensity = self.intensity
+            skymodel_var = self.variance
         else:
             self.vprint(f"Data dimensions ({data.shape}) cannot be reconciled with sky mode ({self.intensity.shape})")
         data_subs = data - skymodel_intensity
@@ -488,7 +491,7 @@ class SkySubsCorrection(CorrectionBase):
         else:
             dc_out.intensity, dc_out.variance = self.skymodel.substract(
                  dc_out.intensity, dc_out.variance)
-        self.log_correction(dc_out, status='applied')
+        #self.log_correction(dc_out, status='applied')  #!!! ANGEL does not work for me...
         
         if plot:
             if not dc_out.intensity.ndim == 2:
@@ -524,16 +527,20 @@ class TelluricCorrection(CorrectionBase):
         self.corr_print("Obtaining telluric correction using spectrophotometric star...")
         
         self.data_container = data_container
-
+        
         # Store basic data
         if self.data_container is not None:
+            
+            if str(self.data_container.__class__) != "<class 'pykoala.rss.RSS'>" and str(self.data_container.__class__) != "<class 'pykoala.rss.Cube'>":
+                raise AttributeError("Input data container must be RSS or Cube class!!!")
+            
             self.corr_print("Estimating telluric correction using input observation")
             self.data_container = data_container
             self.wlm = self.data_container.wavelength
 
-            if self.data_container.__class__ is Cube:
+            if str(self.data_container.__class__) == "<class 'pykoala.rss.Cube'>":
                 self.spectra = self.data_container.get_integrated_light_frac(frac=frac)
-            elif self.data_container.__class__ is RSS:
+            elif str(self.data_container.__class__) == "<class 'pykoala.rss.RSS'>":
                 integrated_fibre = np.nansum(self.data_container.intensity, axis=1)
                 # The n-brightest fibres
                 self.brightest_fibres = integrated_fibre.argsort()[-n_fibres:]
@@ -653,8 +660,10 @@ class TelluricCorrection(CorrectionBase):
         self.telluric_correction[~mask] = stellar[~mask] / std[~mask]
 
         self.telluric_correction = np.clip(self.telluric_correction, a_min=1, a_max=None)
+        self.exclude_wlm =np.vstack((w_l_1 - width, w_l_2 + width)).T
+        
         if plot:
-            fig = self.plot_correction(exclude_wlm=np.vstack((w_l_1 - width, w_l_2 + width)).T,
+            fig = self.plot_correction(exclude_wlm=self.exclude_wlm,
                                        wave_min=self.wlm[0], wave_max=self.wlm[-1])
             return self.telluric_correction, fig
         return self.telluric_correction
@@ -681,7 +690,7 @@ class TelluricCorrection(CorrectionBase):
                     color="purple", alpha=1, lw=.8, label='Telluric corrected')
             ax.set_ylim(np.nanpercentile(self.data_container.intensity[self.brightest_fibres[[0, 1]]], 1),
                         np.nanpercentile(self.data_container.intensity[self.brightest_fibres[[0, 1]]], 99))
-        ax.legend(ncol=2)
+        ax.legend(ncol=2, loc=3)
         ax.axvline(x=wave_min, color='k', linestyle='--')
         ax.axvline(x=wave_max, color='k', linestyle='--')
         ax.set_xlim(self.wlm[0] - 10, self.wlm[-1] + 10)
@@ -690,7 +699,7 @@ class TelluricCorrection(CorrectionBase):
             for i in range(len(exclude_wlm)):
                 ax.axvspan(exclude_wlm[i][0], exclude_wlm[i][1], color='c', alpha=0.1)
         ax.minorticks_on()
-        # plt.show()
+        plt.show() #!!! Angel
         plt.close(fig)
         return fig
 

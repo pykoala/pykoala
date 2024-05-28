@@ -32,7 +32,7 @@ from pykoala.corrections.sky import SkyModel, TelluricCorrection, SkySubsCorrect
 from pykoala.corrections.atmospheric_corrections import AtmosphericExtCorrection
 from pykoala.corrections.throughput import ThroughputCorrection, Throughput
 from pykoala.corrections.wavelength_corrections import WavelengthShiftCorrection
-from pykoala.spectra.onedspec import fit_smooth_spectrum,fit10gaussians, gauss, find_emission_lines,fluxes,clip_spectrum_using_continuum,find_cosmics_in_cut
+from pykoala.spectra.onedspec import fit_smooth_spectrum,fit10gaussians, gauss, find_emission_lines,fluxes,clip_spectrum_using_continuum,find_cosmics_in_cut #, read_table
 from pykoala import __version__ as version
 # =============================================================================
 # Ignore warnings
@@ -53,10 +53,12 @@ koala_info_rss_dict= dict(rss_object_name = None,
                           spaxel_size = None,
                           aaomega_arm = None,
                           aaomega_grating = None,
+                          aaomega_dichroic = None, 
                           KOALA_fov = None,
-                          pos_angle = None,
-                          RA_cen = None,
-                          DEC_cen = None,
+                          position_angle = None,
+                          RA_centre_deg = None,
+                          DEC_centre_deg = None,
+                          exptime = None,
                           description = None,
                           valid_wave_min = None,
                           valid_wave_max = None,
@@ -67,26 +69,28 @@ koala_info_rss_dict= dict(rss_object_name = None,
                           history = None,
                           )
 
-koala_info_cube_dict= dict(  #rss_object_name = None,     #!!! Move to koala_cube ?
-                          #path_to_file = None,
-                          #n_wave = None,
-                          #n_spectra = None,
-                          #spaxel_size = None,
-                          #aaomega_arm = None,
-                          #aaomega_grating = None,
-                          #KOALA_fov = None,
-                          #pos_angle = None,
-                          #RA_cen = None,
-                          #DEC_cen = None,
-                          description = None,
-                          valid_wave_min = None,
-                          valid_wave_max = None,
-                          valid_wave_min_index = None,
-                          valid_wave_max_index = None,
-                          #brightest_line = None,
-                          #brightest_line_wavelength = None,
-                          history = None,
-                          )
+koala_info_cube_dict= dict(cube_object_name = None,
+                           path_to_file = None,
+                           path_to_rss_file = None,
+                           #n_wave = None,
+                           #n_spectra = None,
+                           #spaxel_size = None,
+                           #aaomega_arm = None,
+                           aaomega_grating = None,
+                           aaomega_dichroic = None,
+                           #KOALA_fov = None,
+                           position_angle = None,
+                           description = None,
+                           valid_wave_min = None,
+                           valid_wave_max = None,
+                           valid_wave_min_index = None,
+                           valid_wave_max_index = None,
+                           valid_RA_spaxel_range = None,
+                           valid_DEC_spaxel_range = None,
+                           #brightest_line = None,
+                           #brightest_line_wavelength = None,
+                           history = None,
+                           )
 
 class KOALA_INFO(object):
     """
@@ -106,11 +110,22 @@ class KOALA_INFO(object):
     """
     def __init__(self, **kwargs):
         self.corrections_done = kwargs.get('corrections_done', None) 
+        self.history = kwargs.get('history', None) 
         data_container = kwargs.get('data_container', 'rss')
         if data_container == "cube":
             self.info = kwargs.get('info', koala_info_cube_dict.copy())
             self.integrated_map = kwargs.get('integrated_map', None)
             
+            self.x_max = kwargs.get('x_max', None)
+            self.y_max = kwargs.get('y_max', None)
+            self.x_peaks = kwargs.get('x_peaks', None)
+            self.y_peaks = kwargs.get('y_peaks', None)
+            self.x_peak_median = kwargs.get('x_peak_median', None)
+            self.y_peak_median = kwargs.get('y_peak_median', None)
+            self.offset_from_center_x_arcsec_tracing = kwargs.get('offset_from_center_x_arcsec_tracing', None)
+            self.offset_from_center_y_arcsec_tracing = kwargs.get('offset_from_center_x_arcsec_tracing', None)
+            self.ADR =  kwargs.get('ADR', None)
+                        
         else:            
            self.info = kwargs.get('info', koala_info_rss_dict.copy())
            self.header =  kwargs.get('header', None)
@@ -259,7 +274,7 @@ def koalaRSS(filename, rss_object_name = None, path=None, plot_map= False, **kwa
     
     vprint('\n> Converting KOALA+AAOmega RSS file "'+path_to_file+'" to a koala RSS object...', **kwargs)
     
-    # Read rss using standard pykoala
+    # Read rss using standard pykoala      #TODO: Ángel: I think we should merge the 2 of them (koalaRSS and koala_rss)
     rss = koala_rss(path_to_file)
 
     # Create rss.koala
@@ -283,8 +298,12 @@ def koalaRSS(filename, rss_object_name = None, path=None, plot_map= False, **kwa
     header = fits.getheader(path_to_file, 0) + fits.getheader(path_to_file, 2)
     koala_header = py_koala_header(header)
     
-    koala_info['RA_cen'] = koala_header["RACEN"] *180/np.pi
-    koala_info['DEC_cen'] = koala_header["DECCEN"] *180/np.pi
+    # Add history
+    rss.koala.history = koala_header["HISTORY"]
+    
+    koala_info['RA_centre_deg'] = koala_header["RACEN"] *180/np.pi
+    koala_info['DEC_centre_deg'] = koala_header["DECCEN"] *180/np.pi
+    koala_info['exptime'] = koala_header["EXPOSED"]
     
     # Get AAOmega Arm & gratings
     if (koala_header['SPECTID'] == "RD"):      
@@ -292,6 +311,7 @@ def koalaRSS(filename, rss_object_name = None, path=None, plot_map= False, **kwa
     if (koala_header['SPECTID'] == "BL"):      
         koala_info['aaomega_arm'] = "blue"    
     koala_info['aaomega_grating'] = koala_header['GRATID']
+    koala_info['aaomega_dichroic'] = koala_header["DICHROIC"]
     
     # Constructing Pykoala Spaxels table from 2dfdr spaxels table (data[2]) AGAIN to know WIDE/NARROW & spaxel_size
     fibre_table = fits.getdata(path_to_file, 2)
@@ -309,7 +329,7 @@ def koalaRSS(filename, rss_object_name = None, path=None, plot_map= False, **kwa
         KOALA_fov = 'NARROW: 28.3" x 15.3"'   
     koala_info['KOALA_fov']=KOALA_fov
     koala_info['spaxel_size']=spaxel_size 
-    koala_info['pos_angle'] = koala_header['TEL_PA']
+    koala_info['position_angle'] = koala_header['TEL_PA']
     
     # Check valid range (basic mask in AnPyKOALA)
     valid_wave_range_data = rss_valid_wave_range (rss)    
@@ -348,7 +368,7 @@ def koalaRSS(filename, rss_object_name = None, path=None, plot_map= False, **kwa
     vprint('  Found {} spectra with {} wavelengths'.format(koala_info['n_spectra'], koala_info['n_wave']),
                       'between {:.2f} and {:.2f} Angstroms.'.format(rss.wavelength[0], rss.wavelength[-1]), **kwargs)
     vprint('  This RSS file uses the',koala_info['aaomega_grating'],'grating in the',koala_info['aaomega_arm'],'AAOmega arm.', **kwargs)
-    vprint('  The KOALA field of view is {}, with a spaxel size of {}" and PA = {:.1f}º.'.format(KOALA_fov, spaxel_size,koala_info['pos_angle']), **kwargs)
+    vprint('  The KOALA field of view is {}, with a spaxel size of {}" and PA = {:.1f}º.'.format(KOALA_fov, spaxel_size,koala_info['position_angle']), **kwargs)
     
     if koala_info['rss_object_name'] is not None: 
         vprint('  Name of the observation = "{}",   Name of this Python RSS object = "{}".'.format(rss.info['name'],koala_info['rss_object_name']), **kwargs)
@@ -442,7 +462,8 @@ def get_throughput_2D(file_skyflat= None,
     Adaptation of Angel's get_throughput_2D for 2024 PyKOALA.
     Get a 2D array with the throughput 2D using a COMBINED skyflat / domeflat.
     It is important that this is a COMBINED file, as we should not have any cosmics/nans left.
-    A COMBINED flappy flat could be also used, but that is not as good as the dome / sky flats.
+    A COMBINED flappy flat could be also used if skyflat/domeflats were not available, but 
+    these are NOT as good as the dome / sky flats and should be avoided.
 
     Parameters
     ----------
@@ -596,6 +617,12 @@ def get_throughput_2D(file_skyflat= None,
     throughput.throughput_data = throughput_2D
     #throughput.throughput.throughput_error = throughput_2D_variance
     throughput.throughput_error = throughput_2D**0.5
+    
+    # Save fits file if requested
+    if throughput_2D_file is not None:
+        if path is not None: throughput_2D_file = os.path.join(path,throughput_2D_file)
+        throughput.tofits(throughput_2D_file)
+        
     
     if verbose: print("\n> Throughput 2D obtained!")
     if also_return_skyflat:
@@ -776,6 +803,67 @@ def airmass_from_header(header):
     ZD = (ZDSTART + ZDEND) / 2
     airmass = 1 / np.cos(np.radians(ZD))
     return airmass
+# =============================================================================
+# %% ==========================================================================
+# =============================================================================
+def obtain_telluric_correction(telluric_correction_file = None,
+                               path_to_data = None,
+                               star_list = None,
+                               width_for_telluric = 30,
+                               **kwargs):
+    
+    verbose = kwargs.get('verbose', False)
+    #warnings = kwargs.get('warnings', verbose)
+    plot = kwargs.get('plot', False)
+    
+    if telluric_correction_file is None and star_list is None: raise RuntimeError("No teluric_correction_file or star_list provided!!")
+    
+    
+    if star_list is not None:    # If star_list given, use star_list and save it into telluric_correction_file
+        # FIXME well.... so far this is done in rss
+        # stars are rss objects
+        
+        n_stars = len(star_list)
+        wavelength = star_list[0].wavelength
+
+        # Check that all wavelengths are the same...
+        # Check that were taken the same night 
+        
+        if verbose: print("\n> Obtaining telluric correction using {} stars...".format(n_stars))
+        telluric_correction_list = []
+        for i in range(n_stars):
+            _telluric_correction_ = TelluricCorrection(star_list[i], verbose=verbose)
+            _, fig = _telluric_correction_.telluric_from_model(plot=plot, width=width_for_telluric)
+            telluric_correction_list.append(_telluric_correction_.telluric_correction)
+
+        telluric_correction = copy.deepcopy(_telluric_correction_)
+        
+        telluric_correction.telluric_correction = np.nanmedian(telluric_correction_list, axis=0)
+        
+        ptitle = "Telluric correction combining {} stars".format(n_stars)
+            
+        if telluric_correction_file is not None:
+            if path_to_data is not None:  telluric_correction_file = os.path.join(path_to_data,telluric_correction_file)
+            telluric_correction.save(filename = telluric_correction_file)
+    
+    else:  # no star_list provided but telluric_correction_file is, reading it    
+        if telluric_correction_file[-4:] == "fits":
+            # Read it from fits file #TODO
+            pass
+        else:
+            # Read it from txt file #TODO
+            # wavelength, telluric_correction_data = read_table(telluric_correction_file, ["f", "f"] ) 
+            
+            ptitle = "Telluric correction from file {}".format(telluric_correction_file)
+
+    if plot:
+        plot_plot(wavelength,telluric_correction.telluric_correction, 
+                  ptitle = ptitle,
+                  ylabel = "Telluric correction",
+                  #percentile_min=0.1, percentile_min=99.9, 
+                  **kwargs)
+        
+    return telluric_correction
 # =============================================================================
 # %% ==========================================================================
 # =============================================================================
@@ -1069,6 +1157,7 @@ def find_sky_fibres(rss, n_sky=200, sky_wave_min=None, sky_wave_max=None, **kwar
 # =============================================================================
 def SkyFrom_n_sky(rss, n_sky=50, sky_fibres=None, sky_wave_min=None, sky_wave_max=None, 
                   bright_emission_lines_to_substract_in_sky = None,
+                  fix_edges = False,
                   list_of_skylines_to_fit_near_bright_emission_lines = None,
                   fit_degree_continuum=None, max_wave_disp = None, min_peak_flux = None, max_sigma = None,  # If substract Ha is needed
                   max_peak_factor = None, min_peak_factor = None,
@@ -1129,7 +1218,7 @@ def SkyFrom_n_sky(rss, n_sky=50, sky_fibres=None, sky_wave_min=None, sky_wave_ma
                                        **kwargs)
         #TODO Check what to do with variance if bright emission line is substracted
     # Add continuum to the edges if needed:
-    if np.isnan(np.median(sky_spectrum)):   # This is True if there are nans, should be the edges
+    if np.isnan(np.median(sky_spectrum)) and fix_edges:   # This is True if there are nans, should be the edges  #TODO CHECK IT
         sky_spectrum_as_list = list(sky_spectrum)
         # Right edge, typically the one with problems
         # Find the first nan
@@ -2062,6 +2151,55 @@ def apply_mask_to_rss(rss, mask = None,   # THIS TASK SHOULD BE A CORRECTION CLA
 # =============================================================================
 # %% ==========================================================================
 # =============================================================================
+def process_n_koala_rss_files(filename_list = None,
+                              path = None,
+                              rss_list = None,
+                              rss_object_name_list = None,
+                              save_rss_to_fits_file_list = None,
+                              #calibration_night = None,
+                              # more things to add #TODO
+                              **kwargs):
+    
+    verbose = kwargs.get('verbose', False)
+    #warnings = kwargs.get('warnings', verbose)
+    #plot =  kwargs.get('plot', False)
+    
+    number_rss_files = None
+    if filename_list is not None:  number_rss_files = len(filename_list)
+    if rss_list is not None:  number_rss_files = len(rss_list)
+    if number_rss_files is None:
+        raise RuntimeError("NO filename_list or rss_list provided!!!") 
+            
+    if rss_list is None: rss_list = [None] * number_rss_files
+    if filename_list is None: filename_list = [None] * number_rss_files
+    if rss_object_name_list is None: rss_object_name_list = [None] * number_rss_files
+    if path is None: 
+        path = [None] * number_rss_files
+    elif np.isscalar(path):
+        path = [path] * number_rss_files
+    if save_rss_to_fits_file_list is None: 
+        save_rss_to_fits_file_list = [None] * number_rss_files
+    elif np.isscalar(save_rss_to_fits_file_list):
+        save_rss_to_fits_file_list = [save_rss_to_fits_file_list] * number_rss_files
+        
+    processed_rss_files = []
+    
+    for i in range(number_rss_files):
+        if verbose: print("\n> Processing rss {} of {} :    ---------------------------------------------".format(i+1,number_rss_files))
+
+        _rss_ = process_koala_rss(filename=filename_list[i], 
+                                  path = path[i], 
+                                  rss = rss_list[i],
+                                  rss_object_name=rss_object_name_list[i], 
+                                  save_rss_to_fits_file = save_rss_to_fits_file_list[i],
+                                  # more things to add #TODO
+                                  **kwargs)
+        processed_rss_files.append(_rss_)   
+
+    return processed_rss_files
+# =============================================================================
+# %% ==========================================================================
+# =============================================================================
 
 # THIS IS ONE OF THE MOST IMPORTANT TASKS, AS IT CAN CALL EVERYTHING ELSE FOR PROCESSING / CLEANING RSS
 
@@ -2070,18 +2208,20 @@ def process_koala_rss(filename=None, path=None,
                       rss = None,  rss_object_name = None,
                       save_rss_to_fits_file = None,
                       rss_clean=False,
+                      # Calibration of the night
+                      calibration_night = None,
                       # MASK
                       apply_mask = False,
                       mask = None,   # This can be from a file or a mask
                       make_zeros_in_mask = False, #plot_mask=False,  # Mask if given
                       #valid_wave_min=0, valid_wave_max=0,  # These two are not needed if Mask is given
-                      apply_throughput=False,    # ----------------- THROUGHPUT
+                      apply_throughput=False,    # ----------------- THROUGHPUT (T)
                       throughput = None,
                       #throughput_2D=[], throughput_2D_file="", throughput_2D_wavecor=False,
-                      correct_ccd_defects=False,  # ----------------- CORRECT NANs
+                      correct_ccd_defects=False,  # ----------------- CORRECT NANs in CCD (C)
                       #remove_5577=False, kernel_correct_ccd_defects=51, fibre_p=-1, plot_suspicious_fibres=False,
                       
-                      fix_wavelengths=False,     # ----------------- FIX WAVELENGTH SHIFTS
+                      fix_wavelengths=False,     # ----------------- FIX WAVELENGTH SHIFTS   (W)
                       wavelength_shift_correction = None, #sol=None, #[0, 0, 0],
                       sky_lines_for_wavelength_shifts=None, sky_lines_file_for_wavelength_shifts = None, n_sky_lines_for_wavelength_shifts  = 3,
                       maxima_sigma_for_wavelength_shifts = 2.5, maxima_offset_for_wavelength_shifts = 1.5,
@@ -2091,16 +2231,17 @@ def process_koala_rss(filename=None, path=None,
                       show_fibres_for_wavelength_shifts=None,
                       median_offset_per_skyline_weight = 1.,     # 1 is the BLUE line (median offset per skyline), 0 is the GREEN line (median of solutions), anything between [0,1] is a combination.
                       show_skylines_for_wavelength_shifts = None,
+                      plot_wavelength_shift_correction_solution = None,
                       
-                      correct_for_extinction=False, # ----------------- EXTINCTION
+                      correct_for_extinction=False, # ----------------- EXTINCTION  (X)
                       
-                      apply_telluric_correction = False,    # ----------------- TELLURIC
+                      apply_telluric_correction = False,    # ----------------- TELLURIC  (U)
                       telluric_correction=None, 
                       #telluric_correction_file= None,
                       width_for_telluric_correction = 30,
                       clean_5577 = False,
                       
-                      sky_method=None,        # ----------------- SKY
+                      sky_method=None,        # ----------------- SKY (S)
                       skycorrection = None,
                       n_sky=None, 
                       sky_wave_min=None, sky_wave_max=None,
@@ -2110,13 +2251,14 @@ def process_koala_rss(filename=None, path=None,
                       list_of_skylines_to_fit_near_bright_emission_lines = None,
                       list_of_skylines_to_fit = None,
                       fibre_list=None,
+                      fix_edges = None,
                       #sky_rss=[0], scale_sky_rss=0, scale_sky_1D=0.,
                       #maxima_sigma=3.,
                 
                       #sky_lines_file=None, exclude_wlm=[[0, 0]], emission_line_file = None,
                       is_sky=False, win_sky=0, #auto_scale_sky=False, ranges_with_emission_lines=[0], cut_red_end=0,
                       
-                      correct_negative_sky=False,      # ----------------- NEGATIVE SKY
+                      correct_negative_sky=False,      # ----------------- NEGATIVE SKY  (N)
                       order_fit_for_negative_sky=7, 
                       kernel_for_negative_sky=21, 
                       clip_fit_for_negative_sky = 0.8,
@@ -2128,13 +2270,13 @@ def process_koala_rss(filename=None, path=None,
                       show_fibres_for_negative_sky = None,
                       plot_rss_map_for_negative_sky = False, 
                       
-                      id_el=False,     # ----------------- ID emission lines
+                      id_el=False,     # ----------------- ID emission lines   (I)
                       brightest_line=None, # "Ha",
                       brightest_line_wavelength=None,
                       brightest_fibres_to_combine = None,    #high_fibres=20, 
                       #lowest_fibres_to_combine = None, low_fibres=10,  using n_sky if needed
                       
-                      #clean_sky_residuals=False, # ----------------- CLEAN SKY RESIDUALS
+                      #clean_sky_residuals=False, # ----------------- CLEAN SKY RESIDUALS   (R)
                       big_telluric_residua_correction = False ,
                       max_dispersion_for_big_telluric = 1.4,
                       min_value_per_wave_for_fitting_big_telluric = 50, 
@@ -2147,9 +2289,9 @@ def process_koala_rss(filename=None, path=None,
                       #remove_negative_median_values=False,
                       #fix_edges=False,  # Not implemented
                       
-                      correct_extreme_negatives=False, 
+                      correct_extreme_negatives=False,    # ----------- EXTREME NEGATIVES   (R)
                       percentile_min_for_extreme_negatives=0.05,
-                      clean_cosmics=False,
+                      clean_cosmics=False,                # ----------- CLEAN COSMICS     (R)
                       width_bl=20., kernel_median_cosmics=5, cosmic_higher_than=100., extra_factor=1.,
                       max_number_of_cosmics_per_fibre=12, 
                       only_plot_cosmics_cleaned = False,
@@ -2181,27 +2323,36 @@ def process_koala_rss(filename=None, path=None,
         # plot_final_rss = plot
         plot = False
         #verbose = False 
+    elif calibration_night is not None:
+        if throughput is None and calibration_night.throughput is not None: throughput = calibration_night.throughput
+        if wavelength_shift_correction is None and calibration_night.wavelength_shift_correction is not None: wavelength_shift_correction = calibration_night.wavelength_shift_correction     
+        if telluric_correction is None and calibration_night.telluric_correction is not None: telluric_correction=calibration_night.telluric_correction
+        #if flux_calibration is not None
+                   
     verbose = kwargs.get('verbose', False)
-    warnings = kwargs.get('warnings', verbose)
+    #warnings = kwargs.get('warnings', verbose)
     plot =  kwargs.get('plot', False)
     #plot_all = kwargs.get('plot_all', False)
     
     if plot is False:
         only_plot_cosmics_cleaned = False
+        plot_rss_map_for_negative_sky = False
 
     # Reading the file or the object
     if filename is not None:
         rss = koalaRSS(filename, path = path,
                        rss_object_name = rss_object_name, **kwargs)
     elif rss is None:
-        raise RuntimeError("No rss provided!")
+        raise RuntimeError("  No rss provided !!!!")
     else:  # rss is an object
         rss=copy.deepcopy(rss)
         if rss_object_name is not None:
             rss.koala.info["rss_object_name"]=rss_object_name
-            
-    if filename is None: filename = rss.koala.info["path_to_file"]   # CHECK LATER FOR SAVING FILE #TODO
+    
+    # Get name of original file in case we need it for saving rss at the end
+    if filename is None: filename = rss.koala.info["path_to_file"]   
 
+    # Check the number of corrections to be applied
     if (apply_throughput == False and correct_ccd_defects == False and fix_wavelengths == False
         and correct_for_extinction == False and apply_telluric_correction == False and clean_5577 == False
         and sky_method == None and correct_negative_sky == False and id_el == False
@@ -2210,7 +2361,7 @@ def process_koala_rss(filename=None, path=None,
         and is_sky == False and apply_mask == False):
         # If nothing is selected to do, we assume that the RSS file is CLEAN
         rss_clean = True
-        # plot_final_rss = plot
+        #plot_final_rss = plot   
         #plot = False
         #verbose = False
     elif verbose:
@@ -2218,12 +2369,13 @@ def process_koala_rss(filename=None, path=None,
             print("\n> Processing file {} as requested... ".format(filename))
         else:
             filename = rss.koala.info["path_to_file"]
-            if rss_object_name is None:
-                print("\n> Processing rss object as requested... ")
-            else:
-                print("\n> Processing rss object {} as requested... ".format(rss_object_name))
- 
-    # Get integrated values   
+            
+            if rss_clean is False:
+                if rss_object_name is None:
+                    print("\n> Processing rss object as requested... ")
+                else:
+                    print("\n> Processing rss object {} as requested... ".format(rss_object_name))
+                if calibration_night is not None: print("  Calibration of the night provided!")
  
     # Check wavelength range to guess brightest emission line 
     if brightest_line is None:
@@ -2245,8 +2397,7 @@ def process_koala_rss(filename=None, path=None,
         corrections_done.append("correct_ccd_defects")
 
     if fix_wavelengths:    # -------------------------------------------------------------------  (W)
-        plot_wavelength_shift_correction_solution = False
-        # FInd correction if not provided
+        # Find correction if not provided
         if wavelength_shift_correction is None:
             wavelength_shift_correction = WavelengthShiftCorrection.wavelength_shift_using_skylines(rss, 
                                                                                                     sky_lines =sky_lines_for_wavelength_shifts,
@@ -2263,8 +2414,9 @@ def process_koala_rss(filename=None, path=None,
                                                                                                     fibres_to_plot=fibres_to_plot_for_wavelength_shifts,
                                                                                                     show_fibres=show_fibres_for_wavelength_shifts,
                                                                                                     **kwargs) #, plot=True, verbose =True)
-        else:
-            if plot: plot_wavelength_shift_correction_solution = True
+        elif plot and plot_wavelength_shift_correction_solution is None: 
+            plot_wavelength_shift_correction_solution = True
+        else: plot_wavelength_shift_correction_solution = False
      
         # Apply solution
         rss = wavelength_shift_correction.apply(rss, 
@@ -2314,6 +2466,7 @@ def process_koala_rss(filename=None, path=None,
                                              sky_wave_min=sky_wave_min, sky_wave_max=sky_wave_max, 
                                              bright_emission_lines_to_substract_in_sky = bright_emission_lines_to_substract_in_sky,
                                              list_of_skylines_to_fit_near_bright_emission_lines = list_of_skylines_to_fit_near_bright_emission_lines,
+                                             fix_edges = fix_edges,
                                              **kwargs)
                     sky_fibres = skymodel.sky_fibres
                     
@@ -2335,7 +2488,7 @@ def process_koala_rss(filename=None, path=None,
         corrections_done.append("sky_correction")
         
     # Correct negative sky  # ------------------------------------------------------------------  (N)
-    if is_sky == False and correct_negative_sky == True:                 #TODO: This has to be a correction applied to data container
+    if is_sky is False and correct_negative_sky is True:   #TODO: This has to be a correction applied to data container
     
         rss= correcting_negative_sky(rss, 
                                      order_fit_for_negative_sky = order_fit_for_negative_sky,
@@ -2357,17 +2510,19 @@ def process_koala_rss(filename=None, path=None,
     if id_el:
         find_emission_lines_in_koala(rss, brightest_fibres_to_combine = brightest_fibres_to_combine, 
                                      brightest_line = brightest_line,  **kwargs)
-        brightest_line_wavelength = rss.koala.info["brightest_line_wavelength"]          # Update brightest_line_wavelength
+        # Update brightest_line_wavelength
+        brightest_line_wavelength = rss.koala.info["brightest_line_wavelength"]          
         corrections_done.append("emission_line_identification")
         
     # Clean telluric residua, extreme negatives & cosmics    # ---------------------------------  (R)  
     if big_telluric_residua_correction or telluric_residua_at_6860_correction or correct_extreme_negatives or clean_cosmics:
+        # Get continuum image if any of these have been requested
         if continuum_model_after_sky_correction is None:
             continuum_model_after_sky_correction = rss_continuum_image(rss, **kwargs)
             rss.koala.continuum_model_after_sky_correction = continuum_model_after_sky_correction
     
-    if big_telluric_residua_correction:
-        rss = clean_telluric_residuals(rss,                                     #TODO: This has to be a correction applied to data container
+    if big_telluric_residua_correction:               #TODO: This has to be a correction applied to data container
+        rss = clean_telluric_residuals(rss,                                    
                                        fibre_list = fibres_to_fix,       
                                        continuum = continuum_model_after_sky_correction,
                                        max_dispersion = max_dispersion_for_big_telluric,
@@ -2375,8 +2530,8 @@ def process_koala_rss(filename=None, path=None,
                                        **kwargs)   
         corrections_done.append("big_telluric_residua_correction")
 
-    if telluric_residua_at_6860_correction:
-        rss =     clean_telluric_residuals (rss, continuum=continuum_model_after_sky_correction,    #TODO: This has to be a correction applied to data container
+    if telluric_residua_at_6860_correction:          #TODO: This has to be a correction applied to data container
+        rss =     clean_telluric_residuals (rss, continuum=continuum_model_after_sky_correction,    
                                             max_dispersion = max_dispersion_for_6860,
                                             min_value_per_wave_for_fitting = min_value_per_wave_for_for_6860, #10, #50,
                                             interval_to_clean = [6850,6876],
@@ -2390,8 +2545,8 @@ def process_koala_rss(filename=None, path=None,
                                             **kwargs)        
         corrections_done.append("telluric_residua_at_6860_correction")
     
-    if correct_extreme_negatives:
-        rss = clean_extreme_negatives(rss,                                       #TODO: This has to be a correction applied to data container
+    if correct_extreme_negatives:        #TODO: This has to be a correction applied to data container
+        rss = clean_extreme_negatives(rss,                                       
                                       fibre_list=fibres_to_fix, 
                                       percentile_min=percentile_min_for_extreme_negatives,  
                                       continuum = continuum_model_after_sky_correction,
@@ -2399,8 +2554,8 @@ def process_koala_rss(filename=None, path=None,
         corrections_done.append("correct_extreme_negatives")
 
     # Clean cosmics    (R)
-    if clean_cosmics:
-        rss=kill_cosmics(rss,                                                   #TODO: This has to be a correction applied to data container
+    if clean_cosmics:                    #TODO: This has to be a correction applied to data container
+        rss=kill_cosmics(rss,                                                  
                          brightest_line_wavelength, 
                          width_bl=width_bl, 
                          kernel_median_cosmics=kernel_median_cosmics,
@@ -2438,10 +2593,11 @@ def process_koala_rss(filename=None, path=None,
             if len(corrections_done) > 0:
                 print(f"  Corrections applied: {len(corrections_done)} in total:")
                 for correction in corrections_done: print(f"  - {correction}")
-            print(f"\n  All applied corrections are stored in {rss.koala.info['rss_object_name']}.intensity !")
+            if rss.koala.info['rss_object_name'] is not None:
+                print(f"\n  All applied corrections are stored in {rss.koala.info['rss_object_name']}.intensity !")
     
     if save_rss_to_fits_file is not None:
-        if save_rss_to_fits_file == "auto":
+        if save_rss_to_fits_file == "auto": # These two options, "auto" and "clean", should go in task save_rss_to_fits_file
             save_rss_to_fits_file = name_keys(filename, path= path, 
                                               apply_throughput = apply_throughput,                                       # T
                                               correct_ccd_defects = correct_ccd_defects,                                 # C
@@ -2455,7 +2611,9 @@ def process_koala_rss(filename=None, path=None,
                                               telluric_residua_at_6860_correction = telluric_residua_at_6860_correction, # R02
                                               clean_cosmics = clean_cosmics,                                             # R04
                                               correct_extreme_negatives = correct_extreme_negatives)                     # R08 
-           
+        
+        if save_rss_to_fits_file == "clean": save_rss_to_fits_file = filename[:-5]+"_clean.fits"
+            
         koala_rss_to_fits(rss, fits_file=save_rss_to_fits_file, path = path, verbose=verbose)
     
     return rss
@@ -2763,9 +2921,7 @@ def koala_rss_to_fits(rss, data=None,
     verbose = kwargs.get('verbose', True)
     warnings = kwargs.get('warnings', verbose)
     
-    koala_info = rss.koala.info
-    
-    if path is not None: fits_file = os.path.join(path,fits_file)
+    # Check data: intensity or something else?
     if data is None:
         data = rss.intensity
         if verbose: print("> Using rss.intensity of given RSS file to create fits file...")
@@ -2778,8 +2934,29 @@ def koala_rss_to_fits(rss, data=None,
         else:
             if verbose: print("> Using the data provided + structure of given RSS file to create fits file...")
     
-    fits_image_hdu = fits.PrimaryHDU(data)
     
+    # Check the path
+    if path is not None: fits_file = os.path.join(path,fits_file)
+    # if save_rss_to_fits_file == "auto":                                #TODO, this can be done reading rss.koala.corrections_done
+    #     save_rss_to_fits_file = name_keys(filename, path= path, 
+    #                                       apply_throughput = apply_throughput,                                       # T
+    #                                       correct_ccd_defects = correct_ccd_defects,                                 # C
+    #                                       fix_wavelengths = fix_wavelengths,                                         # W        
+    #                                       correct_for_extinction = correct_for_extinction,                           # X
+    #                                       apply_telluric_correction = apply_telluric_correction,                     # T
+    #                                       sky_method = sky_method,                                                   # S
+    #                                       correct_negative_sky = correct_negative_sky,                               # N
+    #                                       id_el = id_el,                                                             # E
+    #                                       big_telluric_residua_correction = big_telluric_residua_correction,         # R01
+    #                                       telluric_residua_at_6860_correction = telluric_residua_at_6860_correction, # R02
+    #                                       clean_cosmics = clean_cosmics,                                             # R04
+    #                                       correct_extreme_negatives = correct_extreme_negatives)                     # R08 
+    
+    if fits_file == "clean": fits_file = rss.koala.info["path_to_file"][:-5]+"_clean.fits"
+    
+    # Star building fits file
+    koala_info = rss.koala.info
+    fits_image_hdu = fits.PrimaryHDU(data)
     fits_image_hdu.header = copy.deepcopy(rss.koala.header)
         
     # fits_image_hdu.header['BITPIX']  =  16  
@@ -2808,8 +2985,8 @@ def koala_rss_to_fits(rss, data=None,
 
     fits_image_hdu.header["KOALAFOV"] = koala_info["KOALA_fov"]
     fits_image_hdu.header["SPAXSIZE"] = koala_info["spaxel_size"]
-    fits_image_hdu.header['RACEN'] = koala_info["RA_cen"] *np.pi/180     # / Field Centre RA (Radians) (from PTCS) 
-    fits_image_hdu.header['DECCEN'] = koala_info["DEC_cen"] *np.pi/180   # / Field Centre DEC (Radians) (from PTCS) 
+    fits_image_hdu.header['RACEN'] = koala_info["RA_centre_deg"] *np.pi/180     # / Field Centre RA (Radians) (from PTCS) 
+    fits_image_hdu.header['DECCEN'] = koala_info["DEC_centre_deg"] *np.pi/180   # / Field Centre DEC (Radians) (from PTCS) 
     # fits_image_hdu.header['TEL_PA'] = rss.PA
 
     # fits_image_hdu.header["CTYPE2"] = 'Fibre number'          # / Label for axis 2  
@@ -2833,12 +3010,15 @@ def koala_rss_to_fits(rss, data=None,
     del fits_image_hdu.header['HISTORY']
     fits_image_hdu.header['HISTORY'] = "-- PREVIOUS HISTORY:"
     # Add the HISTORY in the previous file
-    for item in rss.koala.header["HISTORY"]:
-        if item == "- Created fits file (this file) :":
-            fits_image_hdu.header['HISTORY'] = "- Created fits file :"
+    for item in rss.koala.history:   # rss.koala.header["HISTORY"]:
+        if item == "- Created fits file (this file):":
+            fits_image_hdu.header['HISTORY'] = "- Created fits file:"
+        elif item == "-- ADDED NEW HISTORY:":
+            pass
         else:    
             fits_image_hdu.header['HISTORY'] = item        
-      
+    fits_image_hdu.header['HISTORY'] = "-- ADDED NEW HISTORY:"   
+    
     # Now, add the new HISTORY
     history = koala_info["history"]
     
@@ -2852,11 +3032,10 @@ def koala_rss_to_fits(rss, data=None,
     #fits_image_hdu.header['HISTORY'] = 'using input file:'
     fits_image_hdu.header['HISTORY'] = koala_info["path_to_file"]
 
-    for item in history:
-        fits_image_hdu.header['HISTORY'] = item
+    for item in history:  fits_image_hdu.header['HISTORY'] = item
 
-    fits_image_hdu.header['HISTORY'] = "- Created fits file (this file) :"
-    fits_image_hdu.header['HISTORY'] = " "+fits_file   
+    fits_image_hdu.header['HISTORY'] = "- Created fits file (this file):"
+    fits_image_hdu.header['HISTORY'] = fits_file   
     
     fits_image_hdu.header['FILE_IN'] = koala_info["path_to_file"]
     fits_image_hdu.header['FILE_OUT'] = fits_file
@@ -2901,8 +3080,8 @@ def koala_rss_to_fits(rss, data=None,
     fibre_table_hdu = fits.BinTableHDU.from_columns(cols)
     fibre_table_hdu.header = rss.koala.fibre_table.header
     
-    fibre_table_hdu.header['RACEN'] = koala_info["RA_cen"] *np.pi/180     # / Field Centre RA (Radians) (from PTCS) 
-    fibre_table_hdu.header['DECCEN'] = koala_info["DEC_cen"] *np.pi/180   # / Field Centre DEC (Radians) (from PTCS) 
+    fibre_table_hdu.header['RACEN'] = koala_info["RA_centre_deg"] *np.pi/180     # / Field Centre RA (Radians) (from PTCS) 
+    fibre_table_hdu.header['DECCEN'] = koala_info["DEC_centre_deg"] *np.pi/180   # / Field Centre DEC (Radians) (from PTCS) 
 
     
     # Put everything together & write

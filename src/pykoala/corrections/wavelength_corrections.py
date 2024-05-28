@@ -13,7 +13,8 @@ from scipy.signal import medfilt
 # =============================================================================
 # Astropy and associated packages
 # =============================================================================
-
+from astropy.io import fits
+from astropy.wcs import WCS
 # =============================================================================
 # KOALA packages
 # =============================================================================
@@ -95,23 +96,32 @@ class WavelengthShiftCorrection(CorrectionBase):
                  sky_lines = None,
                  wavelength_shift_solution=None, 
                  sol_sky_lines = None,
+                 wavelength = None,
                  fitted_offset_sky_lines = None,
                  w_fixed_all_fibres =None,
+                 fits_file = None,
+                 wcs = None,
+                 header = None,
                  **kwargs):
         
         self.sky_lines = sky_lines
+        self.wavelength = wavelength
         self.wavelength_shift_solution = wavelength_shift_solution
         self.sol_sky_lines = sol_sky_lines
         self.fitted_offset_sky_lines = fitted_offset_sky_lines
         self.w_fixed_all_fibres = w_fixed_all_fibres
+        self.fits_file = fits_file
+        self.wcs = wcs
+        self.header = header
         
         self.verbose=kwargs.get("verbose", False)
         self.corr_print("Initialising wavelength correction model.")
         
+        if self.fits_file is not None and self.wavelength_shift_solution is None:
+            self.load_fits(**kwargs)
         
         #super().__init__()
         
-
         #self.wavelength_shift_solution = kwargs.get('wavelength_shift_solution', Wavelength())
         #if type(self.throughput) is not Throughput():   #!!! ANGEL    Así me falla, tengo que llamar a str
         #if str(type(self.throughput)) != str(Throughput()):   ## TAMBIEN FALLA ????
@@ -120,7 +130,85 @@ class WavelengthShiftCorrection(CorrectionBase):
         # self.wavelength.path = kwargs.get('wavelength_path', None)
         # if self.wavelength.wavelength_shift_solution is None and self.wavelength.path is not None:
         #     self.wavelength.load_fits(self.wavelength_path)
-# #-----------------------------------------------------------------------------
+        
+    def tofits(self, fits_file, path_to_file = None ):
+        primary = fits.PrimaryHDU()
+        WAVSHIFT = fits.ImageHDU(data=self.wavelength_shift_solution,
+                            name='WAVSHIFT')
+        #WSHIFTER = fits.ImageHDU(data=self.throughput_error,
+        #                    name='WSHIFTER')
+        FITTED = fits.ImageHDU(data=self.fitted_offset_sky_lines, name='FITTED')
+
+        # DATE, GRATING, WAVELENGTH RANGE SHOULD BE HERE TOO           
+        primary.header = self.header
+        primary.header['OBJECT'] = self.name 
+        
+        #wcs = WCS(naxis=2)   # ÁNGEL: I CAN'T GET WCS RIGHT, MOVING ALL THE HEADER FROM RSS      #FIXME
+        #wcs = self.wcs
+        #primary.header = wcs.to_header()
+        
+        # primary.header["CRVAL1"] = self.wavelength[0]
+        # primary.header["CDELT1"] = (self.wavelength[-1]-self.wavelength[0])/(len(self.wavelength)-1)
+        # primary.header["CRPIX1"] = 1. 
+        # primary.header["NAXIS"] = 2 
+        # primary.header["NAXIS1"] = len(self.wavelength) 
+        primary.header["NWAVES"] = len(self.wavelength)  #FIXME  This is for getting WCS manually...
+        
+        i = 1
+        for item in self.sol_sky_lines:
+            if i>9:
+                text_skyline = "SKYLIN"+str(i)
+                text_solsky  = "SOLSKY"+str(i)
+            else:
+                text_skyline = "SKYLIN0"+str(i)
+                text_solsky  = "SOLSKY0"+str(i)
+            primary.header[text_skyline] = item
+            primary.header[text_solsky] = (str(self.sol_sky_lines[item]).strip("]")).strip("[")
+            i=i+1
+        hdul = fits.HDUList([primary, WAVSHIFT, FITTED])
+
+        if path_to_file is not None: fits_file = path.join(path_to_file,fits_file)
+        hdul.writeto(fits_file, overwrite=True)
+        hdul.close(verbose=True)
+        print(f"[WavelengthShiftCorrection] WavelengthShiftCorrection saved at {fits_file}")
+        
+    def load_fits(self, path_to_file=None):
+        """Load the WavelengthShiftCorrection data from a fits file.
+        
+        Description
+        -----------
+        Loads WavelengthShiftCorrection correction (extension 1)from a fits
+        file.
+        """
+        if path_to_file is not None: self.fits_file = path.join(path_to_file,self.fits_file)
+        if not path.isfile(self.fits_file):
+            raise NameError(f"WavelengthShiftCorrection file {self.fits_file} does not exists.")
+        print(f"[WavelengthShiftCorrection] Loading WavelengthShiftCorrection from {self.fits_file}")
+        with fits.open(self.fits_file) as hdul:
+            self.wavelength_shift_solution = hdul[1].data
+            self.fitted_offset_sky_lines = hdul[2].data
+            
+            header = fits.getheader(self.fits_file, 0) # + fits.getheader(path_to_file, 2)
+            self.header = header
+            #header = hdul[1].header
+            #print(header)
+            
+            # Create wavelength from wcs   #FIXME !!!!!!!!!!!!!!!!!
+            #wcs=WCS(header)
+            #print(wcs)
+            #nrow, ncol = wcs.array_shape
+            #wavelength_index = np.arange(ncol)
+            #self.wavelength = wcs.dropaxis(1).wcs_pix2world(wavelength_index, 0)[0]
+            
+            wavelength_index =  np.arange(header["NWAVES"])
+            CRPIX1 = header["CRPIX1"]
+            CRVAL1 = header["CRVAL1"]
+            CDELT1 = header["CDELT1"]
+            self.wavelength = CRVAL1 - CDELT1 * (CRPIX1-1) + wavelength_index * CDELT1 
+            self.sky_lines = []
+            for item in header:
+                if item[0:6] == "SKYLIN": self.sky_lines.append(float(header[item]))
+            # #-----------------------------------------------------------------------------
 # %% ============================================================================
 # #-----------------------------------------------------------------------------
     def wavelength_shift_using_edges(rss,                    # OLD, better use the other below
@@ -430,11 +518,19 @@ class WavelengthShiftCorrection(CorrectionBase):
 # #            if i != 546 or i != 547:
 # #                self.intensity_corrected[i] = self.intensity_corrected[i] / vector_y[-1][i]
 
-            
+        try:
+            wcs = copy.deepcopy(rss.koala.wcs)            # FIXME WE NEED TO KEEP the WCS of the rss... 
+            header = copy.deepcopy(rss.koala.header) 
+        except Exception:
+            wcs = None 
+            header = None
             
         wavelength_shift_correction_data = WavelengthShiftCorrection(sky_lines = sky_lines,
                                                                 wavelength_shift_solution = wavelength_shift_solution,
                                                                 sol_sky_lines = sol_sky_lines,
+                                                                wavelength= copy.deepcopy(w),
+                                                                wcs = wcs,
+                                                                header = header,
                                                                 fitted_offset_sky_lines = fitted_offset_sky_lines)
                                                                 #w_fixed_all_fibres = w_fixed_all_fibres)
                                                       
@@ -444,6 +540,8 @@ class WavelengthShiftCorrection(CorrectionBase):
 # %% ============================================================================
 # #-----------------------------------------------------------------------------
     def wavelength_shift_using_skylines(rss,  
+                                        wavelength_shift_correction_file = None,
+                                        #path = None,
                                         sky_lines=None, 
                                         sky_lines_file = None,
                                         n_sky_lines = 3,   #TODO need to be implemented
@@ -844,18 +942,32 @@ class WavelengthShiftCorrection(CorrectionBase):
                     print("   {:4.0f}     {:6.3f}  {:6.3f} {:6.3f}    {:.3f}     {:.3f}".format(fibres_to_plot[i],   min_value,median_value,max_value,std,   max_value-min_value))
                 print("  --------------------------------------------------")
     
-            
+            try:
+                wcs = copy.deepcopy(rss.koala.wcs)            # FIXME WE NEED TO KEEP the WCS of the rss... 
+                header = copy.deepcopy(rss.koala.header)      # Taking all header as I can't get WCS working later...
+            except Exception:
+                wcs = None 
+                header = None
             # Prepare the results to be saved in an object with all the key info
             _wavelength_shift_solution_ = [np.array(wavelength_shift_solution), np.array(wavelength_shift_solution_wave)] #, sky_line_fits_sol] this one is in sol_sky_lines
             wavelength_shift_correction_data = WavelengthShiftCorrection(sky_lines = sky_lines,
                                                                          wavelength_shift_solution = _wavelength_shift_solution_,
                                                                          sol_sky_lines = sol_sky_lines,
+                                                                         wavelength = copy.deepcopy(w),
+                                                                         wcs = wcs,
+                                                                         header = header,
                                                                          fitted_offset_sky_lines = fitted_offset_sky_lines)
                                                                          #w_fixed_all_fibres = w_fixed_all_fibres)
                                                                 
             # Add information in History / log
             # self.history.append("  sol (found) = " + str(sol))
             if verbose: print("\n> Computing small wavelength shifts using skylines COMPLETED and saved in a WavelengthShiftCorrection object!")
+    
+    
+            # Save file if requested
+            if wavelength_shift_correction_file is not None:
+                path_to_file = kwargs.get('path', None)
+                wavelength_shift_correction_data.tofits(wavelength_shift_correction_file, path_to_file)
     
             return   wavelength_shift_correction_data  
             
@@ -910,6 +1022,9 @@ class WavelengthShiftCorrection(CorrectionBase):
         rss_out = copy.deepcopy(rss)
         
         w = rss.wavelength
+        
+        #TODO check that initial wavelength in wavelength_shift_solution is the same one that in rss
+        
         nspec = len(rss.intensity)
         xfibre = list(range(nspec))
         if show_fibres is None:  show_fibres=[0, int(nspec/2), nspec-1]
@@ -964,6 +1079,8 @@ class WavelengthShiftCorrection(CorrectionBase):
                                   )
                 
         vprint("\n> Small fixing of the wavelength shifts APPLIED!", **kwargs)
+    
+        #TODO: Updated rss.koala.wcs !!
     
         #!!! TODO: log / history...
         rss.log["wavelength fix"]["index"] = len(wavelength_shift_solution)
