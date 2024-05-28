@@ -27,6 +27,7 @@ from pykoala.ancillary import vprint
 from pykoala.plotting.utils import new_figure, colour_map
 from pykoala.exceptions.exceptions import TelluricNoFileError
 from pykoala.corrections.correction import CorrectionBase
+from pykoala.corrections.throughput import Throughput
 from pykoala.data_container import DataContainer
 from pykoala.rss import RSS
 from pykoala.cubing import Cube
@@ -875,12 +876,37 @@ def combine_telluric_corrections(list_of_telcorr, ref_wavelength):
 
 class WaveletFilter(object):
     '''
+    Estimate overall fibre throughput and wavelength calibration based on sky emission lines (from wavelet transform).
+    
+    Description
+    -----------
     Given a Row-Stacked Spectra (RSS) object:
     1. Estimate the FWHM of emission lines from the autocorrelation of the median (~ sky) spectrum.
     2. Apply a (mexican top hat) wavelet filter to detect features on that scale (i.e. filter out the continuum).
     3. Find regions actually dominated by sky lines (i.e. exclude lines from the target).
     4. Estimate fibre throughput from norm (standard deviation).
     5. Estimate wavelength offset of each fibre (in pixels) from cross-correlation with the sky.
+    
+    Attributes
+    ----------
+    - scale: (int)
+        Scale of the wavelet filter, in pixels.
+    - filtered: numpy.ndarray(float)
+        Throughput-corrected wavelet coefficient (filtered rss.intensity).
+    - sky_lo: numpy.ndarray(float)
+        Lower percentile (16) of the estimated filtered sky.
+    - sky: numpy.ndarray(float)
+        Estimated (median) filtered sky.
+    - sky_hi: numpy.ndarray(float)
+        Upper percentile (84) of the estimated filtered sky.
+    - sky_weight: numpy.ndarray(float)
+        Estimated dominance of the sky (between 0 and 1).
+    - fibre_throughput: numpy.ndarray(float)
+        Overall throughput of each fibre.
+    - wavelength: numpy.ndarray(float)
+        Wavelength of the wavelet coefficients (only used for plotting).
+    - fibre_offset: numpy.ndarray(float)
+        Relative wavelenght calibration. Offset, in pixels, with respect to the sky (from weighted cross-correlation).
     '''
     
     def __init__(self, rss):
@@ -892,7 +918,7 @@ class WaveletFilter(object):
         x = np.nanmedian(rss.intensity, axis=0)  # median ~ sky spectrum
         x -= np.nanmean(x)
         x = scipy.signal.correlate(x, x, mode='same')
-        h = np.count_nonzero(x > 0.5*np.nanmax(x)) // 2
+        h = (np.count_nonzero(x > 0.5*np.nanmax(x)) + 1) // 2
         self.scale = 2*h + 1
         print(f'> Wavelet filter scale: {self.scale} pixels')
         
@@ -914,20 +940,27 @@ class WaveletFilter(object):
         
         self.filtered -= np.nanmean(self.filtered, axis=1)[:, np.newaxis] # should be irrelevant
         self.filtered *= self.sky_weight
-        self.fibre_throughput = np.nanstd(self.filtered, axis=1)
-        self.filtered /= self.fibre_throughput[:, np.newaxis]
+        #self.fibre_throughput = np.nanstd(self.filtered, axis=1)
+        #self.fibre_throughput = np.nanmedian(self.filtered, axis=1)
+        #self.filtered /= self.fibre_throughput[:, np.newaxis]
 
-        x = np.nanmedian(self.filtered / self.sky, axis=1)
-        self.filtered /= x[:, np.newaxis]
-        self.fibre_throughput /= x
+        #self.fibre_throughput = np.nanmedian(self.filtered / self.sky, axis=1)
+        self.fibre_throughput = np.nanmean(self.filtered * self.sky[np.newaxis, :], axis=1) / np.nanmean(self.sky**2)
         self.fibre_throughput /= np.nanmedian(self.fibre_throughput)
+        self.filtered /= self.fibre_throughput[:, np.newaxis]
         
         # 5. Estimate wavelength offset of each fibre (in pixels) from cross-correlation with the sky.
         
-        self.wavelength = rss.wavelength[self.scale + h + 1 : -self.scale - h ].to_value(u.AA)  # only for plotting:
+        x = u.Quantity(rss.wavelength[self.scale + h + 1 : -self.scale - h ])  # only for plotting:
+        if x.unit.is_equivalent(u.AA):
+            self.wavelength = x.to_value(u.AA)
+        elif x.unit.is_equivalent(u.dimensionless_unscaled):  # assume it's already in Angstrom
+            self.wavelength = x.value
+        else:
+            raise TypeError(f'  ERROR: wrong wavelength units ({x.unit})')
+
         mid = rss.intensity.shape[1] // 2
         s = self.scale * 2
-
         x = scipy.signal.fftconvolve(self.filtered, self.sky[np.newaxis, ::-1], mode='same', axes=1)[:, mid-s:mid+s+1]
         self.fibre_offset = np.nansum(np.arange(x.shape[1])[np.newaxis, :] * x**2, axis=1) / np.nansum(x**2, axis=1)
         
@@ -954,6 +987,11 @@ class WaveletFilter(object):
         if save_as is not None:
             fig.savefig(save_as)
 
+        
+    def get_throughput_object(self):
+        return Throughput(throughput_data=np.repeat(self.fibre_throughput[:, np.newaxis], self.wavelength.size + 3*self.scale, axis=1))
+
+    
 
 class SkySelfCalibration(CorrectionBase):
     """Wavelength calibration, throughput, and sky model based on strong sky lines."""
