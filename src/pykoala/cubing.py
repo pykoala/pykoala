@@ -423,6 +423,10 @@ def build_cube(rss_set, wcs=None, wcs_params=None,
     -------
     cube: Cube
          Cube created by interpolating the set of RSS.
+    qc_plot: dictionary, optional
+        Only if qc_plots is `True`. It contains a dictionary of QC plots that
+        includes the individual RSS coverage maps and the final weight/exposure
+        maps.
     """
     print('[Cubing] Starting cubing process')
     if wcs is None and wcs_params is None:
