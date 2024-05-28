@@ -20,8 +20,6 @@ from astropy.io import fits
 # =============================================================================
 # PyKOALA modules
 # =============================================================================
-from pykoala.cubing import Cube, build_wcs, build_cube
-
 
 def vprint(*arg, **kwargs):
     """
@@ -68,37 +66,74 @@ def detect_edge(rss):
     max_index = wavelength.tolist().index(max_w)
     return min_w, min_index, max_w, max_index
 
+# ----------------------------------------------------------------------------------------------------------------------
+# WCS operations
+# ----------------------------------------------------------------------------------------------------------------------
 
-# RSS info dictionary template
-rss_info_template = dict(name=None,  # Name of the object
-                         exptime=None,  # Total rss exposure time (seconds)
-                         fib_ra=None, fib_dec=None,  # Fibres' celestial offset
-                         airmass=None  # Airmass
-                         )
 
-def make_dummy_cube_from_rss(rss, spa_pix_arcsec=0.5, kernel_pix_arcsec=1.0):
-    """Create an empty datacube array from an input RSS."""
-    min_ra, max_ra = np.nanmin(rss.info['fib_ra']), np.nanmax(rss.info['fib_ra'])
-    min_dec, max_dec = np.nanmin(rss.info['fib_dec']), np.nanmax(rss.info['fib_dec'])
-    datacube_shape = (rss.wavelength.size,
-                   int((max_ra - min_ra) * 3600 / spa_pix_arcsec),
-                   int((max_dec - min_dec) * 3600 / spa_pix_arcsec))
-    ref_position = (rss.wavelength[0], (min_ra + max_ra) / 2, (min_dec + max_dec) / 2)
-    spatial_pixel_size = spa_pix_arcsec / 3600
-    spectral_pixel_size = rss.wavelength[1] - rss.wavelength[0]
+def update_wcs_coords(wcs, ra_dec_val=None, ra_dec_offset=None):
+    """Update the celestial reference values of a WCS.
+    
+    Description
+    -----------
+    Update the celestial coordinates of a WCS using new central values of RA
+    and DEC or relative offsets expressed in degree.
 
-    wcs = build_wcs(datacube_shape=datacube_shape,
-                    reference_position=ref_position,
-                    spatial_pix_size=spatial_pixel_size,
-                    spectra_pix_size=spectral_pixel_size,
-                )
-    cube = build_cube([rss], pixel_size_arcsec=spa_pix_arcsec, wcs=wcs,
-                      kernel_size_arcsec=kernel_pix_arcsec)
-    return cube
+    Parameters
+    ----------
+    - wcs: asteropy.wcs.WCS
+        Target WCS to update.
+    - ra_dec_val: list or tupla, default=None
+        New CRVAL of RA and DEC.
+    - ra_dec_offset: list or tupla, default=None
+        Relative offset that will be applyied to CRVAL of RA and DEC axis. If
+        `ra_dec_val` is privided, this will be ignored.
+
+    Return
+    ------
+    - correct_wcs: astropy.wcs.WCS
+        A copy of the original WCS with the reference values updated.
+    """
+    correc_wcs = wcs.deepcopy()
+    if ra_dec_val is not None:
+        if "RA" in correc_wcs.wcs.ctype[0]:
+            correc_wcs.wcs.crval[0] = ra_dec_val[0]
+            correc_wcs.wcs.crval[1] = ra_dec_val[1]
+        elif "RA" in correc_wcs.wcs.ctype[1]:
+            correc_wcs.wcs.crval[0] = ra_dec_val[1]
+            correc_wcs.wcs.crval[1] = ra_dec_val[0]
+        else:
+            raise NameError(
+                "RA coordinate could not be found in the WCS coordinate types:"
+                + f"{correc_wcs.wcs.ctype[0]}, {correc_wcs.wcs.ctype[1]}")
+    elif ra_dec_offset is not None:
+        if "RA" in correc_wcs.wcs.ctype[0]:
+            correc_wcs.wcs.crval[0] = correc_wcs.wcs.crval[0] + ra_dec_offset[0]
+            correc_wcs.wcs.crval[1] = correc_wcs.wcs.crval[1] + ra_dec_offset[1]
+        elif "RA" in correc_wcs.wcs.ctype[1]:
+            correc_wcs.wcs.crval[0] = correc_wcs.wcs.crval[0] + ra_dec_offset[1]
+            correc_wcs.wcs.crval[1] = correc_wcs.wcs.crval[1] + ra_dec_offset[0]
+        else:
+            raise NameError(
+                "RA coordinate could not be found in the WCS coordinate types:"
+                + f"{correc_wcs.wcs.ctype[0]}, {correc_wcs.wcs.ctype[1]}")
+
+    return correc_wcs
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Arithmetic operations
 # ----------------------------------------------------------------------------------------------------------------------
+def med_abs_dev(x, axis=0):
+    mad = np.nanmedian(
+        np.abs(x - np.expand_dims(np.nanmedian(x, axis=axis), axis=axis)),
+        axis=axis)
+    return mad
+
+def std_from_mad(x, axis=0, k=1.4826):
+    mad = med_abs_dev(x, axis=axis)
+    return k * mad
+
 def running_mean(x, n_window):
     """
     This function calculates the running mean of an array.
@@ -231,12 +266,6 @@ def interpolate_image_nonfinite(image):
     return interp_image
 
 
-def make_white_image_from_array(data_array, wavelength=None, **args):
-    """Create a white image from a 3D data array."""
-    print(f"Creating a Cube of dimensions: {data_array.shape}")
-    cube = Cube(intensity=data_array, wavelength=wavelength)
-    return cube.get_white_image()
-
 # TODO: refactor
 def smooth_spectrum(wlm, s, wave_min=0, wave_max=0, step=50, exclude_wlm=[[0,0]], order=7,    
                     weight_fit_median=0.5, plot=False, verbose=False, fig_size=12): 
@@ -332,6 +361,163 @@ def smooth_spectrum(wlm, s, wave_min=0, wave_max=0, step=50, exclude_wlm=[[0,0]]
         print('  Weights for getting smooth spectrum:  fit_median =',weight_fit_median,'    fit_median_interpolated =',(1-weight_fit_median))
 
     return weight_fit_median*fit_median + (1-weight_fit_median)*fit_median_interpolated #   (fit_median+fit_median_interpolated)/2      # Decide if fit_median or fit_median_interpolated
+
+def vect_norm(a, b):
+    """Compute the norm of two vectors."""
+    return np.sqrt(np.sum((a - b)**2, axis=-1))
+
+
+def in_rectangle(pos, rectangle_pos):
+    """Check if a point lies in the perimeter of a rectangle."""
+    in_rectangle = (
+     (pos[0] <= rectangle_pos[:, 0]).any()
+     & (pos[0] >= rectangle_pos[:, 0]).any()
+     & (pos[1] <= rectangle_pos[:, 1]).any()
+     & (pos[1] >= rectangle_pos[:, 1]).any()
+     )
+    return in_rectangle
+
+def pixel_in_circle(pixel_pos, pixel_size, circle_pos, circle_radius):
+    """Compute the area of a pixel within a circle.
+    
+    Parameters
+    ----------
+    - pixel_pos: tuple
+        Position of the lower left corner of the pixel
+    - pixel_size: float
+        Size of the pixel.
+    - circle_pos: tuple
+        Position of the circle centre
+    - circle_raidus: float
+        Radius of the circle.
+    
+    Returns
+    -------
+    - area_pixel:
+        Area of the pixel contained within the circle
+    - area_fraction:
+        Fration of the circle area that overlaps with the pixel.
+    """
+    pixel_vertices = (np.atleast_1d(pixel_pos)[np.newaxis, :]
+                      + pixel_size * np.array([[0, 0], [0, 1], [1, 0], [1, 1]])
+                      )
+    # Find those pixels inside the circle
+    inside = vect_norm(pixel_vertices, np.array(circle_pos)[np.newaxis]
+                       ) < circle_radius
+    n_inside = np.count_nonzero(inside)
+    if n_inside == 0:
+        return 0, 0
+
+    pixel_center = np.array([pixel_pos[0] + pixel_size / 2,
+                             pixel_pos[1] + pixel_size / 2])
+    pixel_area = pixel_size**2
+    vertex_in = pixel_vertices[inside].squeeze()
+    vertex_out = pixel_vertices[~inside].squeeze()
+    cr_s = circle_radius**2
+    circle_area = np.pi * cr_s
+
+    if n_inside == 1:
+        x_cross = (cr_s - (vertex_in[1] - circle_pos[1])**2)**0.5
+        x_cross = np.array([[circle_pos[0] + x_cross, vertex_in[1]],
+                            [circle_pos[0] - x_cross, vertex_in[1]]])
+        xcross_pt = np.argmin(vect_norm(pixel_center[np.newaxis, :], x_cross))
+        x_cross = x_cross[xcross_pt]
+        
+        y_cross = (cr_s - (vertex_in[0] - circle_pos[0])**2)**0.5
+        y_cross = np.array([[vertex_in[0], circle_pos[1] + y_cross],
+                            [vertex_in[0], circle_pos[1] - y_cross]])
+        ycross_pt = np.argmin(vect_norm(pixel_center[np.newaxis, :], y_cross))
+        y_cross = y_cross[ycross_pt]
+        arc_length = vect_norm(x_cross, y_cross)
+        phi = np.arccos(
+            (2*circle_radius**2 - arc_length**2) / (2 * circle_radius**2))
+
+        # Area of the triangle formed by the circle center and the intersection
+        area_triangle = 0.5 * circle_radius**2 * np.sin(phi)
+        area_sector = phi / 2 * circle_radius**2
+        # Area of the triangle within the pixel surface inside the circle
+        area_pixel_triangle = 0.5 * np.sqrt(
+            (vertex_in[0] - x_cross[0])**2 * (vertex_in[1] - y_cross[1])**2)
+        area_pixel = area_sector - area_triangle + area_pixel_triangle        
+
+    elif n_inside == 2:
+        parallel_axis = np.where(vertex_in[0] == vertex_in[1])[0][0]
+        perpendicular_axis = [0, 1]
+        perpendicular_axis.remove(parallel_axis)
+        dist = np.abs(vertex_in[0][perpendicular_axis
+            ] - vertex_in[1][perpendicular_axis]).squeeze()
+        intersection_points = np.zeros((2, 2))
+        for i, v in enumerate(vertex_in):
+            x_cross = (cr_s - (v[1] - circle_pos[1])**2)**0.5
+            x_cross = np.array([[circle_pos[0] + x_cross, v[1]],
+                                [circle_pos[0] - x_cross, v[1]]])
+            xcross_pt = np.argmin(vect_norm(pixel_center[np.newaxis, :], x_cross))
+            x_cross = x_cross[xcross_pt]
+            if in_rectangle(x_cross, pixel_vertices):
+                intersection_points[i] = x_cross
+                continue
+            y_cross = (cr_s - (v[0] - circle_pos[0])**2)**0.5
+            y_cross = np.array([[v[0], circle_pos[1] + y_cross],
+                                [v[0], circle_pos[1] - y_cross]])
+            ycross_pt = np.argmin(vect_norm(pixel_center[np.newaxis, :], y_cross))
+            y_cross = y_cross[ycross_pt]
+            if in_rectangle(y_cross, pixel_vertices):
+                intersection_points[i] = y_cross
+
+        # Parallel sides of the trapezium
+        a = np.abs(
+            vertex_in[0][parallel_axis]
+            - intersection_points[0][parallel_axis])
+        b = np.abs(
+            vertex_in[1][parallel_axis]
+            - intersection_points[1][parallel_axis])
+
+        area_trapezoid = dist * (a + b) / 2
+        arc_length = vect_norm(intersection_points[0], intersection_points[1])
+        phi = np.arccos(
+            (2*circle_radius**2 - arc_length**2) / (2 * circle_radius**2))
+        area_triangle = 0.5 * cr_s * np.sin(phi)
+        area_sector = phi / 2 * cr_s
+        area_pixel = area_sector - area_triangle + area_trapezoid
+
+    elif n_inside == 3:
+        dist_to_center = vect_norm(vertex_in, np.array(circle_pos)[np.newaxis])
+        corner_pos = np.argmin(dist_to_center)
+        intersection_points = np.zeros((2, 2))
+        for i, v in enumerate(np.delete(vertex_in, corner_pos, axis=0)):
+            x_cross = (cr_s - (v[1] - circle_pos[1])**2)**0.5
+            x_cross = np.array([[circle_pos[0] + x_cross, v[1]],
+                                [circle_pos[0] - x_cross, v[1]]])
+            xcross_pt = np.argmin(vect_norm(pixel_center[np.newaxis, :], x_cross))
+            x_cross = x_cross[xcross_pt]
+            if in_rectangle(x_cross, pixel_vertices):
+                intersection_points[i] = x_cross
+                continue
+            
+            y_cross = (cr_s - (v[0] - circle_pos[0])**2)**0.5
+            y_cross = np.array([[v[0], circle_pos[1] + y_cross],
+                                [v[0], circle_pos[1] - y_cross]])
+            ycross_pt = np.argmin(vect_norm(pixel_center[np.newaxis, :], y_cross))
+            y_cross = y_cross[ycross_pt]
+            if in_rectangle(y_cross, pixel_vertices):
+                intersection_points[i] = y_cross
+
+        arc_length = vect_norm(intersection_points[0], intersection_points[1])
+        phi = np.arccos(
+            (2*circle_radius**2 - arc_length**2) / (2 * circle_radius**2))
+
+        area_inner_triangle = 0.5 * cr_s * np.sin(phi)
+        area_sector = phi / 2 * cr_s
+        
+        area_outer_triangle = 0.5 * (
+            vect_norm(intersection_points[0], vertex_out)
+            * vect_norm(intersection_points[1], vertex_out))
+        area_pixel = (pixel_area - area_outer_triangle
+                      + (area_sector - area_inner_triangle))
+    else:
+        area_pixel = pixel_size**2        
+    area_fraction = area_pixel / (circle_area + 1e-100)
+    return area_pixel, area_fraction
 # ----------------------------------------------------------------------------------------------------------------------
 # Models and fitting
 # ----------------------------------------------------------------------------------------------------------------------

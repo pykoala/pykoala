@@ -14,50 +14,218 @@ from astropy.coordinates import SkyCoord
 # =============================================================================
 # KOALA packages
 # =============================================================================
+from pykoala import ancillary
 from pykoala.data_container import DataContainer
+from pykoala.plotting import qc_plot
 from pykoala import __version__
 from scipy.special import erf
+
+class CubeStacking:
+    """Collection of cubing stacking methods.
+    
+    Description
+    -----------
+    Each method takes as input arguments a collection of cubes and variances,
+    either in the form of a list or as an array with the first dimension corresponding
+    to each cube, and additional keyword arguments.
+
+    """
+    def sigma_clipping(cubes: np.ndarray, variances: np.ndarray, **kwargs):
+        """Perform cube stacking using STD clipping.
+        
+        Parameters
+        ----------
+        - cubes: np.ndarray
+            An array consisting of the collection of data to combine. The first
+            dimension must correspond to the individual elements (e.g. datacubes)
+            that will be combined. If the size of the first dimension is 1, it
+            will return `cubes[0]` withouth applying any combination.
+        - variances: np.ndarray
+            Array of variances associated to cubes.
+        - inv_var_weight: np.ndarray, optional
+            An array of weights to apply during the stacking.
+        
+        Returns
+        -------
+        - stacked_cube: np.ndarray
+            The result of stacking the data in cubes along axis 0.
+        - stacked_variance: np.ndarray
+            The result of stacking the variances along axis 0.
+        """
+        if cubes.shape[0] == 1:
+            return cubes[0], variances[0]
+
+        nsigma = kwargs.get("nsigma", 3.0)
+        sigma = np.nanstd(cubes, axis=0)
+        mean =np.nanmean(cubes, axis=0)
+        good_pixel = np.abs((cubes - mean[np.newaxis]) / sigma[np.newaxis]
+                            ) < nsigma
+        if kwargs.get("inv_var_weight", False):
+            w = 1 / variances
+        else:
+            w = np.ones_like(cubes)
+
+        stacked_cube = np.nansum(cubes * w * good_pixel, axis=0) / np.nansum(
+            w * good_pixel, axis=0)
+        stacked_variance = np.nansum(variances, axis=0) / cubes.shape[0]**2
+        return stacked_cube, stacked_variance
+
+    def mad_clipping(cubes: np.ndarray, variances: np.ndarray, **kwargs):
+        """Perform cube stacking using MAD clipping.
+        
+        Parameters
+        ----------
+        - cubes: np.ndarray
+            An array consisting of the collection of data to combine. The first
+            dimension must correspond to the individual elements (e.g. datacubes)
+            that will be combined. If the size of the first dimension is 1, it
+            will return `cubes[0]` withouth applying any combination.
+        - variances: np.ndarray
+            Array of variances associated to cubes.
+        - inv_var_weight: np.ndarray, optional
+            An array of weights to apply during the stacking.
+        
+        Returns
+        -------
+        - stacked_cube: np.ndarray
+            The result of stacking the data in cubes along axis 0.
+        - stacked_variance: np.ndarray
+            The result of stacking the variances along axis 0.
+        """
+        if cubes.shape[0] == 1:
+            return cubes[0], variances[0]
+
+        nsigma = kwargs.get("nsigma", 3.0)
+        sigma = ancillary.std_from_mad(cubes, axis=0)
+        median =np.nanmedian(cubes, axis=0)
+        good_pixel = np.abs(
+            (cubes - median[np.newaxis]) / sigma[np.newaxis]) < nsigma
+
+        if kwargs.get("inv_var_weight", True):
+            w = 1 / variances
+        else:
+            w = np.ones_like(cubes)
+
+        stacked_cube = np.nansum(cubes * w * good_pixel, axis=0) / np.nansum(
+            w * good_pixel, axis=0)
+        stacked_variance = np.nansum(variances, axis=0) / cubes.shape[0]**2
+        return stacked_cube, stacked_variance
 
 # -------------------------------------------
 # Fibre Interpolation and cube reconstruction
 # -------------------------------------------
 
-def gaussian_kernel(z, norm=False):
-    """1D Cumulative gaussian kernel function.
+class InterpolationKernel(object):
+    def __init__(self, scale, *args, **kwargs):
+        self.scale = scale
+        self.truncation_radius = kwargs.get("truncation_radius", 1.0)
+        self.pixel_scale_arcsec = kwargs.get("pixel_scale_arcsec")
 
-    Params
-    ------
-    z: (np.ndarray)
-        Array of points where the kernel will be evaluated.
-    norm: (bool, default=False)
-        If true, the output will be forced to be normalized.
-    """
-    c = 0.5 * (1 + erf(z / np.sqrt(2)))
-    w = np.diff(c)
-    if norm:
-        w /= np.sum(w)
-    return w
+    def truncation_normalization(self):
+        pass
+        
+    def kernel(self, z):
+        pass  
 
-def cubic_kernel(z, norm=False):
-    """1D Cumulative cubic kernel function.
+class ParabolicKernel(InterpolationKernel):
+    def __init__(self, scale, *args, **kwargs):
+        if 'truncation_radius' in kwargs:
+            del kwargs['truncation_radius']
+        super().__init__(scale, truncation_radius=1, *args, **kwargs)
+        
+    def cmf(self, z):
+        z.clip(-1, 1, out=z)
+        return (3. * z - z ** 3 + 2.) / 4
+
+    def kernel_1D(self, x_edges):
+        z_edges = (x_edges / self.scale).clip(-1, 1)
+        cumulative = self.cmf(z_edges)
+        weights = np.diff(cumulative)
+        return weights
     
-    Params
-    ------
-    z: (np.ndarray)
-        Array of points where the kernel will be evaluated.
-    norm: (bool, default=False)
-        If true, the output will be forced to be normalized.
-    """
-    c = (3. * z - z ** 3 + 2.) / 4
-    w = np.diff(c)
-    if norm:
-        w /= np.sum(w)
-    return w
+    def kernel_2D(self, x_edges, y_edges):
+        z_yy, z_xx  = np.meshgrid(y_edges / self.scale, x_edges / self.scale)
+        z_yy = z_yy.clip(-1., 1.)
+        z_xx = z_xx.clip(-1., 1.)
+        cum_k = ((3. * z_xx - z_xx ** 3 + 2.) / 4
+                 * (3. * z_yy - z_yy ** 3 + 2.) / 4)
+        weights = np.diff(cum_k, axis=0)
+        weights = np.diff(weights, axis=1)
+        return weights
+
+class GaussianKernel(InterpolationKernel):
+    def __init__(self, scale, truncation_radius, *args, **kwargs):
+        super().__init__(scale, truncation_radius=truncation_radius,
+                         *args, **kwargs)
+        self.left_norm = 0.5 * (1 + erf(-self.truncation_radius / np.sqrt(2)))
+        self.right_norm = 0.5 * (1 + erf(self.truncation_radius / np.sqrt(2)))
+
+    def cmf(self, z):
+        c = (0.5 * (1 + erf(z / np.sqrt(2))) - self.left_norm) / (self.right_norm - self.left_norm)
+        return c.clip(0, 1)
+
+    def kernel_1D(self, x_edges):
+        cumulative = self.cmf(x_edges / self.scale)
+        weights = np.diff(cumulative)
+        return weights
+
+    def kernel_2D(self, x_edges, y_edges):
+        weights = (
+            self.kernel_1D(x_edges)[:, np.newaxis]
+            * self.kernel_1D(y_edges)[np.newaxis, :])
+        return weights
+
+class TopHatKernel(InterpolationKernel):
+    def __init__(self, scale, *args, **kwargs):
+        super().__init__(scale, *args, **kwargs)
+
+    def cmf(self, z):
+        c = 0.5 * (z / self.truncation_radius + 1)
+        c[z > self.truncation_radius] = 1.0
+        c[z < - self.truncation_radius] =0.0
+        return c
+        
+    def kernel_1D(self, x_edges):
+        z_edges = (x_edges / self.scale).clip(
+            -self.truncation_radius, self.truncation_radius)
+        cumulative = self.cmf(z_edges)
+        weights = np.diff(cumulative)
+        return weights
+
+    def kernel_2D(self, x_edges, y_edges):
+        weights = (
+            self.kernel_1D(x_edges)[:, np.newaxis]
+            * self.kernel_1D(y_edges)[np.newaxis, :])
+        return weights
+
+class DrizzlingKernel(TopHatKernel):
+    def __init__(self, scale, *args, **kwargs):
+        super().__init__(scale=scale, **kwargs)
+        self.truncation_radius =1
+
+    def kernel_1D(self, *args):
+        pass
+
+    def kernel_2D(self, x_edges, y_edges):
+        weights = np.zeros((x_edges.size - 1, y_edges.size - 1))
+        # x == rows, y == columns
+        pix_edge_x, pix_edge_y = np.meshgrid(x_edges[:-1], y_edges[:-1])
+        for i, (px, py) in enumerate(
+            zip(pix_edge_x.flatten(), pix_edge_y.flatten())):
+            _, area_fraction = ancillary.pixel_in_circle(
+                (px, py), pixel_size=1, circle_pos=(0, 0),
+                circle_radius=self.scale / 2)
+            weights[np.unravel_index(i, weights.shape)] = area_fraction
+        return weights
+
+# ------------------------------------------------------------------------------
+# Fibre interpolation
+# ------------------------------------------------------------------------------
 
 def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
-                      pix_pos_cols, pix_pos_rows, kernel_size_pixels,
+                      pix_pos_cols, pix_pos_rows,
                       adr_cols=None, adr_rows=None, adr_pixel_frac=0.05,
-                      kernel_func=cubic_kernel):
+                      kernel=DrizzlingKernel(scale=1.0), fibre_mask=None):
 
     """ Interpolates fibre spectra and variance to a 3D data cube.
 
@@ -74,13 +242,9 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
     cube_weight: (k, n, m) np.ndarray (float)
         Cube to store fibre spectral weights.
     pix_pos_cols: int
-        offset columns pixels (m) with respect to the cube array centre.
+        Fibre column pixel position (m).
     pix_pos_rows: int
-        offset rows pixels (n) with respect to to the cube array centre.
-    pixel_size: float
-        Datacube pixel size in arcseconds.
-    kernel_size_pixels: float
-        Smoothing kernel size in pixels.
+        Fibre row pixel position (n).
     adr_cols: (k,) np.array(float), optional, default=None
         Atmospheric Differential Refraction (ADR) of each wavelength point along x (ra)-axis (m) expressed in pixels.
     adr_rows: (k,) np.array(float), optional, default=None
@@ -88,8 +252,8 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
     adr_pixel_frac: float, optional, default=0.05
         ADR Pixel fraction used to bin the spectral pixels. For each bin, the median ADR correction will be used to
         correct the range of wavelength.
-    kernel_func: (method)
-        1D kernel function to interpolate the data. Default is cubic kernel.
+    kernel: pykoala.cubing.InterpolationKernel
+        Kernel object to interpolate the data. Default is drizzling.
 
     Returns
     -------
@@ -112,7 +276,7 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
         ) * fib_spectra.size)
 
     # Set NaNs to 0 and discard pixels
-    nan_pixels = ~np.isfinite(fib_spectra)
+    nan_pixels = ~np.isfinite(fib_spectra) | fibre_mask
     fib_spectra[nan_pixels] = 0.
 
     pixel_weights = np.ones_like(fib_spectra)
@@ -120,60 +284,46 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
 
     # Loop over wavelength pixels
     for wl_range in range(0, fib_spectra.size, spectral_window):
-        # ADR correction for spectral window
-        median_adr_cols = np.nanmedian(adr_cols[wl_range: wl_range + spectral_window])
-        median_adr_rows = np.nanmedian(adr_rows[wl_range: wl_range + spectral_window])
+        wl_slice = slice(wl_range, wl_range + spectral_window)
 
         # Kernel along columns direction (x, ra)
-        kernel_centre_cols = pix_pos_cols - median_adr_cols
-        cols_min = max(int(kernel_centre_cols - kernel_size_pixels), 0)
-        cols_max = min(int(kernel_centre_cols + kernel_size_pixels) + 1, cube.shape[2] + 1)
-        n_points_cols = cols_max - cols_min
+        kernel_centre_cols = pix_pos_cols - np.nanmedian(adr_cols[wl_slice])
+        kernel_offset = kernel.scale * kernel.truncation_radius
+        cols_min = max(int(kernel_centre_cols - kernel_offset) - 2, 0)
+        cols_max = min(int(kernel_centre_cols + kernel_offset) + 2,
+                       cube.shape[2] - 1)
+        columns_slice = slice(cols_min, cols_max + 1)
         # Kernel along rows direction (y, dec)
-        kernel_centre_rows = pix_pos_rows - median_adr_rows
-        rows_min = max(int(kernel_centre_rows - kernel_size_pixels), 0)
-        rows_max = min(int(kernel_centre_rows + kernel_size_pixels) + 1, cube.shape[1] + 1)
-        n_points_rows = rows_max - rows_min
+        kernel_centre_rows = pix_pos_rows - np.nanmedian(adr_rows[wl_slice])
+        rows_min = max(int(kernel_centre_rows - kernel_offset) - 2, 0)
+        rows_max = min(int(kernel_centre_rows + kernel_offset) + 2,
+                       cube.shape[1] - 1)
+        rows_slice = slice(rows_min, rows_max + 1)
 
-        if (n_points_cols < 1) | (n_points_rows < 1):
-            # print("OUT FOV")
+        if (cols_max <= cols_min) | (rows_max <= rows_min):
             continue
-
-        cols = np.linspace(cols_min - kernel_centre_cols, cols_max - kernel_centre_cols,
-                           n_points_cols) / kernel_size_pixels
-        rows = np.linspace(rows_min - kernel_centre_rows, rows_max - kernel_centre_rows,
-                           n_points_rows) / kernel_size_pixels
-        # Ensure weight normalization
-        if cols_min > 0:
-            cols[0] = -1.
-        if cols_max < cube.shape[2] + 1:
-            cols[-1] = 1.
-        if rows_min > 0:
-            rows[0] = -1.
-        if rows_max < cube.shape[1] + 1:
-            rows[-1] = 1.
-
-        weight_cols = kernel_func(cols)
-        weight_rows = kernel_func(rows)
-
-        # Kernel weight matrix
-        w = weight_rows[np.newaxis, :, np.newaxis] * weight_cols[np.newaxis, np.newaxis, :]
+        column_edges = np.arange(cols_min - 0.5, cols_max + 1.5, 1.0)
+        row_edges = np.arange(rows_min - 0.5, rows_max + 1.5, 1.0)
+        pos_col_edges = (column_edges - kernel_centre_cols)
+        pos_row_edges = (row_edges - kernel_centre_rows)
+        w = kernel.kernel_2D(pos_row_edges, pos_col_edges)
+        w = w[np.newaxis]
+        #print(w.sum())
         # Add spectra to cube
-        cube[wl_range: wl_range + spectral_window, rows_min:rows_max - 1, cols_min:cols_max - 1] += (
-                fib_spectra[wl_range: wl_range + spectral_window, np.newaxis, np.newaxis]
-                * w)
-        cube_var[wl_range: wl_range + spectral_window, rows_min:rows_max - 1, cols_min:cols_max - 1] += (
-                fib_variance[wl_range: wl_range + spectral_window, np.newaxis, np.newaxis]
-                * w)
-        cube_weight[wl_range: wl_range + spectral_window, rows_min:rows_max - 1, cols_min:cols_max - 1] += (
-                pixel_weights[wl_range: wl_range + spectral_window, np.newaxis, np.newaxis]
-                * w)
+        cube[wl_slice, rows_slice, columns_slice] += (
+            fib_spectra[wl_slice, np.newaxis, np.newaxis] * w)
+        cube_var[wl_slice, rows_slice, columns_slice] += (
+                fib_variance[wl_slice, np.newaxis, np.newaxis] * w**2)
+        cube_weight[wl_slice, rows_slice, columns_slice] += (
+                pixel_weights[wl_slice, np.newaxis, np.newaxis] * w)
+
     return cube, cube_var, cube_weight
 
 
-def interpolate_rss(rss, wcs, kernel_size_arcsec=2.0,
+def interpolate_rss(rss, wcs, kernel,
                     datacube=None, datacube_var=None, datacube_weight=None,
-                    adr_ra_arcsec=None, adr_dec_arcsec=None):
+                    adr_ra_arcsec=None, adr_dec_arcsec=None, mask_flags=None,
+                    qc_plots=False):
 
     """Perform fibre interpolation using a RSS into to a 3D datacube.
 
@@ -209,25 +359,29 @@ def interpolate_rss(rss, wcs, kernel_size_arcsec=2.0,
         datacube_var = np.zeros_like(datacube)
     if datacube_weight is None:
         datacube_weight = np.zeros_like(datacube)
-    # Kernel pixel size for interpolation
-    pixel_size = wcs.pixel_scale_matrix.diagonal()[1:].mean()
-    pixel_size *= 3600
-    kernel_size_pixels = kernel_size_arcsec / pixel_size
+    
     if adr_dec_arcsec is not None:
-        adr_dec_pixel = adr_dec_arcsec / pixel_size
+        adr_dec_pixel = adr_dec_arcsec / kernel.pixel_scale_arcsec
     else:
         adr_dec_pixel = None
     if adr_ra_arcsec is not None:
-        adr_ra_pixel = adr_ra_arcsec / pixel_size
+        adr_ra_pixel = adr_ra_arcsec / kernel.pixel_scale_arcsec
     else:
         adr_ra_pixel = None
-
-    print(f"[Cubing] Smoothing kernel scale: {kernel_size_pixels:.0f} (pixels)")
     # Interpolate all RSS fibres
-    # Obtain fibre position in the detector
+    mask = rss.mask.get_flag_map(mask_flags)
+    # Obtain fibre position in the detector (center of pixel)
     fibre_pixel_pos_cols, fibre_pixel_pos_rows = wcs.celestial.world_to_pixel(
         SkyCoord(rss.info['fib_ra'], rss.info['fib_dec'], unit='deg')
         )
+    if qc_plots:
+        qc_fig = qc_plot.qc_fibres_on_fov(
+            datacube.shape[1:], fibre_pixel_pos_cols, fibre_pixel_pos_rows,
+            fibre_diam=getattr(rss, 'fibre_diameter',
+                               1.25 / kernel.pixel_scale_arcsec))
+    else:
+        qc_fig = None
+
     for fibre in range(rss.intensity.shape[0]):
         offset_ra_pix = fibre_pixel_pos_cols[fibre]
         offset_dec_pix = fibre_pixel_pos_rows[fibre]
@@ -237,15 +391,17 @@ def interpolate_rss(rss, wcs, kernel_size_arcsec=2.0,
             fib_variance=rss.variance[fibre].copy(),
             cube=datacube, cube_var=datacube_var, cube_weight=datacube_weight,
             pix_pos_cols=offset_ra_pix, pix_pos_rows=offset_dec_pix,
-            kernel_size_pixels=kernel_size_pixels,
-            adr_cols=adr_ra_pixel, adr_rows=adr_dec_pixel)
-    return datacube, datacube_var, datacube_weight
+            kernel=kernel,
+            adr_cols=adr_ra_pixel, adr_rows=adr_dec_pixel,
+            fibre_mask=mask[fibre])
+    return datacube, datacube_var, datacube_weight, qc_fig
 
 
-def build_cube(rss_set, 
-               wcs=None, wcs_params=None,
-               kernel_size_arcsec=2.0,
-               adr_set=None, **cube_info):
+def build_cube(rss_set, wcs=None, wcs_params=None,
+                        kernel=GaussianKernel,
+                        kernel_size_arcsec=2.0,
+                        kernel_truncation_radius=2.0,
+                        adr_set=None, mask_flags=None, qc_plots=False, **kwargs):
                
     """Create a Cube from a set of Raw Stacked Spectra (RSS).
 
@@ -267,20 +423,35 @@ def build_cube(rss_set,
     -------
     cube: Cube
          Cube created by interpolating the set of RSS.
+    qc_plot: dictionary, optional
+        Only if qc_plots is `True`. It contains a dictionary of QC plots that
+        includes the individual RSS coverage maps and the final weight/exposure
+        maps.
     """
     print('[Cubing] Starting cubing process')
     if wcs is None and wcs_params is None:
         raise ValueError("User must provide either wcs or wcs_params values.")
     if wcs is None and wcs_params is not None:
         wcs = WCS(wcs_params)
-
+    plots = {}
+    # Initialise kernel
+    pixel_size = wcs.celestial.pixel_scale_matrix.diagonal().mean()
+    pixel_size *= 3600
+    kernel_scale = kernel_size_arcsec / pixel_size
+    print(
+        f"[Cubing] Initialising {kernel.__name__}"
+        + f"\n Scale: {kernel_scale:.1f} (pixels)"
+        + f"\n Truncation radius: {kernel_truncation_radius:.1f}")
+    kernel = kernel(pixel_scale_arcsec=pixel_size, scale=kernel_scale,
+                    truncation_radius=kernel_truncation_radius)
+    
     # Create empty cubes for data, variance and weights - these will be filled and returned
     print(f"[Cubing] Initialising new datacube with dimensions: {wcs.array_shape}")
-    datacube = datacube = np.zeros(wcs.array_shape)
-    datacube_var = np.zeros_like(datacube)
-    datacube_weight = np.zeros_like(datacube)
-    # Create an RSS mask that will contain the contribution of each RSS in the datacube
-    rss_mask = np.zeros((len(rss_set), *datacube.shape))
+    all_datacubes = np.zeros((len(rss_set), *wcs.array_shape))
+    all_var = np.zeros_like(all_datacubes)
+    all_w = np.zeros_like(all_datacubes)
+    all_exp = np.zeros_like(all_datacubes)
+
     # "Empty" array that will be used to store exposure times
     exposure_times = np.zeros((len(rss_set)))
 
@@ -294,27 +465,40 @@ def build_cube(rss_set,
         exposure_times[i] = copy_rss.info['exptime']
 
         # Interpolate RSS to data cube
-        datacube_weight_before = datacube_weight.copy()
-        datacube, datacube_var, datacube_weight = interpolate_rss(
+        datacube_i, datacube_var_i, datacube_weight_i, rss_plots = interpolate_rss(
             copy_rss,
             wcs=wcs,
-            kernel_size_arcsec=kernel_size_arcsec,
-            datacube=datacube, datacube_var=datacube_var, datacube_weight=datacube_weight,
-            adr_ra_arcsec=adr_set[i][0], adr_dec_arcsec=adr_set[i][1])
-        rss_mask[i] = datacube_weight - datacube_weight_before
-        rss_mask[i] /= np.nanmax(rss_mask[i])
-        del datacube_weight_before, copy_rss
-    pixel_exptime = np.nansum(rss_mask * exposure_times[:, np.newaxis, np.newaxis, np.newaxis],
-                           axis=0)
-    datacube /= pixel_exptime
-    datacube_var /= pixel_exptime**2
-    # Create cube meta data
-    # TODO: save the pixel exptime info in a file or somewhere else,
-    info = dict(pixel_exptime=pixel_exptime, kernel_size_arcsec=kernel_size_arcsec, **cube_info)
+            kernel=kernel,
+            datacube=np.zeros(wcs.array_shape),
+            datacube_var=np.zeros(wcs.array_shape),
+            datacube_weight=np.zeros(wcs.array_shape),
+            adr_ra_arcsec=adr_set[i][0], adr_dec_arcsec=adr_set[i][1],
+            mask_flags=mask_flags,
+            qc_plots=qc_plots)
+        plots[f'rss_{i+1}'] = rss_plots
+        all_datacubes[i] = datacube_i / exposure_times[i]
+        all_var[i] = datacube_var_i / exposure_times[i]**2
+        all_w[i] = datacube_weight_i
+        all_exp[i] = datacube_weight_i * exposure_times[i]
+
+    # Stacking
+    stacking_method = kwargs.get("stack_method", CubeStacking.mad_clipping)
+    stacking_args = kwargs.get("stack_method_args", {})
+    print(f"[Cubing] Stacking individual cubes using {stacking_method.__name__}")
+    print(f"[Cubing] Additonal arguments for stacking: {stacking_args}")
+    datacube, datacube_var = stacking_method(
+        all_datacubes, all_var, **stacking_args)
+    info = dict(kernel_size_arcsec=kernel_size_arcsec,
+                **kwargs.get('cube_info', {}))
     # Create WCS information
     hdul = build_hdul(intensity=datacube, variance=datacube_var, wcs=wcs)
     cube = Cube(hdul=hdul, info=info)
+    if qc_plots:
+        # Compute the fibre coverage and exposure time maps
+        plots[f'weights'] = qc_plot.qc_cubing(all_w, all_exp)
+        return cube, plots
     return cube
+
 
 def build_wcs(datacube_shape, reference_position, spatial_pix_size,
               spectra_pix_size, radesys='ICRS    ', equinox=2000.0):
@@ -342,7 +526,7 @@ def build_wcs(datacube_shape, reference_position, spatial_pix_size,
     'CRVAL1': reference_position[1], 'NAXIS1': datacube_shape[1],
     'CTYPE2': 'DEC--TAN', 'CUNIT2': 'deg', 'CDELT2': spatial_pix_size, 'CRPIX2': datacube_shape[2] / 2,
     'CRVAL2': reference_position[2], 'NAXIS2': datacube_shape[2],
-    'CTYPE3': 'WAVE    ', 'CUNIT3': 'Angstrom', 'CDELT3': spectra_pix_size, 'CRPIX3': 0,
+    'CTYPE3': 'WAVE    ', 'CUNIT3': 'angstrom', 'CDELT3': spectra_pix_size, 'CRPIX3': 0,
     'CRVAL3': reference_position[0], 'NAXIS3': datacube_shape[0]}
     wcs = WCS(wcs_dict)
     return wcs
@@ -394,12 +578,14 @@ class Cube(DataContainer):
     def __init__(self, hdul=None, file_path=None, 
                  hdul_extensions_map=None, **kwargs):
 
-        if hdul is not None:
-            if hdul_extensions_map is None:
-                self.hdul_extensions_map = {"INTENSITY": "INTENSITY", "VARIANCE": "VARIANCE"}
-            else:
-                self.hdul_extensions_map = hdul
-            print("[Cube] Initialising cube with input HDUL")
+        self.hdul = hdul
+        self.hdul_extensions_map = hdul_extensions_map
+
+        if self.hdul_extensions_map is None:
+            self.hdul_extensions_map = {"INTENSITY": "INTENSITY",
+                                        "VARIANCE": "VARIANCE"}
+        if self.hdul is not None:
+            print("[Cube] Initialising cube from input HDUL")
             self.hdul = hdul
         elif file_path is not None:
             self.load_hdul(file_path)
@@ -449,7 +635,7 @@ class Cube(DataContainer):
 
     def get_wcs_from_header(self):
         """Create a WCS from HDUL header."""
-        print("[Cube] Constructing WCS")
+        print("[Cube] Reading WCS")
         self.wcs = WCS(self.hdul[self.hdul_extensions_map['INTENSITY']].header)
 
     def get_wavelength(self):
@@ -485,15 +671,15 @@ class Cube(DataContainer):
         pos = np.searchsorted(cumulative_intensity, frac)
         return cumulative_intensity[pos]
 
-    def get_white_image(self, wave_range=None, s_clip=3.0):
+    def get_white_image(self, wave_range=None, s_clip=3.0, frequency_density=False):
         """Create a white image."""
         if wave_range is not None and self.wavelength is not None:
             wave_mask = (self.wavelength >= wave_range[0]) & (self.wavelength <= wave_range[1])
         else:
-            wave_mask = np.ones(self.intensity.shape[0], dtype=bool)
+            wave_mask = np.ones(self.wavelength.size, dtype=bool)
         
         if s_clip is not None:
-            std_dev = np.nanstd(self.intensity[wave_mask], axis=0)
+            std_dev = ancillary.std_from_mad(self.intensity[wave_mask], axis=0)
             median = np.nanmedian(self.intensity[wave_mask], axis=0)
 
             weights = (
@@ -502,45 +688,24 @@ class Cube(DataContainer):
         else:
             weights = np.ones_like(self.intensity[wave_mask])
 
-        white_image = np.nansum(self.intensity * weights, axis=0) / np.nansum(weights, axis=0)
+        if frequency_density:
+            freq_trans = self.wavelength**2 / 3e18
+        else:
+            freq_trans = np.ones_like(self.wavelength)
+
+        white_image = np.nansum(
+            self.intensity[wave_mask] * freq_trans[wave_mask, np.newaxis, np.newaxis] * weights, axis=0
+            ) / np.nansum(weights, axis=0)
         return white_image
 
-    def get_wcs(self):
-        """Create an astropy.wcs.WCS object using the cube properties."""
-        print("[Cube] Constructing WCS")
-        w = WCS(naxis=3)
-        w.wcs.crpix = [self.n_cols / 2, self.n_rows / 2,
-                       0]
-        w.wcs.cdelt = np.array([
-            self.info.get('pixel_size_arcsec', 1.0) / 3600,
-            self.info.get('pixel_size_arcsec', 1.0) / 3600,
-            np.diff(self.wavelength).mean()])
-        w.wcs.crval = [self.info.get('cen_ra', 0.0),
-                       self.info.get('cen_dec', 0.0),
-                       self.wavelength[0]]
-        w.wcs.ctype = ["RA---TAN", "DEC--TAN", "WAVE"]
-        self.wcs = w
-        print("[Cube] WCS: ", w)
-        return self.wcs
-
-    def wcs_metadata(self):
-        """Get the Cube WCS metadata"""
-        return self.get_wcs().to_header()
-    
     def to_fits(self, fname=None, primary_hdr_kw=None):
-        """ TODO...
-        include --
-           parent RSS information
-           filenames
-           exptimes
-           effective exptime?
-
-        """
+        """Save the Cube into a FITS file."""
         if fname is None:
-            fname = 'cube_{}.fits.gz'.format(datetime.now().strftime("%d_%m_%Y_%H_%M_%S"))
+            fname = 'cube_{}.fits.gz'.format(
+                datetime.now().strftime("%d_%m_%Y_%H_%M_%S"))
         if primary_hdr_kw is None:
             primary_hdr_kw = {}
-        
+
         # Create the PrimaryHDU with WCS information 
         primary = fits.PrimaryHDU()
         for key, val in primary_hdr_kw.items():
@@ -548,10 +713,9 @@ class Cube(DataContainer):
         
         
         # Include cubing information
-        primary.header['CREATED'] = datetime.now().strftime(
-            "%d_%m_%Y_%H_%M_%S"), "Cube creation date"
-        primary.header['KERNSIZE'] = self.info["kernel_size_arcsec"], "arcsec"
-        primary.header['pykoala'] = __version__, "PyKOALA version"
+        primary.header['pykoala0'] = __version__, "PyKOALA version"
+        primary.header['pykoala1'] = datetime.now().strftime(
+            "%d_%m_%Y_%H_%M_%S"), "creation date / last change"
 
         # Fill the header with the log information
         primary.header = self.dump_log_in_header(primary.header)
@@ -559,12 +723,54 @@ class Cube(DataContainer):
         # Create a list of HDU
         hdu_list = [primary]
         # Change headers for variance and INTENSITY
-        hdu_list.append(fits.ImageHDU(data=self.intensity, name='INTENSITY', header=self.wcs_metadata()))
-        hdu_list.append(fits.ImageHDU(data=self.variance, name='VARIANCE', header=hdu_list[-1].header))
+        hdu_list.append(fits.ImageHDU(
+            data=self.intensity, name='INTENSITY', header=self.wcs.to_header()))
+        hdu_list.append(fits.ImageHDU(
+            data=self.variance, name='VARIANCE', header=hdu_list[-1].header))
+        # Store the mask information
+        hdu_list.append(self.mask.dump_to_hdu())
         # Save fits
         hdul = fits.HDUList(hdu_list)
         hdul.writeto(fname, overwrite=True)
         hdul.close()
         print("[Cube] Cube saved at:\n {}".format(fname))
+
+    def update_coordinates(self, new_coords=None, offset=None):
+        """Update the celestial coordinates of the Cube"""
+        updated_wcs = ancillary.update_wcs_coords(self.wcs.celestial,
+                                               ra_dec_val=new_coords,
+                                               ra_dec_offset=offset)
+        # Update only the celestial axes
+        print("Previous CRVAL: ", self.wcs.celestial.wcs.crval,
+              "\nNew CRVAL: ", updated_wcs.wcs.crval)
+        self.wcs.wcs.crval[:-1] = updated_wcs.wcs.crval
+        self.log('update_coords', "Offset-coords updated")
+
+def make_white_image_from_array(data_array, wavelength=None, **args):
+    """Create a white image from a 3D data array."""
+    print(f"Creating a Cube of dimensions: {data_array.shape}")
+    cube = Cube(intensity=data_array, wavelength=wavelength)
+    return cube.get_white_image()
+
+
+def make_dummy_cube_from_rss(rss, spa_pix_arcsec=0.5, kernel_pix_arcsec=1.0):
+    """Create an empty datacube array from an input RSS."""
+    min_ra, max_ra = np.nanmin(rss.info['fib_ra']), np.nanmax(rss.info['fib_ra'])
+    min_dec, max_dec = np.nanmin(rss.info['fib_dec']), np.nanmax(rss.info['fib_dec'])
+    datacube_shape = (rss.wavelength.size,
+                   int((max_ra - min_ra) * 3600 / spa_pix_arcsec),
+                   int((max_dec - min_dec) * 3600 / spa_pix_arcsec))
+    ref_position = (rss.wavelength[0], (min_ra + max_ra) / 2, (min_dec + max_dec) / 2)
+    spatial_pixel_size = spa_pix_arcsec / 3600
+    spectral_pixel_size = rss.wavelength[1] - rss.wavelength[0]
+
+    wcs = build_wcs(datacube_shape=datacube_shape,
+                    reference_position=ref_position,
+                    spatial_pix_size=spatial_pixel_size,
+                    spectra_pix_size=spectral_pixel_size,
+                )
+    cube = build_cube([rss], pixel_size_arcsec=spa_pix_arcsec, wcs=wcs,
+                      kernel_size_arcsec=kernel_pix_arcsec)
+    return cube
 
 # Mr Krtxo \(ﾟ▽ﾟ)/

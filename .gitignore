@@ -1,7 +1,8 @@
 # Other
 /deprecated
 # Tutorials stuff
-tutorials/products/Henize_2-10_cube.fits.gz
+tutorials/*.fits*
+tutorials/products/*.fits*
 tutorials/data/weave
 
 # Byte-compiled / optimized / DLL files
@@ -30,6 +31,7 @@ wheels/
 pip-wheel-metadata/
 share/python-wheels/
 *.egg-info/
+pyvenv.cfg
 .installed.cfg
 *.egg
 MANIFEST
@@ -91,6 +93,10 @@ ipython_config.py
 
 # pyenv
 .python-version
+lib64/*
+lib/*
+include/*
+bin/*
 
 # pipenv
 #   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
@@ -142,3 +148,6 @@ dmypy.json
 *.bak
 .DS_Store
 *.orig
+
+
+tutorials/ps_query_180.0001_0.0001_i.fits
