@@ -1,5 +1,6 @@
 include versioneer.py
 include src/pykoala/_version.py
+include src/pykoala/plotting/pykoala.mplstyle
 
 include *.toml
 include LICENSE
