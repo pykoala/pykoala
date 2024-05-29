@@ -2,8 +2,11 @@
 This module contains the parent class that represents the data used during the
 reduction process
 """
+import numpy as np
+import copy
 
-from astropy.io.fits import Header
+from astropy.io.fits import Header, ImageHDU
+from astropy.nddata import bitmask
 
 from pykoala.exceptions.exceptions import NoneAttrError
 
@@ -253,6 +256,113 @@ class Parameter(object):
     def __init__(self) -> None:
         pass
     
+class DataMask(object):
+    """A mask to store the pixel flags of DataContainers.
+    
+    Description
+    -----------
+    A mask to store the pixel flags of DataContainers.
+
+    Attributes
+    ----------
+    - flag_map: dict, default={"CR": 2, "HP": 4, "DP": 8}
+        A mapping between the flag names and their numerical values expressed
+        in powers of two.
+    - bitmask: (np.ndarray)
+        The array containing the bit pixel mask.
+    - masks: dict
+        A dictionary that stores the individual mask in the form of boolean arrays
+        for each flag name.
+    
+    Methods
+    -------
+    - flag_pixels
+    - get_flag_map_from_bitmask
+    - get_flag_map
+    """
+    def __init__(self, shape, flag_map=None):
+        if flag_map is None:
+            self.flag_map = {"BAD": (2, "Generic bad pixel flag")}
+        else:
+            self.flag_map = flag_map
+        # Initialise the mask with all pixels being valid
+        self.bitmask = np.zeros(shape, dtype=int)
+        self.masks = {}
+        for key in self.flag_map.keys():
+            self.masks[key] = np.zeros(shape, dtype=bool)
+
+    def __decode_bitmask(self, value):
+        return np.bitwise_and(self.bitmask, value) > 0
+
+    def flag_pixels(self, mask, flag_name):
+        """Add a pixel mask corresponding to a flag name.
+
+        Description
+        -----------
+        Add a pixel mask layer in the bitmask. If the mask already contains
+        information about the same flag, it will be overriden by the
+        new values.
+
+        Parameters
+        ----------
+        - mask: np.ndarray
+            Input pixel flag. It must have the same shape as the bitmask.
+        """
+        if flag_name not in self.flag_map:
+            raise NameError(f"Input flag name {flag_name} does not exist")
+        # Check that the bitmask does not already contain this flag
+        bit_flag_map = self.get_flag_map_from_bitmask(flag_name)
+        self.bitmask[bit_flag_map] -= self.flag_map[flag_name][0]
+        self.bitmask[mask] += self.flag_map[flag_name][0]
+        # Store the individual boolean map
+        self.masks[flag_name] = mask
+
+    def get_flag_map_from_bitmask(self, flag_name):
+        """Get the boolean mask for a given flag name from the bitmask."""
+        return self.__decode_bitmask(self.flag_map[flag_name][0])
+
+    def get_flag_map(self, flag_name=None):
+        """Return the boolean mask that corresponds to the input flags.
+        
+        Parameters
+        ----------
+        - flag_name: str or iterable, default=None
+            The flags to be used for constructing the mask. It can be a single
+            flag name or an iterable. If None, the mask will comprise every flag
+            that is included on the bitmask.
+
+        Returns
+        -------
+        - mask: np.ndarray
+            An array containing the boolean values for every pixel.
+        """
+        if flag_name is not None:
+            if type(flag_name) is str:
+                return self.masks[flag_name]
+            else:
+                mask = np.zeros_like(self.bitmask, dtype=bool)
+                for flag in flag_name:
+                    mask |= self.masks[flag]
+                return mask
+        else:
+            return self.bitmask > 0
+
+    def dump_to_hdu(self):
+        """Return a ImageHDU containig the mask information.
+        
+        Returns
+        -------
+        - hdu: ImageHDU
+            An ImageHDU containing the bitmask information.
+        """
+        header = Header()
+        header['COMMENT'] = "Each flag KEY is stored using the convention FLAG_KEY"
+        for flag_name, value in self.flag_map.items():
+            # Store the value and the description
+            header[f"FLAG_{flag_name}"] = value
+        header['COMMENT'] = "A value of 0 means unmasked"
+        hdu = ImageHDU(name='BITMASK', data=self.bitmask, header=header)
+        return hdu
 
 class DataContainer(object):
     """
@@ -287,6 +397,7 @@ class DataContainer(object):
             self.info = dict()
         self.log = kwargs.get("log", HistoryLog())
         self.fill_info()
+        self.mask = kwargs.get("mask", DataMask(shape=self.intensity.shape))
 
     def fill_info(self):
         """Check the keywords of info and fills them with placeholders."""
@@ -313,4 +424,7 @@ class DataContainer(object):
         """Fill a FITS Header with the HistoryLog information."""
         return self.log.dump_to_header(header)
 
+    def copy(self):
+        return copy.deepcopy(self)
+    
 # Mr Krtxo \(ﾟ▽ﾟ)/

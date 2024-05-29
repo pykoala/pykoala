@@ -3,7 +3,7 @@
 # =============================================================================
 import numpy as np
 import os
-
+from datetime import datetime
 # =============================================================================
 # Astropy and associated packages
 # =============================================================================
@@ -11,7 +11,7 @@ from astropy.io import fits
 # =============================================================================
 # KOALA packages
 # =============================================================================
-# Modular
+from pykoala import __version__
 from pykoala.ancillary import vprint
 from pykoala.data_container import DataContainer
 
@@ -138,7 +138,7 @@ class RSS(DataContainer):
     # =============================================================================
     # Save an RSS object (corrections applied) as a separate .fits file
     # =============================================================================
-    def to_fits(self, filename, overwrite=False, checksum=False):
+    def to_fits(self, filename, primary_hdr_kw=None, overwrite=False, checksum=False):
         """
         Writes a RSS object to .fits
         
@@ -149,21 +149,51 @@ class RSS(DataContainer):
         ----------
         name: path-like object
             File to write to. This can be a path to file written in string format with a meaningful name.
-        layer: TODO
         overwrite: bool, optional
             If True, overwrite the output file if it exists. Raises an OSError if False and the output file exists. Default is False.
         checksum: bool, optional
             If True, adds both DATASUM and CHECKSUM cards to the headers of all HDU’s written to the file.
-
         Returns
         -------
         """
-        # TODO: This needs to
-        primary_hdu = fits.PrimaryHDU(data=self.intensity)
+        if filename is None:
+            filename = 'cube_{}.fits.gz'.format(
+                datetime.now().strftime("%d_%m_%Y_%H_%M_%S"))
+        if primary_hdr_kw is None:
+            primary_hdr_kw = {}
+
+        # Create the PrimaryHDU with WCS information 
+        primary = fits.PrimaryHDU()
+        for key, val in primary_hdr_kw.items():
+            primary.header[key] = val
+        
+        # Include general information
+        primary.header['pykoala0'] = __version__, "PyKOALA version"
+        primary.header['pykoala1'] = datetime.now().strftime(
+            "%d_%m_%Y_%H_%M_%S"), "creation date / last change"
+
+        # Fill the header with the log information
+        primary.header = self.dump_log_in_header(primary.header)
+
         # primary_hdu.header = self.header
-        primary_hdu.verify('fix')
-        primary_hdu.writeto(name=filename, overwrite=overwrite, checksum=checksum)
-        primary_hdu.close()
+        # Create a list of HDU
+        hdu_list = [primary]
+        # Change headers for variance and INTENSITY
+        hdu_list.append(fits.ImageHDU(
+            data=self.intensity, name='INTENSITY',
+            #TODO: rescue the original header?
+            #header=self.wcs.to_header()
+            )
+            )
+        hdu_list.append(fits.ImageHDU(
+            data=self.variance, name='VARIANCE', header=hdu_list[-1].header))
+        # Store the mask information
+        hdu_list.append(self.mask.dump_to_hdu())
+        # Save fits
+        hdul = fits.HDUList(hdu_list)
+        hdul.verify('fix')
+        hdul.writeto(filename, overwrite=overwrite, checksum=checksum)
+        hdul.close()
         print(f"[RSS] File saved as {filename}")
 
 
