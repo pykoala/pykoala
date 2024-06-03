@@ -5,7 +5,7 @@ Working on a fork enables you to develop your own copy of PyKOALA, contributing 
 
 How to fork
 -----------
-First, click “Fork this repository” on the main PyKOALA repository in github. You then have your own copy of Phantom in github.com/USERNAME/koala
+First, click “Fork this repository” on the main PyKOALA repository in github. You then have your own copy of PyKOALA in github.com/USERNAME/koala
 
 .. figure:: ../_static/figures/fork_buttom.png
 

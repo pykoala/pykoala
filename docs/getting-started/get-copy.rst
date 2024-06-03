@@ -11,8 +11,6 @@ To get PyKOALA, clone the repository, using git:
     git clone https://github.com/pykoala/koala.git
 
 
-Alternatively, you can create your own :doc:`fork<../developer-guide/fork>` if you want to contribute to the code. We describe the steps for developers in this :doc:`guide<../developer-guide/index>`.
-
 Setting username and email address
 ----------------------------------
 

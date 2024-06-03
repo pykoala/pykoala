@@ -48,6 +48,13 @@ To get PyKOALA, clone the repository, using git:
 git clone https://github.com/pykoala/koala.git
 ```
 
+## Installation
+
+Installation it in your local machine is done with pip:
+
+```
+cd koala ; pip install . 
+```
 
 ## Package structure
 
