@@ -61,8 +61,142 @@ def plot_wavelength(rss, wavelength, r = False, **kwargs):
         plot_plot(x, corte_wave, **kwargs)
     
     if r: return corte_wave
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
+# #-----------------------------------------------------------------------------
+# %% ============================================================================
+# #-----------------------------------------------------------------------------
+def get_spectrum(data_container, 
+                 r = True, median=False,
+                 # Parameters for RSS
+                 fibre = None, list_fibre=None,   
+                 # Parameters for CUBE
+                 spaxel = None, spaxel_list = None, show_map = False,
+                 **kwargs):
+    """
+    This task should replace tasks plot_spectrum and plot_combined_spectrum in rss and
+    task spectrum_of_cube and spectrum_of_spaxel in cube.
+
+    Parameters
+    ----------
+    data_container : TYPE
+        DESCRIPTION.
+    r : TYPE, optional
+        DESCRIPTION. The default is False.
+    median : TYPE, optional
+        DESCRIPTION. The default is False.
+    # Parameters for RSS             fibre : TYPE, optional
+        DESCRIPTION. The default is None.
+    list_fibre : TYPE, optional
+        DESCRIPTION. The default is None.
+    # Parameters for CUBE             spaxel : TYPE, optional
+        DESCRIPTION. The default is None.
+    spaxel_list : TYPE, optional
+        DESCRIPTION. The default is None.
+    show_map : TYPE, optional
+        DESCRIPTION. The default is False.
+    **kwargs : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    if r is True, return the spectrum.
+
+    """
+    
+    verbose = kwargs.get('verbose', False)
+    #warnings = kwargs.get('warnings', verbose)
+    plot = kwargs.get('plot', False)
+    ptitle = kwargs.get('ptitle', None)
+    
+    info = data_container.info
+    kinfo = data_container.koala.info
+    wavelength = data_container.wavelength
+    intensity =  data_container.intensity
+    
+    if str(type(data_container))[-5:-2] == "RSS":     # It is a RSS
+
+        if fibre is not None:
+            spectrum = intensity[fibre]
+            if ptitle is None: kwargs["ptitle"] = "Spectrum of fibre {} in {}".format(fibre, info["name"])
+            
+        else:
+            if list_fibre is None:  list_fibre = list(range(len(intensity)))
+            value_list = [intensity[fibre] for fibre in list_fibre]
+            if median:
+                spectrum = np.nanmedian(value_list, axis=0)
+            else:
+                spectrum = np.nansum(value_list, axis=0)
+            if ptitle is None:
+                if len(list_fibre) == list_fibre[-1] - list_fibre[0] + 1:
+                    kwargs["ptitle"] = "{} - Combined spectrum in range [ {} , {} ]".format(info["name"],list_fibre[0], list_fibre[-1])
+                else:
+                    kwargs["ptitle"] = "Combined spectrum using requested fibres"
+            if verbose: 
+                if median:
+                    print("\n> Median spectrum of selected {} spaxels...".format(len(value_list)))
+                else:    
+                    print("\n> Integrating spectrum of selected {} spaxels...".format(len(value_list)))
+        
+    else:               # It is a cube
+ 
+        if spaxel is None and spaxel_list is None:          # If these are not provided, plot integrated spectrum
+        
+            if median:
+                if verbose: print("\n> Computing the median spectrum of the cube...")
+                spectrum=np.nanmedian(np.nanmedian(intensity, axis=1),axis=1)
+                if ptitle is None : kwargs['ptitle'] = "Median spectrum in {}".format(info["name"])
+            else:
+                if verbose: print("\n> Computing the integrated spectrum of the cube...")
+                spectrum=np.nansum(np.nansum(intensity, axis=1),axis=1)
+                if ptitle is None: kwargs['ptitle'] = "Integrated spectrum in {}".format(info["name"])
+        
+        elif spaxel_list is not None:
+            
+            n_spaxels = len(spaxel_list)
+            if verbose: 
+                if median:
+                    print("\n> Median spectrum of selected {} spaxels...".format(n_spaxels))
+                else:    
+                    print("\n> Integrating spectrum of selected {} spaxels...".format(n_spaxels))
+            list_of_spectra=[]        
+            for i in range(n_spaxels):
+                #if verbose: print("  Adding spaxel  {} : [ {}, {} ]".format(i+1,spaxel_list[i][0],spaxel_list[i][1]))
+                list_of_spectra.append( [intensity[:,spaxel_list[i][1], spaxel_list[i][0]] ])
+                                     
+            if median:                
+                spectrum=np.nanmedian(list_of_spectra, axis=0)[0]
+                if ptitle is None: kwargs['ptitle'] = "Median spectrum adding {} spaxels in {}".format(n_spaxels, info["name"])
+            else:    
+                spectrum=np.nansum(list_of_spectra, axis=0)[0]
+                if ptitle is None: kwargs['ptitle'] = "Integrated spectrum adding {} spaxels in {}".format(n_spaxels, info["name"])
+        
+        else:
+            
+            if spaxel == "peak":
+                x = int(round(data_container.koala.x_max-0.25, 0))
+                y = int(round(data_container.koala.y_max-0.25, 0))
+                spaxel = [x,y]
+            else:
+                x,y = spaxel[1],spaxel[0]
+                
+            spectrum = intensity[:,y,x]
+            if ptitle is None : kwargs['ptitle'] = "Spaxel [{},{}] in {}".format(x,y, info["name"])
+        
+        if show_map: plot_map(data_container, spaxel = spaxel, spaxel_list=spaxel_list, **kwargs)
+  
+    if plot:
+        vlines = kwargs.get('vlines', None)
+        if vlines is None: kwargs["vlines"] =[kinfo["valid_wave_min"],kinfo["valid_wave_max"]]
+        
+        
+        plot_plot(wavelength, spectrum,
+                  #ptitle = ptitle,
+                  #vlines=[kinfo["valid_wave_min"],kinfo["valid_wave_max"]],
+                  **kwargs)    
+    
+    if r: return spectrum 
+
+#-----------------------------------------------------------------------------
+#-----------------------------------------------------------------------------
 def plot_spectrum(rss, spectrum_number, r = False, **kwargs):
     """
     Plot spectrum of a particular fibre.

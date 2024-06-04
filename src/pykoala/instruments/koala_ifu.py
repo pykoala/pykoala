@@ -275,6 +275,7 @@ def koalaRSS(filename, rss_object_name = None, path=None, plot_map= False, **kwa
     vprint('\n> Converting KOALA+AAOmega RSS file "'+path_to_file+'" to a koala RSS object...', **kwargs)
     
     # Read rss using standard pykoala      #TODO: Ángel: I think we should merge the 2 of them (koalaRSS and koala_rss)
+    
     rss = koala_rss(path_to_file)
 
     # Create rss.koala
@@ -501,6 +502,7 @@ def get_throughput_2D(file_skyflat= None,
     """
     
     verbose = kwargs.get('verbose', False)
+    verbose_counter = kwargs.get('verbose_counter', verbose)
     #warnings = kwargs.get('warnings', verbose)
     plot =  kwargs.get('plot', False)
     if plot_final_rss is False and plot is True: plot_final_rss = True
@@ -549,13 +551,14 @@ def get_throughput_2D(file_skyflat= None,
         if index_fit_throughput is None: index_fit_throughput = 11
         if verbose: 
             print("\n  - Applying smooth with kernel =", kernel_throughput," and using to fit a polynomium of degree =",index_fit_throughput,"..." )
+        if verbose_counter:
             sys.stdout.write("    Working on fibre:                           ")
             sys.stdout.flush()
     
         throughput_2D = np.zeros_like(throughput_2D_)
         # throughput_2D_variance = np.zeros_like(throughput_2D_variance_)
         for fibre in range(n_spectra):
-            if verbose:
+            if verbose_counter:
                 sys.stdout.write("\b" * 25)
                 sys.stdout.write("{:5.0f}  ({:5.2f}% completed)".format(fibre, fibre/n_spectra*100))
                 sys.stdout.flush()
@@ -573,11 +576,12 @@ def get_throughput_2D(file_skyflat= None,
             #                                              index_fit=index_fit_throughput,
             #                                              verbose=False, plot=False)  
 
-        if verbose:
+        if verbose_counter:
             sys.stdout.write("\b" * 51)
             sys.stdout.write("  Process completed!                                     ")
             sys.stdout.flush()
             print(" ")
+        elif verbose: print("  Process completed!\n")
         throughput_2D = throughput_2D * skyflat.mask 
         # throughput_2D_variance = throughput_2D_variance * skyflat.mask 
         #if plot: rss_image(skyflat, image=throughput_2D, chigh=1.1, clow=0.9, cmap="binary_r",  title=" 2D throughput AFTER SMOOTHING AND FITTING A POLYNOMIUM")
@@ -870,16 +874,17 @@ def obtain_telluric_correction(telluric_correction_file = None,
 def correcting_negative_sky(rss, 
                             mask= None,
                             edgelow=None, edgehigh=None, #low_fibres=10, 
-                            kernel_for_negative_sky=51, order_fit_for_negative_sky=3, 
                             min_percentile_for_negative_sky = 5,
+                            individual_check_for_negative_sky=True,   # NOT IMPLEMENTED #TODO 
+                            kernel_for_negative_sky=21, 
+                            order_fit_for_negative_sky=7, 
                             clip_fit_for_negative_sky = 0.8,
-                            use_fit_for_negative_sky=False, 
-                            individual_check=True, 
+                            use_fit_for_negative_sky=True, 
                             sky_fibres = None, 
                             check_only_sky_fibres = False,
                             force_sky_fibres_to_zero=False,
                             exclude_wlm=None,
-                            show_fibres=None, 
+                            show_fibres_for_negative_sky=None, 
                             plot_rss_map_for_negative_sky = False,
                             **kwargs): #fig_size=12, plot=True, verbose=True):
     """
@@ -897,11 +902,11 @@ def correcting_negative_sky(rss,
         Minimum and maximum pixel number such that any pixel in between this range is only to be considered
     use_fit_for_negative_sky: boolean (default = False)
         Substract the fit instead of the smoothed median spectrum
-    individual_check: boolean (default = True)
+    individual_check_for_negative_sky: boolean (default = True)
         Check individual fibres and correct if integrated value is negative
     exclude_wlm : list
         exclusion command to prevent large absorption lines from being affected by negative sky correction : (lower wavelength, upper wavelength)
-    show_fibres : list of integers (default = [0,450,985])
+    show_fibres_for_negative_sky : list of integers (default = [0,450,985])
         List of fibres to show
     force_sky_fibres_to_zero : boolean (default = True)
         If True, fibres defined at the sky will get an integrated value = 0
@@ -910,12 +915,13 @@ def correcting_negative_sky(rss,
     """
     verbose = kwargs.get('verbose', False)
     plot =  kwargs.get('plot', False)
-    warnings = kwargs.get('warnings', verbose)
+    warnings = kwargs.get('warnings', verbose)  # DIAAAA
+    verbose_counter = kwargs.get('verbose_counter', verbose)
     rss_out = copy.deepcopy(rss)
     
     
     if verbose: 
-        if individual_check: 
+        if individual_check_for_negative_sky: 
             print("> Individual correction of fibres with negative sky ... ")
         else:
             print("> Correcting for negative sky...")
@@ -945,8 +951,8 @@ def correcting_negative_sky(rss,
     # Compute integrated fibre 
     rss_out = compute_integrated_fibre(rss_out, verbose=False,plot=False)
 
-    if show_fibres is None:
-        show_fibres =[]
+    if show_fibres_for_negative_sky is None:
+        show_fibres_for_negative_sky =[]
 
     if plot:
         integrated_fibre_sorted = rss_out.koala.integrated_fibre_sorted   #np.argsort(rss_out.integrated_fibre)
@@ -956,19 +962,19 @@ def correcting_negative_sky(rss,
         else:
             faintest_fibre = sky_fibres[0]
         if verbose: 
-            if len(show_fibres) > 0:
-                print(f"  Plots in fibres {show_fibres}, will be shown, including brightest fibre {brightest_fibre} and faintest fibre {faintest_fibre}.")    
+            if len(show_fibres_for_negative_sky) > 0:
+                print(f"  Plots in fibres {show_fibres_for_negative_sky}, will be shown, including brightest fibre {brightest_fibre} and faintest fibre {faintest_fibre}.")    
             else:
                 if sky_fibres is not None and check_only_sky_fibres: 
                     print(f"  The faintest sky fibre {faintest_fibre} will be shown.") 
                 else:
                     print(f"  The brightest fibre {brightest_fibre} and faintest fibre {faintest_fibre} will be shown.") 
-        show_fibres.append(brightest_fibre)  # Adding the brightest fibre
-        show_fibres.append(faintest_fibre)  # Adding the faintest fibre
+        show_fibres_for_negative_sky.append(brightest_fibre)  # Adding the brightest fibre
+        show_fibres_for_negative_sky.append(faintest_fibre)  # Adding the faintest fibre
     else: 
-        show_fibres =[]
+        show_fibres_for_negative_sky =[]
         
-    if individual_check:
+    if individual_check_for_negative_sky:
         if force_sky_fibres_to_zero and verbose: print("  Also forcing integrated spectrum of sky_fibres = 0 ... ")
         if verbose: 
             if use_fit_for_negative_sky: 
@@ -981,11 +987,14 @@ def correcting_negative_sky(rss,
         #corrected_not_sky_fibres = 0
         #sky_fibres_to_zero = 0
   
-        output_every_few = np.sqrt(number_fibres_to_check) + 1
-        next_output = -1
+        if verbose_counter:
+            output_every_few = np.sqrt(number_fibres_to_check) + 1
+            next_output = -1  
+            sys.stdout.write("   Checking fibre:                               ")
+            sys.stdout.flush()
 
         for fibre in fibres_to_check: 
-            if verbose:
+            if verbose_counter:
                 if fibre > next_output:
                     sys.stdout.write("\b" * 51)
                     sys.stdout.write("  Checking fibre {:4} ... ({:6.2f} % completed ) ...".format(fibre, fibre * 100. / number_fibres_to_check))
@@ -993,10 +1002,11 @@ def correcting_negative_sky(rss,
                     next_output = fibre + output_every_few
             
             plot_this = False
-            if fibre in show_fibres:
-                if verbose: 
+            if fibre in show_fibres_for_negative_sky:
+                if verbose_counter: 
                     sys.stdout.write("\b" * 55)
                     sys.stdout.write(" " *  55)
+                if verbose:
                     print("\n- Checking fibre", fibre, ":")
                 if plot: plot_this = True
             
@@ -1019,27 +1029,27 @@ def correcting_negative_sky(rss,
             if needs_correction: 
                 list_of_fibres_corrected.append(fibre)
                 if use_fit_for_negative_sky:
-                    if fibre in show_fibres and verbose: print(
+                    if fibre in show_fibres_for_negative_sky and verbose: print(
                         "      Using fit to smooth spectrum for correcting the negative sky in fibre", fibre, " ...")
                     rss_out.intensity[fibre] -= fit
                     rss_out.variance[fibre] -= fit
                 else:
-                    if fibre in show_fibres and verbose: print(
+                    if fibre in show_fibres_for_negative_sky and verbose: print(
                         "      Using smooth spectrum for correcting the negative sky in fibre", fibre, " ...")
                     rss_out.intensity[fibre] -= smooth
                     rss_out.variance[fibre] -= smooth
                     
             else:
-                if fibre in show_fibres and verbose: print("      Fibre", fibre,
+                if fibre in show_fibres_for_negative_sky and verbose: print("      Fibre", fibre,
                                                            "does not need to be corrected for negative sky ...")
-        if verbose:
+        if verbose_counter:
             sys.stdout.write("\b" * 55)
             sys.stdout.write(" " *  55)
             sys.stdout.write("\n  Checking fibres completed!")
             sys.stdout.flush()
             print(" ")
 
-        if force_sky_fibres_to_zero:
+        if force_sky_fibres_to_zero and sky_fibres is not None:
             integer = int(len(sky_fibres) *0.25)  # this is 8 for 25 skyfibres
             if verbose: print("  Substracting residual of forcing sky fibres to zero to all fibres combining\n  the negative fits to the",integer,"brightest sky fibres...")
             fit_median_=    np.nanmedian(fit_list_to_sky_fibres[-integer:], axis=0)
@@ -1158,6 +1168,9 @@ def find_sky_fibres(rss, n_sky=200, sky_wave_min=None, sky_wave_max=None, **kwar
 def SkyFrom_n_sky(rss, n_sky=50, sky_fibres=None, sky_wave_min=None, sky_wave_max=None, 
                   bright_emission_lines_to_substract_in_sky = None,
                   fix_edges = False,
+                  fix_edges_wavelength_continuum = None,
+                  fix_edges_index_fit=None, 
+                  fix_edges_kernel_fit=None,
                   list_of_skylines_to_fit_near_bright_emission_lines = None,
                   fit_degree_continuum=None, max_wave_disp = None, min_peak_flux = None, max_sigma = None,  # If substract Ha is needed
                   max_peak_factor = None, min_peak_factor = None,
@@ -1180,6 +1193,9 @@ def SkyFrom_n_sky(rss, n_sky=50, sky_fibres=None, sky_wave_min=None, sky_wave_ma
         DESCRIPTION.
 
     """  
+    
+    
+    
     verbose = kwargs.get('verbose', False)
     plot =  kwargs.get('plot', False)
 
@@ -1219,6 +1235,10 @@ def SkyFrom_n_sky(rss, n_sky=50, sky_fibres=None, sky_wave_min=None, sky_wave_ma
         #TODO Check what to do with variance if bright emission line is substracted
     # Add continuum to the edges if needed:
     if np.isnan(np.median(sky_spectrum)) and fix_edges:   # This is True if there are nans, should be the edges  #TODO CHECK IT
+        if fix_edges_wavelength_continuum is None:  fix_edges_wavelength_continuum = 200
+        if fix_edges_index_fit is None:  fix_edges_index_fit=3
+        if fix_edges_kernel_fit is None:  fix_edges_kernel_fit=21
+    
         sky_spectrum_as_list = list(sky_spectrum)
         # Right edge, typically the one with problems
         # Find the first nan
@@ -1226,20 +1246,20 @@ def SkyFrom_n_sky(rss, n_sky=50, sky_fibres=None, sky_wave_min=None, sky_wave_ma
         for j in range(rss.koala.info["valid_wave_max_index"],len(rss.wavelength)):
             if np.isnan(sky_spectrum_as_list[j]) and first_bad_index is None: first_bad_index = j
 
-        exclude_wlm =[[rss.wavelength[0], rss.wavelength[first_bad_index]-500], [rss.wavelength[first_bad_index],rss.wavelength[-1]]]
+        exclude_wlm =[[rss.wavelength[0], rss.wavelength[first_bad_index]-fix_edges_wavelength_continuum], [rss.wavelength[first_bad_index],rss.wavelength[-1]]]
         
         if verbose: print("  Found nans in edges of sky spectrum... fitting a polynomium in right edge...")
             
         _,fit = fit_smooth_spectrum(rss.wavelength, sky_spectrum, 
-                            index_fit=3, kernel_fit=3,
+                            index_fit=fix_edges_index_fit, kernel_fit=fix_edges_kernel_fit,
                             exclude_wlm= exclude_wlm,
-                            xmin=rss.wavelength[first_bad_index]-550, xmax=rss.wavelength[-1]+20, 
+                            xmin=rss.wavelength[first_bad_index]-fix_edges_wavelength_continuum-50, xmax=rss.wavelength[-1]+20, 
                             plot=plot,verbose=False)
             
         sky_spectrum_ =  sky_spectrum_as_list[:first_bad_index] + list(fit[first_bad_index:])
         sky_spectrum=np.array(sky_spectrum_)
         
-        # Left edget, typically OK
+        # Left edge, typically OK
         if np.isnan(sky_spectrum_as_list[0]):
             pass 
         elif verbose: print("  Left edge of sky spectrum is OK, no need to be fixed")
@@ -1298,7 +1318,8 @@ def model_sky_fitting_gaussians(rss, sky_spectrum,
                                 plot_continuum = False,
                                 **kwargs):
     
-    verbose = kwargs.get('verbose', False)
+    verbose = kwargs.get('verbose', False)  #DIAAAA
+    verbose_counter = kwargs.get('verbose_counter', verbose)
     plot =  kwargs.get('plot', False)
     warnings = kwargs.get('warnings', verbose)
     
@@ -1332,12 +1353,13 @@ def model_sky_fitting_gaussians(rss, sky_spectrum,
     if verbose: 
         print("\n> Modelling sky using Gaussian fits and input sky spectrum.")
         print("  - Performing Gaussian fits in input rss...")
+    if verbose_counter:
         sys.stdout.write("    Working on fibre:                           ")
         sys.stdout.flush()
        
     ### Fitting wavelength ranges
     for fibre in sky_fibres: #range(0,n_spectra): #637
-        if verbose:
+        if verbose_counter:
             sys.stdout.write("\b" * 25)
             sys.stdout.write("{:5.0f}  ({:5.2f}% completed)".format(fibre, fibre/n_fibres*100))
             sys.stdout.flush()
@@ -1357,11 +1379,12 @@ def model_sky_fitting_gaussians(rss, sky_spectrum,
                 fitted_lines[fibre] = fitted_lines[fibre] + fitted_lines_
             except Exception:
                 if warnings: print("  WARNING: Gaussian fit failed in Fibre = ",fibre,",  list = ",i,"\n")
-    if verbose:
+    if verbose_counter:
         sys.stdout.write("\b" * 51)
         sys.stdout.write("  Checking fibres completed!                             ")
         sys.stdout.flush()
         print(" ")
+    elif verbose: print("  Checking fibres completed!\n")
         
     ### Fit the sky_spectrum
     if verbose: print("  - Performing Gaussian fits in sky spectrum...")
@@ -1510,6 +1533,7 @@ def rss_continuum_image(rss, mask = None, **kwargs): #verbose = False, plot=Fals
     
     """
     verbose = kwargs.get('verbose', False)
+    verbose_counter = kwargs.get('verbose_counter', verbose)
     kwargs["verbose"]=False 
     plot =  kwargs.get('plot', False)
     kwargs["plot"]=False
@@ -1524,12 +1548,13 @@ def rss_continuum_image(rss, mask = None, **kwargs): #verbose = False, plot=Fals
             pass
     
     if verbose: 
-        print("> Creating continuum image of this rss...")
+        print("> Creating a continuum image of this rss...")
+    if verbose_counter:
         sys.stdout.write("    Working on fibre:                           ")
         sys.stdout.flush()
     
     for i in range(n_fibres):
-        if verbose:
+        if verbose_counter:
             sys.stdout.write("\b" * 25)
             sys.stdout.write("{:5.0f}  ({:5.2f}% completed)".format(i, i/n_fibres*100))
             sys.stdout.flush()
@@ -1539,10 +1564,12 @@ def rss_continuum_image(rss, mask = None, **kwargs): #verbose = False, plot=Fals
                                     #mask=[rss.koala_info["first_good_wave_per_fibre"][i], rss.koala_info["last_good_wave_per_fibre"][i]],
                                     **kwargs) # plot=False,  verbose=False)
         continuum.append(cont)
-    if verbose:
+    if verbose_counter:
         sys.stdout.write("\b" * 51)
         sys.stdout.write("  Checking fibres completed!                             ")
         sys.stdout.flush()
+    elif verbose: print("  Checking fibres completed!                             ")
+        
     continuum=np.array(continuum)  
     if plot: rss_image(rss, image=continuum, greyscale=True, log=True, title=" - Continuum image", add_title=True)
     return continuum
@@ -1571,6 +1598,7 @@ def clean_telluric_residuals(rss,
                              **kwargs): ### verbose =False, warnings = False, ):
     
     verbose = kwargs.get('verbose', False)
+    verbose_counter = kwargs.get('verbose_counter', verbose)
     plot =  kwargs.get('plot', False)
     warnings = kwargs.get('warnings', False)
     
@@ -1605,7 +1633,7 @@ def clean_telluric_residuals(rss,
         plot_fibre_list =[int(round(uniform(0, (n_fibres-1)/100),2)*100) for i in range(3)]
         if verbose: print("  Plotting comparison in 3 fibres randomly choosen :",plot_fibre_list)  
     
-    if verbose: 
+    if verbose_counter: 
         sys.stdout.write("  Working on fibre:                           ")
         sys.stdout.flush()
 
@@ -1618,7 +1646,7 @@ def clean_telluric_residuals(rss,
         
     j=0
     for fibre in fibre_list: 
-        if verbose:
+        if verbose_counter:
             sys.stdout.write("\b" * 46)
             sys.stdout.write("  Working on fibre: {:5.0f}  ({:6.2f}% completed)".format(fibre, j/n_fibres*100))
             sys.stdout.flush()
@@ -1658,11 +1686,12 @@ def clean_telluric_residuals(rss,
                                                                  verbose=False, plot=plot_comparison)
         j=j+1
                
-    if verbose:
+    if verbose_counter:
         sys.stdout.write("\b" * 46)
         sys.stdout.write("  Checking fibres completed!                             ")
         sys.stdout.flush()
         print(" ")
+    elif verbose: print("  Checking fibres completed!\n")
     if plot: 
         compare_rss_images(rss_out, image_list=[rss.intensity, rss_out.intensity, rss_out.intensity/rss.intensity],
                    cmap=["binary_r","binary_r","binary_r"], 
@@ -1723,6 +1752,7 @@ def clean_skyline(rss, skyline,
         rss with skyline substracted.
     """
     verbose = kwargs.get('verbose', False)
+    verbose_counter = kwargs.get('verbose_counter', verbose)
     plot =  kwargs.get('plot', False)
     warnings = kwargs.get('warnings', verbose)
     
@@ -1742,7 +1772,7 @@ def clean_skyline(rss, skyline,
     rss_out = copy.deepcopy(rss)
     w= rss_out.wavelength
     
-    if verbose:
+    if verbose_counter:
         sys.stdout.write("  Working on fibre:                           ")
         sys.stdout.flush()
         output_every_few = np.sqrt(len(fibre_list)) + 1
@@ -1751,7 +1781,7 @@ def clean_skyline(rss, skyline,
     n_fibres = len(rss.intensity)
     j=0
     for fibre in fibre_list:
-        if verbose:
+        if verbose_counter:
             if fibre > next_output:
                 sys.stdout.write("\b" * 46)
                 sys.stdout.write("  Working on fibre: {:5.0f}  ({:6.2f}% completed)".format(fibre, j/n_fibres*100))
@@ -1769,11 +1799,12 @@ def clean_skyline(rss, skyline,
         rss_out.intensity[fibre]=resultado[-1]
         j=j+1
    
-    if verbose:
+    if verbose_counter:
         sys.stdout.write("\b" * 46)
         sys.stdout.write("  Checking fibres completed!                             ")
         sys.stdout.flush()
         print(" ")
+    elif verbose: print("  Checking fibres completed!")
     if plot: compare_rss_images(rss_out, image_list=[rss.intensity, rss_out.intensity, rss_out.intensity/rss.intensity],
                    cmap=["binary_r","binary_r","binary_r"], 
                    log=[True,True,False], #gamma=[0,0,0],
@@ -1788,7 +1819,7 @@ def clean_skyline(rss, skyline,
 # =============================================================================
 # %% ==========================================================================
 # =============================================================================
-def clean_extreme_negatives(rss, fibre_list=[], percentile_min=0.3, continuum=None, **kwargs): # plot=True, verbose=True):
+def clean_extreme_negatives(rss, fibre_list=[], percentile_min=0.05, continuum=None, **kwargs): # plot=True, verbose=True):
      """
      Remove pixels that have extreme negative values (that is below percentile_min) and replace for the median value
 
@@ -1802,6 +1833,7 @@ def clean_extreme_negatives(rss, fibre_list=[], percentile_min=0.3, continuum=No
          where we can find verbose, warnings, plot...
      """
      verbose = kwargs.get('verbose', False)
+     verbose_counter = kwargs.get('verbose_counter', verbose)
      plot =  kwargs.get('plot', False)
      #warnings = kwargs.get('warnings', verbose)
      
@@ -1816,7 +1848,8 @@ def clean_extreme_negatives(rss, fibre_list=[], percentile_min=0.3, continuum=No
 
      if verbose:
          print("  np.nanpercentile(intensity_corrected, ", percentile_min, ") = ", np.round(minimo, 2))
-         print("  to have the median value of the fibre...")            
+         print("  to have the median value of the fibre...")  
+     if verbose_counter:
          sys.stdout.write("  Fixing {} spectra...       ".format(len(fibre_list)))
          sys.stdout.flush()
          output_every_few = np.sqrt(len(fibre_list)) + 1
@@ -1828,7 +1861,7 @@ def clean_extreme_negatives(rss, fibre_list=[], percentile_min=0.3, continuum=No
               
      #median_value_fibre_list=[]
      for fibre in fibre_list:
-          if verbose:
+          if verbose_counter:
                 i = i + 1
                 if fibre > next_output:
                     sys.stdout.write("\b" * 6)
@@ -1848,11 +1881,12 @@ def clean_extreme_negatives(rss, fibre_list=[], percentile_min=0.3, continuum=No
               if plot: correction_map[fibre] = [1 if s[j] < minimo else s[j] for j in range(n_wave)]
     
 
-     if verbose:
+     if verbose_counter:
          sys.stdout.write("\b" * 51)
          sys.stdout.write("  Checking fibres completed!                  ")
          sys.stdout.flush()
          print(" ")
+     elif verbose: print("  Checking fibres completed!\n")
 
      if plot:
          rss_image(rss_out, image=correction_map*rss_out.mask, cmap="binary", title="Extreme negatives - Correction map", clow=0,chigh=1,
@@ -1903,6 +1937,7 @@ def kill_cosmics(rss, brightest_line_wavelength = None,
 
     """
     verbose = kwargs.get('verbose', False)
+    verbose_counter = kwargs.get('verbose_counter', verbose)
     plot =  kwargs.get('plot', False)
     warnings = kwargs.get('warnings', False)
     
@@ -1979,14 +2014,14 @@ def kill_cosmics(rss, brightest_line_wavelength = None,
     lista_cosmicos = []
     cosmic_image = np.zeros_like(rss_out.intensity)
     
-    if verbose:
+    if verbose_counter:
          sys.stdout.write("  Checking {} wavelength...         ".format(len(w)))
          sys.stdout.flush()
          output_every_few = np.sqrt(len(w)) + 1
          next_output = -1
     
     for i in range(len(w)):
-        if verbose:
+        if verbose_counter:
                 if i > next_output:
                     sys.stdout.write("\b" * 6)
                     sys.stdout.write("{:5.2f}%".format(i * 100. / len(w)))
@@ -2022,14 +2057,15 @@ def kill_cosmics(rss, brightest_line_wavelength = None,
                                    "and hence these are NOT corrected!")
 
 
-    if verbose:
+    if verbose_counter:
         sys.stdout.write("\b" * 70)
         sys.stdout.write("  Checking spectra completed!                 ")
         sys.stdout.flush()
         print(" ")
+    elif verbose: print("  Checking spectra completed!\n")
 
     # Check number of cosmics found
-    if plot_cosmic_image: rss_image(rss_out, image=cosmic_image, cmap="binary_r", title=" - Cosmics identification", add_title=True)
+    if plot_cosmic_image: rss_image(rss_out, image=cosmic_image, cmap="binary_r", title=" - Cosmic Candidates", add_title=True)
     # print(lista_cosmicos)
     if verbose: print("\n  Total number of cosmic candidates found = "+str(len(lista_cosmicos))+", correcting only if < "+str(max_number_of_cosmics_per_fibre)+" per wavelength ...")
 
@@ -2222,7 +2258,7 @@ def process_koala_rss(filename=None, path=None,
                       #remove_5577=False, kernel_correct_ccd_defects=51, fibre_p=-1, plot_suspicious_fibres=False,
                       
                       fix_wavelengths=False,     # ----------------- FIX WAVELENGTH SHIFTS   (W)
-                      wavelength_shift_correction = None, #sol=None, #[0, 0, 0],
+                      wavelength_shift_correction = None, 
                       sky_lines_for_wavelength_shifts=None, sky_lines_file_for_wavelength_shifts = None, n_sky_lines_for_wavelength_shifts  = 3,
                       maxima_sigma_for_wavelength_shifts = 2.5, maxima_offset_for_wavelength_shifts = 1.5,
                       median_fibres_for_wavelength_shifts = 7, 
@@ -2250,23 +2286,28 @@ def process_koala_rss(filename=None, path=None,
                       bright_emission_lines_to_substract_in_sky = None,
                       list_of_skylines_to_fit_near_bright_emission_lines = None,
                       list_of_skylines_to_fit = None,
-                      fibre_list=None,
+                      #fibre_list=None,
                       fix_edges = None,
+                      fix_edges_wavelength_continuum = None,
+                      fix_edges_index_fit=None, 
+                      fix_edges_kernel_fit=None,
+                      
+                      scale_sky = None,
                       #sky_rss=[0], scale_sky_rss=0, scale_sky_1D=0.,
                       #maxima_sigma=3.,
                 
                       #sky_lines_file=None, exclude_wlm=[[0, 0]], emission_line_file = None,
                       is_sky=False, win_sky=0, #auto_scale_sky=False, ranges_with_emission_lines=[0], cut_red_end=0,
                       
-                      correct_negative_sky=False,      # ----------------- NEGATIVE SKY  (N)
-                      order_fit_for_negative_sky=7, 
-                      kernel_for_negative_sky=21, 
+                      correct_negative_sky=False,           # ----------------- NEGATIVE SKY  (N)
+                      min_percentile_for_negative_sky = 5,
+                      kernel_for_negative_sky=21,
+                      order_fit_for_negative_sky=7,  
                       clip_fit_for_negative_sky = 0.8,
-                      individual_check_for_negative_sky=True,
+                      individual_check_for_negative_sky=True, # NOT IMPLEMENTED YET #TODO IF NEEDED
                       use_fit_for_negative_sky=True,
                       check_only_sky_fibres = False,
                       force_sky_fibres_to_zero=False,
-                      individual_sky_substraction=True,  
                       show_fibres_for_negative_sky = None,
                       plot_rss_map_for_negative_sky = False, 
                       
@@ -2287,7 +2328,6 @@ def process_koala_rss(filename=None, path=None,
                       fibres_to_fix=None,
                       #features_to_fix=[], sky_fibres_for_residuals=[],
                       #remove_negative_median_values=False,
-                      #fix_edges=False,  # Not implemented
                       
                       correct_extreme_negatives=False,    # ----------- EXTREME NEGATIVES   (R)
                       percentile_min_for_extreme_negatives=0.05,
@@ -2422,9 +2462,9 @@ def process_koala_rss(filename=None, path=None,
         rss = wavelength_shift_correction.apply(rss, 
                                                 wavelength_shift_correction=wavelength_shift_correction,
                                                 median_offset_per_skyline_weight = median_offset_per_skyline_weight,
-                                                show_fibres=show_fibres_for_wavelength_shifts,
-                                                show_skylines = show_skylines_for_wavelength_shifts,
-                                                plot_solution = plot_wavelength_shift_correction_solution,
+                                                show_fibres_for_wavelength_shifts=show_fibres_for_wavelength_shifts,
+                                                show_skylines_for_wavelength_shifts = show_skylines_for_wavelength_shifts,
+                                                plot_wavelength_shift_correction_solution = plot_wavelength_shift_correction_solution,
                                                 **kwargs)   # verbose = True, plot=False)
 
         corrections_done.append("wavelength_shift_correction")
@@ -2467,6 +2507,9 @@ def process_koala_rss(filename=None, path=None,
                                              bright_emission_lines_to_substract_in_sky = bright_emission_lines_to_substract_in_sky,
                                              list_of_skylines_to_fit_near_bright_emission_lines = list_of_skylines_to_fit_near_bright_emission_lines,
                                              fix_edges = fix_edges,
+                                             fix_edges_wavelength_continuum = fix_edges_wavelength_continuum,
+                                             fix_edges_index_fit=fix_edges_index_fit, 
+                                             fix_edges_kernel_fit=fix_edges_kernel_fit,
                                              **kwargs)
                     sky_fibres = skymodel.sky_fibres
                     
@@ -2491,15 +2534,16 @@ def process_koala_rss(filename=None, path=None,
     if is_sky is False and correct_negative_sky is True:   #TODO: This has to be a correction applied to data container
     
         rss= correcting_negative_sky(rss, 
-                                     order_fit_for_negative_sky = order_fit_for_negative_sky,
-                                     use_fit_for_negative_sky = use_fit_for_negative_sky,
+                                     min_percentile_for_negative_sky = min_percentile_for_negative_sky,
+                                     individual_check_for_negative_sky = individual_check_for_negative_sky,
                                      kernel_for_negative_sky = kernel_for_negative_sky,
+                                     order_fit_for_negative_sky = order_fit_for_negative_sky,
                                      clip_fit_for_negative_sky = clip_fit_for_negative_sky,
-                                     individual_check = individual_check_for_negative_sky,
+                                     use_fit_for_negative_sky = use_fit_for_negative_sky,
                                      check_only_sky_fibres = check_only_sky_fibres,
+                                     force_sky_fibres_to_zero=force_sky_fibres_to_zero,
                                      sky_fibres= sky_fibres,
                                      show_fibres = show_fibres_for_negative_sky,
-                                     force_sky_fibres_to_zero=force_sky_fibres_to_zero,
                                      plot_rss_map_for_negative_sky = plot_rss_map_for_negative_sky,
                                      **kwargs)  #plot=plot, verbose = verbose, 
         
@@ -2518,8 +2562,11 @@ def process_koala_rss(filename=None, path=None,
     if big_telluric_residua_correction or telluric_residua_at_6860_correction or correct_extreme_negatives or clean_cosmics:
         # Get continuum image if any of these have been requested
         if continuum_model_after_sky_correction is None:
-            continuum_model_after_sky_correction = rss_continuum_image(rss, **kwargs)
-            rss.koala.continuum_model_after_sky_correction = continuum_model_after_sky_correction
+            if rss.koala.continuum_model_after_sky_correction is not None:
+                continuum_model_after_sky_correction = rss.koala.continuum_model_after_sky_correction
+            else:
+                continuum_model_after_sky_correction = rss_continuum_image(rss, **kwargs)
+                rss.koala.continuum_model_after_sky_correction = continuum_model_after_sky_correction
     
     if big_telluric_residua_correction:               #TODO: This has to be a correction applied to data container
         rss = clean_telluric_residuals(rss,                                    
@@ -2570,11 +2617,21 @@ def process_koala_rss(filename=None, path=None,
     if apply_telluric_correction or sky_method is not None or correct_negative_sky or clean_cosmics or correct_extreme_negatives or apply_mask:
         rss = apply_mask_to_rss(rss, mask=mask, make_zeros=make_zeros_in_mask, verbose=verbose) 
         
-    # Summary
-    rss.koala.corrections_done = corrections_done
-    rss.koala.info["history"] = corrections_done  # TODO: needs to do proper history 
+        
+    # Add corrections_done and history:    
+    if rss.koala.corrections_done is None:
+        rss.koala.corrections_done = corrections_done
+    else:
+        rss.koala.corrections_done.append(corrections_done)
     
-    if plot_final_rss is None and len(corrections_done) > 0 : plot_final_rss= True
+    if rss.koala.info["history"] is None: rss.koala.info["history"] = []  # TODO: needs to do proper history 
+    for item in corrections_done: 
+        #print(item)
+        rss.koala.info["history"].append(item)
+
+    # Summary:
+    
+    if plot_final_rss is None and len(corrections_done) > 0 and plot is not False : plot_final_rss= True
     
     if len(corrections_done) > 0: 
         if plot_final_rss:
@@ -2617,10 +2674,6 @@ def process_koala_rss(filename=None, path=None,
         koala_rss_to_fits(rss, fits_file=save_rss_to_fits_file, path = path, verbose=verbose)
     
     return rss
-
-
-
-
 
 
 

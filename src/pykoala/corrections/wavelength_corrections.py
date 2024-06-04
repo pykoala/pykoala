@@ -254,6 +254,8 @@ class WavelengthShiftCorrection(CorrectionBase):
         fig_size : integer (default = 12)
             Size of the image plotted          
         """
+        #verbose = kwargs.get('verbose', False)
+        #verbose_counter = kwargs.get('verbose_counter', verbose)
         
         if sky_lines == None:
             # This depends of wavelength range & resolution (grating) #TODO
@@ -263,9 +265,9 @@ class WavelengthShiftCorrection(CorrectionBase):
             #if self.grating == "2000R": sky_lines = [6498.737, 6553.626, 6863.971]
         
         if fibres_to_plot is None:
-            fibres_to_plot = [0, np.int(np.percentile(range(len(rss.intensity)),17)), np.int(np.percentile(range(len(rss.intensity)),34)),
-                              np.int(np.percentile(range(len(rss.intensity)),50)),
-                              np.int(np.percentile(range(len(rss.intensity)),67)),np.int(np.percentile(range(len(rss.intensity)),84)),                              
+            fibres_to_plot = [0, int(np.percentile(range(len(rss.intensity)),17)), int(np.percentile(range(len(rss.intensity)),34)),
+                              int(np.percentile(range(len(rss.intensity)),50)),
+                              int(np.percentile(range(len(rss.intensity)),67)),int(np.percentile(range(len(rss.intensity)),84)),                              
                               len(rss.intensity)-1]
         
         vprint("> Fixing wavelengths using skylines in edges...",  **kwargs)
@@ -588,6 +590,7 @@ class WavelengthShiftCorrection(CorrectionBase):
             Size of the image plotted          
         """
         verbose = kwargs.get('verbose', False)
+        verbose_counter = kwargs.get('verbose_counter', verbose)
         plot_all = kwargs.get('plot_all', False)
         plot =  kwargs.get('plot', False)
         warnings = kwargs.get('warnings', verbose)
@@ -609,8 +612,12 @@ class WavelengthShiftCorrection(CorrectionBase):
                               len(rss.intensity)-1]
         
         if sky_lines_file is None:
-            sky_lines_file = path.join(path.dirname(__file__), '..', 'input_data',
-                                      'sky_lines', 'sky_lines_rest.dat')
+            if path.dirname(__file__)[-9:] == "tutorials":
+                sky_lines_file = path.join(path.dirname(__file__), '..', 'src','pykoala','input_data',
+                                          'sky_lines', 'sky_lines_rest.dat')
+            else:
+                sky_lines_file = path.join(path.dirname(__file__), '..', 'input_data',
+                                          'sky_lines', 'sky_lines_rest.dat')
             
         #if sky_lines is None:
             #if self.grating == "385R": sky_lines = [6300.309, 8430.147, 8465.374]
@@ -656,9 +663,10 @@ class WavelengthShiftCorrection(CorrectionBase):
         sl_xmin = sl_xmin_[valid_skylines]
         sl_xmax = sl_xmax_[valid_skylines]
         skyline_in_absorption =[]
-        for i in range(len(sl_center_)):
-            if i in valid_skylines[0]:
-                skyline_in_absorption.append(skyline_in_absorption_[i])        
+                
+        if valid_wave_min < sl_center_[0]:   #FIXME
+            for j in range(len(sl_center_)):
+                if sl_center_[j] in valid_skylines[0]: skyline_in_absorption.append(skyline_in_absorption_[j])        
         
         number_sl = len(sl_center)
         sky_lines = list(sl_center)
@@ -698,7 +706,7 @@ class WavelengthShiftCorrection(CorrectionBase):
         if only_fibre is not None:
             f_i = only_fibre
             f_f = only_fibre + 1
-            if verbose: print("  Checking fibre ", only_fibre,
+            if verbose_counter: print("  Checking fibre ", only_fibre,
                               " (use only_fibre = None for all)...")
             verbose_ = True
             warnings = True
@@ -715,7 +723,7 @@ class WavelengthShiftCorrection(CorrectionBase):
         
         for fibre in range(f_i, f_f):  
             spectrum = intensity[fibre]
-            if verbose:
+            if verbose_counter:
                 if fibre > next_output:
                     sys.stdout.write("\b" * 51)
                     sys.stdout.write("  Checking fibre {:4} ...  ({:6.2f} % completed) ...".format(fibre, fibre * 100. / number_fibres_to_check))
@@ -773,7 +781,7 @@ class WavelengthShiftCorrection(CorrectionBase):
             wave_median_offset.append(median_offset_fibre)         # Append the median offset per fibre to list
             if verbose_: print("\n> Median offset for fibre {:3} = {:7.3f}".format(fibre, median_offset_fibre))
 
-        if verbose and only_fibre is  None:
+        if verbose_counter and only_fibre is  None:
             sys.stdout.write("\b" * 51)
             sys.stdout.write("  Checking fibres completed!                  ")
             sys.stdout.flush()
@@ -975,13 +983,13 @@ class WavelengthShiftCorrection(CorrectionBase):
 # #-----------------------------------------------------------------------------
 # %% ============================================================================
 # #-----------------------------------------------------------------------------
-
     def apply(self, rss, 
               wavelength_shift_solution = None,  
               median_offset_per_skyline_weight = 1.,   # 1 is the BLUE, 0 is the GREEN
               sky_lines = None, 
-              show_fibres=None, show_skylines = None,
-              plot_solution = False,
+              show_fibres_for_wavelength_shifts=None,              
+              show_skylines_for_wavelength_shifts = None,          
+              plot_wavelength_shift_correction_solution = False,    
               **kwargs):                               
         """Apply a 2D wavelength correction to a RSS.
 
@@ -992,6 +1000,7 @@ class WavelengthShiftCorrection(CorrectionBase):
         - median_offset_per_skyline_weight: 
             1 is the BLUE line (median offset per skyline), 0 is the GREEN line (median of solutions), anything between [0,1] is a combination.
         """
+        
         
         if wavelength_shift_solution is None and self.wavelength_shift_solution is not None:
             wavelength_shift_solution = self.wavelength_shift_solution
@@ -1027,8 +1036,8 @@ class WavelengthShiftCorrection(CorrectionBase):
         
         nspec = len(rss.intensity)
         xfibre = list(range(nspec))
-        if show_fibres is None:  show_fibres=[0, int(nspec/2), nspec-1]
-        if show_skylines is None: show_skylines = [self.sky_lines[0], self.sky_lines[-1]]
+        if show_fibres_for_wavelength_shifts is None:  show_fibres_for_wavelength_shifts=[0, int(nspec/2), nspec-1]
+        if show_skylines_for_wavelength_shifts is None: show_skylines_for_wavelength_shifts = [self.sky_lines[0], self.sky_lines[-1]]
     
         if len (self.wavelength_shift_solution) == 2:
             wavelength_shift_solution = (1-median_offset_per_skyline_weight) * self.wavelength_shift_solution[0] + median_offset_per_skyline_weight * self.wavelength_shift_solution [1]            
@@ -1046,7 +1055,7 @@ class WavelengthShiftCorrection(CorrectionBase):
         #sol = wavelength_shift_solution
         fx = wavelength_shift_solution[0] + wavelength_shift_solution[1] * np.array(xfibre) + wavelength_shift_solution[2] * np.array(xfibre) ** 2
 
-        if plot_solution:   # Do we need to plot the correction again?     
+        if plot_wavelength_shift_correction_solution:   # Do we need to plot the correction again?     
             if len(wavelength_shift_solution) == 1: 
                 ptitle = "Linear correction, y = "+str(round(wavelength_shift_solution[0],4))+" + "+str(round(wavelength_shift_solution[1],6))+"x"
             else:
@@ -1067,7 +1076,7 @@ class WavelengthShiftCorrection(CorrectionBase):
     
             if kwargs.get("plot"):
                 for line in sky_lines: 
-                    if fibre in show_fibres and line in show_skylines:
+                    if fibre in show_fibres_for_wavelength_shifts and line in show_skylines_for_wavelength_shifts:
                         ptitle = "Wavelength correction in Fibre " + str(fibre) + " in skyline "+str(line)
                         plot_plot([w, w_fixed, w], [rss.intensity[fibre], rss.intensity[fibre], rss_out.intensity[fibre]],
                                   xmin = line-20, xmax= line+20,
