@@ -65,12 +65,16 @@ class WavelengthCorrection(CorrectionBase):
 
     Attributes
     ----------
-    - `name`: to be recorded in the log
-    - `offset`: (WavelengthOffset)
+    name : str
+        Correction name, to be recorded in the log.
+    offset : WavelengthOffset
+        2D wavelength offset (n_fibres x n_wavelengths)
+    verbose: bool
+        False by default.
     """
     name = "WavelengthCorrection"
     offset = None
-    # verbose = False
+    verbose = False
 
     def __init__(self, **kwargs):
         super().__init__()
@@ -84,7 +88,13 @@ class WavelengthCorrection(CorrectionBase):
 
         Parameters
         ----------
-        - rss: (RSS)
+        rss : RSS
+            Original Row-Stacked-Spectra object to be corrected.
+
+        Returns
+        -------
+        RSS
+            Corrected RSS object.
         """
 
         assert isinstance(rss, RSS)
