@@ -49,6 +49,7 @@ class RSS(DataContainer):
     log : dict
         Dictionary containing a log of the processes applied on the rss.   
     """
+
     def __init__(self,
                  intensity=None,
                  wavelength=None,
@@ -88,21 +89,25 @@ class RSS(DataContainer):
         for wave_range in range(0, self.wavelength.size, wavelength_step):
             # Mean across all fibres
             ra_com[wave_range: wave_range + wavelength_step] = np.nansum(
-                self.intensity[:, wave_range: wave_range + wavelength_step]**power * ra[:, np.newaxis],
+                self.intensity[:, wave_range: wave_range +
+                               wavelength_step]**power * ra[:, np.newaxis],
                 axis=0) / np.nansum(self.intensity[:, wave_range: wave_range + wavelength_step]**power,
                                     axis=0)
             # Statistic (e.g., median, mean) per wavelength bin
-            ra_com[wave_range: wave_range + wavelength_step] = stat(ra_com[wave_range: wave_range + wavelength_step])
+            ra_com[wave_range: wave_range + wavelength_step] = stat(
+                ra_com[wave_range: wave_range + wavelength_step])
             dec_com[wave_range: wave_range + wavelength_step] = np.nansum(
-                self.intensity[:, wave_range: wave_range + wavelength_step]**power * dec[:, np.newaxis],
+                self.intensity[:, wave_range: wave_range +
+                               wavelength_step]**power * dec[:, np.newaxis],
                 axis=0) / np.nansum(self.intensity[:, wave_range: wave_range + wavelength_step]**power,
                                     axis=0)
-            dec_com[wave_range: wave_range + wavelength_step] = stat(dec_com[wave_range: wave_range + wavelength_step])
+            dec_com[wave_range: wave_range + wavelength_step] = stat(
+                dec_com[wave_range: wave_range + wavelength_step])
         return ra_com, dec_com
 
     def update_coordinates(self, new_coords=None, offset=None):
         """Update fibre coordinates.
-        
+
         Description
         -----------
         Update the fibre sky position by providing new locations of relative
@@ -115,7 +120,7 @@ class RSS(DataContainer):
         - new_fib_coord_offset: np.ndarray, default=None
             Relative offset in *deg*. If `new_fib_coord` is provided, this will
             be ignored.
-        
+
         Returns
         -------
 
@@ -141,7 +146,7 @@ class RSS(DataContainer):
     def to_fits(self, filename, primary_hdr_kw=None, overwrite=False, checksum=False):
         """
         Writes a RSS object to .fits
-        
+
         Ideally this would be used for RSS objects containing corrected data that need to be saved
         during an intermediate step
 
@@ -162,11 +167,11 @@ class RSS(DataContainer):
         if primary_hdr_kw is None:
             primary_hdr_kw = {}
 
-        # Create the PrimaryHDU with WCS information 
+        # Create the PrimaryHDU with WCS information
         primary = fits.PrimaryHDU()
         for key, val in primary_hdr_kw.items():
             primary.header[key] = val
-        
+
         # Include general information
         primary.header['pykoala0'] = __version__, "PyKOALA version"
         primary.header['pykoala1'] = datetime.now().strftime(
@@ -181,10 +186,10 @@ class RSS(DataContainer):
         # Change headers for variance and INTENSITY
         hdu_list.append(fits.ImageHDU(
             data=self.intensity, name='INTENSITY',
-            #TODO: rescue the original header?
-            #header=self.wcs.to_header()
-            )
-            )
+            # TODO: rescue the original header?
+            # header=self.wcs.to_header()
+        )
+        )
         hdu_list.append(fits.ImageHDU(
             data=self.variance, name='VARIANCE', header=hdu_list[-1].header))
         # Store the mask information
@@ -216,7 +221,7 @@ def combine_rss(list_of_rss, combine_method='nansum'):
 
         all_intensities.append(intensity)
         all_variances.append(variance)
-    
+
     if hasattr(np, combine_method):
         combine_function = getattr(np, combine_method)
         new_intensity = combine_function(all_intensities, axis=0)
@@ -227,9 +232,8 @@ def combine_rss(list_of_rss, combine_method='nansum'):
     new_rss = RSS(intensity=new_intensity, variance=new_variance,
                   wavelength=rss.wavelength, log=rss.log, info=rss.info)
     return new_rss
-    
 
-    
 
+# =============================================================================
 # Mr Krtxo \(ﾟ▽ﾟ)/
-
+#                                                       ... Paranoy@ Rulz! ;^D
