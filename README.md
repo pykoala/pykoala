@@ -4,7 +4,7 @@
 
 ---
 
-PyKOALA is a Python package to reduce KOALA+AAOmega integral field spectroscopy (IFS) data creating a data cube. It produces full calibrated (wavelength, flux and astrometry) data cubes ready for science.
+**PyKOALA** is a Python package to reduce KOALA+AAOmega integral field spectroscopy (IFS) data creating a data cube. It produces full calibrated (wavelength, flux and astrometry) data cubes ready for science.
 
 [KOALA][koala_website], the Kilofibre Optical AAT Lenslet Array, is a wide-field, high efficiency, integral field unit used by the 
 AAOmega spectrograph on the 3.9m AAT ([Anglo-Australian Telescope][aat_website]) at Siding Spring Observatory. **PyKOALA** is the forthcoming data reduction pipeline for creating science-ready 3D data cubes using Raw Stacked Spectra (RSS) images created with [2dfdr][2dfdr_website].
@@ -24,12 +24,12 @@ AAOmega spectrograph on the 3.9m AAT ([Anglo-Australian Telescope][aat_website])
 ---
 ## Documentation
 
-PyKOALA full documentation can be found here: https://pykoala.readthedocs.io/en/latest/index.html
+**PyKOALA** full documentation can be found here: https://pykoala.readthedocs.io/en/latest/index.html
 
 ---
 ## Download
 
-PyKOALA can be obtained by cloning the repository, using git:
+**PyKOALA** can be obtained by cloning the repository, using git:
 
 ```bash
 git clone https://github.com/pykoala/koala.git
@@ -37,26 +37,36 @@ git clone https://github.com/pykoala/koala.git
 
 ## Installation (recommended)
 
-We recommend the use of Python environments for the installation of PyKOALA. First, from the terminal go **inside** the downloaded PyKOALA package and type:
+We recommend the use of Python environments for the installation of **PyKOALA**. First, from the terminal enter in the downloaded **PyKOALA** package and create the Python environment:
 
 ```bash
+cd koala
 python3 -m venv venv_koala
 ```
 
-To activate it, use:
+To activate the environment, use:
 
 ```bash
 source venv_koala/bin/activate
 ```
 
-Then install all required packages with:
+then install all required packages with:
 
 ```bash
 pip install -r requirements.txt
 pip install .
 ```
 
-The second command will also install PyKOALA in the virtual environment. For more information about installation and usage of Python virtual environment, check the [documentation](https://pykoala.readthedocs.io/en/latest/getting-started/virtual-environment.html).
+The second command will also install **PyKOALA** in the virtual environment. Once you are finished with your **PyKOALA** session, use:
+
+```bash
+deactivate
+```
+
+to deactivate the Python environment.
+
+For more information about installation and usage of Python virtual environment, check the [documentation](https://pykoala.readthedocs.io/en/latest/getting-started/virtual-environment.html) or the oficial [Python documentation](https://docs.python.org/3/library/venv.html).
+
 ## Package structure
 
 ---
