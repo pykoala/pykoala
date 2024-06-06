@@ -104,8 +104,8 @@ def crosscorrelate_im_apertures(ref_aperture_flux, ref_aperture_flux_err,
         n_valid = np.count_nonzero(mask)
         flux_diff = np.nansum((flux_in_ap[mask] - ref_flux[mask])**2) / n_valid
         flax_ratio = ref_ap_norm / flux_in_ap_norm
-        sampling[:2, *np.unravel_index(i, sampling[0].shape)] = (
-            flux_diff, flax_ratio)
+        idx = np.unravel_index(i, sampling[0].shape)
+        sampling[:2, idx[0], idx[1]] = (flux_diff, flax_ratio)
 
     print("Computing the offset solution")
     weights = np.exp(- (sampling[0] + np.abs(1 - sampling[1])) / 2)
