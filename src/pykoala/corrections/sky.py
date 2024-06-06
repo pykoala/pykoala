@@ -28,6 +28,7 @@ from pykoala.plotting.utils import new_figure, colour_map
 from pykoala.exceptions.exceptions import TelluricNoFileError
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.corrections.throughput import Throughput
+from pykoala.corrections.wavelength import WavelengthOffset
 from pykoala.data_container import DataContainer
 from pykoala.rss import RSS
 from pykoala.cubing import Cube
@@ -911,7 +912,7 @@ class WaveletFilter(object):
     
     def __init__(self, rss):
         
-        assert isinstance(rss, RSS) == True
+        assert isinstance(rss, RSS)
         
         # 1. Estimate the FWHM of emission lines from the autocorrelation of the median (~ sky) spectrum.
         
@@ -919,6 +920,7 @@ class WaveletFilter(object):
         x -= np.nanmean(x)
         x = scipy.signal.correlate(x, x, mode='same')
         h = (np.count_nonzero(x > 0.5*np.nanmax(x)) + 1) // 2
+        #h = 0
         self.scale = 2*h + 1
         print(f'> Wavelet filter scale: {self.scale} pixels')
         
@@ -943,11 +945,22 @@ class WaveletFilter(object):
         #self.fibre_throughput = np.nanstd(self.filtered, axis=1)
         #self.fibre_throughput = np.nanmedian(self.filtered, axis=1)
         #self.filtered /= self.fibre_throughput[:, np.newaxis]
+        self.filtered[~ np.isfinite(self.filtered)] = 0
 
         #self.fibre_throughput = np.nanmedian(self.filtered / self.sky, axis=1)
-        self.fibre_throughput = np.nanmean(self.filtered * self.sky[np.newaxis, :], axis=1) / np.nanmean(self.sky**2)
-        self.fibre_throughput /= np.nanmedian(self.fibre_throughput)
+        x = np.exp(-.5 * ((self.filtered - self.sky) / (self.sky_hi - self.sky_lo))**2)
+        x *= self.sky_weight[np.newaxis, :]
+        print(np.nanpercentile(x, [0, 16, 50, 85, 100]), '---', x.shape)
+        #self.fibre_throughput = np.nanmean(x * self.filtered / self.sky[np.newaxis, :], axis=1) / np.nanmean(x)
+        x = np.where(x > 0.5, self.filtered / self.sky[np.newaxis, :], np.nan)
+        print(x.shape)
+        self.fibre_throughput = np.nanmedian(x, axis=1)
+        renorm = np.nanmedian(self.fibre_throughput)
+        self.fibre_throughput /= renorm
         self.filtered /= self.fibre_throughput[:, np.newaxis]
+        self.sky *= renorm
+        self.sky_lo *= renorm
+        self.sky_hi *= renorm
         
         # 5. Estimate wavelength offset of each fibre (in pixels) from cross-correlation with the sky.
         
@@ -959,10 +972,15 @@ class WaveletFilter(object):
         else:
             raise TypeError(f'  ERROR: wrong wavelength units ({x.unit})')
 
-        mid = rss.intensity.shape[1] // 2
-        s = self.scale * 2
-        x = scipy.signal.fftconvolve(self.filtered, self.sky[np.newaxis, ::-1], mode='same', axes=1)[:, mid-s:mid+s+1]
-        self.fibre_offset = np.nansum(np.arange(x.shape[1])[np.newaxis, :] * x**2, axis=1) / np.nansum(x**2, axis=1)
+        #mid = rss.intensity.shape[1] // 2
+        mid = self.wavelength.size // 2
+        s = self.scale
+        x = np.nanmedian(self.filtered, axis=0)
+        x[~ np.isfinite(x)] = 0
+        x = scipy.signal.fftconvolve(self.filtered, x[np.newaxis, ::-1], mode='same', axes=1)[:, mid-s:mid+s+1]
+        idx = np.arange(x.shape[1])
+        weight = np.where(x>0, x, 0)
+        self.fibre_offset = np.nansum((idx - s)[np.newaxis, :] * weight, axis=1) / np.nansum(weight, axis=1)
         
         
     def qc_plots(self, show=False, save_as=None):
@@ -973,7 +991,8 @@ class WaveletFilter(object):
         '''
         fig, axes = new_figure('wavelet_filter', nrows=3, ncols=2, sharey=False, gridspec_kw={'width_ratios': [1, .02], 'hspace': 0., 'wspace': .1})
         im, cb = colour_map(fig, axes[0, 0], 'wavelet coefficient', self.filtered, x=self.wavelength, ylabel='spec_id', cbax=axes[0, 1])
-        im, cb = colour_map(fig, axes[1, 0], 'sky-subtracted', self.filtered - self.sky*self.sky_weight, x=self.wavelength, ylabel='spec_id', cbax=axes[1, 1])
+        im, cb = colour_map(fig, axes[1, 0], 'sky-subtracted', self.filtered - self.sky, x=self.wavelength, ylabel='spec_id', cbax=axes[1, 1])
+        axes[1, 0].sharey(axes[0, 0])
         ax = axes[-1, 0]
         axes[-1, 1].axis('off')
         ax.plot(self.wavelength, self.sky, 'k-', alpha=.5, label='sky (median coefficient)')
@@ -990,6 +1009,9 @@ class WaveletFilter(object):
         
     def get_throughput_object(self):
         return Throughput(throughput_data=np.repeat(self.fibre_throughput[:, np.newaxis], self.wavelength.size + 3*self.scale, axis=1))
+
+    def get_wavelength_offset(self):
+        return WavelengthOffset(offset_data=np.repeat(self.fibre_offset[:, np.newaxis], self.wavelength.size + 3*self.scale, axis=1))
 
     
 
