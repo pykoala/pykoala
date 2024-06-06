@@ -1,61 +1,62 @@
-# KOALA
-[![Build Status](https://travis-ci.com/pykoala/koala.svg?branch=master)](https://travis-ci.com/pykoala/koala)
-[![Documentation Status](https://readthedocs.org/projects/pykoala/badge/?version=latest)](https://pykoala.readthedocs.io/en/latest/?badge=latest)
-[![Coverage Status](https://codecov.io/github/pykoala/koala/coverage.svg?branch=master)](https://codecov.io/github/pykoala/koala?branch=master)
-[![License](https://img.shields.io/pypi/l/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/)
-[![Supported versions](https://img.shields.io/pypi/pyversions/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/)
-[![PyPI](https://img.shields.io/pypi/status/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/)
+# PyKOALA
 
----------------------------------------------
-
-# PyKOALA: A multi-instrument tool for reducing Integral Field Spectroscopic Data
-
+> A multi-instrument tool for reducing Integral Field Spectroscopic Data
 
 ---
 
 PyKOALA is a Python package to reduce KOALA+AAOmega integral field spectroscopy (IFS) data creating a data cube. It produces full calibrated (wavelength, flux and astrometry) data cubes ready for science.
 
 [KOALA][koala_website], the Kilofibre Optical AAT Lenslet Array, is a wide-field, high efficiency, integral field unit used by the 
-AAOmega spectrograph on the 3.9m AAT ([Anglo-Australian Telescope][aat_website]) at Siding Spring Observatory. **PyKOALA** is the forthcoming data reduction pipeline for 
-creating science-ready 3D data cubes using Raw Stacked Spectra (RSS) images created with [2dfdr][2dfdr_website].
+AAOmega spectrograph on the 3.9m AAT ([Anglo-Australian Telescope][aat_website]) at Siding Spring Observatory. **PyKOALA** is the forthcoming data reduction pipeline for creating science-ready 3D data cubes using Raw Stacked Spectra (RSS) images created with [2dfdr][2dfdr_website].
 
 [koala_website]: https://aat.anu.edu.au/science/instruments/current/koala/overview
 [aat_website]: https://aat.anu.edu.au/about-us/AAT
 [2dfdr_website]: https://aat.anu.edu.au/science/instruments/current/AAOmega/reduction
 
+---
+## Status
+[![Documentation Status](https://readthedocs.org/projects/pykoala/badge/?version=latest)](https://pykoala.readthedocs.io/en/latest/?badge=latest)
+[![Coverage Status](https://codecov.io/github/pykoala/koala/coverage.svg?branch=master)](https://codecov.io/github/pykoala/koala?branch=master)
+[![License](https://img.shields.io/pypi/l/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/)
+[![Supported versions](https://img.shields.io/pypi/pyversions/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/)
+[![PyPI](https://img.shields.io/pypi/status/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/)
 
 ---
-## Pre-requisites
+## Documentation
 
-PyKOALA has the following pre-requisites 
+PyKOALA full documentation can be found here: https://pykoala.readthedocs.io/en/latest/index.html
 
-```
-- pip
-- numpy
-- scipy
-- astropy
-- photutils
-- skimage (for image registration using cross-correlation)
-...
-```
-
-
+---
 ## Download
 
-To get PyKOALA, clone the repository, using git:
+PyKOALA can be obtained by cloning the repository, using git:
 
-```
+```bash
 git clone https://github.com/pykoala/koala.git
 ```
 
-## Installation
+## Installation (recommended)
 
-Installation it in your local machine is done with pip:
+We recommend the use of Python environments for the installation of PyKOALA. First, from the terminal go **inside** the downloaded PyKOALA package and type:
 
+```bash
+python3 -m venv venv_koala
 ```
-cd koala ; pip install . 
+
+To activate it, use:
+
+```bash
+source venv_koala/bin/activate
 ```
 
+Then install all required packages with:
+
+```bash
+pip install -r requirements.txt
+pip install .
+```
+
+The second command will also install PyKOALA in the virtual environment. For more information about installation and usage of Python virtual environment, check the [documentation](https://pykoala.readthedocs.io/en/latest/getting-started/virtual-environment.html).
 ## Package structure
 
 ---
@@ -122,39 +123,17 @@ All the corrections applied to the data are build upon the Correction base class
 
 ## License and Acknowledgements
 
-...
+BSD 3-Clause License
 
+Copyright (c) 2020, pykoala All rights reserved.
 
-## Helping to develop PyKOALA 
----------------------------------------------
-1. Fork koala into your github account
-2. Clone your fork onto your laptop:
-```
-    git clone https://github.com/<your_account>/koala
-```
-3. Add this repository as another remote (to get the latest stuff):
-```
-    git remote add  upstream https://github.com/pykoala/koala
-```
-4. Create a branch to work on the changes:
-```
-    git checkout -b <new_branch>
-```
-5. Add and commit changes
-6. Push up your changes
-7. Create a PR, and wait for someone to review it
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
 
-Reviewing commits
----------------------------------------------
-1. Look through the changes, and provide comments
-2. Once the PR is ready, type bors r+, then bors will handle the merge (DON'T
-   HIT THE MERGE BUTTON).
-3. If the tests fail, help the proposer fix the failures
-4. Use bors r+ again
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+    
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+    
+3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+    
 
-You can also use bors try to try running the tests, without merging
-
-<!---[![Version](https://img.shields.io/pypi/v/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/) --->
-<!---[![Wheel](https://img.shields.io/pypi/wheel/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/) --->
-<!---[![Format](https://img.shields.io/pypi/format/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/) --->
-<!---[![Supported implemntations](https://img.shields.io/pypi/implementation/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/)--->
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS “AS IS” AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
