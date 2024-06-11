@@ -333,6 +333,31 @@ class SkyModel(object):
         """
         pass
     
+    def remove_continuum(self, cont_estimator="median", cont_estimator_args=None):
+        """
+        Remove the continuum from the background model.
+
+        Parameters
+        ----------
+        cont_estimator : str, optional
+            Method to estimate the continuum signal. Default is 'median'.
+        cont_estimator_args : dict, optional
+            Arguments for the continuum estimator. Default is None.
+        """
+        if cont_estimator_args is None:
+            cont_estimator_args = {}
+        if self.intensity is not None:
+            if hasattr(ContinuumEstimator, cont_estimator):
+                estimator = getattr(ContinuumEstimator, cont_estimator)
+            else:
+                raise NameError(f"{cont_estimator} does not correspond to any"
+                                + "available continuum method")
+            self.continuum = estimator(self.intensity, **cont_estimator_args)
+            self.intensity -= self.continuum
+        else:
+            raise AttributeError("Sky model intensity has not been computed")
+
+
     def vprint(self, *messages):
         """
         Print messages if `verbose` is True.
@@ -439,13 +464,14 @@ class SkyFromObject(SkyModel):
         self.dc = dc
         self.exptime = dc.info['exptime']
         self.vprint("Estimating sky background contribution...")
-        self.estimate_background(bckgr_estimator, bckgr_params, source_mask_nsigma)
+        bckg, bckg_sigma = self.estimate_background(
+            bckgr_estimator, bckgr_params, source_mask_nsigma)
+        super().__init__(wavelength=self.dc.wavelength,
+                         intensity=bckg,
+                         variance=bckg_sigma**2)
         if remove_cont:
             self.vprint("Removing background continuum")
             self.remove_continuum(cont_estimator, cont_estimator_args)
-        super().__init__(wavelength=self.dc.wavelength,
-                         intensity=self.bckgr,
-                         variance=self.bckgr_sigma**2)
 
     def estimate_background(self, bckgr_estimator, bckgr_params=None, source_mask_nsigma=3):
         """
@@ -494,31 +520,8 @@ class SkyFromObject(SkyModel):
                            * np.expand_dims(self.bckgr_sigma, dims_to_expand))
             data[source_mask] = np.nan
 
-        self.bckgr, self.bckgr_sigma = estimator(data, **bckgr_params)
-        return self.bckgr, self.bckgr_sigma
-
-    def remove_continuum(self, cont_estimator="median", cont_estimator_args=None):
-        """
-        Remove the continuum from the background model.
-
-        Parameters
-        ----------
-        cont_estimator : str, optional
-            Method to estimate the continuum signal. Default is 'median'.
-        cont_estimator_args : dict, optional
-            Arguments for the continuum estimator. Default is None.
-        """
-        if cont_estimator_args is None:
-            cont_estimator_args = {}
-        if self.bckgr is not None:
-            if hasattr(ContinuumEstimator, cont_estimator):
-                estimator = getattr(ContinuumEstimator, cont_estimator)
-            else:
-                raise NameError(f"{cont_estimator} does not correspond to any available continuum method")
-            self.continuum = estimator(self.bckgr, **cont_estimator_args)
-            self.bckgr -= self.continuum
-        else:
-            raise AttributeError("Background model has not been computed")
+        bckgr, bckgr_sigma = estimator(data, **bckgr_params)
+        return bckgr, bckgr_sigma
 
     def fit_emission_lines(self, cont_clean_spec, errors=None, window_size=100,
                            resampling_wave=0.1, **fit_kwargs):
