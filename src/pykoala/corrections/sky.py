@@ -248,6 +248,12 @@ class SkyModel(object):
     variance : np.ndarray
         Array representing the variance associated with the sky model. 
         It must have the same dimensions as `intensity`.
+    continuum : np.ndarray
+        Array representing the continuuum emission of the sky model.
+    sky_lines: np.ndarray
+        1-D array representing the wavelength of a collection of sky emission
+        lines expressed in angstrom. This is used for fitting the emission lines
+        from the (continuum-substracted) intensity.
     verbose : bool, optional
         If True, print messages during execution. Default is True.
 
@@ -264,6 +270,7 @@ class SkyModel(object):
     """
 
     verbose = True
+    sky_lines = None
 
     def __init__(self, **kwargs):
         """
@@ -286,6 +293,7 @@ class SkyModel(object):
         self.wavelength = kwargs.get('wavelength', None)
         self.intensity = kwargs.get('intensity', None)
         self.variance = kwargs.get('variance', None)
+        self.continuum = kwargs.get('continuum', None)
         self.verbose = kwargs.get('verbose', True)
 
     def substract(self, data, variance, axis=-1, verbose=False):
@@ -357,6 +365,179 @@ class SkyModel(object):
         else:
             raise AttributeError("Sky model intensity has not been computed")
 
+    def fit_emission_lines(self, window_size=100,
+                           resampling_wave=0.1, **fit_kwargs):
+        """
+        Fit emission lines to the continuum-subtracted spectrum.
+
+        Parameters
+        ----------
+        window_size : int, optional
+            Size of the wavelength window for fitting. Default is 100.
+        resampling_wave : float, optional
+            Wavelength resampling interval. Default is 0.1.
+
+        Returns
+        -------
+        emission_model : models.Gaussian1D
+            Fitted emission line model.
+        emission_spectra : np.ndarray
+            Emission spectra.
+        """
+        assert self.intensity, "Sky Model intensity is None"
+
+        if self.continuum is None:
+            self.vprint("Sky Model intensity might contain continuum emission"
+                        " leading to unsuccessful emission line fit")
+        if self.variance is None:
+            errors = np.ones_like(self.intensity, dtype=float)
+
+        finite_mask = np.isfinite(self.intensity)
+        p0_amplitude = np.interp(self.sky_lines, self.dc.wavelength[finite_mask],
+                                 self.intensity[finite_mask])
+        p0_amplitude = np.clip(p0_amplitude, a_min=0, a_max=None)
+        fit_g = fitting.LevMarLSQFitter()
+        emission_model = models.Gaussian1D(amplitude=0, mean=0, stddev=0)
+        emission_spectra = np.zeros_like(self.wavelength)
+        wavelength_windows = np.arange(self.wavelength.min(),
+                                       self.wavelength.max(), window_size)
+        wavelength_windows[-1] = self.wavelength.max()
+        self.vprint(f"Fitting all emission lines ({self.sky_lines.size})"
+                    + " to continuum-subtracted sky spectra")
+        for wl_min, wl_max in zip(wavelength_windows[:-1], wavelength_windows[1:]):
+            self.vprint(f"Starting fit in the wavelength range [{wl_min:.1f}, {wl_max:.1f}]")
+            mask_lines = (self.sky_lines >= wl_min) & (self.sky_lines < wl_max)
+            mask = (self.wavelength >= wl_min) & (
+                self.wavelength < wl_max) & finite_mask
+            wave = np.arange(self.wavelength[mask][0],
+                             self.wavelength[mask][-1], resampling_wave)
+            obs = np.interp(wave, self.wavelength[mask], self.intensity[mask])
+            err = np.interp(wave, self.wavelength[mask], errors[mask])
+            if mask_lines.any():
+                self.vprint(f"> Line to Fit {self.sky_lines[mask_lines][0]:.1f}")
+                window_model = models.Gaussian1D(
+                    amplitude=p0_amplitude[mask_lines][0],
+                    mean=self.sky_lines[mask_lines][0],
+                    stddev=1,
+                    bounds={'amplitude': (p0_amplitude[mask_lines][0] * 0.5, p0_amplitude[mask_lines][0] * 10),
+                            'mean': (self.sky_lines[mask_lines][0] - 5, self.sky_lines[mask_lines][0] + 5),
+                            'stddev': (self.sky_lines_fwhm[mask_lines][0] / 2, 5)}
+                )
+                for line, p0, sigma in zip(
+                    self.sky_lines[mask_lines][1:], p0_amplitude[mask_lines][1:],
+                    self.sky_lines_fwhm[mask_lines][1:]):
+                    self.vprint(f"Line to Fit {line:.1f}")
+                    model = models.Gaussian1D(
+                        amplitude=p0, mean=line, stddev=sigma,
+                        bounds={'amplitude': (p0 * 0.5, p0 * 10), 'mean': (line - 5, line + 5),
+                                'stddev': (sigma / 2, 5)}
+                    )
+                    window_model += model
+                g = fit_g(window_model, wave, obs, weights=1 / err, **fit_kwargs)
+                emission_spectra += g(self.wavelength)
+                emission_model += g
+        return emission_model, emission_spectra
+
+    def load_sky_lines(self, path_to_table=None, lines_pct=84., **kwargs):
+        """
+        Load sky lines from a file.
+
+        Parameters
+        ----------
+        path_to_table : str, optional
+            Path to the table containing sky lines. Default is None.
+        lines_pct : float, optional
+            Percentile for selecting faint lines. Default is 84.
+        kwargs : dict, optional
+            Additional arguments for `np.loadtxt`.
+
+        Returns
+        -------
+        None
+        """
+        if path_to_table is not None:
+            self.vprint(f"Loading input sky line table {path_to_table}")
+            path_to_table = os.path.join(os.path.dirname(__file__),
+                                         'input_data', 'sky_lines',
+                                         path_to_table)
+            self.sky_lines, self.sky_lines_fwhm, self.sky_lines_f = np.loadtxt(
+                path_to_table, usecols=(0, 1, 2), unpack=True, **kwargs)
+        else:
+            self.vprint(f"Loading UVES sky line table")
+            self.sky_lines, self.sky_lines_fwhm, self.sky_lines_f = uves_sky_lines()
+        # Select only those lines within the wavelength range of the model
+        common_lines = (self.sky_lines >= self.wavelength[0]) & (self.sky_lines <= self.wavelength[-1])
+        self.sky_lines = self.sky_lines[common_lines]
+        self.sky_lines_fwhm = self.sky_lines_fwhm[common_lines]
+        self.sky_lines_f = self.sky_lines_f[common_lines]
+        self.vprint(f"Total number of sky lines: {self.sky_lines.size}")
+        # Blend sky emission lines
+        delta_lambda = self.wavelength[1] - self.wavelength[0]
+        self.vprint("Blending sky emission lines according to"
+                    + f"wavelength resolution ({delta_lambda} AA)")
+        unresolved_lines = np.where(np.diff(self.sky_lines) <= delta_lambda)[0]
+        while len(unresolved_lines) > 0:
+            self.sky_lines[unresolved_lines] = (
+                self.sky_lines[unresolved_lines] + self.sky_lines[unresolved_lines + 1]) / 2
+            self.sky_lines_fwhm[unresolved_lines] = np.sqrt(
+                self.sky_lines_fwhm[unresolved_lines]**2 + self.sky_lines_fwhm[unresolved_lines + 1]**2
+            )
+            self.sky_lines_f[unresolved_lines] = (
+                self.sky_lines_f[unresolved_lines] + self.sky_lines_f[unresolved_lines + 1]
+            )
+            self.sky_lines = np.delete(self.sky_lines, unresolved_lines)
+            self.sky_lines_fwhm = np.delete(self.sky_lines_fwhm, unresolved_lines)
+            self.sky_lines_f = np.delete(self.sky_lines_f, unresolved_lines)
+            unresolved_lines = np.where(np.diff(self.sky_lines) <= delta_lambda)[0]
+        self.vprint(f"Total number of sky lines after blending: {self.sky_lines.size}")
+        # Remove faint lines
+        #self.vprint(f"Selecting the  sky lines after blending: {self.sky_lines.size}")
+        faint = np.where(self.sky_lines_f < np.nanpercentile(self.sky_lines_f, lines_pct))[0]
+        self.sky_lines = np.delete(self.sky_lines, faint)
+        self.sky_lines_fwhm = np.delete(self.sky_lines_fwhm, faint)
+        self.sky_lines_f = np.delete(self.sky_lines_f, faint)
+
+    def plot_sky_model(self, show=False):
+        """Plot the sky model
+        
+        Parameters
+        ----------
+        - show : bool
+            Show the resulting plot. Default is False.
+            
+        Returns
+        -------
+        - fig : plt.Figure
+            Figure containing the Sky Model plot.
+        """
+        fig = plt.figure(constrained_layout=True)
+        if self.intensity.ndim == 1:
+            ax = fig.add_subplot(111, title='1-D Sky Model')
+            ax.fill_between(self.wavelength, self.intensity - self.variance**0.5,
+                            self.intensity + self.variance**0.5, color='k',
+                            alpha=0.5, label='STD')
+            ax.plot(self.wavelength, self.intensity, color='r', label='intensity')
+            ax.set_ylim(np.nanpercentile(self.intensity, [1, 99]))
+            ax.set_ylabel("Intensity")
+            ax.set_xlabel("Wavelength (AA)")
+            ax.legend()
+
+        elif self.intensity.ndim == 2:
+            im_args = dict(
+                interpolation='none', aspect='auto', origin="lower",
+                extent=(1, self.intensity.shape[0],
+                        self.wavelength[0], self.wavelength[-1]))
+            ax = fig.add_subplot(121, title='2-D Sky Model Intensity')
+            mappable = ax.imshow(self.intensity, **im_args)
+            plt.colorbar(mappable, ax=ax)
+            ax = fig.add_subplot(122, title='2-D Sky Model STD')
+            mappable = ax.imshow(self.variance**0.5, **im_args)
+            plt.colorbar(mappable, ax=ax)
+        if show:
+            plt.show()
+        else:
+            plt.close()
+        return fig
 
     def vprint(self, *messages):
         """
@@ -433,10 +614,6 @@ class SkyFromObject(SkyModel):
         Estimated continuum. Initialized as None.
     """
 
-    bckgr = None
-    bckgr_sigma = None
-    continuum = None
-
     def __init__(self, dc, bckgr_estimator='mad', bckgr_params=None, 
                  source_mask_nsigma=3, remove_cont=False, 
                  cont_estimator='median', cont_estimator_args=None):
@@ -462,7 +639,7 @@ class SkyFromObject(SkyModel):
         """
         self.vprint("Creating SkyModel from input Data Container")
         self.dc = dc
-        self.exptime = dc.info['exptime']
+        #self.exptime = dc.info['exptime']
         self.vprint("Estimating sky background contribution...")
         bckg, bckg_sigma = self.estimate_background(
             bckgr_estimator, bckgr_params, source_mask_nsigma)
@@ -511,134 +688,17 @@ class SkyFromObject(SkyModel):
             dims_to_expand = (0)
 
         if source_mask_nsigma is not None:
-            if self.bckgr is None:
-                self.vprint("Pre-estimating background using all data")
-                self.estimate_background(bckgr_estimator, bckgr_params, None)
+            self.vprint("Pre-estimating background using all data")
+            bckgr, bckgr_sigma = estimator(data, **bckgr_params)
             self.vprint(f"Applying sigma-clipping mask (n-sigma={source_mask_nsigma})")
-            source_mask = (data > np.expand_dims(self.bckgr, dims_to_expand) +
+            source_mask = (data > np.expand_dims(bckgr, dims_to_expand) +
                            source_mask_nsigma
-                           * np.expand_dims(self.bckgr_sigma, dims_to_expand))
+                           * np.expand_dims(bckgr_sigma, dims_to_expand))
             data[source_mask] = np.nan
 
         bckgr, bckgr_sigma = estimator(data, **bckgr_params)
         return bckgr, bckgr_sigma
 
-    def fit_emission_lines(self, cont_clean_spec, errors=None, window_size=100,
-                           resampling_wave=0.1, **fit_kwargs):
-        """
-        Fit emission lines to the continuum-subtracted spectrum.
-
-        Parameters
-        ----------
-        cont_clean_spec : np.ndarray
-            Continuum-subtracted spectrum.
-        errors : np.ndarray, optional
-            Errors associated with the spectrum. Default is None.
-        window_size : int, optional
-            Size of the wavelength window for fitting. Default is 100.
-        resampling_wave : float, optional
-            Wavelength resampling interval. Default is 0.1.
-
-        Returns
-        -------
-        emission_model : models.Gaussian1D
-            Fitted emission line model.
-        emission_spectra : np.ndarray
-            Emission spectra.
-        """
-        if errors is None:
-            errors = np.ones_like(cont_clean_spec)
-        finite_mask = np.isfinite(cont_clean_spec)
-        p0_amplitude = np.interp(self.sky_lines, self.dc.wavelength[finite_mask],
-                                 cont_clean_spec[finite_mask])
-        p0_amplitude = np.clip(p0_amplitude, a_min=0, a_max=None)
-        fit_g = fitting.LevMarLSQFitter()
-        emission_model = models.Gaussian1D(amplitude=0, mean=0, stddev=0)
-        emission_spectra = np.zeros_like(self.dc.wavelength)
-        wavelength_windows = np.arange(self.dc.wavelength.min(), self.dc.wavelength.max(), window_size)
-        wavelength_windows[-1] = self.dc.wavelength.max()
-        self.vprint(f"Fitting all emission lines ({self.sky_lines.size})"
-                    + " to continuum-subtracted sky spectra")
-        for wl_min, wl_max in zip(wavelength_windows[:-1], wavelength_windows[1:]):
-            self.vprint(f"Starting fit in the wavelength range [{wl_min:.1f}, {wl_max:.1f}]")
-            mask_lines = (self.sky_lines >= wl_min) & (self.sky_lines < wl_max)
-            mask = (self.dc.wavelength >= wl_min) & (
-                self.dc.wavelength < wl_max) & finite_mask
-            wave = np.arange(self.dc.wavelength[mask][0],
-                             self.dc.wavelength[mask][-1], resampling_wave)
-            obs = np.interp(wave, self.dc.wavelength[mask], cont_clean_spec[mask])
-            err = np.interp(wave, self.dc.wavelength[mask], errors[mask])
-            if mask_lines.any():
-                self.vprint(f"> Line to Fit {self.sky_lines[mask_lines][0]:.1f}")
-                window_model = models.Gaussian1D(
-                    amplitude=p0_amplitude[mask_lines][0],
-                    mean=self.sky_lines[mask_lines][0],
-                    stddev=1,
-                    bounds={'amplitude': (p0_amplitude[mask_lines][0] * 0.5, p0_amplitude[mask_lines][0] * 10),
-                            'mean': (self.sky_lines[mask_lines][0] - 5, self.sky_lines[mask_lines][0] + 5),
-                            'stddev': (self.sky_lines_fwhm[mask_lines][0] / 2, 5)}
-                )
-                for line, p0, sigma in zip(
-                    self.sky_lines[mask_lines][1:], p0_amplitude[mask_lines][1:],
-                    self.sky_lines_fwhm[mask_lines][1:]):
-                    self.vprint(f"Line to Fit {line:.1f}")
-                    model = models.Gaussian1D(
-                        amplitude=p0, mean=line, stddev=sigma,
-                        bounds={'amplitude': (p0 * 0.5, p0 * 10), 'mean': (line - 5, line + 5),
-                                'stddev': (sigma / 2, 5)}
-                    )
-                    window_model += model
-                g = fit_g(window_model, wave, obs, weights=1 / err, **fit_kwargs)
-                emission_spectra += g(self.dc.wavelength)
-                emission_model += g
-        return emission_model, emission_spectra
-
-    def load_sky_lines(self, path_to_table=None, lines_pct=84., **kwargs):
-        """
-        Load sky lines from a file.
-
-        Parameters
-        ----------
-        path_to_table : str, optional
-            Path to the table containing sky lines. Default is None.
-        lines_pct : float, optional
-            Percentile for selecting faint lines. Default is 84.
-        kwargs : dict, optional
-            Additional arguments for `np.loadtxt`.
-
-        Returns
-        -------
-        None
-        """
-        if path_to_table is not None:
-            path_to_table = os.path.join(os.path.dirname(__file__), 'input_data', 'sky_lines', path_to_table)
-            self.sky_lines, self.sky_lines_fwhm, self.sky_lines_f = np.loadtxt(
-                path_to_table, usecols=(0, 1, 2), unpack=True, **kwargs)
-        else:
-            self.sky_lines, self.sky_lines_fwhm, self.sky_lines_f = uves_sky_lines()
-        common_lines = (self.sky_lines >= self.dc.wavelength[0]) & (self.sky_lines <= self.dc.wavelength[-1])
-        self.sky_lines, self.sky_lines_fwhm, self.sky_lines_f = (
-            self.sky_lines[common_lines], self.sky_lines_fwhm[common_lines], self.sky_lines_f[common_lines]
-        )
-        delta_lambda = np.median(np.diff(self.dc.wavelength))
-        unresolved_lines = np.where(np.diff(self.sky_lines) <= delta_lambda)[0]
-        while len(unresolved_lines) > 0:
-            self.sky_lines[unresolved_lines] = (
-                self.sky_lines[unresolved_lines] + self.sky_lines[unresolved_lines + 1]) / 2
-            self.sky_lines_fwhm[unresolved_lines] = np.sqrt(
-                self.sky_lines_fwhm[unresolved_lines]**2 + self.sky_lines_fwhm[unresolved_lines + 1]**2
-            )
-            self.sky_lines_f[unresolved_lines] = (
-                self.sky_lines_f[unresolved_lines] + self.sky_lines_f[unresolved_lines + 1]
-            )
-            self.sky_lines = np.delete(self.sky_lines, unresolved_lines)
-            self.sky_lines_fwhm = np.delete(self.sky_lines_fwhm, unresolved_lines)
-            self.sky_lines_f = np.delete(self.sky_lines_f, unresolved_lines)
-            unresolved_lines = np.where(np.diff(self.sky_lines) <= delta_lambda)[0]
-        faint = np.where(self.sky_lines_f < np.nanpercentile(self.sky_lines_f, lines_pct))[0]
-        self.sky_lines = np.delete(self.sky_lines, faint)
-        self.sky_lines_fwhm = np.delete(self.sky_lines_fwhm, faint)
-        self.sky_lines_f = np.delete(self.sky_lines_f, faint)
 
 
 # =============================================================================
@@ -707,12 +767,12 @@ class SkySubsCorrection(CorrectionBase):
         im_args = kwargs.get(
             'im_args', dict(aspect='auto', interpolation='none',
                             cmap='nipy_spectral',
-                            vmin=np.nanpercentile(original_image.intensity, 1),
-                            vmax=np.nanpercentile(original_image.intensity, 99))
+                            vmin=np.nanpercentile(original_image, 1),
+                            vmax=np.nanpercentile(original_image, 99))
                             )
         
         ax = axs[0]
-        ax.set_title("Input")
+        ax.set_title("Original")
         ax.imshow(original_image, **im_args)
         
         ax = axs[1]
@@ -720,7 +780,7 @@ class SkySubsCorrection(CorrectionBase):
         mappable = ax.imshow(corr_image, **im_args)
         cax = ax.inset_axes((-1.2, -.1, 2.2, 0.02))
         plt.colorbar(mappable, cax=cax, orientation="horizontal")
-        if kwargs.get("plot", False):
+        if kwargs.get("show", False):
             plt.show()
         else:
             plt.close(fig)
@@ -766,14 +826,8 @@ class SkySubsCorrection(CorrectionBase):
                 dc_out.intensity, dc_out.variance)
         
         self.log_correction(dc_out, status='applied')
-        
         if plot:
-            if dc_out.intensity.ndim != 2:
-                # TODO: Include 3D plots
-                self.corr_print("Plots can only be produced for 2D Data containers (RSS)")
-                fig = None
-            else:
-                fig = self.plot_correction(dc, dc_out, **plot_kwargs)
+            fig = self.plot_correction(dc, dc_out, **plot_kwargs)
         else:
             fig = None
         
