@@ -163,6 +163,9 @@ class SkyModel(object):
         elif data.ndim == 2 and self.intensity.ndim == 1:
             skymodel_intensity = self.intensity[np.newaxis, :]
             skymodel_var = self.intensity[np.newaxis, :]
+        elif data.ndim == 2 and self.intensity.ndim == 2:  
+            skymodel_intensity = self.intensity       
+            skymodel_var = self.variance
         else:
             self.vprint(f"Data dimensions ({data.shape}) cannot be reconciled with sky mode ({self.intensity.shape})")
         data_subs = data - skymodel_intensity
