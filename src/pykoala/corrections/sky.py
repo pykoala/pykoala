@@ -368,7 +368,7 @@ class SkyOffset(SkyModel):
         Parameters
         ----------
         dc : DataContainer
-            Raw Stacked Spectra (RSS) corresponding to the offset-sky exposure.
+            Data container used to estimate the sky.
         """
         self.dc = dc
         self.exptime = dc.info['exptime']
