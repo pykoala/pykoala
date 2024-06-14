@@ -152,6 +152,67 @@ def colour_map(fig, ax, cblabel, data,
 
     return im, cb
 
+def fibre_map(fig, ax, cblabel,
+              rss, data,
+              s=100, cmap=default_cmap, norm=None, cbax=None):
+    """
+    Plot a colour map of a physical magnitude defined on each fibre.
+
+    Parameters
+    ----------
+    fig : plt.Figure
+        Figure where the colour map will be drawn.
+    ax : mpl.Axes
+        Axes where the colour map will be drawn.
+    cblabel : str
+        Label of the colorbar
+    rss : RSS
+        Row-Stacked Spectra containing the fibre positions.
+    data : ndarray
+        1D array to be represented.
+    cmap : str or mpl.colors.Norm
+    norm : mpl.colors.Norm
+    cbax: mpl.Axes
+        Axes where the colour bar will be drawn.
+
+    Returns
+    -------
+    im : mpl.AxesImage
+    cb : mpl.Colorbar
+    """
+
+    if norm is None:
+        percentiles = np.array([1, 16, 50, 84, 99])
+        ticks = np.nanpercentile(data, percentiles)
+        linthresh = np.median(data[data > 0])
+        norm = colors.SymLogNorm(vmin=2*ticks[0]-ticks[1],
+                                 vmax=2*ticks[-1]-ticks[-2],
+                                 linthresh=linthresh)
+    else:
+        ticks = None
+
+    s = np.prod(ax.bbox.size) / data.size / 2
+    im = ax.scatter(rss.info['fib_ra'], rss.info['fib_dec'], c=data,
+                    s=s, cmap=cmap, norm=norm)
+
+    if cbax is None:
+        cb = fig.colorbar(im, ax=ax, orientation='vertical', shrink=.9)
+        cbax = cb.ax
+    elif cbax is False:
+        cb = None
+    else:
+        cb = fig.colorbar(im, cax=cbax, orientation='vertical')
+    if cbax:
+        cb.ax.yaxis.set_label_position("left")
+        cb.set_label(cblabel)
+        if ticks is not None:
+            cb.ax.set_yticks(ticks=ticks, labels=[f'{value:.3g} ({percent}\\%)'
+                                                  for value, percent in
+                                                  zip(ticks, percentiles)])
+        cb.ax.tick_params(labelsize='small')
+
+    return im, cb
+
 # =============================================================================
 # Mr Krtxo \(ﾟ▽ﾟ)/
 #                                                       ... Paranoy@ Rulz! ;^D
