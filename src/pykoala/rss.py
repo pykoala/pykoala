@@ -27,25 +27,25 @@ class RSS(DataContainer):
 
     Attributes
     ----------
-    intensity: numpy.ndarray(float)
+    intensity : numpy.ndarray(float)
         Intensity :math:``I_lambda``.
         Axis 0 corresponds to spectral dimension
         Axis 1 Corresponds to fibre ID
-    variance: numpy.ndarray(float)
+    variance : numpy.ndarray(float)
         Variance :math:`sigma^2_lambda`.
         (note the square in the definition of the variance). Must have the
         same dimensions as `intensity`
-    wavelength: numpy.ndarray(float)
+    wavelength : numpy.ndarray(float)
         Wavelength, expressed in Angstrom. It must have the same dimensions
         as `intensity` along axis 0.
     info : dict
         Dictionary containing RSS information.
         Important dictionary keys:
-            info['fib_ra'] - original RA fiber position
-            info['fib_dec'] - original DEC fiber position
-            info['exptime'] - exposure time in seconds
-            info['airmass'] - mean airmass during observation
-            info['name'] - Name reference
+        info['fib_ra'] - original RA fiber position
+        info['fib_dec'] - original DEC fiber position
+        info['exptime'] - exposure time in seconds
+        info['airmass'] - mean airmass during observation
+        info['name'] - Name reference
     log : dict
         Dictionary containing a log of the processes applied on the rss.   
     """
@@ -108,8 +108,6 @@ class RSS(DataContainer):
     def update_coordinates(self, new_coords=None, offset=None):
         """Update fibre coordinates.
 
-        Description
-        -----------
         Update the fibre sky position by providing new locations of relative
         offsets.
 

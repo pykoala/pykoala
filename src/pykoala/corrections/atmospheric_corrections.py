@@ -25,8 +25,6 @@ from pykoala.corrections.correction import CorrectionBase
 class AtmosphericExtCorrection(CorrectionBase):
     """Atmospheric Extinction Correction.
 
-    Description
-    -----------
     This module accounts for the brightness reduction caused due to the absorption of 
     photons by the atmosphere.
 

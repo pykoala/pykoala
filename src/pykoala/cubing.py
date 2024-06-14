@@ -23,8 +23,6 @@ from scipy.special import erf
 class CubeStacking:
     """Collection of cubing stacking methods.
     
-    Description
-    -----------
     Each method takes as input arguments a collection of cubes and variances,
     either in the form of a list or as an array with the first dimension corresponding
     to each cube, and additional keyword arguments.
@@ -504,8 +502,6 @@ def build_wcs(datacube_shape, reference_position, spatial_pix_size,
               spectra_pix_size, radesys='ICRS    ', equinox=2000.0):
     """Create a WCS using cubing information.
     
-    Description
-    -----------
     Integer pixel values fall at the center of pixels. 
 
     Parameters

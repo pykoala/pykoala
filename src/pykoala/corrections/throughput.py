@@ -43,8 +43,6 @@ class Throughput(object):
     def load_fits(self):
         """Load the throughput data from a fits file.
 
-        Description
-        -----------
         Loads throughput values (extension 1) and
         associated errors (extension 2) from a fits file.
         """
@@ -67,6 +65,12 @@ class ThroughputCorrection(CorrectionBase):
     ----------
     - name
     -
+    name : str
+        Correction name, to be recorded in the log.
+    throughput : Throughput
+        2D fibre throughput (n_fibres x n_wavelengths).
+    verbose: bool
+        False by default.
     """
     name = "ThroughputCorrection"
     throughput = None

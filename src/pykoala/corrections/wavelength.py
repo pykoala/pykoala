@@ -11,14 +11,12 @@ from pykoala.ancillary import flux_conserving_interpolation
 class WavelengthOffset(object):
     """Wavelength offset class.
 
-    Description
-    -----------
     This class stores a 2D wavelength offset.
 
     Attributes
     ----------
-    - `offset_data`: wavelength offset, in pixels
-    - `offset_error`: standard deviation of `offset_data`
+    offset_data : wavelength offset, in pixels
+    offset_error : standard deviation of `offset_data`
     """
     offset_data = None
     offset_error = None
@@ -43,8 +41,6 @@ class WavelengthOffset(object):
     def load_fits(self):
         """Load the offset data from a fits file.
 
-        Description
-        -----------
         Loads offset values (extension 1) and
         associated errors (extension 2) from a fits file.
         """
@@ -59,8 +55,6 @@ class WavelengthOffset(object):
 class WavelengthCorrection(CorrectionBase):
     """Wavelength correction class.
 
-    Description
-    -----------
     This class accounts for the relative wavelength offset between fibres.
 
     Attributes

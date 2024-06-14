@@ -77,8 +77,6 @@ def detect_edge(rss):
 def update_wcs_coords(wcs, ra_dec_val=None, ra_dec_offset=None):
     """Update the celestial reference values of a WCS.
 
-    Description
-    -----------
     Update the celestial coordinates of a WCS using new central values of RA
     and DEC or relative offsets expressed in degree.
 
@@ -167,14 +165,13 @@ def running_mean(x, n_window):
 def flux_conserving_interpolation(new_wavelength, wavelength, spectra, **interp_args):
     """Flux-conserving linear interpolation.
 
-    Description
-    -----------
     Linear interpolation of a spectrum :math:`I_\lambda(\labmda)`
     as a function of wavelength :math:`\lambda`,
     ensuring that the integrated flux
     math::
-        F(\lambda_a, \lambda_b)
-        = \int_{\lambda_a}^{\lambda_b} I_\lambda(\labmda) d\lambda$
+    F(\lambda_a, \lambda_b)
+    = \int_{\lambda_a}^{\lambda_b} I_\lambda(\labmda) d\lambda$
+        
     is conserved for any :math:`(\lambda_a, \lambda_b)`.
     
     `np.nan` values become zero.
@@ -199,7 +196,6 @@ def flux_conserving_interpolation(new_wavelength, wavelength, spectra, **interp_
     -----
     The function computes the cumulative flux with `np.nancumsum`,
     calls `np.interp`, and differentiates back.
-
     """
     dwave = wavelength[1:] - wavelength[:-1]
     wavelength_edges = np.hstack((wavelength[0] - dwave[0] / 2, wavelength[:-1] + dwave / 2,
@@ -577,18 +573,19 @@ def pixel_in_circle(pixel_pos, pixel_size, circle_pos, circle_radius):
 
 
 def cumulative_1d_sky(r2, sky_brightness):
-    """1D cumulative sky brightness.
-        F_sky = 4*pi*r2 * B_sky
+    """
+    1D cumulative sky brightness. F_sky = 4*pi*r2 * B_sky
+    
     Parameters
     ----------
-    r2: np.array(float)
+    r2 : np.array(float)
         Square radius from origin.
-    sky_brightness: float
+    sky_brightness : float
         Sky surface brightness.
 
     Returns
     -------
-    cumulative_sky_brightness: np.array(float)
+    cumulative_sky_brightness : np.array(float)
         Cumulative sky brightness.
     """
     return np.pi * r2 * sky_brightness
@@ -630,7 +627,8 @@ def fit_moffat(r2_growth_curve, f_growth_curve,
     cutting at to r_max (in units of the half-light radius),
     provided an initial guess of the total flux and half-light radius squared.
 
-    Parameters #TODO
+    # TODO
+    Parameters
     ----------
     r2_growth_curve : TYPE
         DESCRIPTION.
@@ -649,7 +647,6 @@ def fit_moffat(r2_growth_curve, f_growth_curve,
     -------
     fit : TYPE
         DESCRIPTION.
-
     """
     index_cut = np.searchsorted(r2_growth_curve, r2_half_light * r_max ** 2)
     fit, cov = optimize.curve_fit(cumulative_1d_moffat,
