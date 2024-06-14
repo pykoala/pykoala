@@ -25,21 +25,7 @@ from pykoala.ancillary import (centre_of_mass, cumulative_1d_moffat, mask_lines)
 
 
 class FluxCalibration(CorrectionBase):
-    """
-    This module contains the methods for extracting and applying an absolute flux calibration.
-
-    Description
-    -----------
-
-
-    Attributes
-    ----------
-
-    Methods
-    -------
-
-    Example
-    -------
+    """This module contains the methods for extracting and applying an absolute flux calibration.
     """
     name = "FluxCalibration"
     verbose = True
@@ -74,37 +60,40 @@ class FluxCalibration(CorrectionBase):
 
         Parameters
         ----------
-        - data: (list) List of DataContainers corresponding to standard stars.
-        - calib_stars: (list) List of stellar names. This names will be used to read
-        the default files in the spectrophotometric_stars library.
-        - extract_args: (dict) Dictionary containing the parameters used for extracting
-        the stellar flux.
-        The default dictionary corresponds to:
+        data : list
+            List of DataContainers corresponding to standard stars.
+        calib_stars : list
+            List of stellar names. This names will be used to read
+            the default files in the spectrophotometric_stars library.
+        extract_args : dict
+            Dictionary containing the parameters used for extracting
+            the stellar flux.
+            The default dictionary corresponds to:
             {wave_rage: None, # Wavelength range used to derive the response function
             wave_window: 30, # Wavelength window in AA used to average the flux
             plot: False,  # If True, it will provide a plot showing the extraction results
             bounds=([0, 0, 0], [np.inf, np.inf, np.inf])  # Bounds used for fitting
             }
-            See FluxCalibration.extract_stellar_flux
-        - response_params: default=None
-        - save: bool, default=True
-        - fnames: default=None
-
+        response_params : default=None
+        save : bool, default=True
+        fnames : default=None
 
         Returns
         -------
-        - flux_cal_results: (dict)
+        flux_cal_results : dict
             Dictionary containing the results from the flux calibration process
             for each of the stars provided. Results for each star are contained
             within a dictionary that includes:
-                · extraction: 
-                    mean_wave
-                    optimal
-                · interp: Polynomial interpolation of the response function
-                · response: Instrumental throughput.
-                · resp_fig: If plot=True in **respones_params it will contain
-                a plot of the wavelength versus the instrument response function.
-            
+            extraction: mean_wave, optimal
+            interp: Polynomial interpolation of the response function
+            response: Instrumental throughput
+            resp_fig: If plot=True in `**respones_params` it will contain
+            a plot of the wavelength versus the instrument response function.
+        
+        See Also
+        --------
+        pykoala.corrections.flux_calibration.FluxCalibration.extract_stellar_flux :
+            Extract the stellar flux from an RSS or Cube.
         """
         if extract_args is None:
             # Default extraction arguments
@@ -197,31 +186,31 @@ class FluxCalibration(CorrectionBase):
 
         Parameters
         ----------
-        - data_container: DataContainer
+        data_container : DataContainer
             Source for extracting the stellar flux.
-        - wave_range: list
+        wave_range : list
             Wavelength range to use for the flux extraction.
-        - wave_window: int
+        wave_window : int
             Wavelength window size for averaging the input flux.
-        - profile: function, default=commulative_1d_moffat
+        profile : function, default=commulative_1d_moffat
             Profile function to model the cumulative ligth profile. Any function that accepts as first argument
             the square distance (r^2) and returns the cumulative profile can be used.
-        - growth_r: np.ndarray, default=np.arange(0, 10, 0.5)
+        growth_r : np.ndarray, default=np.arange(0, 10, 0.5)
             Radial bins relative to the center of the star in arcseconds that
             will be used to compute the curve of growth.
-        - plot: bool, default=False
+        plot : bool, default=False
             If True, for each wavelength step the fit will be shown in a plot.
-        - fitter_args: kwargs
+        fitter_args: kwargs
             extra arguments to be passed to scipy.optimize.curve_fit
 
 
         Returns
         -------
-        - results: dict
+        results : dict
             Dictionary containing the results from the fits:
-                - mean_wave: mean wavelength value for each fit.
-                - optimal: optimal parameters for the profile function.
-                - variance: variance of each parameter.
+            mean_wave: mean wavelength value for each fit.
+            optimal: optimal parameters for the profile function.
+            variance: variance of each parameter.
         """
 
         wavelength = data_container.wavelength
@@ -390,15 +379,16 @@ class FluxCalibration(CorrectionBase):
     def read_calibration_star(self, name=None, path=None, flux_units=None):
         """
         Read from a file the spectra of a calibration star. TODO...
+
         Parameters
         ----------
-        name
-        path
-        flux_units
+        name : TODO
+        path : TODO
+        flux_units : TODO
 
         Returns
         -------
-
+        TODO
         """
         if flux_units is None:
             flux_units = 1 / self.response_units
@@ -430,29 +420,30 @@ class FluxCalibration(CorrectionBase):
                            mask_absorption=True):
         """
         Compute the response curve (spectral throughput) from a given observed spectrum and a reference function.
+
         Parameters
         ----------
-        wave: np.ndarray
+        wave : np.ndarray
             Wavelength array of observed and reference spectra.
-        obs_spectra: np.ndarray
+        obs_spectra : np.ndarray
             Observed spectra
-        ref_spectra: np.ndarry
+        ref_spectra : np.ndarry
             Reference spectra
-        pol_deg: int (default=None)
+        pol_deg : int (default=None)
             If not None, the response curve will be interpolated to a polynomial of degree pol_deg.
-        gauss_smooth_sigma: float (default=None)
+        gauss_smooth_sigma : float (default=None)
             If not None, the cumulative response function will be gaussian smoothed before interpolation. The units must
             be the same as the wavelength array (AA).
-        plot: bool (default=False)
+        plot : bool (default=False)
             If True, will return a figure containing a plot of the interpolation.
 
         Returns
         -------
-            response: function
-                Interpolator function of the response curve.
-            fig: default=None, if plot=True it will return a plt.figure() 
+        response : function
+            Interpolator function of the response curve.
+        fig : default=None
+            If plot=True it will return a `plt.Figure` 
             containing the response function in terms of wavelength
-
         """
         print("Computing spectrophotometric response")
         dwave = np.diff(wave)

@@ -13,8 +13,6 @@ from pykoala.exceptions.exceptions import NoneAttrError
 class LogEntry(object):
     """Log information unit.
     
-    Description
-    -----------
     This class represents a unit of information stored in a log.
 
     Attributes
@@ -59,8 +57,6 @@ class LogEntry(object):
 class HistoryLog(object):
     """Data reduction history logger class.
     
-    Description
-    -----------
     This class stores the data reduction history of a DataContainer by creating
     consecutive log entries.
 
@@ -88,8 +84,6 @@ class HistoryLog(object):
     def initialise_log(self, list_of_entries):
         """Initialise the log from a set of input entries.
         
-        Description
-        -----------
         This method initialises the log using a collection of entries. The
         input can be in the form of a, interable consisting of LogEntry objects
         or an interable containing a 2 or 3 elements iterable (title, comments)
@@ -187,8 +181,6 @@ class HistoryLog(object):
     def dump_to_header(self, header=None):
         """Write the log into a astropy.fits.Header.
         
-        Description
-        -----------
         Save the entries of the log in a Header. All entries will be saved using
         card names `PYKOALAnumber`, where number corresponds to an index ranging
         from 0 to the number of entries contained in the log.
@@ -259,8 +251,6 @@ class Parameter(object):
 class DataMask(object):
     """A mask to store the pixel flags of DataContainers.
     
-    Description
-    -----------
     A mask to store the pixel flags of DataContainers.
 
     Attributes
@@ -297,8 +287,6 @@ class DataMask(object):
     def flag_pixels(self, mask, flag_name):
         """Add a pixel mask corresponding to a flag name.
 
-        Description
-        -----------
         Add a pixel mask layer in the bitmask. If the mask already contains
         information about the same flag, it will be overriden by the
         new values.

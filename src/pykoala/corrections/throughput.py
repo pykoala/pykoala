@@ -6,7 +6,7 @@ import numpy as np
 import copy
 from astropy.io import fits
 from scipy.ndimage import median_filter
-from scipy.ndimage import gaussian_filter
+# from scipy.ndimage import gaussian_filter
 # =============================================================================
 # Astropy and associated packages
 # =============================================================================
@@ -19,6 +19,7 @@ from pykoala.corrections.correction import CorrectionBase
 from pykoala.rss import RSS
 from pykoala import ancillary
 
+
 class Throughput(object):
     def __init__(self, path=None, throughput_data=None, throughput_error=None):
         self.path = path
@@ -27,13 +28,13 @@ class Throughput(object):
 
         if self.path is not None and self.throughput_data is None:
             self.load_fits()
-    
+
     def tofits(self, output_path):
         primary = fits.PrimaryHDU()
         thr = fits.ImageHDU(data=self.throughput_data,
                             name='THROU')
         thr_err = fits.ImageHDU(data=self.throughput_error,
-                            name='THROUERR')
+                                name='THROUERR')
         hdul = fits.HDUList([primary, thr, thr_err])
         hdul.writeto(output_path, overwrite=True)
         hdul.close(verbose=True)
@@ -41,11 +42,9 @@ class Throughput(object):
 
     def load_fits(self):
         """Load the throughput data from a fits file.
-        
-        Description
-        -----------
-        Loads throughput values (extension 1) and associated errors (extension 2) from a fits
-        file.
+
+        Loads throughput values (extension 1) and
+        associated errors (extension 2) from a fits file.
         """
         if not path.isfile(self.path):
             raise NameError(f"Throughput file {self.path} does not exists.")
@@ -59,12 +58,19 @@ class ThroughputCorrection(CorrectionBase):
     """
     Throughput correction class.
 
-    This class accounts for the relative flux loss due to differences on the fibre efficiencies.
+    This class accounts for the relative flux loss due to differences
+    on the fibre efficiencies.
 
     Attributes
     ----------
     - name
     -
+    name : str
+        Correction name, to be recorded in the log.
+    throughput : Throughput
+        2D fibre throughput (n_fibres x n_wavelengths).
+    verbose: bool
+        False by default.
     """
     name = "ThroughputCorrection"
     throughput = None
@@ -74,8 +80,9 @@ class ThroughputCorrection(CorrectionBase):
         super().__init__()
 
         self.throughput = kwargs.get('throughput', Throughput())
-        if type(self.throughput) is not Throughput:
-            raise AttributeError("Input throughput must be an instance of Throughput class")
+        if not isinstance(self.throughput, Throughput):
+            raise AttributeError(
+                "Input throughput must be an instance of Throughput class")
 
         self.throughput.path = kwargs.get('throughput_path', None)
         if self.throughput.throughput_data is None and self.throughput.path is not None:
@@ -95,7 +102,8 @@ class ThroughputCorrection(CorrectionBase):
         - rss_set: (list)
             List of RSS data.
         - clean_nan: (bool, optional, default=True)
-            If True, nan values will be replaced by a nearest neighbour interpolation.
+            If True, nan values will be replaced by a
+            nearest neighbour interpolation.
         - statistic: (str, optional, default='median')
             Set to 'median' or 'mean' to compute the throughput function.
         - medfilt: (float, optional, default=None)
@@ -123,7 +131,7 @@ class ThroughputCorrection(CorrectionBase):
         throughput_error = combined_flux_err / reference_fibre[np.newaxis, :]
 
         if clear_nan:
-            print("Applying nearest neighbour interpolation to remove NaN values")
+            print("Nearest neighbour interpolation to remove NaN values")
             throughput_data = ancillary.interpolate_image_nonfinite(
                 throughput_data)
             throughput_error = ancillary.interpolate_image_nonfinite(
@@ -133,7 +141,7 @@ class ThroughputCorrection(CorrectionBase):
             throughput_data = median_filter(throughput_data, size=medfilt)
             throughput_error = median_filter(
                 throughput_error**2, size=medfilt)**0.5
-        
+
         throughput = Throughput(throughput_data=throughput_data,
                                 throughput_error=throughput_error)
         return throughput
@@ -143,28 +151,41 @@ class ThroughputCorrection(CorrectionBase):
 
         Parameters
         ----------
-        - throughput
-        - rss: (RSS)
-        - plot: (bool, optional, default=True)
+        rss : RSS
+            Original Row-Stacked-Spectra object to be corrected.
+        throughput: Throughput
+            Throughput object to be applied.
+        plot : bool, optional, default=True
+
+        Returns
+        -------
+        RSS
+            Corrected RSS object.
         """
-        
+
         if throughput is None and self.throughput is not None:
             throughput = self.throughput
         else:
             raise RuntimeError("Throughput not provided!")
-        
+
         if type(throughput) is not Throughput:
-            raise AttributeError("Input throughput must be an instance of Throughput class")
+            raise AttributeError(
+                "Input throughput must be an instance of Throughput class")
 
         if type(rss) is not RSS:
-            raise ValueError("Throughput can only be applied to RSS data:\n input {}"
-                             .format(type(rss)))
+            raise ValueError(
+                "Throughput can only be applied to RSS data:\n input {}"
+                .format(type(rss)))
         # =============================================================================
-        # Copy input RSS for storage the changes implemented in the task   
+        # Copy input RSS for storage the changes implemented in the task
         # =============================================================================
         rss_out = copy.deepcopy(rss)
 
         rss_out.intensity = rss_out.intensity / throughput.throughput_data
         rss_out.variance = rss_out.variance / throughput.throughput_data**2
-        self.log_correction(rss, status='applied')
+        self.log_correction(rss_out, status='applied')
         return rss_out
+
+# =============================================================================
+# Mr Krtxo \(ﾟ▽ﾟ)/
+#                                                       ... Paranoy@ Rulz! ;^D

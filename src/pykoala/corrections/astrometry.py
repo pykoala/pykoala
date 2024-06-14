@@ -21,8 +21,6 @@ from pykoala.plotting.qc_plot import qc_registration_centroids
 class AstrometryCorrection(CorrectionBase):
     """Perform astrometry-related corrections on DataContainers
     
-    Description
-    -----------
     This class applies astrometry corrections to input DataContainers based
     on different kind of quantities.
     -   RSS offset correction
@@ -169,8 +167,6 @@ def find_centroid_in_dc(data_container, wave_range=None,
     Find the position that corresponds to the centre of light in
     a DataContainer.
 
-    Description
-    -----------
     This function finds the centre of light on an image created from a
     DataContainer (RSS or Cube). The position is computed either by using
     the first moment or a gaussian kernel of some power of the light distribution.
@@ -236,8 +232,6 @@ def find_centroid_in_dc(data_container, wave_range=None,
 def cross_correlate_images(list_of_images, oversample=100):
     """Compute image cross-correlation shift.
     
-    Description
-    -----------
     Apply the skimage.registration.phase_cross_correlation method to find 
     the shift of a list of images with respect to the first one.
 
