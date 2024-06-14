@@ -39,6 +39,7 @@ from pykoala.ancillary import smooth_spectrum
 # Background estimators
 # =============================================================================
 
+
 class BackgroundEstimator:
     # TODO: this is too heterogeneous
     def percentile(data, percentiles=[16, 50, 84], axis=0):
@@ -50,38 +51,66 @@ class BackgroundEstimator:
     def mad(data, axis=0):
         """Median absolute deviation background estimator."""
         background = np.nanmedian(data, axis=axis)
-        mad = np.nanmedian(np.abs(data  - np.expand_dims(background, axis=axis)),
-                        axis=axis)
+        mad = np.nanmedian(np.abs(data - np.expand_dims(background, axis=axis)),
+                           axis=axis)
         background_sigma = 1.4826 * mad
         return background, background_sigma
 
-    def linear(data, axis=0):
+    def fit(data, axis, wavelet):
         """Background estimator from linear fit (Work in progress)."""
         print('>>> LINEAR FIT (WARNING: work in progress!)')
-        if data.ndim < 2:
-            raise ValueError("Dataset must have at least two dimensions")
-        else:
-            wl_axis = -1
-            axis = np.asarray(axis)
-            for ax in range(data.ndim):
-                if ax not in axis:
-                    wl_axis = ax
-            n_wavelength = data.shape[wl_axis]
-            n_spectra = data.size // n_wavelength
-            if wl_axis == 0:
-                spectra = data.reshape((n_wavelength, n_spectra))
-            elif wl_axis == data.ndim -1:
-                spectra = data.reshape((n_spectra, n_wavelength)).T
-            else:
-                raise ValueError('Wavelength axis not found!')
-        plow, background, pup = np.nanpercentile(spectra, [16, 50, 84], axis=1)
-        background_sigma = (pup - plow) / 2
-        print('>>>', data.shape, spectra.shape, background.shape)
-        total_flux = np.nansum(spectra)
-        return background, background_sigma
+        flux = np.nanmean(data, axis=1)
+        mean_flux = np.nanmean(flux)
+        flux_cut_low = np.nanmedian(flux[flux < mean_flux])
+        flux_cut_hi = 2*mean_flux - flux_cut_low
+        flux_low = np.nanmean(flux[flux < flux_cut_low])
+        flux_med = np.nanmean(flux[(flux > flux_cut_low) & (flux < mean_flux)])
+        flux_hi = np.nanmean(flux[(flux > mean_flux) & (flux < flux_cut_hi)])
+
+        I_low = np.nanmean(data[flux < flux_cut_low, :], axis=0)
+        I_med = np.nanmean(data[(flux > flux_cut_low) & (flux < mean_flux), :], axis=0)
+        I_hi = np.nanmean(data[(flux > mean_flux) & (flux < flux_cut_hi), :], axis=0)
+        m = (I_hi - I_low) / (flux_hi - flux_low)
+        b = I_low - m * flux_low
         
+        sky_flux_candidate = np.arange(0, flux_cut_hi, .01*np.min(flux))
+        sky_filtered = m[np.newaxis, :] * sky_flux_candidate[:, np.newaxis] + b[np.newaxis, :]
+        x = np.nancumsum(sky_filtered, axis=1)
+        s = wavelet.scale
+        sky_filtered = (x[:, 2*s:-s] - x[:, s:-2*s]) / s
+        sky_filtered -= (x[:, 3*s:] - x[:, :-3*s]) / (3*s)
+        chi2_no_sky = np.nanstd(sky_filtered*(1 - wavelet.sky_weight), axis=1)
+
+        ''' Unsuccessful attempt (keep for a while, just in case)
+        # Wavelet scale:
+        x = b - np.nanmean(b)
+        x = scipy.signal.correlate(x, x, mode='same')
+        h = (np.count_nonzero(x > 0.5*np.nanmax(x)) + 1) // 2
+        s = 2*h + 1
+
+        sky_flux_candidate = np.arange(0, flux_cut_hi, .01*np.min(flux))
+        sky_filtered = m[np.newaxis, :] * sky_flux_candidate[:, np.newaxis] + b[np.newaxis, :]
+        x = np.nancumsum(sky_filtered, axis=1)
+        sky_filtered = (x[:, 2*s:-s] - x[:, s:-2*s]) / s
+        sky_filtered -= (x[:, 3*s:] - x[:, :-3*s]) / (3*s)
+
+        # Sky-based weight:
+        print(s, data.shape, sky_filtered.shape)
+        p16, p50, p84 = np.nanpercentile(data[:, s+h+1:-s-h], [16, 50, 84], axis=0)
+        not_sky = np.exp(-.5 * (p50 / np.fmax((p84 - p50), (p50 - p16)))**2)
+
+        # Select optimal flux:
+        chi2_no_sky = np.nanstd(sky_filtered * not_sky[np.newaxis, :], axis=1)
+        '''
+
+        sky_flux = sky_flux_candidate[np.nanargmin(chi2_no_sky)]
+        sky_intensity = b + m*sky_flux
+        print(s, sky_flux)
+
+        return sky_intensity, np.nan + sky_intensity
+
     def mode(data, axis=0, n_bins=None, bin_range=None):
-        #TODO
+        # TODO
         raise NotImplementedError("Sorry not implemented :(")
 
 
@@ -90,19 +119,18 @@ class BackgroundEstimator:
 # =============================================================================
 class ContinuumEstimator:
     # TODO: refactor and homogeneize
-    
+
     def medfilt_continuum(data, window_size=5):
         continuum = scipy.signal.medfilt(data, window_size)
         return continuum
 
-    
     def pol_continuum(data, wavelength, pol_order=3, **polfit_kwargs):
         fit = np.polyfit(data, wavelength, pol_order, **polfit_kwargs)
         polynomial = np.poly1d(fit)
         return polynomial(wavelength)
 
-    
     default_min_separation = 10
+
     @classmethod
     def lower_envelope(self, x, y, min_separation=None):
         '''
@@ -132,28 +160,27 @@ class ContinuumEstimator:
 
 class ContinuumModel:
 
-    def __init__(self, dc:DataContainer, min_separation=None):
+    def __init__(self, dc: DataContainer, min_separation=None):
         self.update(dc, min_separation)
-        
-        
+
     # TODO: Don't assume RSS format (intensity[spec_id, wavelength])
     #       def update(self, dc:DataContainer, min_separation=None):
-    def update(self, dc:RSS, min_separation=None):
+    def update(self, dc: RSS, min_separation=None):
         n_spectra = dc.intensity.shape[0]
         self.intensity = np.zeros_like(dc.intensity)
         self.scale = np.zeros(n_spectra)
-        
+
         print(f"> Find continuum for {n_spectra} spectra:")
         t0 = time()
 
         for i in range(n_spectra):
-            self.intensity[i], self.scale[i] = ContinuumEstimator.lower_envelope(dc.wavelength, dc.intensity[i], min_separation)
+            self.intensity[i], self.scale[i] = ContinuumEstimator.lower_envelope(
+                dc.wavelength, dc.intensity[i], min_separation)
 
         print(f"  Done ({time()-t0:.3g} s)")
         self.strong_sky_lines = self.detect_lines(dc)
 
-
-    def detect_lines(self, dc:DataContainer, n_sigmas=3):
+    def detect_lines(self, dc: DataContainer, n_sigmas=3):
         SN = (dc.intensity - self.intensity) / self.scale[:, np.newaxis]
         SN_p16, SN_p50, SN_p84 = np.nanpercentile(SN, [16, 50, 84], axis=0)
 
@@ -166,28 +193,31 @@ class ContinuumModel:
         line_right += 1
         print(f'  {line_left.size} strong sky lines ({np.count_nonzero(line_mask)} out of {dc.wavelength.size} wavelengths)')
         return QTable((line_left, line_right), names=('left', 'right'))
-        
-    
+
+
 # =============================================================================
 # Line Spread Function
 # =============================================================================
 
 class LSF_estimator:
-    
+
     def __init__(self, wavelength_range, resolution):
-        self.delta_lambda = np.linspace(-wavelength_range, wavelength_range, int(np.ceil(2 * wavelength_range / resolution)) + 1)
+        self.delta_lambda = np.linspace(-wavelength_range, wavelength_range, int(
+            np.ceil(2 * wavelength_range / resolution)) + 1)
 
     def find_LSF(self, line_wavelengths, wavelength, intensity):
-        line_spectra = np.zeros((len(line_wavelengths), self.delta_lambda.size))
+        line_spectra = np.zeros(
+            (len(line_wavelengths), self.delta_lambda.size))
         for i, line_wavelength in enumerate(line_wavelengths):
-            sed = np.interp(line_wavelength + self.delta_lambda, wavelength, intensity)
+            sed = np.interp(line_wavelength + self.delta_lambda,
+                            wavelength, intensity)
             line_spectra[i] = self.normalise(sed)
         return self.normalise(np.nanmedian(line_spectra, axis=0))
 
     def normalise(self, x):
-        x -= stats.biweight.biweight_location(x) # subtract continuum
-        #x -= np.median(x)
-        norm = x[x.size//2] # normalise at centre
+        x -= stats.biweight.biweight_location(x)  # subtract continuum
+        # x -= np.median(x)
+        norm = x[x.size//2]  # normalise at centre
         if norm > 0:
             x /= norm
         else:
@@ -196,8 +226,10 @@ class LSF_estimator:
 
     def find_FWHM(self, profile):
         threshold = np.max(profile)/2
-        left = np.max(self.delta_lambda[(self.delta_lambda < 0) & (profile < threshold)])
-        right = np.min(self.delta_lambda[(self.delta_lambda > 0) & (profile < threshold)])
+        left = np.max(
+            self.delta_lambda[(self.delta_lambda < 0) & (profile < threshold)])
+        right = np.min(
+            self.delta_lambda[(self.delta_lambda > 0) & (profile < threshold)])
         return right-left
 
 
@@ -207,9 +239,7 @@ class LSF_estimator:
 
 def uves_sky_lines():
     """Library of sky emission lines measured with UVES@VLT.
-    
-    Description
-    -----------
+
     For more details see https://www.eso.org/observing/dfo/quality/UVES/pipeline/sky_spectrum.html
 
     Returns
@@ -224,7 +254,8 @@ def uves_sky_lines():
     # Prefix of each table
     prefix = ["346", "437", "580L", "580U", "800U", "860L", "860U"]
     # Path to tables
-    data_path = os.path.join(os.path.dirname(__file__), "..", "input_data", "sky_lines", "ESO-UVES")
+    data_path = os.path.join(os.path.dirname(
+        __file__), "..", "input_data", "sky_lines", "ESO-UVES")
 
     line_wavelength = np.empty(1)
     line_fwhm = np.empty(1)
@@ -247,6 +278,7 @@ def uves_sky_lines():
 # Sky models
 # =============================================================================
 # TODO: convert this class to an ABC
+
 
 class SkyModel(object):
     """
@@ -299,7 +331,8 @@ class SkyModel(object):
             skymodel_intensity = self.intensity[np.newaxis, :]
             skymodel_var = self.intensity[np.newaxis, :]
         else:
-            self.vprint(f"Data dimensions ({data.shape}) cannot be reconciled with sky mode ({self.intensity.shape})")
+            self.vprint(
+                f"Data dimensions ({data.shape}) cannot be reconciled with sky mode ({self.intensity.shape})")
         data_subs = data - skymodel_intensity
         var_subs = variance + skymodel_var
         return data_subs, var_subs
@@ -307,20 +340,17 @@ class SkyModel(object):
     def substract_pca():
         # TODO: Implement PCA substraction method
         pass
-    
+
     def vprint(self, *messages):
         """Print a message"""
         if self.verbose:
             print("[SkyModel] ", *messages)
 
 
-
 class SkyOffset(SkyModel):
     """
     Sky model based on a single RSS offset sky exposure
 
-    Description
-    -----------
     This class builds a sky emission model from individual sky exposures.
 
     Attributes
@@ -330,6 +360,7 @@ class SkyOffset(SkyModel):
     - exptime:
         Data container net exposure time
     """
+
     def __init__(self, dc):
         """
 
@@ -354,8 +385,6 @@ class SkyFromObject(SkyModel):
     """
     Sky model based on a single Data Container.
 
-    Description
-    -----------
     This class builds a sky emission model using the data
     from a given Data Container that includes the contribution
     of an additional source (i.e. star/galaxy).
@@ -371,19 +400,19 @@ class SkyFromObject(SkyModel):
     def __init__(self, dc,
                  bckgr_estimator='mad',
                  bckgr_params=None,
-                 source_mask_nsigma=3,
+                 source_mask_nsigma=None,
                  remove_cont=False,
                  cont_estimator='median',
                  cont_estimator_args=None):
         """
-        Params
-        ------
-        - dc:
+        Parameters
+        ----------
+        dc :
             Input DataContainer object
-        - bckgr_estimator: (str, default='mad')
+        bckgr_estimator : (str, default='mad')
             Background estimator method to be used.
-        - bckgr_params: (dict, default=None)
-        - remove_cont: (bool, default=False)
+        bckgr_params : (dict, default=None)
+        remove_cont : (bool, default=False)
             If True, the continuum will be removed.
         """
         self.vprint("Creating SkyModel from input Data Container")
@@ -391,7 +420,8 @@ class SkyFromObject(SkyModel):
         self.dc = dc
         # Background estimator
         self.vprint("Estimating sky background contribution...")
-        self.estimate_background(bckgr_estimator, bckgr_params, source_mask_nsigma)
+        self.estimate_background(
+            bckgr_estimator, bckgr_params, source_mask_nsigma)
         if remove_cont:
             self.vprint("Removing background continuum")
             self.remove_continuum(cont_estimator, cont_estimator_args)
@@ -400,21 +430,21 @@ class SkyFromObject(SkyModel):
                          intensity=self.bckgr,
                          variance=self.bckgr_sigma**2)
 
-    def estimate_background(self, bckgr_estimator, bckgr_params=None, source_mask_nsigma=3):
+    def estimate_background(self, bckgr_estimator, bckgr_params=None, source_mask_nsigma=None):
         """Estimate the background.
-        
+
         Parameters
         ----------
-        - bckgr_estimator: (str)
+        bckgr_estimator : str
             Background estimator method. Currently available:
             - mad (median absolute deviation),
             - percentile (median percentile +/- (84th - 16th) * 0.5).
             For details see BackgroundEstimator class.
         Returns
         -------
-        - background: (np.ndarray)
+        background : np.ndarray
             Estimated background
-        - background_sigma: (np.ndarray)
+        background_sigma : np.ndarray
             Estimated background standard deviation
         """
         if bckgr_params is None:
@@ -423,7 +453,8 @@ class SkyFromObject(SkyModel):
         if hasattr(BackgroundEstimator, bckgr_estimator):
             estimator = getattr(BackgroundEstimator, bckgr_estimator)
         else:
-            raise NameError(f"Input background estimator {bckgr_estimator} does not exist")        
+            raise NameError(
+                f"Input background estimator {bckgr_estimator} does not exist")
 
         data = self.dc.intensity.copy()
 
@@ -446,7 +477,8 @@ class SkyFromObject(SkyModel):
                 self.vprint("Pre-estimating background using all data")
                 self.estimate_background(bckgr_estimator=bckgr_estimator, bckgr_params=bckgr_params,
                                          source_mask_nsigma=None)
-            self.vprint(f"Applying sigma-clipping mask (n-sigma={source_mask_nsigma})")
+            self.vprint(
+                f"Applying sigma-clipping mask (n-sigma={source_mask_nsigma})")
             source_mask = (data > np.expand_dims(self.bckgr, dims_to_expand)
                            + source_mask_nsigma * np.expand_dims(self.bckgr_sigma, dims_to_expand))
             data[source_mask] = np.nan
@@ -457,7 +489,7 @@ class SkyFromObject(SkyModel):
 
     def remove_continuum(self, cont_estimator="median", cont_estimator_args=None):
         """Remove the continuum from the background model.
-        
+
         Parameters
         ----------
         - method: (str)
@@ -507,22 +539,27 @@ class SkyFromObject(SkyModel):
         emission_model = models.Gaussian1D(amplitude=0, mean=0, stddev=0)
         emission_spectra = np.zeros_like(self.dc.wavelength)
         # Select window steps
-        wavelength_windows = np.arange(self.dc.wavelength.min(), self.dc.wavelength.max(), window_size)
+        wavelength_windows = np.arange(
+            self.dc.wavelength.min(), self.dc.wavelength.max(), window_size)
         # Ensure the last element corresponds to the last wavelength point of the RSS
         wavelength_windows[-1] = self.dc.wavelength.max()
         print("Fitting all emission lines ({}) to continuum-substracted sky spectra".format(self.sky_lines.size))
         # Loop over each spectral window
         for wl_min, wl_max in zip(wavelength_windows[:-1], wavelength_windows[1:]):
-            print("Starting fit in the wavelength range [{:.1f}, {:.1f}]".format(wl_min, wl_max))
+            print("Starting fit in the wavelength range [{:.1f}, {:.1f}]".format(
+                wl_min, wl_max))
             mask_lines = (self.sky_lines >= wl_min) & (self.sky_lines < wl_max)
             mask = (self.dc.wavelength >= wl_min
                     ) & (self.dc.wavelength < wl_max) & finite_mask
             # Oversample wavelength array to prevent fitting crash for excess of lines
-            wave = np.arange(self.dc.wavelength[mask][0], self.dc.wavelength[mask][-1], resampling_wave)
-            obs = np.interp(wave, self.dc.wavelength[mask], cont_clean_spec[mask])
+            wave = np.arange(
+                self.dc.wavelength[mask][0], self.dc.wavelength[mask][-1], resampling_wave)
+            obs = np.interp(
+                wave, self.dc.wavelength[mask], cont_clean_spec[mask])
             err = np.interp(wave, self.dc.wavelength[mask], errors[mask])
             if mask_lines.any():
-                print("> Line to Fit {:.1f}".format(self.sky_lines[mask_lines][0]))
+                print("> Line to Fit {:.1f}".format(
+                    self.sky_lines[mask_lines][0]))
                 window_model = models.Gaussian1D(
                     amplitude=p0_amplitude[mask_lines][0],
                     mean=self.sky_lines[mask_lines][0],
@@ -552,7 +589,8 @@ class SkyFromObject(SkyModel):
         else:
             self.sky_lines, self.sky_lines_fwhm, self.sky_lines_f = uves_sky_lines()
         # Select only lines within the RSS spectral range
-        common_lines = (self.sky_lines >= self.dc.wavelength[0]) & (self.sky_lines <= self.dc.wavelength[-1])
+        common_lines = (self.sky_lines >= self.dc.wavelength[0]) & (
+            self.sky_lines <= self.dc.wavelength[-1])
         self.sky_lines, self.sky_lines_fwhm, self.sky_lines_f = (
             self.sky_lines[common_lines], self.sky_lines_fwhm[common_lines],
             self.sky_lines_f[common_lines])
@@ -567,11 +605,14 @@ class SkyFromObject(SkyModel):
             self.sky_lines_f[unresolved_lines] = (self.sky_lines_f[unresolved_lines]
                                                   + self.sky_lines_f[unresolved_lines + 1])
             self.sky_lines = np.delete(self.sky_lines, unresolved_lines)
-            self.sky_lines_fwhm = np.delete(self.sky_lines_fwhm, unresolved_lines)
+            self.sky_lines_fwhm = np.delete(
+                self.sky_lines_fwhm, unresolved_lines)
             self.sky_lines_f = np.delete(self.sky_lines_f, unresolved_lines)
-            unresolved_lines = np.where(np.diff(self.sky_lines) <= delta_lambda)[0]
+            unresolved_lines = np.where(
+                np.diff(self.sky_lines) <= delta_lambda)[0]
         # Remove faint lines
-        faint = np.where(self.sky_lines_f < np.nanpercentile(self.sky_lines_f, lines_pct))[0]
+        faint = np.where(self.sky_lines_f < np.nanpercentile(
+            self.sky_lines_f, lines_pct))[0]
         self.sky_lines = np.delete(self.sky_lines, faint)
         self.sky_lines_fwhm = np.delete(self.sky_lines_fwhm, faint)
         self.sky_lines_f = np.delete(self.sky_lines_f, faint)
@@ -579,6 +620,7 @@ class SkyFromObject(SkyModel):
 # =============================================================================
 # Sky Substraction Correction
 # =============================================================================
+
 
 class SkySubsCorrection(CorrectionBase):
     """Correction for removing sky emission from a datacube."""
@@ -604,13 +646,13 @@ class SkySubsCorrection(CorrectionBase):
         ax = axs[1]
         ax.set_title("Sky emission substracted")
         mappable = ax.imshow(data_cont_corrected.intensity, **im_args)
-        
+
         cax = ax.inset_axes((-1.2, -.1, 2.2, 0.02))
         plt.colorbar(mappable, cax=cax, orientation="horizontal")
-        
+
         plt.close(fig)
         return fig
-        
+
     def apply(self, dc, pca=False, verbose=True, plot=False, **plot_kwargs):
         # Set print verbose
         self.verbose = verbose
@@ -619,16 +661,17 @@ class SkySubsCorrection(CorrectionBase):
         self.corr_print("Applying sky substraction")
         if pca:
             dc_out.intensity, dc_out.variance = self.skymodel.substract_pca(
-            dc_out.intensity, dc_out.variance)
+                dc_out.intensity, dc_out.variance)
         else:
             dc_out.intensity, dc_out.variance = self.skymodel.substract(
-                 dc_out.intensity, dc_out.variance)
+                dc_out.intensity, dc_out.variance)
         self.log_correction(dc_out, status='applied')
-        
+
         if plot:
             if not dc_out.intensity.ndim == 2:
                 # TODO: Include 3D plots
-                self.corr_print("Plots can only be produed for 2D Data containers (RSS)")
+                self.corr_print(
+                    "Plots can only be produed for 2D Data containers (RSS)")
             fig = self.plot_correction(dc, dc_out, **plot_kwargs)
         else:
             fig = None
@@ -637,6 +680,8 @@ class SkySubsCorrection(CorrectionBase):
 # =============================================================================
 # Telluric Correction
 # =============================================================================
+
+
 class TelluricCorrection(CorrectionBase):
     """
     Telluric correction produced by atmosphere absorption. # TODO
@@ -654,22 +699,26 @@ class TelluricCorrection(CorrectionBase):
                  n_fibres=10,
                  verbose=True,
                  frac=0.5):
-        
+
         self.verbose = verbose
-        self.corr_print("Obtaining telluric correction using spectrophotometric star...")
-        
+        self.corr_print(
+            "Obtaining telluric correction using spectrophotometric star...")
+
         self.data_container = data_container
 
         # Store basic data
         if self.data_container is not None:
-            self.corr_print("Estimating telluric correction using input observation")
+            self.corr_print(
+                "Estimating telluric correction using input observation")
             self.data_container = data_container
             self.wlm = self.data_container.wavelength
 
             if self.data_container.__class__ is Cube:
-                self.spectra = self.data_container.get_integrated_light_frac(frac=frac)
+                self.spectra = self.data_container.get_integrated_light_frac(
+                    frac=frac)
             elif self.data_container.__class__ is RSS:
-                integrated_fibre = np.nansum(self.data_container.intensity, axis=1)
+                integrated_fibre = np.nansum(
+                    self.data_container.intensity, axis=1)
                 # The n-brightest fibres
                 self.brightest_fibres = integrated_fibre.argsort()[-n_fibres:]
                 self.spectra = np.nansum(
@@ -680,8 +729,10 @@ class TelluricCorrection(CorrectionBase):
             self.bad_pixels_mask = np.isfinite(self.spectra) & np.isfinite(self.spectra_var
                                                                            ) & (self.spectra / self.spectra_var > 0)
         elif telluric_correction_file is not None:
-            self.corr_print(f"Reading telluric correction from input file {telluric_correction_file}")
-            self.wlm, self.telluric_correction = np.loadtxt(telluric_correction_file, unpack=True)
+            self.corr_print(
+                f"Reading telluric correction from input file {telluric_correction_file}")
+            self.wlm, self.telluric_correction = np.loadtxt(
+                telluric_correction_file, unpack=True)
         elif telluric_correction is not None and wavelength is not None:
             self.corr_print("Using user-provided telluric correction")
             self.telluric_correction = telluric_correction
@@ -717,33 +768,39 @@ class TelluricCorrection(CorrectionBase):
         # Mask user-provided spectral regions
         spec_windows_mask = np.ones_like(self.wlm, dtype=bool)
         for window in exclude_wlm:
-            spec_windows_mask[(self.wlm >= window[0]) & (self.wlm <= window[1])] = False
+            spec_windows_mask[(self.wlm >= window[0]) &
+                              (self.wlm <= window[1])] = False
         # Master mask used to compute the Telluric correction
         telluric_mask = correct_mask & spec_windows_mask
         smooth_med_star = smooth_spectrum(self.wlm, self.spectra, wave_min=wave_min, wave_max=wave_max, step=step,
                                           weight_fit_median=weight_fit_median,
                                           exclude_wlm=exclude_wlm, plot=False, verbose=verbose)
-        self.telluric_correction[telluric_mask] = smooth_med_star[telluric_mask] / self.spectra[telluric_mask]
+        self.telluric_correction[telluric_mask] = smooth_med_star[telluric_mask] / \
+            self.spectra[telluric_mask]
 
         waves_for_tc_ = []
         for rango in exclude_wlm:
             if rango[0] < 6563. and rango[1] > 6563.:  # H-alpha is here, skip
                 print("  Skipping range with H-alpha...")
             else:
-                index_region = np.where((self.wlm >= rango[0]) & (self.wlm <= rango[1]))
+                index_region = np.where(
+                    (self.wlm >= rango[0]) & (self.wlm <= rango[1]))
                 waves_for_tc_.append(index_region)
 
         waves_for_tc = []
         for rango in waves_for_tc_:
-            waves_for_tc = np.concatenate((waves_for_tc, rango[0].tolist()), axis=None)
+            waves_for_tc = np.concatenate(
+                (waves_for_tc, rango[0].tolist()), axis=None)
 
         # Now, change the value in telluric_correction
         for index in waves_for_tc:
             i = np.int(index)
             if smooth_med_star[i] / self.spectra[i] > 1.:
-                self.telluric_correction[i] = smooth_med_star[i] / self.spectra[i]
+                self.telluric_correction[i] = smooth_med_star[i] / \
+                    self.spectra[i]
         if plot:
-            fig = self.plot_correction(wave_min=wave_min, wave_max=wave_max, exclude_wlm=exclude_wlm)
+            fig = self.plot_correction(
+                wave_min=wave_min, wave_max=wave_max, exclude_wlm=exclude_wlm)
             return self.telluric_correction, fig
         return self.telluric_correction
 
@@ -787,7 +844,8 @@ class TelluricCorrection(CorrectionBase):
         # self.telluric_correction[~mask] = stellar[~mask] / self.spectra[~mask]
         self.telluric_correction[~mask] = stellar[~mask] / std[~mask]
 
-        self.telluric_correction = np.clip(self.telluric_correction, a_min=1, a_max=None)
+        self.telluric_correction = np.clip(
+            self.telluric_correction, a_min=1, a_max=None)
         if plot:
             fig = self.plot_correction(exclude_wlm=np.vstack((w_l_1 - width, w_l_2 + width)).T,
                                        wave_min=self.wlm[0], wave_max=self.wlm[-1])
@@ -798,9 +856,12 @@ class TelluricCorrection(CorrectionBase):
         fig = plt.figure(figsize=(fig_size, fig_size / 2.5))
         ax = fig.add_subplot(111)
         if self.data_container.__class__ is Cube:
-            print("  Telluric correction for this star (" + self.data_container.combined_cube.object + ") :")
-            ax.plot(self.wlm, self.spectra, color="b", alpha=0.3, label='Original')
-            ax.plot(self.wlm, self.spectra * self.telluric_correction, color="g", alpha=0.5, label='Telluric corrected')
+            print("  Telluric correction for this star (" +
+                  self.data_container.combined_cube.object + ") :")
+            ax.plot(self.wlm, self.spectra, color="b",
+                    alpha=0.3, label='Original')
+            ax.plot(self.wlm, self.spectra * self.telluric_correction,
+                    color="g", alpha=0.5, label='Telluric corrected')
             ax.set_ylim(np.nanmin(self.spectra), np.nanmax(self.spectra))
         else:
             ax.set_title("Telluric correction using fibres {} (blue) and {} (red)"
@@ -812,7 +873,8 @@ class TelluricCorrection(CorrectionBase):
             ax.plot(self.wlm, self.data_container.intensity[self.brightest_fibres[1]], color="r",
                     label='Original', lw=3, alpha=0.8)
             ax.plot(self.wlm,
-                    self.data_container.intensity[self.brightest_fibres[1]] * self.telluric_correction,
+                    self.data_container.intensity[self.brightest_fibres[1]
+                                                  ] * self.telluric_correction,
                     color="purple", alpha=1, lw=.8, label='Telluric corrected')
             ax.set_ylim(np.nanpercentile(self.data_container.intensity[self.brightest_fibres[[0, 1]]], 1),
                         np.nanpercentile(self.data_container.intensity[self.brightest_fibres[[0, 1]]], 99))
@@ -823,7 +885,8 @@ class TelluricCorrection(CorrectionBase):
         ax.set_xlabel(r"Wavelength [$\mathrm{\AA}$]")
         if exclude_wlm is not None:
             for i in range(len(exclude_wlm)):
-                ax.axvspan(exclude_wlm[i][0], exclude_wlm[i][1], color='c', alpha=0.1)
+                ax.axvspan(exclude_wlm[i][0],
+                           exclude_wlm[i][1], color='c', alpha=0.1)
         ax.minorticks_on()
         # plt.show()
         plt.close(fig)
@@ -838,7 +901,6 @@ class TelluricCorrection(CorrectionBase):
             self.corr_vprint("Interpolating correction to input wavelength")
             self.interpolate_model(rss.wavelength, update=update)
 
-            
         # Copy input RSS for storage the changes implemented in the task
         rss_out = copy.deepcopy(rss)
         self.corr_print("Applying telluric correction to this star...")
@@ -849,7 +911,8 @@ class TelluricCorrection(CorrectionBase):
 
     def interpolate_model(self, wavelength, update=True):
         """Interpolate the telluric correction model to the input wavelength array."""
-        telluric_correction = np.interp(wavelength, self.wlm, self.telluric_correction, left=1, right=1)
+        telluric_correction = np.interp(
+            wavelength, self.wlm, self.telluric_correction, left=1, right=1)
         if update:
             self.teluric_correction = telluric_correction
             self.wlm = wavelength
@@ -858,12 +921,15 @@ class TelluricCorrection(CorrectionBase):
     def save(self, filename='telluric_correction.txt', **kwargs):
         """Save telluric correction function to text file."""
         self.corr_print(f"Saving telluric correction into file {filename}")
-        np.savetxt(filename, np.array([self.wlm, self.telluric_correction]).T, **kwargs)
+        np.savetxt(filename, np.array(
+            [self.wlm, self.telluric_correction]).T, **kwargs)
+
 
 def combine_telluric_corrections(list_of_telcorr, ref_wavelength):
     """Combine a list of input telluric corrections."""
-    print("Combining input telluric corrections")    
-    telluric_corrections = np.zeros((len(list_of_telcorr), ref_wavelength.size))
+    print("Combining input telluric corrections")
+    telluric_corrections = np.zeros(
+        (len(list_of_telcorr), ref_wavelength.size))
     for i, telcorr in enumerate(list_of_telcorr):
         telluric_corrections[i] = telcorr.interpolate_model(ref_wavelength)
 
@@ -878,16 +944,14 @@ def combine_telluric_corrections(list_of_telcorr, ref_wavelength):
 class WaveletFilter(object):
     '''
     Estimate overall fibre throughput and wavelength calibration based on sky emission lines (from wavelet transform).
-    
-    Description
-    -----------
+
     Given a Row-Stacked Spectra (RSS) object:
     1. Estimate the FWHM of emission lines from the autocorrelation of the median (~ sky) spectrum.
     2. Apply a (mexican top hat) wavelet filter to detect features on that scale (i.e. filter out the continuum).
     3. Find regions actually dominated by sky lines (i.e. exclude lines from the target).
     4. Estimate fibre throughput from norm (standard deviation).
     5. Estimate wavelength offset of each fibre (in pixels) from cross-correlation with the sky.
-    
+
     Attributes
     ----------
     - scale: (int)
@@ -909,51 +973,54 @@ class WaveletFilter(object):
     - fibre_offset: numpy.ndarray(float)
         Relative wavelenght calibration. Offset, in pixels, with respect to the sky (from weighted cross-correlation).
     '''
-    
-    def __init__(self, rss):
-        
-        assert isinstance(rss, RSS)
-        
+
+    def __init__(self, rss: RSS):
+
         # 1. Estimate the FWHM of emission lines from the autocorrelation of the median (~ sky) spectrum.
-        
+
         x = np.nanmedian(rss.intensity, axis=0)  # median ~ sky spectrum
         x -= np.nanmean(x)
         x = scipy.signal.correlate(x, x, mode='same')
         h = (np.count_nonzero(x > 0.5*np.nanmax(x)) + 1) // 2
-        #h = 0
+        # h = 0
         self.scale = 2*h + 1
         print(f'> Wavelet filter scale: {self.scale} pixels')
-        
+
         # 2. Apply a (mexican top hat) wavelet filter to detect features on that scale (i.e. filter out the continuum).
-        
+
         x = np.nancumsum(rss.intensity, axis=1)
-        self.filtered = (x[:, 2*self.scale:-self.scale] - x[:, self.scale:-2*self.scale]) / self.scale
-        self.filtered -= (x[:,3*self.scale:] - x[:,:-3*self.scale]) / (3*self.scale)
+        self.filtered = (x[:, 2*self.scale:-self.scale] -
+                         x[:, self.scale:-2*self.scale]) / self.scale
+        self.filtered -= (x[:, 3*self.scale:] -
+                          x[:, :-3*self.scale]) / (3*self.scale)
 
         # 3. Find regions actually dominated by sky lines (i.e. exclude lines from the target).
-        
-        self.sky_lo, self.sky, self.sky_hi = np.nanpercentile(self.filtered, [16, 50, 84], axis=0)
-        self.sky_weight = 1 - np.exp(-.5 * (self.sky / np.fmax((self.sky - self.sky_lo), (self.sky_hi - self.sky)))**2)
+
+        self.sky_lo, self.sky, self.sky_hi = np.nanpercentile(
+            self.filtered, [16, 50, 84], axis=0)
+        self.sky_weight = 1 - \
+            np.exp(-.5 * (self.sky / np.fmax((self.sky - self.sky_lo),
+                   (self.sky_hi - self.sky)))**2)
         self.sky *= self.sky_weight
         self.sky_lo *= self.sky_weight
         self.sky_hi *= self.sky_weight
-        
+
         # 4. Estimate fibre throughput from norm (standard deviation).
-        
-        self.filtered -= np.nanmean(self.filtered, axis=1)[:, np.newaxis] # should be irrelevant
+
+        # should be irrelevant
+        self.filtered -= np.nanmean(self.filtered, axis=1)[:, np.newaxis]
         self.filtered *= self.sky_weight
-        #self.fibre_throughput = np.nanstd(self.filtered, axis=1)
-        #self.fibre_throughput = np.nanmedian(self.filtered, axis=1)
-        #self.filtered /= self.fibre_throughput[:, np.newaxis]
+        # self.fibre_throughput = np.nanstd(self.filtered, axis=1)
+        # self.fibre_throughput = np.nanmedian(self.filtered, axis=1)
+        # self.filtered /= self.fibre_throughput[:, np.newaxis]
         self.filtered[~ np.isfinite(self.filtered)] = 0
 
-        #self.fibre_throughput = np.nanmedian(self.filtered / self.sky, axis=1)
-        x = np.exp(-.5 * ((self.filtered - self.sky) / (self.sky_hi - self.sky_lo))**2)
+        # self.fibre_throughput = np.nanmedian(self.filtered / self.sky, axis=1)
+        x = np.exp(-.5 * ((self.filtered - self.sky) /
+                   (self.sky_hi - self.sky_lo))**2)
         x *= self.sky_weight[np.newaxis, :]
-        print(np.nanpercentile(x, [0, 16, 50, 85, 100]), '---', x.shape)
-        #self.fibre_throughput = np.nanmean(x * self.filtered / self.sky[np.newaxis, :], axis=1) / np.nanmean(x)
+        # self.fibre_throughput = np.nanmean(x * self.filtered / self.sky[np.newaxis, :], axis=1) / np.nanmean(x)
         x = np.where(x > 0.5, self.filtered / self.sky[np.newaxis, :], np.nan)
-        print(x.shape)
         self.fibre_throughput = np.nanmedian(x, axis=1)
         renorm = np.nanmedian(self.fibre_throughput)
         self.fibre_throughput /= renorm
@@ -961,43 +1028,52 @@ class WaveletFilter(object):
         self.sky *= renorm
         self.sky_lo *= renorm
         self.sky_hi *= renorm
-        
+
         # 5. Estimate wavelength offset of each fibre (in pixels) from cross-correlation with the sky.
-        
-        x = u.Quantity(rss.wavelength[self.scale + h + 1 : -self.scale - h ])  # only for plotting:
+
+        # only for plotting:
+        x = u.Quantity(rss.wavelength[self.scale + h + 1: -self.scale - h])
         if x.unit.is_equivalent(u.AA):
             self.wavelength = x.to_value(u.AA)
-        elif x.unit.is_equivalent(u.dimensionless_unscaled):  # assume it's already in Angstrom
+        # assume it's already in Angstrom
+        elif x.unit.is_equivalent(u.dimensionless_unscaled):
             self.wavelength = x.value
         else:
             raise TypeError(f'  ERROR: wrong wavelength units ({x.unit})')
 
-        #mid = rss.intensity.shape[1] // 2
+        # mid = rss.intensity.shape[1] // 2
         mid = self.wavelength.size // 2
         s = self.scale
         x = np.nanmedian(self.filtered, axis=0)
         x[~ np.isfinite(x)] = 0
-        x = scipy.signal.fftconvolve(self.filtered, x[np.newaxis, ::-1], mode='same', axes=1)[:, mid-s:mid+s+1]
+        x = scipy.signal.fftconvolve(
+            self.filtered, x[np.newaxis, ::-1], mode='same', axes=1)[:, mid-s:mid+s+1]
         idx = np.arange(x.shape[1])
-        weight = np.where(x>0, x, 0)
-        self.fibre_offset = np.nansum((idx - s)[np.newaxis, :] * weight, axis=1) / np.nansum(weight, axis=1)
-        
-        
+        weight = np.where(x > 0, x, 0)
+        self.fibre_offset = np.nansum(
+            (idx - s)[np.newaxis, :] * weight, axis=1) / np.nansum(weight, axis=1)
+
     def qc_plots(self, show=False, save_as=None):
         '''
         Top: Filtered intensity for every fibre.
         Centre: Sky-subtracted.
         Bottom: Filtered sky.
         '''
-        fig, axes = new_figure('wavelet_filter', nrows=3, ncols=2, sharey=False, gridspec_kw={'width_ratios': [1, .02], 'hspace': 0., 'wspace': .1})
-        im, cb = colour_map(fig, axes[0, 0], 'wavelet coefficient', self.filtered, x=self.wavelength, ylabel='spec_id', cbax=axes[0, 1])
-        im, cb = colour_map(fig, axes[1, 0], 'sky-subtracted', self.filtered - self.sky, x=self.wavelength, ylabel='spec_id', cbax=axes[1, 1])
+        fig, axes = new_figure('wavelet_filter', nrows=3, ncols=2, sharey=False, gridspec_kw={
+                               'width_ratios': [1, .02], 'hspace': 0., 'wspace': .1})
+        im, cb = colour_map(fig, axes[0, 0], 'wavelet coefficient', self.filtered,
+                            x=self.wavelength, ylabel='spec_id', cbax=axes[0, 1])
+        im, cb = colour_map(fig, axes[1, 0], 'sky-subtracted', self.filtered -
+                            self.sky, x=self.wavelength, ylabel='spec_id', cbax=axes[1, 1])
         axes[1, 0].sharey(axes[0, 0])
         ax = axes[-1, 0]
         axes[-1, 1].axis('off')
-        ax.plot(self.wavelength, self.sky, 'k-', alpha=.5, label='sky (median coefficient)')
-        ax.fill_between(self.wavelength, self.sky_lo, self.sky_hi, color='k', alpha=0.1, label='uncertainty (16-84%)')
-        ax.plot(self.wavelength, self.sky/self.sky_weight, 'r:', alpha=.5, label='unweighted sky')
+        ax.plot(self.wavelength, self.sky, 'k-', alpha=.5,
+                label='sky (median coefficient)')
+        ax.fill_between(self.wavelength, self.sky_lo, self.sky_hi,
+                        color='k', alpha=0.1, label='uncertainty (16-84%)')
+        ax.plot(self.wavelength, self.sky/self.sky_weight,
+                'r:', alpha=.5, label='unweighted sky')
         ax.set_xlabel('wavelength [pix]')
         ax.set_ylabel(f'filtered (scale = {self.scale} pix)')
         ax.legend()
@@ -1006,14 +1082,12 @@ class WaveletFilter(object):
         if save_as is not None:
             fig.savefig(save_as)
 
-        
     def get_throughput_object(self):
         return Throughput(throughput_data=np.repeat(self.fibre_throughput[:, np.newaxis], self.wavelength.size + 3*self.scale, axis=1))
 
     def get_wavelength_offset(self):
         return WavelengthOffset(offset_data=np.repeat(self.fibre_offset[:, np.newaxis], self.wavelength.size + 3*self.scale, axis=1))
 
-    
 
 class SkySelfCalibration(CorrectionBase):
     """Wavelength calibration, throughput, and sky model based on strong sky lines."""
@@ -1022,41 +1096,45 @@ class SkySelfCalibration(CorrectionBase):
 
     # TODO: Don't assume RSS format (intensity[spec_id, wavelength])
     #       def __init__(self, dc:DataContainer, continuum:ContinuumModel):
-    def __init__(self, dc:RSS):
+    def __init__(self, dc: RSS):
         self.update(dc)
 
-    def update(self, dc:RSS):
+    def update(self, dc: RSS):
         self.dc = dc
         self.biweight_sky()
         self.update_sky_lines()
         self.calibrate()
 
-
     # TODO: use SkyModel as an argument to update()?
-    def biweight_sky(self):
-        #self.wavelength = self.dc.wavelength.to_value(u.Angstrom)
-        self.sky_intensity = stats.biweight.biweight_location(self.dc.intensity, axis=0)
 
+    def biweight_sky(self):
+        # self.wavelength = self.dc.wavelength.to_value(u.Angstrom)
+        self.sky_intensity = stats.biweight.biweight_location(
+            self.dc.intensity, axis=0)
 
     def update_sky_lines(self):
-        sky_cont, sky_err = ContinuumEstimator.lower_envelope(self.dc.wavelength, self.sky_intensity)#, min_separation)
+        sky_cont, sky_err = ContinuumEstimator.lower_envelope(
+            self.dc.wavelength, self.sky_intensity)  # , min_separation)
         sky_lines = self.sky_intensity - sky_cont
 
         self.continuum = ContinuumModel(self.dc)
-        self.continuum.strong_sky_lines.add_column(0.*u.Angstrom, name='sky_wavelength')
+        self.continuum.strong_sky_lines.add_column(
+            0.*u.Angstrom, name='sky_wavelength')
         self.continuum.strong_sky_lines.add_column(0., name='sky_intensity')
         for line in self.continuum.strong_sky_lines:
             wavelength = self.dc.wavelength[line['left']:line['right']]
             spectrum = sky_lines[line['left']:line['right']]
             weight = spectrum**2
-            line['sky_wavelength'] = np.nansum(weight*wavelength) / np.nansum(weight)
+            line['sky_wavelength'] = np.nansum(
+                weight*wavelength) / np.nansum(weight)
             line['sky_intensity'] = np.nanmean(spectrum)
 
-
     # TODO: Don't assume RSS format (intensity[spec_id, wavelength])
+
     def calibrate(self):
         n_spectra = self.dc.intensity.shape[0]
-        self.wavelength_offset = np.zeros(n_spectra) * self.dc.wavelength[0] # dirty hack to specify units
+        self.wavelength_offset = np.zeros(
+            n_spectra) * self.dc.wavelength[0]  # dirty hack to specify units
         self.wavelength_offset_err = np.zeros_like(self.wavelength_offset)
         self.relative_throughput = np.zeros(n_spectra)
         self.relative_throughput_err = np.zeros(n_spectra)
@@ -1064,31 +1142,38 @@ class SkySelfCalibration(CorrectionBase):
         t0 = time()
         for spec_id in range(n_spectra):
             line_wavelength, line_intensity = self.measure_lines(spec_id)
-            y = line_wavelength - self.continuum.strong_sky_lines['sky_wavelength']
-            self.wavelength_offset[spec_id] = stats.biweight.biweight_location(y)
-            self.wavelength_offset_err[spec_id] = stats.biweight.biweight_scale(y)
-            y = line_intensity / self.continuum.strong_sky_lines['sky_intensity']
-            self.relative_throughput[spec_id] = stats.biweight.biweight_location(y)
-            self.relative_throughput_err[spec_id] = stats.biweight.biweight_scale(y)
+            y = line_wavelength - \
+                self.continuum.strong_sky_lines['sky_wavelength']
+            self.wavelength_offset[spec_id] = stats.biweight.biweight_location(
+                y)
+            self.wavelength_offset_err[spec_id] = stats.biweight.biweight_scale(
+                y)
+            y = line_intensity / \
+                self.continuum.strong_sky_lines['sky_intensity']
+            self.relative_throughput[spec_id] = stats.biweight.biweight_location(
+                y)
+            self.relative_throughput_err[spec_id] = stats.biweight.biweight_scale(
+                y)
         print(f"  Done ({time()-t0:.3g} s)")
-
 
     def measure_lines(self, spec_id):
         intensity = self.dc.intensity[spec_id]
         continuum = self.continuum.intensity[spec_id]
-        sky_wavelength = self.continuum.strong_sky_lines['sky_wavelength'].to_value(u.Angstrom)
+        sky_wavelength = self.continuum.strong_sky_lines['sky_wavelength'].to_value(
+            u.Angstrom)
         line_wavelength = np.zeros_like(sky_wavelength)
         sky_intensity = self.continuum.strong_sky_lines['sky_intensity']
         line_intensity = np.zeros_like(sky_intensity)
         wavelength = self.dc.wavelength.to_value(u.Angstrom)
         for i, line in enumerate(self.continuum.strong_sky_lines):
             section_wavelength = wavelength[line['left']:line['right']]
-            section_intensity = (intensity - continuum)[line['left']:line['right']]
+            section_intensity = (
+                intensity - continuum)[line['left']:line['right']]
             weight = section_intensity**2
-            line_wavelength[i] = np.nansum(weight*section_wavelength) / np.nansum(weight)
+            line_wavelength[i] = np.nansum(
+                weight*section_wavelength) / np.nansum(weight)
             line_intensity[i] = np.nanmean(section_intensity)
         return line_wavelength*u.Angstrom, line_intensity
-
 
     def apply(self, rss, verbose=True, is_combined_cube=False, update=True):
         # Set print verbose
