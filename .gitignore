@@ -1,5 +1,6 @@
 # Other
 /deprecated
+venv_koala/
 # Tutorials stuff
 tutorials/*.fits*
 tutorials/products/*.fits*
