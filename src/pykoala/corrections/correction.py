@@ -40,8 +40,6 @@ class CorrectionBase(ABC):
     def log_correction(self, datacontainer, status='applied', **extra_comments):
         """Log in the DataContainer the correction and additional info.
         
-        Description
-        -----------
         Whenever a correction is applied, this is logged into the DataContainer
         log. This might just inform of the status of the correction (applied/failed)
         as well as other relevant information.
@@ -52,8 +50,7 @@ class CorrectionBase(ABC):
             DC to log the correction.
         - status: str, default='applied'
            Keyword to denote the success of the correction. Can take two values
-           'applied' or 'failed'.
-           
+           'applied' or 'failed'.    
         """
         if status != 'applied' and status != 'failed':
             raise KeyError("Correction log status can only be 'applied' or 'failed'")

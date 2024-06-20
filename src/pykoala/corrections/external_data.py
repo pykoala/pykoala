@@ -26,8 +26,6 @@ def crosscorrelate_im_apertures(ref_aperture_flux, ref_aperture_flux_err,
                                 plot=True):
     """Cross-correlate an image with an input set of apertures.
     
-    Description
-    -----------
     This method performs a spatial cross-correlation between a list of input aperture fluxes
     and a reference image. For example, the aperture fluxes can simply correspond to the
     flux measured within a fibre or a set of aperture measured in a datacube.
@@ -209,9 +207,6 @@ def make_crosscorr_plot(results):
 class AncillaryDataCorrection(CorrectionBase):
     """Correction using ancillary data.
     
-    Description
-    -----------
-
     Attributes
     ----------
     - data_containers: `pykoala.data_container.DataContainer`
@@ -243,10 +238,6 @@ class AncillaryDataCorrection(CorrectionBase):
     def get_effective_sky_footprint(self):
         """Computes the effective footprint the contains all DataContainers.
         
-        Description
-        -----------
-        Computes the effective footprint the contains all DataContainers.
-
         Return
         ------
         - centre: tuple
@@ -284,8 +275,6 @@ class AncillaryDataCorrection(CorrectionBase):
                     im_output_dir='.'):
         """Perform a query of external images that overlap with the DataContainers.
         
-        Description
-        -----------
         This method performs a query to the database of some photometric survey (e.g. PS)
         and retrieves a set of images that overlap with the IFS data.
 
@@ -347,8 +336,6 @@ class AncillaryDataCorrection(CorrectionBase):
                                aperture_diameter=1.25, sample_every=2):
         """Compute aperture fluxes from the DataContainers
         
-        Description
-        -----------
         This method computes a set of aperture fluxes from an input data container.
         If the input DC is a Cube, a grid of equally-spaced apertures will be
         computed. If the input DC is a RSS, the fibre positions will be used as
@@ -452,8 +439,6 @@ class AncillaryDataCorrection(CorrectionBase):
     def get_synthetic_photometry(self, filter, dc, dc_intensity_units):
         """Compute synthetic photometry from a DataContainer.
         
-        Description
-        -----------
         This method extracts synthetic photometry using the spectral information
         of a DataContainer.
 
@@ -509,8 +494,6 @@ class AncillaryDataCorrection(CorrectionBase):
                             ap_flux, ap_flux_err):
         """Plot the synthetic aperture fluxes measured from a DC.
         
-        Description
-        -----------
         This method creates a plot showing the synth
         """
         if isinstance(dc, Cube):
@@ -584,8 +567,6 @@ class AncillaryDataCorrection(CorrectionBase):
     def get_astrometry_offset(self):
         """Compute astrometric offsets using apertures.
         
-        Description
-        -----------
         Compute the astrometric offsets that match the synthetic
         aperture photometry to the external image.
         """
