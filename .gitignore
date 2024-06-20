@@ -3,6 +3,9 @@
 # Tutorials stuff
 tutorials/products/*.fits.gz
 tutorials/*.fits
+tutorials/data/throughput_files/example_throughput.fits
+tutorials/ps_query_180.0001_0.0001_i.fits
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -148,5 +151,3 @@ dmypy.json
 .DS_Store
 *.orig
 
-
-tutorials/ps_query_180.0001_0.0001_i.fits
