@@ -235,7 +235,7 @@ def koala_rss(path_to_file, **kwargs):
 # #-----------------------------------------------------------------------------
 import glob
 
-from pykoala.plotting.plot_plot import plot_plot
+from pykoala.plotting.quick_plot import quick_plot
 from pykoala.plotting.rss_plot import rss_image, rss_map
 
 
@@ -935,7 +935,7 @@ def rss_valid_wave_range(rss, **kwargs):
 
     mask_max = np.nanmax(mask_first_good_value_per_fibre)
     if plot:        
-        plot_plot(x, mask_first_good_value_per_fibre, ymax=mask_max + 1, xlabel="Fibre",
+        quick_plot(x, mask_first_good_value_per_fibre, ymax=mask_max + 1, xlabel="Fibre",
                   ptitle="Left edge of the RSS", hlines=[mask_max], ylabel="First good pixel in RSS")
 
     # Right edge, important for RED
@@ -973,7 +973,7 @@ def rss_valid_wave_range(rss, **kwargs):
     if plot:
         ptitle = "Fibres with all good values in the right edge of the RSS file : " + str(
             len(mask_list_fibres_all_good_values))
-        plot_plot(x, mask_last_good_value_per_fibre, ymin=np.nanmin(mask_min),
+        quick_plot(x, mask_last_good_value_per_fibre, ymin=np.nanmin(mask_min),
                   ymax=2050, hlines=[2047], xlabel="Fibre", ylabel="Last good pixel in RSS", ptitle=ptitle)
 
     if verbose: 
