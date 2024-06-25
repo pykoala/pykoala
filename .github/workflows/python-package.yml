@@ -28,6 +28,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         python -m pip install flake8 pytest nbval .
+        sudo apt-get update 
         sudo apt install cm-super texlive-latex-base texlive-latex-extra dvipng 
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 #    - name: Lint with flake8
