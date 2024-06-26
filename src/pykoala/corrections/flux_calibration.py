@@ -68,15 +68,12 @@ class FluxCalibration(CorrectionBase):
     """
 
     name = "FluxCalibration"
-    verbose = True
-    calib_spectra = None
-    calib_wave = None
 
-    response = None
-    resp_wave = None
-    response_units = 1e16  # erg/s/cm2/AA
-
-    def __init__(self, path_to_response=None, verbose=True):
+    def __init__(self, 
+                 response=None, resp_wave=None, response_units=1e16,
+                 calib_spectra=None, calib_wave=None,
+                 path_to_response=None,
+                 verbose=True):
         """
         Initializes the FluxCalibration object.
 
@@ -89,11 +86,18 @@ class FluxCalibration(CorrectionBase):
         """
         self.corr_print("Initialising Flux Calibration (Spectral Throughput)")
         self.verbose = verbose
-            
 
+        self.calib_spectra = calib_spectra
+        self.calib_wave = calib_wave
+
+        self.response_units = response_units  # erg/s/cm2/AA
+        
         if path_to_response is not None:
             self.corr_print(f"Loading response from file {path_to_response}")
             self.resp_wave, self.response = np.loadtxt(path_to_response, unpack=True)
+        else:
+            self.resp_wave, self.response = resp_wave, response
+
 
     def interpolate_model(self, wavelength, update=True):
         """
