@@ -1,14 +1,19 @@
 """
-Parent CorrectionBase class
+Base Correction class
 """
-from pykoala.exceptions.exceptions import CorrectionClassError
-from abc import ABC, abstractmethod
 
+from abc import ABC, abstractmethod
+import sys
+import logging
 
 class CorrectionBase(ABC):
     """
     Base class of an astronomical correction to a given data (RSS or CUBE).
     """
+
+    def __init__(self, verbose=False) -> None:
+        self.verbose = verbose
+        self.setup_logger()
 
     @property
     @abstractmethod
@@ -32,10 +37,27 @@ class CorrectionBase(ABC):
     def apply(self):
         raise NotImplementedError("Each class needs to implement this method")
 
-    def corr_print(self, msg, *args):
-        """Print a message."""
+    def setup_logger(self):
+        self.logger = logging.getLogger(self.name)
+        stdout = logging.StreamHandler(stream=sys.stdout)
+        fmt = logging.Formatter(
+        "[PyKOALA Correction:%(name)s] %(asctime)s | %(levelname)s > %(message)s"
+        )
+        stdout.setFormatter(fmt)
+
+        if (self.logger.hasHandlers()):
+            self.logger.handlers.clear()
+        self.logger.addHandler(stdout)
+
         if self.verbose:
-            print("[Correction: {}] {}".format(self.name, msg), *args)
+            self.logger.setLevel(logging.INFO)
+        else:
+            self.logger.setLevel(logging.ERROR)
+
+    def corr_print(self, msg, level='info'):
+        """Print a message."""
+        printer = getattr(self.logger, level)
+        printer(msg)
 
     def log_correction(self, datacontainer, status='applied', **extra_comments):
         """Log in the DataContainer the correction and additional info.

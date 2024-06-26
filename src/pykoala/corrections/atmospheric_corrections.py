@@ -52,6 +52,7 @@ class AtmosphericExtCorrection(CorrectionBase):
                  extinction_correction_wave=None,
                  extinction_file=default_extinction,
                  verbose=False):
+        super().__init__(verbose)
         self.verbose = verbose
         self.corr_print("Initialising Atm ext. correction model.")
 
