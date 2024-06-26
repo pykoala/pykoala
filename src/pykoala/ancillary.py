@@ -15,7 +15,18 @@ from scipy import interpolate
 from scipy import optimize
 import logging
 
+# =============================================================================
+# Astropy and associated packages
+# =============================================================================
+from astropy.io import fits
+# =============================================================================
+
+# =============================================================================
+# PyKOALA modules
+# =============================================================================
+
 logger = logging.getLogger('pykoala.logger')
+
 if not (logger.hasHandlers()):
     stdout = logging.StreamHandler()
     fmt = logging.Formatter(
@@ -33,15 +44,6 @@ def log_into_file(filename, level='INFO'):
     logger.addHandler(hdlr) 
     logger.setLevel(level)
 
-# =============================================================================
-# Astropy and associated packages
-# =============================================================================
-from astropy.io import fits
-# =============================================================================
-
-# =============================================================================
-# PyKOALA modules
-# =============================================================================
 
 
 def vprint(*arg, **kwargs):
