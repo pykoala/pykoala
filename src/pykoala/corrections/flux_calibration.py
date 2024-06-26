@@ -44,27 +44,6 @@ class FluxCalibration(CorrectionBase):
         The response wavelength data.
     response_units : float
         Units of the response function, default is 1e16 (erg/s/cm^2/AA).
-
-    Methods
-    -------
-    interpolate_model(wavelength, update=True)
-        Interpolates the spectral response to the input wavelength array.
-    auto(data, calib_stars, extract_args=None, response_params=None, save=None, fnames=None, combine=False)
-        Performs automatic calibration using a set of standard stars.
-    master_flux_auto(flux_cal_results)
-        Computes a master response function from results returned by the auto method.
-    extract_stellar_flux(data_container, wave_range=None, wave_window=None, profile=cumulative_1d_moffat, bounds='auto', growth_r=np.arange(0, 10, 0.5), plot=False, **fitter_args)
-        Extracts the stellar flux from a DataContainer object.
-    list_available_stars(verbose=True)
-        Lists all available spectrophotometric standard star files.
-    read_calibration_star(name=None, path=None, flux_units=None)
-        Reads the spectra of a calibration star from a file.
-    get_response_curve(wave, obs_spectra, ref_spectra, pol_deg=None, spline=False, spline_args={}, gauss_smooth_sigma=None, plot=False, mask_absorption=True)
-        Computes the response curve from observed and reference spectra.
-    apply(data_container, response=None, response_units=None)
-        Applies the spectral response function to a DataContainer object.
-    save_response(fname, response, wavelength, units=None)
-        Saves the response function to a file.
     """
 
     name = "FluxCalibration"
