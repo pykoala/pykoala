@@ -25,75 +25,112 @@ from pykoala.ancillary import (centre_of_mass, cumulative_1d_moffat, mask_lines)
 
 
 class FluxCalibration(CorrectionBase):
-    """This module contains the methods for extracting and applying an absolute flux calibration.
     """
+    A class to handle the extraction and application of absolute flux calibration.
+
+    Attributes
+    ----------
+    name : str
+        The name of the Correction.
+    verbose : bool
+        If True, prints additional information during execution.
+    calib_spectra : None or array-like
+        The calibration spectra data.
+    calib_wave : None or array-like
+        The calibration wavelength data.
+    response : None or array-like
+        The response data.
+    resp_wave : None or array-like
+        The response wavelength data.
+    response_units : float
+        Units of the response function, default is 1e16 (erg/s/cm^2/AA).
+    """
+
     name = "FluxCalibration"
-    verbose = True
-    calib_spectra = None
-    calib_wave = None
 
-    response = None
-    resp_wave = None
-    response_units = 1e16  # erg/s/cm2/AA
+    def __init__(self, 
+                 response=None, resp_wave=None, response_units=1e16,
+                 calib_spectra=None, calib_wave=None,
+                 path_to_response=None,
+                 verbose=True):
+        """
+        Initializes the FluxCalibration object.
 
-    def __init__(self, path_to_response=None, verbose=True):
+        Parameters
+        ----------
+        path_to_response : str, optional
+            Path to the response file.
+        verbose : bool, optional
+            If True, prints additional information during execution.
+        """
         self.corr_print("Initialising Flux Calibration (Spectral Throughput)")
         self.verbose = verbose
-            
 
+        self.calib_spectra = calib_spectra
+        self.calib_wave = calib_wave
+
+        self.response_units = response_units  # erg/s/cm2/AA
+        
         if path_to_response is not None:
             self.corr_print(f"Loading response from file {path_to_response}")
             self.resp_wave, self.response = np.loadtxt(path_to_response, unpack=True)
+        else:
+            self.resp_wave, self.response = resp_wave, response
+
 
     def interpolate_model(self, wavelength, update=True):
-        """Interpolate the spectral response to the input wavelength array."""
+        """
+        Interpolates the spectral response to the input wavelength array.
+
+        Parameters
+        ----------
+        wavelength : array-like
+            The wavelength array to which the response will be interpolated.
+        update : bool, optional
+            If True, updates the internal response and wavelength attributes.
+
+        Returns
+        -------
+        response : array-like
+            The interpolated response.
+        """
         self.corr_print("Interpolating spectral response to input wavelength array")
-        response = np.interp(wavelength, self.resp_wave, self.response, right=0., left=0.)
+        response = np.interp(wavelength, self.resp_wave, self.response,
+                             right=0., left=0.)
         if update:
+            self.corr_print("Updating response and wavelength arrays")
             self.response = response
             self.resp_wave = wavelength
         return response
 
     def auto(self, data, calib_stars, extract_args=None,
              response_params=None, save=None, fnames=None, combine=False):
-        """Automatic calibration process for extracting the calibration response curve from a set of stars.
+        """
+        Automatic calibration process for extracting the calibration response curve from a set of stars.
 
         Parameters
         ----------
         data : list
             List of DataContainers corresponding to standard stars.
         calib_stars : list
-            List of stellar names. This names will be used to read
-            the default files in the spectrophotometric_stars library.
-        extract_args : dict
-            Dictionary containing the parameters used for extracting
-            the stellar flux.
-            The default dictionary corresponds to:
-            {wave_rage: None, # Wavelength range used to derive the response function
-            wave_window: 30, # Wavelength window in AA used to average the flux
-            plot: False,  # If True, it will provide a plot showing the extraction results
-            bounds=([0, 0, 0], [np.inf, np.inf, np.inf])  # Bounds used for fitting
-            }
-        response_params : default=None
-        save : bool, default=True
-        fnames : default=None
+            List of stellar names. These names will be used to read the default files in the spectrophotometric_stars library.
+        extract_args : dict, optional
+            Dictionary containing the parameters used for extracting the stellar flux from the input data.
+            See the `FluxCalibration.extract_stellar_flux` method.
+        response_params : dict, optional
+            Dictionary containing the parameters for computing the response curve from the stellar spectra.
+            See the `FluxCalibration.get_response_curve` method.
+        save : str or None, optional
+            Path where the response curves will be saved.
+        fnames : list or None, optional
+            Filenames corresponding to the calibration stars.
+        combine : bool, optional
+            If True, combines individual response curves into a master response curve.
 
         Returns
         -------
         flux_cal_results : dict
-            Dictionary containing the results from the flux calibration process
-            for each of the stars provided. Results for each star are contained
-            within a dictionary that includes:
-            extraction: mean_wave, optimal
-            interp: Polynomial interpolation of the response function
-            response: Instrumental throughput
-            resp_fig: If plot=True in `**respones_params` it will contain
-            a plot of the wavelength versus the instrument response function.
-        
-        See Also
-        --------
-        pykoala.corrections.flux_calibration.FluxCalibration.extract_stellar_flux :
-            Extract the stellar flux from an RSS or Cube.
+            Dictionary containing the results from the flux calibration process for each of the stars provided.
         """
         if extract_args is None:
             # Default extraction arguments
@@ -110,11 +147,6 @@ class FluxCalibration(CorrectionBase):
         for i, name in enumerate(fnames):
             self.corr_print("\n" + "-" * 40 + "\nAutomatic calibration process for {}\n"
                             .format(calib_stars[i]) + "-" * 40 + '\n')
-            self.corr_print("Loading template spectra")
-
-            # Load standard star
-            ref_wave, ref_spectra = self.read_calibration_star(name=calib_stars[i])
-
             # Extract flux from std star
             self.corr_print("Extracting stellar flux from data")
             result = self.extract_stellar_flux(copy.deepcopy(data[i]),
@@ -124,6 +156,11 @@ class FluxCalibration(CorrectionBase):
             self.corr_print("Interpolating template to observed wavelength")
             mean_wave = np.nanmean(result['wave_edges'], axis=1)
             result['mean_wave'] = mean_wave
+
+            # Load standard star
+            self.corr_print("Loading template spectra")
+            ref_wave, ref_spectra = self.read_calibration_star(name=calib_stars[i])
+
             interp_s = np.interp(mean_wave, ref_wave, ref_spectra)
 
             flux_cal_results[name]['interp'] = interp_s
@@ -152,10 +189,18 @@ class FluxCalibration(CorrectionBase):
         return flux_cal_results
     
     def master_flux_auto(self, flux_cal_results):
-        """Create a master response function.
-        
-        Compute a master reponse function from the results returned by
-        FluxCalibration.auto
+        """
+        Create a master response function from the results returned by FluxCalibration.auto.
+
+        Parameters
+        ----------
+        flux_cal_results : dict
+            Dictionary containing the results from the flux calibration process for each of the stars provided.
+
+        Returns
+        -------
+        master_resp : array-like
+            The master response function.
         """
         self.corr_print("Mastering response function")
         reference_wavelength = None
@@ -188,29 +233,26 @@ class FluxCalibration(CorrectionBase):
         ----------
         data_container : DataContainer
             Source for extracting the stellar flux.
-        wave_range : list
+        wave_range : list, optional
             Wavelength range to use for the flux extraction.
-        wave_window : int
+        wave_window : int, optional
             Wavelength window size for averaging the input flux.
-        profile : function, default=commulative_1d_moffat
-            Profile function to model the cumulative ligth profile. Any function that accepts as first argument
-            the square distance (r^2) and returns the cumulative profile can be used.
-        growth_r : np.ndarray, default=np.arange(0, 10, 0.5)
-            Radial bins relative to the center of the star in arcseconds that
-            will be used to compute the curve of growth.
-        plot : bool, default=False
-            If True, for each wavelength step the fit will be shown in a plot.
-        fitter_args: kwargs
-            extra arguments to be passed to scipy.optimize.curve_fit
-
+        profile : function, optional
+            Profile function to model the cumulative light profile. Any function that accepts as first argument
+            the square distance (r^2) and returns the cumulative profile can be used. Default is cumulative_1d_moffat.
+        bounds : str or tuple, optional
+            Bounds for the curve fit. Default is 'auto'.
+        growth_r : np.ndarray, optional
+            Radial bins relative to the center of the star in arcseconds that will be used to compute the curve of growth. Default is np.arange(0, 10, 0.5).
+        plot : bool, optional
+            If True, shows a plot of the fit for each wavelength step.
+        fitter_args : dict, optional
+            Extra arguments to be passed to scipy.optimize.curve_fit
 
         Returns
         -------
-        results : dict
-            Dictionary containing the results from the fits:
-            mean_wave: mean wavelength value for each fit.
-            optimal: optimal parameters for the profile function.
-            variance: variance of each parameter.
+        result : dict
+            Dictionary containing the extracted flux and other related data.
         """
 
         wavelength = data_container.wavelength
@@ -229,7 +271,7 @@ class FluxCalibration(CorrectionBase):
                         + " -> Wavelength window={}\n".format(wave_window))
 
         # Formatting the data
-        if type(data_container) is RSS:
+        if isinstance(data_container, RSS):
             self.corr_print("Extracting flux from RSS")
             data = data_container.intensity.copy()
             variance = data_container.variance.copy()
@@ -237,14 +279,13 @@ class FluxCalibration(CorrectionBase):
             data, variance = data.T, variance.T
             x = data_container.info['fib_ra']
             y = data_container.info['fib_dec']
-        elif type(data_container) is Cube:
+        elif isinstance(data_container, Cube):
             self.corr_print("Extracting flux from input Cube")
             data = data_container.intensity.copy()
             data = data.reshape((data.shape[0], data.shape[1] * data.shape[2]))
             variance = data_container.variance.copy()
             variance = variance.reshape((variance.shape[0], variance.shape[1] * variance.shape[2]))
-            x, y = np.meshgrid(np.arange(data_container.n_cols),
-                               np.arange(data_container.n_rows))
+            x, y = np.indices((data_container.n_rows, data_container.n_cols))
             x, y = x.flatten(), y.flatten()
             x, y = data_container.wcs.celestial.pixel_to_world_values(x, y)
 
@@ -265,7 +306,7 @@ class FluxCalibration(CorrectionBase):
             fitter_args['xtol'] = 0.001
             fitter_args['gtol'] = 0.001
         if 'max_nfev' not in fitter_args.keys():
-            fitter_args['max_nfev'] = 100000
+            fitter_args['max_nfev'] = 1000
  
         # Loop over all spectral slices
         self.corr_print("...Fitting wavelength chuncks...")
@@ -279,7 +320,7 @@ class FluxCalibration(CorrectionBase):
             slice_var = np.nanmedian(slice_var, axis=0) / np.sqrt(slice_var.shape[0])
             slice_var[slice_var <= 0] = np.inf
 
-            if np.isfinite(slice_data).all():
+            if not np.isfinite(slice_data).any():
                 self.corr_print("Chunk between {} to {} contains no useful data"
                                 .format(wave_edges[0], wave_edges[1]))
                 continue
@@ -313,11 +354,9 @@ class FluxCalibration(CorrectionBase):
                 p0=[growth_c[-1], r2_dummy.mean(), 1.0]
                 popt, pcov = curve_fit(
                     profile, r2[cog_mask], growth_c[cog_mask], bounds=p_bounds,
-                    p0=p0,
-                    **fitter_args)
+                    p0=p0, **fitter_args)
             except Exception as e:
                 self.corr_print("There was a problem during the fit:\n", e)
-
             else:
                 cog.append(growth_c)
                 cog_var.append(growth_c_var)
@@ -327,33 +366,9 @@ class FluxCalibration(CorrectionBase):
                 residuals.append(np.nanmean(growth_c - profile(r2, *popt)))
 
         if plot:
-            # TODO: This could be another function on this or the plotting module
-            fig, axs = plt.subplots(ncols=2, nrows=2, figsize=(8, 8), gridspec_kw=dict(hspace=0.4, wspace=0.4))
-            ax = axs[0, 0]
-            ax.set_title("Median intensity")
-            mappable = ax.scatter(x, y, c=np.log10(np.nanmedian(data, axis=0)),
-                                  cmap='nipy_spectral')
-            plt.colorbar(mappable, ax=ax, label=r'$\log_{10}$(intensity)')
-            ax.plot(x0, y0, '+', ms=5, color='r')
-
-            ax = axs[1, 0]
-            cog = np.array(cog)
-            cog /= cog[:, -1][:, np.newaxis]
-            pct_cog = np.nanpercentile(cog, [16, 50, 84], axis=0)
-            for pct in pct_cog:
-                ax.plot(r2_dummy**0.5, pct)
-            ax.set_yscale('log')
-            ax.set_xscale('log')
-            ax.set_ylabel('Normalised Curve of Growth')
-            ax.set_xlabel('Distance to COM (arcsec)')
-            ax.grid(visible=True, which='both')
-            ax = axs[0, 1]
-            ax.plot(np.mean(running_wavelength, axis=1), residuals, '-o', color='k', lw=2)
-            ax.set_ylabel('Mean residuals')
-            ax.set_xlabel('Wavelength')
-
-            axs[1, 1].axis('off')
-            plt.close(fig)
+            fig = self.plot_extraction(x, y, x0, y0, r2_dummy**0.5, cog,
+                                 np.mean(running_wavelength, axis=1),
+                                 residuals)
         else:
             fig = None
         result = dict(wave_edges=np.array(running_wavelength),
@@ -362,9 +377,54 @@ class FluxCalibration(CorrectionBase):
                       figure=fig)
         return result
 
+    def plot_extraction(self, x, y, x0, y0, data, rad, cog, wavelength, residuals):
+        """"""
+        self.corr_print("Making stellar flux extraction plot")
+        fig, axs = plt.subplots(ncols=2, nrows=2, figsize=(8, 8),
+                                gridspec_kw=dict(hspace=0.4, wspace=0.4),
+                                constrained_layout=True)
+        # Plot in the sky
+        ax = axs[0, 0]
+        ax.set_title("Median intensity")
+        mappable = ax.scatter(x, y, c=np.log10(np.nanmedian(data, axis=0)),
+                                cmap='nipy_spectral')
+        plt.colorbar(mappable, ax=ax, label=r'$\log_{10}$(intensity)')
+        ax.plot(x0, y0, '+', ms=5, color='r')
+        # Plot cog
+        ax = axs[1, 0]
+        cog = np.array(cog)
+        cog /= cog[:, -1][:, np.newaxis]
+        pct_cog = np.nanpercentile(cog, [16, 50, 84], axis=0)
+        for p, pct in zip([16, 50, 84], pct_cog):
+            ax.plot(rad, pct, label=f'Percentile {p}')
+        ax.set_yscale('log')
+        ax.set_xscale('log')
+        ax.set_ylabel('Normalised Curve of Growth')
+        ax.set_xlabel('Distance to COM (arcsec)')
+        ax.grid(visible=True, which='both')
+        ax = axs[0, 1]
+        ax.plot(wavelength, residuals, '-o', color='k', lw=2)
+        ax.set_ylabel('Mean residuals')
+        ax.set_xlabel('Wavelength')
+        axs[1, 1].axis('off')
+        plt.close(fig)
+        return fig
+    
     @staticmethod
     def list_available_stars(verbose=True):
-        """List all available spectrophotometric standard star files."""
+        """
+        Lists all available spectrophotometric standard star files.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            If True, prints the list of available stars.
+
+        Returns
+        -------
+        stars : list
+            List of available spectrophotometric standard stars.
+        """
         files = os.listdir(os.path.join(os.path.dirname(__file__), '..',
                                         'input_data', 'spectrophotometric_stars'))
         files = np.sort(files)
@@ -378,17 +438,23 @@ class FluxCalibration(CorrectionBase):
 
     def read_calibration_star(self, name=None, path=None, flux_units=None):
         """
-        Read from a file the spectra of a calibration star. TODO...
+        Reads the spectra of a calibration star from a file.
 
         Parameters
         ----------
-        name : TODO
-        path : TODO
-        flux_units : TODO
+        name : str, optional
+            Name of the calibration star.
+        path : str, optional
+            Path to the file containing the calibration star spectra.
+        flux_units : str, optional
+            Units of the flux.
 
         Returns
         -------
-        TODO
+        wave : array-like
+            Wavelength array of the calibration star.
+        flux : array-like
+            Flux array of the calibration star.
         """
         if flux_units is None:
             flux_units = 1 / self.response_units
@@ -419,31 +485,35 @@ class FluxCalibration(CorrectionBase):
                            pol_deg=None, spline=False, spline_args={}, gauss_smooth_sigma=None, plot=False,
                            mask_absorption=True):
         """
-        Compute the response curve (spectral throughput) from a given observed spectrum and a reference function.
+        Computes the response curve from observed and reference spectra.
 
         Parameters
         ----------
-        wave : np.ndarray
-            Wavelength array of observed and reference spectra.
-        obs_spectra : np.ndarray
-            Observed spectra
-        ref_spectra : np.ndarry
-            Reference spectra
-        pol_deg : int (default=None)
-            If not None, the response curve will be interpolated to a polynomial of degree pol_deg.
-        gauss_smooth_sigma : float (default=None)
-            If not None, the cumulative response function will be gaussian smoothed before interpolation. The units must
-            be the same as the wavelength array (AA).
-        plot : bool (default=False)
-            If True, will return a figure containing a plot of the interpolation.
+        wave : array-like
+            Wavelength array.
+        obs_spectra : array-like
+            Observed spectra.
+        ref_spectra : array-like
+            Reference spectra.
+        pol_deg : int, optional
+            Degree of the polynomial fit. If None, no polynomial fit is applied.
+        spline : bool, optional
+            If True, uses a spline fit.
+        spline_args : dict, optional
+            Additional arguments for the spline fit.
+        gauss_smooth_sigma : float, optional
+            Sigma for Gaussian smoothing.
+        plot : bool, optional
+            If True, plots the response curve.
+        mask_absorption : bool, optional
+            If True, masks absorption features.
 
         Returns
         -------
-        response : function
-            Interpolator function of the response curve.
-        fig : default=None
-            If plot=True it will return a `plt.Figure` 
-            containing the response function in terms of wavelength
+        response_curve : callable
+            Function representing the response curve.
+        response_fig : matplotlib.figure.Figure
+            Figure of the response curve plot, if plot is True.
         """
         print("Computing spectrophotometric response")
         dwave = np.diff(wave)
@@ -507,15 +577,36 @@ class FluxCalibration(CorrectionBase):
             return response, None
 
     def apply(self, data_container, response=None, response_units=None):
-        """Apply a spectral response function to a Data Container object.
-        If the object has already been calibrated an exception will be raised.
+        """
+        Computes the response curve from observed and reference spectra.
 
         Parameters
         ----------
-        response: np.ndarray
-            Response function interpolated to the same wavelength points as the Data Container data
-        data_container: DataContainer
-            Data to be calibrated.
+        wave : array-like
+            Wavelength array.
+        obs_spectra : array-like
+            Observed spectra.
+        ref_spectra : array-like
+            Reference spectra.
+        pol_deg : int, optional
+            Degree of the polynomial fit. If None, no polynomial fit is applied.
+        spline : bool, optional
+            If True, uses a spline fit.
+        spline_args : dict, optional
+            Additional arguments for the spline fit.
+        gauss_smooth_sigma : float, optional
+            Sigma for Gaussian smoothing.
+        plot : bool, optional
+            If True, plots the response curve.
+        mask_absorption : bool, optional
+            If True, masks absorption features.
+
+        Returns
+        -------
+        response_curve : callable
+            Function representing the response curve.
+        response_fig : matplotlib.figure.Figure
+            Figure of the response curve plot, if plot is True.
         """
 
         if data_container.is_corrected(self.name):
@@ -551,6 +642,24 @@ class FluxCalibration(CorrectionBase):
         return data_container
 
     def save_response(self, fname, response, wavelength, units=None):
+        """
+        Saves the response function to a file.
+
+        Parameters
+        ----------
+        fname : str
+            File name for saving the response function.
+        response : array-like
+            The response function data.
+        wavelength : array-like
+            The wavelength array corresponding to the response function.
+        units : str, optional
+            Units of the response function.
+
+        Returns
+        -------
+        None
+        """
         # TODO Include response units in header
         if units is None:
             units = self.response_units
