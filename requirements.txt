@@ -17,3 +17,4 @@ setuptools==65.5.1
 scikit-image>=0.0
 synphot==1.2.1
 ipykernel>=6.29.4
+tqdm==4.66.4

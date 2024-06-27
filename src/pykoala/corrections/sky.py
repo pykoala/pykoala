@@ -485,6 +485,7 @@ class SkyModel(object):
         self.continuum = kwargs.get('continuum', None)
         self.verbose = kwargs.get('verbose', True)
 
+
     def substract(self, data, variance, axis=-1, verbose=False):
         """
         Subtracts the sky model from the given data.
@@ -826,10 +827,10 @@ class SkyFromObject(SkyModel):
         cont_estimator_args : dict, optional
             Arguments for the continuum estimator. Default is None.
         """
-        self.vprint("Creating SkyModel from input Data Container")
+        vprint(self,"Creating SkyModel from input Data Container")
         self.dc = dc
         # self.exptime = dc.info['exptime']
-        self.vprint("Estimating sky background contribution...")
+        vprint(self,"Estimating sky background contribution...")
 
         bckg, bckg_sigma = self.estimate_background(
             bckgr_estimator, bckgr_params, source_mask_nsigma)
@@ -879,9 +880,9 @@ class SkyFromObject(SkyModel):
             dims_to_expand = (0)
 
         if source_mask_nsigma is not None:
-            self.vprint("Pre-estimating background using all data")
+            vprint(self,"Pre-estimating background using all data")
             bckgr, bckgr_sigma = estimator(data, **bckgr_params)
-            self.vprint(
+            vprint(self,
                 f"Applying sigma-clipping mask (n-sigma={source_mask_nsigma})")
             source_mask = (data > np.expand_dims(bckgr, dims_to_expand) +
                            source_mask_nsigma

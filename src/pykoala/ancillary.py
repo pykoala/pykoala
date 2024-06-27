@@ -28,9 +28,8 @@ def vprint(*arg, **kwargs):
     """
     Prints the arguments only if verbose=True.
     """
-    if kwargs['verbose']:
+    if 'verbose' in kwargs:
         print(*arg)
-
 
 # =============================================================================
 # Ancillary Functions - RSS Related

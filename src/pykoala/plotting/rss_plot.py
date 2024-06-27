@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
-from pykoala.plotting.plot_plot import plot_plot #, basic_statistics
+from pykoala.plotting.quick_plot import quick_plot #, basic_statistics
 
 # Fuego color map
 #from matplotlib import pyplot as plt
@@ -71,7 +71,7 @@ def plot_wavelength(rss, wavelength, r = False, **kwargs):
             kwargs["xlabel"] = "Fibre"  
         if kwargs.get("ptitle") is None:
             kwargs["ptitle"] = "Intensity cut at " + str(round(wave,2)) + " $\mathrm{\AA}$ - index =" + str(wave_index)
-        plot_plot(x, corte_wave, **kwargs)
+        quick_plot(x, corte_wave, **kwargs)
     
     if r: return corte_wave
 # #-----------------------------------------------------------------------------
@@ -201,7 +201,7 @@ def get_spectrum(data_container,
         if vlines is None: kwargs["vlines"] =[kinfo["valid_wave_min"],kinfo["valid_wave_max"]]
         
         
-        plot_plot(wavelength, spectrum,
+        quick_plot(wavelength, spectrum,
                   #ptitle = ptitle,
                   #vlines=[kinfo["valid_wave_min"],kinfo["valid_wave_max"]],
                   **kwargs)    
@@ -231,7 +231,7 @@ def plot_spectrum(rss, spectrum_number, r = False, **kwargs):
     spectrum = rss.intensity[spectrum_number]
     if kwargs.get("ptitle") is None:
         kwargs["ptitle"] = rss.info["name"] + " - Spectrum: "+str(spectrum_number)
-    plot_plot(wavelength, spectrum, **kwargs)
+    quick_plot(wavelength, spectrum, **kwargs)
     if r: return spectrum
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -273,7 +273,7 @@ def plot_combined_spectrum(rss, list_spectra=None,  median=False, r = False, **k
                 kwargs["ptitle"] = "{} - Combined spectrum in range [{},{}]".format(rss.info["name"],list_spectra[0], list_spectra[-1])
             else:
                 kwargs["ptitle"] = "Combined spectrum using requested fibres"
-        plot_plot(rss.wavelength, spectrum,  **kwargs)
+        quick_plot(rss.wavelength, spectrum,  **kwargs)
                   
     if r: return spectrum       
 # -----------------------------------------------------------------------------
