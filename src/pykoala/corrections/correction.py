@@ -20,11 +20,11 @@ class CorrectionBase(ABC):
         self._name = value
 
     @property
-    @abstractmethod
+#    @abstractmethod
     def verbose(self):
         return self._verbose
 
-    @verbose.setter
+#    @verbose.setter
     def verbose(self, verbose):
         self._verbose = verbose
 
