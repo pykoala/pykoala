@@ -16,6 +16,7 @@ AAOmega spectrograph on the 3.9m AAT ([Anglo-Australian Telescope][aat_website])
 ---
 ## Status
 [![Documentation Status](https://readthedocs.org/projects/pykoala/badge/?version=latest)](https://pykoala.readthedocs.io/en/latest/?badge=latest)
+[![test](https://github.com/pykoala/pykoala/actions/workflows/test.yml/badge.svg)](https://github.com/pykoala/pykoala/actions/workflows/test.yml)
 [![Coverage Status](https://codecov.io/github/pykoala/koala/coverage.svg?branch=master)](https://codecov.io/github/pykoala/koala?branch=master)
 [![License](https://img.shields.io/pypi/l/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/)
 [![Supported versions](https://img.shields.io/pypi/pyversions/pykoala-ifs.svg)](https://pypi.python.org/pypi/pykoala-ifs/)
@@ -32,7 +33,7 @@ AAOmega spectrograph on the 3.9m AAT ([Anglo-Australian Telescope][aat_website])
 **PyKOALA** can be obtained by cloning the repository, using git:
 
 ```bash
-git clone https://github.com/pykoala/koala.git
+git clone https://github.com/pykoala/pykoala.git
 ```
 
 ## Installation (recommended)
@@ -40,7 +41,7 @@ git clone https://github.com/pykoala/koala.git
 We recommend the use of Python environments for the installation of **PyKOALA**. First, from the terminal enter in the downloaded **PyKOALA** package and create the Python environment:
 
 ```bash
-cd koala
+cd pykoala
 python3 -m venv venv_koala
 ```
 
