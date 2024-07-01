@@ -366,7 +366,7 @@ class FluxCalibration(CorrectionBase):
                 residuals.append(np.nanmean(growth_c - profile(r2, *popt)))
 
         if plot:
-            fig = self.plot_extraction(x, y, x0, y0, r2_dummy**0.5, cog,
+            fig = self.plot_extraction(x, y, x0, y0, data, r2_dummy**0.5, cog,
                                  np.mean(running_wavelength, axis=1),
                                  residuals)
         else:
