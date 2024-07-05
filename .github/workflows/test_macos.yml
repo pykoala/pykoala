@@ -30,7 +30,7 @@ jobs:
         python -m pip install flake8 pytest nbval .
         brew update
         brew install basictex texlive
-        eval "$(/usr/libexec/path_helper)"
+        sudo eval "$(/usr/libexec/path_helper)"
         tlmgr install type1cm dvipng
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 #    - name: Lint with flake8
