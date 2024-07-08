@@ -57,6 +57,7 @@ jobs:
           dvipng
           type1ec
           psnfss
+          collection-fontsrecommended
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
