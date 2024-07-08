@@ -56,7 +56,6 @@ jobs:
           underscore
           dvipng
           type1ec
-          texlive-latex-extra
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
