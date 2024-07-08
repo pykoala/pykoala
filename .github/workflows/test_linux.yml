@@ -62,7 +62,7 @@ jobs:
         python -m pip install flake8 pytest nbval .
         brew update
         exec bash -l
-        tlmgr install dvipng texlive-latex-base cm-super texlive-fonts-recommended texlive-latex-extra 
+        tlmgr install dvipng texlive-latex-base cm-super texlive-fonts-recommended texlive-latex-extra psnfss
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Test with pytest
       run: |
