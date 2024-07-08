@@ -53,13 +53,13 @@ jobs:
         packages: |
           scheme-basic
           type1cm
-          type1ec
           underscore
+          dvipng
+          type1ec
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         python -m pip install flake8 pytest nbval .
-        tlmgr install dvipng
         brew update
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Test with pytest
