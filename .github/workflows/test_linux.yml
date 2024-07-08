@@ -10,8 +10,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build:
-
+  build-ubuntu:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -31,13 +30,35 @@ jobs:
         sudo apt-get update 
         sudo apt install cm-super texlive-latex-base texlive-latex-extra dvipng 
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-#    - name: Lint with flake8
-#      run: |
-#         # stop the build if there are Python syntax errors or undefined names
-#        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-#        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-#        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test with pytest
       run: |
         py.test --nbval-lax tutorials/reduction_sequence_science.ipynb tutorials/create_combined_throughput.ipynb tutorials/reduction_sequence_std_stars.ipynb tutorials/cubing.ipynb tutorials/data_container_mask.ipynb tutorials/koala_tutorial_1_intro.ipynb
 
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Setup TeXLive Action
+      uses: teatimeguest/setup-texlive-action@v3.3.0    
+      with:
+        packages: |
+          scheme-basic
+          type1cm
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install flake8 pytest nbval .
+        brew update
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+    - name: Test with pytest
+      run: |
+        py.test --nbval-lax tutorials/reduction_sequence_science.ipynb tutorials/create_combined_throughput.ipynb tutorials/reduction_sequence_std_stars.ipynb tutorials/cubing.ipynb tutorials/data_container_mask.ipynb tutorials/koala_tutorial_1_intro.ipynb
