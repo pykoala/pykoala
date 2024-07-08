@@ -28,6 +28,7 @@ jobs:
       uses: teatimeguest/setup-texlive-action@v3.3.0    
       with:
         packages: |
+          scheme-basic
           super-cm
           texlive-latex-base texlive-latex-extra
 
