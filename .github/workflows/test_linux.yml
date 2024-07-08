@@ -53,6 +53,7 @@ jobs:
         packages: |
           scheme-basic
           type1cm
+          type1ec
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
