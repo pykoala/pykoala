@@ -30,7 +30,6 @@ jobs:
         packages: |
           scheme-basic
           super-cm
-          texlive-latex-base texlive-latex-extra
 
     - name: Install dependencies
       run: |
