@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 import copy
 from astropy.io.fits import Header, ImageHDU
+from astropy import units as u
 
 # from astropy.nddata import bitmask
 # from pykoala.exceptions.exceptions import NoneAttrError
@@ -444,13 +445,14 @@ class DataContainer(ABC):
         del self._mask
 
     def __init__(self, **kwargs):
-        self._intensity = kwargs['intensity']
-        self._variance = kwargs.get('variance', np.full_like(self._intensity, np.nan, dtype=type(np.nan)))
-        self._mask = kwargs.get('mask',
-                                DataMask(shape=self.intensity.shape))
-        self.info = kwargs.get('info', dict())
+        self._intensity = kwargs["intensity"]
+        self._variance = kwargs.get(
+            "variance", np.full_like(self._intensity, np.nan, dtype=type(np.nan))
+        )
+        self._mask = kwargs.get("mask", DataMask(shape=self.intensity.shape))
+        self.info = kwargs.get("info", dict())
         self.fill_info()
-        self.log = kwargs.get('log', HistoryLog())
+        self.log = kwargs.get("log", HistoryLog())
 
     def fill_info(self):
         """Check the keywords of info and fills them with placeholders."""
@@ -528,7 +530,13 @@ class SpectraContainer(DataContainer):
         pass
 
     def __init__(self, **kwargs):
-        self._wavelength = kwargs['wavelength']
+        if "wavelength" in kwargs.keys():
+            self._wavelength = kwargs["wavelength"]
+        else:
+            print(
+                "WARNING: No `wavelength` vector supplied; creating empty `SpectraContainer`"
+            )
+            self._wavelength = u.Quantity([], u.AA)
         super().__init__(**kwargs)
 
 
