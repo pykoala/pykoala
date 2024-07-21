@@ -1,7 +1,7 @@
 # How to Contribute to `PyKOALA`
 
 Every contributor is welcome, regardless of their programming experience, if any.
-There are several ways you can contribute to this project, here is a not exahustive list:
+There are several ways you can contribute to this project, here is a not exhaustive list:
 
 ## Report an issue
 
