@@ -7,11 +7,7 @@ import os
 
 from pykoala.corrections.throughput import Throughput
 
-#TODO: This is not working
-plt.style.use(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                 'pykoala.mplstyle')
-)
+plt.style.use('dark_background')
 
 throughput_cmap = plt.cm.get_cmap('jet').copy()
 throughput_cmap.set_extremes(bad='gray', under='black', over='fuchsia')
