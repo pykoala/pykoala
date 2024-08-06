@@ -13,6 +13,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy import interpolate
 from scipy import optimize
+import sys
 # =============================================================================
 # Astropy and associated packages
 # =============================================================================
@@ -695,6 +696,79 @@ def mask_lines(wave_array, width=30, lines=lines.values()):
     for line in lines:
         mask[(wave_array < line + width) & (wave_array > line - width)] = False
     return mask
+
+def print_counter(stage, 
+                  iteration=None, 
+                  total=None, 
+                  output_every_few = None, 
+                  next_output = None,
+                  Jupyter = True, 
+                  text = "spectrum",
+                  pbar=None):
+    """
+    Task for printing a counter with the % progresion
+
+    Parameters
+    ----------
+    stage : integer
+        Stage number: 1 (setting), 2 (looping), 3 (closing).
+    iteration : integer, optional
+        iteration in the series.
+    total : int, optional
+        Total number of iterations 
+    output_every_few : integer, optional
+        printing the counter every output_every_few iteractions.
+    next_output : integer, optional
+        When the next output will be shown.
+    Jupyter : boolean, optional
+        Use the counter that works in Jupyter. The default is True.
+    pbar : object, optional
+        bar object where to print. It needs to be created OUT of this function to work, using:
+            pbar = tqdm(total=n_spectra, file=sys.stdout)
+        The default is None.
+
+    Returns
+    -------
+    next_output if it is obtained (to be considered in the next iteration).
+
+    """
+    if stage == 1:
+        if Jupyter is False:  sys.stdout.write("    Working on {}:                           ".format(text))
+        next_output = -1
+
+    if stage == 2:
+        if output_every_few is None: output_every_few = int(np.sqrt(total-1) + 1)
+        next_output = int(iteration + output_every_few)
+
+        if Jupyter is True:
+            ptext = '    Working on '+text+': '
+            pbar.set_description(ptext+'%d' % (iteration))
+            #pbar.set_description('    Working on spectrum: %d' % (iteration))
+            if iteration == 0:
+                pbar.update(0)
+            else:
+                pbar.update(output_every_few)
+        else:
+            sys.stdout.write("\b" * 28)
+            sys.stdout.write("{:5.0f}  ({:5.2f}% completed)".format(iteration, iteration/total*100))
+    if stage == 3:
+        if Jupyter is False:  
+            sys.stdout.write("\b" * 51)
+            sys.stdout.write("    Process completed!                                     ")
+        else:
+            pbar.set_description("    Process completed!         ")
+            if output_every_few is None: output_every_few = int(np.sqrt(total-1) + 1)
+            add_last_fibres =  total - (next_output - output_every_few)
+            pbar.update(add_last_fibres)
+            pbar.close()
+
+    
+    if Jupyter is False: sys.stdout.flush()
+    
+    if next_output is not None: return next_output
+
+
+
 
 # =============================================================================
 # Mr Krtxo \(ﾟ▽ﾟ)/
