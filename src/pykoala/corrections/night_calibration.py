@@ -45,7 +45,7 @@ class NIGHT_CALIBRATION(object):
         #    if path is not None: self.filename = os.path.join(path,self.filename)
             #if verbose: print("\n> Reading files for calibration of the night:")
         if self.throughput is not None:
-            if str(type(self.throughput))[-5:-2] == "str":
+            if type(self.throughput) == str:
                 if path is not None: self.throughput = os.path.join(path,self.throughput)
                 if verbose: print(" - Reading throughtput calibration from file",self.throughput)
                 self.throughput = Throughput(path=self.throughput)
