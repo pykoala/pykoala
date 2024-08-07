@@ -13,7 +13,7 @@ from astropy.io import fits
 # =============================================================================
 from pykoala import __version__
 from pykoala.ancillary import vprint
-from pykoala.data_container import DataContainer
+from pykoala.data_container import SpectraContainer
 
 
 # =============================================================================
@@ -21,7 +21,7 @@ from pykoala.data_container import DataContainer
 # =============================================================================
 
 
-class RSS(DataContainer):
+class RSS(SpectraContainer):
     """
     Data Container class for row-stacked spectra (RSS).
 
@@ -50,18 +50,18 @@ class RSS(DataContainer):
         Dictionary containing a log of the processes applied on the rss.   
     """
 
-    def __init__(self,
-                 intensity=None,
-                 wavelength=None,
-                 variance=None,
-                 info=None,
-                 log=None,
-                 ):
+    @property
+    def rss_intensity(self):
+        return self._intensity
 
-        # Intialise base class
-        super().__init__(intensity=intensity, variance=variance, info=info, log=log)
-        # Specific RSS attributes
-        self.wavelength = wavelength
+    @property
+    def rss_variance(self):
+        return self._variance
+
+    def __init__(self, **kwargs):
+        assert ('wavelength' in kwargs)
+        assert ('intensity' in kwargs)
+        super().__init__(**kwargs)
 
     def get_centre_of_mass(self, wavelength_step=1, stat=np.nanmedian, power=1.0):
         """Compute the center of mass (COM) based on the RSS fibre positions
@@ -176,7 +176,7 @@ class RSS(DataContainer):
             "%d_%m_%Y_%H_%M_%S"), "creation date / last change"
 
         # Fill the header with the log information
-        primary.header = self.dump_log_in_header(primary.header)
+        primary.header = self.log.dump_to_header(primary.header)
 
         # primary_hdu.header = self.header
         # Create a list of HDU
