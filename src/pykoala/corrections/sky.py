@@ -23,7 +23,7 @@ from astropy import units as u
 # KOALA packages
 # =============================================================================
 # Modular
-from pykoala.ancillary import vprint
+from pykoala import vprint
 from pykoala.plotting.utils import new_figure, colour_map
 from pykoala.exceptions.exceptions import TelluricNoFileError
 from pykoala.corrections.correction import CorrectionBase
