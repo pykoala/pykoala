@@ -4,8 +4,8 @@ Base Correction class
 
 from abc import ABC, abstractmethod
 import logging
-from pykoala.ancillary import pykoala_logger, log_into_file
 
+from pykoala import pykoala_logger, log_into_file
 
 class CorrectionBase(ABC):
     """
@@ -66,6 +66,8 @@ class CorrectionBase(ABC):
 
         if logger is None:
             self.logger = pykoala_logger.getChild(f"correction.{self.name}")
+        else:
+            self.logger = logger
 
         self.verbose = verbose
         # This variable supersedes `verbose`
@@ -86,7 +88,6 @@ class CorrectionBase(ABC):
         self._name = value
 
     @property
-    @abstractmethod
     def verbose(self):
         """Abstract property for the verbosity of the correction."""
         return self._verbose

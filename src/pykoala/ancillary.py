@@ -13,8 +13,6 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy import interpolate
 from scipy import optimize
-import logging
-import sys
 # =============================================================================
 # Astropy and associated packages
 # =============================================================================
@@ -24,37 +22,6 @@ from astropy.io import fits
 # =============================================================================
 # PyKOALA modules
 # =============================================================================
-
-# Parent logger
-pykoala_logger = logging.getLogger('pykoala')
-
-if not (pykoala_logger.hasHandlers()):
-    stdout = logging.StreamHandler(sys.stdout)
-    fmt = logging.Formatter(
-    "[%(name)s] %(asctime)s|%(levelname)s> %(message)s",
-    datefmt="%Y/%m/%d %H:%M")
-    stdout.setFormatter(fmt)
-    pykoala_logger.addHandler(stdout)
-    pykoala_logger.setLevel(logging.INFO)
-
-def log_into_file(filename, logger_name='pykoala', level='INFO'):
-    logger = logging.getLogger(logger_name)
-    hdlr = logging.FileHandler(filename)
-    fmt = logging.Formatter(
-    "[%(name)s] %(asctime)s|%(levelname)s> %(message)s",
-    datefmt="%Y/%m/%d %H:%M")
-    hdlr.setFormatter(fmt)
-    logger.addHandler(hdlr) 
-    logger.setLevel(level)
-
-
-
-def vprint(*arg, **kwargs):
-    """
-    Prints the arguments only if verbose=True.
-    """
-    if 'verbose' in kwargs:
-        print(*arg)
 
 # =============================================================================
 # Ancillary Functions - RSS Related
@@ -678,9 +645,6 @@ def fit_moffat(r2_growth_curve, f_growth_curve,
                                   p0=(f_guess, r2_half_light, 1)
                                   )
     if plot:
-        print("Best-fit: L_star =", fit[0])
-        print("          alpha =", np.sqrt(fit[1]))
-        print("          beta =", fit[2])
         r_norm = np.sqrt(np.array(r2_growth_curve) / r2_half_light)
         plt.plot(r_norm, cumulative_1d_moffat(np.array(r2_growth_curve),
                                               fit[0], fit[1], fit[2]) / fit[0], ':')
