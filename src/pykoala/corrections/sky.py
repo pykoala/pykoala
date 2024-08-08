@@ -918,9 +918,8 @@ class SkySubsCorrection(CorrectionBase):
     """
 
     name = "SkyCorrection"
-    verbose = True
 
-    def __init__(self, skymodel):
+    def __init__(self, skymodel, **correction_kwargs):
         """
         Initialize the SkySubsCorrection with a given sky model.
 
@@ -929,6 +928,7 @@ class SkySubsCorrection(CorrectionBase):
         skymodel : SkyModel
             The sky model to be used for sky emission subtraction.
         """
+        super().__init__(**correction_kwargs)
         self.skymodel = skymodel
 
     def plot_correction(self, data_cont, data_cont_corrected, **kwargs):
@@ -1075,7 +1075,6 @@ class TelluricCorrection(CorrectionBase):
     """
     name = "TelluricCorretion"
     telluric_correction = None
-    verbose = True
 
     def __init__(self,
                  data_container=None,
@@ -1083,8 +1082,8 @@ class TelluricCorrection(CorrectionBase):
                  telluric_correction=None,
                  wavelength=None,
                  n_fibres=10,
-                 verbose=True,
-                 frac=0.5):
+                 frac=0.5,
+                 **correction_kwargs):
         """
         Initializes the TelluricCorrection object.
 
@@ -1105,8 +1104,7 @@ class TelluricCorrection(CorrectionBase):
         frac : float, optional
             Fraction of the data to use for correction (default is 0.5).
         """
-
-        self.verbose = verbose
+        super().__init__(**correction_kwargs)
         self.corr_print(
             "Obtaining telluric correction using spectrophotometric star...")
 
@@ -1574,7 +1572,8 @@ class SkySelfCalibration(CorrectionBase):
 
     # TODO: Don't assume RSS format (intensity[spec_id, wavelength])
     #       def __init__(self, dc:DataContainer, continuum:ContinuumModel):
-    def __init__(self, dc: RSS):
+    def __init__(self, dc: RSS, **correction_kwargs):
+        super().__init__(**correction_kwargs)
         self.update(dc)
 
     def update(self, dc: RSS):

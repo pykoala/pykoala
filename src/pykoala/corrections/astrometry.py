@@ -31,8 +31,8 @@ class AstrometryCorrection(CorrectionBase):
     name = 'Astrometry'
     verbose = True
 
-    def __init__(self, *args, **kwargs) -> None:
-        self.verbose = kwargs.get('verbose', True)
+    def __init__(self, **correction_args) -> None:
+        super().__init__(**correction_args)
 
     def register_centroids(self, data_set, object_name=None, qc_plot=False, **centroid_args):
         """Register a collection of DataContainers.
