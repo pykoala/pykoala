@@ -3,21 +3,82 @@ Base Correction class
 """
 
 from abc import ABC, abstractmethod
-import sys
 import logging
+from pykoala.ancillary import pykoala_logger, log_into_file
+
 
 class CorrectionBase(ABC):
     """
-    Base class of an astronomical correction to a given data (RSS or CUBE).
+    Abstract base class for implementing astronomical corrections on a 
+    DataContainer.
+
+    This class defines the structure and basic functionality required for 
+    applying a correction to an astronomical data container. It includes
+    logging capabilities to track the application of corrections.
+
+    Attributes
+    ----------
+    verbose : bool
+        Convenient attribute for controlling the logging output. If True, logs are set to 
+        INFO level; if False, logs are set to ERROR level.
+    logger : logging.Logger
+        Logger instance used to log messages. If not provided, a pykoala logger child
+        (see `pykoala.ancillary.pykoala_logger`) is created with a name based on the
+        correction's name.
+    log_filename : str, optional
+        Name of the file to log messages. If provided, logs will also be saved 
+        to this file.
+    log_level : int, optional
+        Level of logging, which overrides the `verbose` attribute if provided
+        (for more details see https://docs.python.org/3/library/logging.html#logging-levels).
+
+    Methods
+    -------
+    name :
+        Abstract property that needs to be defined in a subclass, representing 
+        the name of the correction.
+    verbose :
+        Abstract property that needs to be defined in a subclass, representing 
+        the verbosity level of the correction.
+    apply :
+        Abstract method that must be implemented in a subclass to apply the 
+        correction.
+    corr_print(msg, level='info') :
+        Logs a message at the specified level.
+    log_correction(datacontainer, status='applied', **extra_comments) :
+        Logs the status of the correction in the DataContainer, with additional
+        information if provided.
+
+    Examples
+    --------
+    To create a new correction, subclass CorrectionBase and implement the 
+    `name`, `verbose`, and `apply` methods.
+
+    Notes
+    -----
+    When implementing a new correction, ensure that the `apply` method correctly
+    applies the intended transformation to the DataContainer and that the 
+    operation is logged via the `log_correction` method.
+
     """
 
-    def __init__(self, verbose=False) -> None:
-        self.verbose = verbose
-        self.setup_logger()
+    def __init__(self, verbose=True, logger=None, log_filename=None, log_level=None) -> None:
 
+        if logger is None:
+            self.logger = pykoala_logger.getChild(f"correction.{self.name}")
+
+        self.verbose = verbose
+        # This variable supersedes `verbose`
+        if log_level is not None:
+            self.logger.setLevel(log_level)
+
+        if log_filename is not None:
+            log_into_file(log_filename, f"pykoala.correction.{self.name}",
+                          level=log_level)
     @property
     @abstractmethod
     def name(self):
+        """Abstract property for the name of the correction."""
         return self._name
 
     @name.setter
@@ -25,60 +86,64 @@ class CorrectionBase(ABC):
         self._name = value
 
     @property
-#    @abstractmethod
+    @abstractmethod
     def verbose(self):
+        """Abstract property for the verbosity of the correction."""
         return self._verbose
 
-#    @verbose.setter
+    @verbose.setter
     def verbose(self, verbose):
+        if verbose:
+            self.logger.setLevel(logging.INFO)
+        else:
+            self.logger.setLevel(logging.ERROR)
         self._verbose = verbose
 
     @abstractmethod
     def apply(self):
-        raise NotImplementedError("Each class needs to implement this method")
-
-    def setup_logger(self):
-        self.logger = logging.getLogger(self.name)
-        stdout = logging.StreamHandler(stream=sys.stdout)
-        fmt = logging.Formatter(
-        "[PyKOALA Correction:%(name)s] %(asctime)s | %(levelname)s > %(message)s"
-        )
-        stdout.setFormatter(fmt)
-
-        if (self.logger.hasHandlers()):
-            self.logger.handlers.clear()
-        self.logger.addHandler(stdout)
-
-        if self.verbose:
-            self.logger.setLevel(logging.INFO)
-        else:
-            self.logger.setLevel(logging.ERROR)
+        raise NotImplementedError("Each class needs to implement the `apply` method")
 
     def corr_print(self, msg, level='info'):
-        """Print a message."""
+        """
+        Logs a message at the specified level.
+
+        Parameters
+        ----------
+        msg : str
+            The message to be logged.
+        level : str, optional
+            The level at which to log the message (default is 'info').
+        """
         printer = getattr(self.logger, level)
         printer(msg)
 
     def log_correction(self, datacontainer, status='applied', **extra_comments):
-        """Log in the DataContainer the correction and additional info.
-        
-        Whenever a correction is applied, this is logged into the DataContainer
-        log. This might just inform of the status of the correction (applied/failed)
-        as well as other relevant information.
-        
+        """
+        Logs the status of the correction in the DataContainer.
+
+        Whenever a correction is applied, this method logs the status of the 
+        correction (e.g., 'applied' or 'failed') and any additional comments in 
+        the DataContainer's log.
+
         Parameters
         ----------
-        - datacontainer: koala.DataContainer
-            DC to log the correction.
-        - status: str, default='applied'
-           Keyword to denote the success of the correction. Can take two values
-           'applied' or 'failed'.    
+        datacontainer : koala.DataContainer
+            The data container to log the correction.
+        status : str, optional
+            Indicates the success of the correction. Should be either 'applied' 
+            or 'failed' (default is 'applied').
+        **extra_comments : dict
+            Additional information to log alongside the correction status.
+
+        Raises
+        ------
+        KeyError
+            If `status` is not 'applied' or 'failed'.
         """
-        if status != 'applied' and status != 'failed':
+        if status not in ['applied', 'failed']:
             raise KeyError("Correction log status can only be 'applied' or 'failed'")
         
         datacontainer.log(self.name, status, tag='correction')
-        for (k, v) in extra_comments.items():
-            datacontainer.log(self.name, k + " " + str(v), tag='correction')
-
+        for k, v in extra_comments.items():
+            datacontainer.log(self.name, f"{k} {v}", tag='correction')
         
