@@ -228,12 +228,13 @@ class AncillaryDataCorrection(CorrectionBase):
     name = 'AncillaryData'
     verbose = True
 
-    def __init__(self, data_containers, **kwargs):
+    def __init__(self, data_containers, images=dict(), dc_photometry=dict(),
+                 **correction_kwargs):
+        super().__init__(**correction_kwargs)
+        
         self.data_containers = data_containers
-        self.verbose = kwargs.get('verbose', True)
-
-        self.images = kwargs.get("images", dict())
-        self.dc_photometry = kwargs.get("dc_photometry", dict())
+        self.images = images
+        self.dc_photometry = dc_photometry
 
     def get_effective_sky_footprint(self):
         """Computes the effective footprint the contains all DataContainers.

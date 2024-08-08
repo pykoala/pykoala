@@ -23,14 +23,6 @@ from astropy.io import fits
 # PyKOALA modules
 # =============================================================================
 
-
-def vprint(*arg, **kwargs):
-    """
-    Prints the arguments only if verbose=True.
-    """
-    if 'verbose' in kwargs:
-        print(*arg)
-
 # =============================================================================
 # Ancillary Functions - RSS Related
 # =============================================================================
@@ -653,9 +645,6 @@ def fit_moffat(r2_growth_curve, f_growth_curve,
                                   p0=(f_guess, r2_half_light, 1)
                                   )
     if plot:
-        print("Best-fit: L_star =", fit[0])
-        print("          alpha =", np.sqrt(fit[1]))
-        print("          beta =", fit[2])
         r_norm = np.sqrt(np.array(r2_growth_curve) / r2_half_light)
         plt.plot(r_norm, cumulative_1d_moffat(np.array(r2_growth_curve),
                                               fit[0], fit[1], fit[2]) / fit[0], ':')

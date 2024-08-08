@@ -70,12 +70,16 @@ class WavelengthCorrection(CorrectionBase):
     offset = None
     verbose = False
 
-    def __init__(self, **kwargs):
-        super().__init__()
+    def __init__(self, offset_path=None, offset=None, **correction_kwargs):
+        super().__init__(**correction_kwargs)
 
-        path = kwargs.get('offset_path', None)
-        self.offset = kwargs.get('offset', WavelengthOffset(path=path))
-        assert isinstance(self.offset, WavelengthOffset)
+        path = offset_path
+        if offset is not None:
+            assert isinstance(offset, WavelengthOffset)
+            self.offset = offset
+        else:
+            self.offset = WavelengthOffset(path=path)
+        
 
     def apply(self, rss):
         """Apply a 2D wavelength offset model to a RSS.

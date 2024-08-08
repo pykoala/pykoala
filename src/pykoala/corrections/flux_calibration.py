@@ -52,7 +52,7 @@ class FluxCalibration(CorrectionBase):
                  response=None, resp_wave=None, response_units=1e16,
                  calib_spectra=None, calib_wave=None,
                  path_to_response=None,
-                 verbose=True):
+                 **correction_kwargs):
         """
         Initializes the FluxCalibration object.
 
@@ -63,8 +63,9 @@ class FluxCalibration(CorrectionBase):
         verbose : bool, optional
             If True, prints additional information during execution.
         """
+        super().__init__(**correction_kwargs)
+        
         self.corr_print("Initialising Flux Calibration (Spectral Throughput)")
-        self.verbose = verbose
 
         self.calib_spectra = calib_spectra
         self.calib_wave = calib_wave
