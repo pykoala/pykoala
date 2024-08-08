@@ -12,7 +12,7 @@ from astropy.io import fits
 # KOALA packages
 # =============================================================================
 from pykoala import __version__
-from pykoala.ancillary import vprint
+from pykoala import vprint
 from pykoala.data_container import SpectraContainer
 
 
