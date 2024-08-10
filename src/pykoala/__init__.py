@@ -36,4 +36,53 @@ def vprint(msg, level='info'):
     print_method = getattr(logger, level)
     print_method(msg)
 
-__all__ = ["__version__", "pykoala_logger", "log_into_file", "vprint"]
+
+class VerboseMixin(object):
+
+    @property
+    def logger(self):
+        return self._logger
+
+    @logger.setter
+    def logger(self, logger):
+        if isinstance(logger, str):
+            if logger == pykoala_logger.name:
+                self._logger = pykoala_logger
+            else:
+                self._logger = pykoala_logger.getChild(logger)
+        elif isinstance(logger, logging.Logger):
+            self._logger = logger
+
+    @property
+    def verbose(self):
+        """Abstract property for the verbosity of the correction."""
+        return self._verbose
+
+    @verbose.setter
+    def verbose(self, verbose):
+        if verbose:
+            self.logger.setLevel(logging.INFO)
+        else:
+            self.logger.setLevel(logging.ERROR)
+        self._verbose = verbose
+    
+    def vprint(self, msg, level='info'):
+        """
+        Logs a message at the specified level.
+
+        Parameters
+        ----------
+        msg : str
+            The message to be logged.
+        level : str, optional
+            The level at which to log the message (default is 'info').
+        """
+        printer = getattr(self.logger, level)
+        printer(msg)
+
+    def log_into_file(self, filename, level="INFO"):
+        log_into_file(filename, self.logger.name, level=level)
+
+
+__all__ = ["__version__", "pykoala_logger", "log_into_file", "vprint",
+           "VerboseMixin"]

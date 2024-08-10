@@ -5,9 +5,9 @@ Base Correction class
 from abc import ABC, abstractmethod
 import logging
 
-from pykoala import pykoala_logger, log_into_file
+from pykoala import VerboseMixin
 
-class CorrectionBase(ABC):
+class CorrectionBase(ABC, VerboseMixin):
     """
     Abstract base class for implementing astronomical corrections on a 
     DataContainer.
@@ -65,7 +65,7 @@ class CorrectionBase(ABC):
     def __init__(self, verbose=True, logger=None, log_filename=None, log_level=None) -> None:
 
         if logger is None:
-            self.logger = pykoala_logger.getChild(f"correction.{self.name}")
+            self.logger = f"correction.{self.name}"
         else:
             self.logger = logger
 
@@ -75,8 +75,8 @@ class CorrectionBase(ABC):
             self.logger.setLevel(log_level)
 
         if log_filename is not None:
-            log_into_file(log_filename, f"pykoala.correction.{self.name}",
-                          level=log_level)
+            self.log_into_file(log_filename, level=log_level)
+
     @property
     @abstractmethod
     def name(self):
@@ -87,36 +87,9 @@ class CorrectionBase(ABC):
     def name(self, value):
         self._name = value
 
-    @property
-    def verbose(self):
-        """Abstract property for the verbosity of the correction."""
-        return self._verbose
-
-    @verbose.setter
-    def verbose(self, verbose):
-        if verbose:
-            self.logger.setLevel(logging.INFO)
-        else:
-            self.logger.setLevel(logging.ERROR)
-        self._verbose = verbose
-
     @abstractmethod
     def apply(self):
         raise NotImplementedError("Each class needs to implement the `apply` method")
-
-    def corr_print(self, msg, level='info'):
-        """
-        Logs a message at the specified level.
-
-        Parameters
-        ----------
-        msg : str
-            The message to be logged.
-        level : str, optional
-            The level at which to log the message (default is 'info').
-        """
-        printer = getattr(self.logger, level)
-        printer(msg)
 
     def log_correction(self, datacontainer, status='applied', **extra_comments):
         """
