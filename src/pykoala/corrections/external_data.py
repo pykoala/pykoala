@@ -259,17 +259,17 @@ class AncillaryDataCorrection(CorrectionBase):
                      [min_ra, max_dec],
                      [min_ra, min_dec]])
             else:
-                self.corr_print(f"Unrecognized data container of type: {dc.__class__}")
+                self.vprint(f"Unrecognized data container of type: {dc.__class__}")
                 continue
             data_containers_footprint.append(footprint)
 
-        self.corr_print("Object footprint: ", data_containers_footprint)
+        self.vprint("Object footprint: ", data_containers_footprint)
         # Select a rectangle containing all footprints
         max_ra, max_dec = np.nanmax(data_containers_footprint, axis=(0, 1))
         min_ra, min_dec = np.nanmin(data_containers_footprint, axis=(0, 1))
         ra_cen, dec_cen = (max_ra + min_ra) / 2, (max_dec + min_dec) / 2
         ra_width, dec_width = max_ra - min_ra, max_dec - min_dec
-        self.corr_print("Combined footprint Fov: ", ra_width * 60, dec_width * 60)
+        self.vprint("Combined footprint Fov: ", ra_width * 60, dec_width * 60)
         return (ra_cen, dec_cen), (ra_width, dec_width)
     
     def query_image(self, survey='PS', filters='r', im_extra_size_arcsec=30,
@@ -295,7 +295,7 @@ class AncillaryDataCorrection(CorrectionBase):
         Returns
         -------
         """
-        self.corr_print("Querying image to external database")
+        self.vprint("Querying image to external database")
         # TODO: Include more options
         if survey != 'PS':
             raise NotImplementedError("Currently only PS queries available")
@@ -308,8 +308,8 @@ class AncillaryDataCorrection(CorrectionBase):
             (np.max(im_fov) * 3600 + im_extra_size_arcsec
              ) / PSQuery.pixelsize_arcsec)
         
-        self.corr_print("Image center sky position (RA, DEC): ", im_pos)
-        self.corr_print("Image size (pixels): ", im_size_pix)
+        self.vprint("Image center sky position (RA, DEC): ", im_pos)
+        self.vprint("Image size (pixels): ", im_size_pix)
         # Perform the query
         tab = PSQuery.getimage(*im_pos, size=im_size_pix, filters=filters)
         if len(tab) == 0:
@@ -396,12 +396,12 @@ class AncillaryDataCorrection(CorrectionBase):
                 self.dc_photometry[photo_filter]['synth_photo'].append(synth_photo)
                 self.dc_photometry[photo_filter]['synth_photo_err'].append(synth_photo_err)
                 if isinstance(dc, Cube):
-                    self.corr_print(
+                    self.vprint(
                         "Computing aperture fluxes using Cube synthetic photometry")
                     # Create a grid of apertures equally spaced
                     pix_size_arcsec = np.max(dc.wcs.celestial.wcs.cdelt) * 3600
                     delta_pix = aperture_diameter / pix_size_arcsec * sample_every
-                    self.corr_print(
+                    self.vprint(
                         f"Creating a grid of circular aperture (rad={aperture_diameter / 2 / pix_size_arcsec:.2f} px) every {delta_pix:.1f} pixels")
                     rows = np.arange(0, synth_photo.shape[0], delta_pix)
                     columns = np.arange(0, synth_photo.shape[1], delta_pix)
@@ -409,7 +409,7 @@ class AncillaryDataCorrection(CorrectionBase):
                     coordinates = dc.wcs.celestial.pixel_to_world(xx.flatten(), yy.flatten())
                     apertures = SkyCircularAperture(
                         coordinates, r=aperture_diameter / 2 * u.arcsec)
-                    self.corr_print(f"Total number of apertures: {len(apertures)}")
+                    self.vprint(f"Total number of apertures: {len(apertures)}")
                     reference_table = ApertureStats(data=synth_photo, error=synth_photo_err,
                     aperture=apertures, wcs=dc.wcs.celestial, sum_method='exact')
                     # Compute the total flux in the aperture using the mean value
@@ -419,7 +419,7 @@ class AncillaryDataCorrection(CorrectionBase):
                     flux_in_ap_err = reference_table.sum_err
                     self.dc_photometry[photo_filter]['wcs'].append(dc.wcs.celestial.deepcopy())
                 elif isinstance(dc, RSS):
-                    self.corr_print("Using RSS synthetic photometry as apertures")
+                    self.vprint("Using RSS synthetic photometry as apertures")
                     coordinates = SkyCoord(dc.info['fib_ra'], dc.info['fib_dec'])
                     flux_in_ap, flux_in_ap_err = synth_photo, synth_photo_err
                     self.dc_photometry[photo_filter]['wcs'].append(None)
@@ -571,7 +571,7 @@ class AncillaryDataCorrection(CorrectionBase):
         Compute the astrometric offsets that match the synthetic
         aperture photometry to the external image.
         """
-        self.corr_print("Computing astrometric offsets")
+        self.vprint("Computing astrometric offsets")
         astrometry_results = []
         for ith, dc in enumerate(self.data_containers):
             dc_results = {}
@@ -593,7 +593,7 @@ class AncillaryDataCorrection(CorrectionBase):
         return astrometry_results
 
     def apply(self, dc, ra_dec_offset):
-        self.corr_print(
+        self.vprint(
             "Applying astrometry offset correction to DC (RA, DEC): ",
             ra_dec_offset)
         dc.update_coordinates(offset=np.array(ra_dec_offset) / 3600)

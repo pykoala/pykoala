@@ -70,7 +70,7 @@ class AstrometryCorrection(CorrectionBase):
             try:
                 reference_pos = SkyCoord.from_name(object_name)
             except Exception as e:
-                self.corr_print(e)
+                self.vprint(e)
                 reference_pos = find_centroid_in_dc(data_set[0], **centroid_args)
         else:
             centroid_args['full_output'] = False
@@ -81,7 +81,7 @@ class AstrometryCorrection(CorrectionBase):
             wcs_list = []
             centroid_list = []
 
-        self.corr_print("Reference position: ", reference_pos)
+        self.vprint("Reference position: ", reference_pos)
         offsets = []
         for data in data_set:
             if qc_plot:
@@ -94,7 +94,7 @@ class AstrometryCorrection(CorrectionBase):
 
             offset = [reference_pos.ra - centroid_world.ra, reference_pos.dec - centroid_world.dec]
             offsets.append(offset)
-            self.corr_print("Offset found (ra, dec): ", offset[0].to('arcsec'), offset[1].to('arcsec'),
+            self.vprint("Offset found (ra, dec): ", offset[0].to('arcsec'), offset[1].to('arcsec'),
                             " (arcsec)")
         if qc_plot:
             fig = qc_registration_centroids(images_list, wcs_list,
@@ -109,7 +109,7 @@ class AstrometryCorrection(CorrectionBase):
         """Register a collection of DataContainers.
 
         """
-        self.corr_print("Performing image cross-correlation")
+        self.vprint("Performing image cross-correlation")
         images = []
         wcs = []
         offsets = [[0 * u.deg, 0 * u.deg]]
@@ -145,7 +145,7 @@ class AstrometryCorrection(CorrectionBase):
     
     def apply(self, data_container, offset):
         if data_container.__class__ is RSS:
-            self.corr_print("Applying correction to RSS")
+            self.vprint("Applying correction to RSS")
 
             data_container.info['fib_ra'] += offset[0].to('deg').value
             data_container.info['fib_dec'] += offset[1].to('deg').value

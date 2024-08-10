@@ -53,7 +53,7 @@ class AtmosphericExtCorrection(CorrectionBase):
                  extinction_file=default_extinction,
                  **correction_args):
         super().__init__(**correction_args)
-        self.corr_print("Initialising Atm ext. correction model.")
+        self.vprint("Initialising Atm ext. correction model.")
 
         # Initialise variables
         self.extinction_correction = extinction_correction
@@ -68,7 +68,7 @@ class AtmosphericExtCorrection(CorrectionBase):
 
     def load_atmospheric_extinction(self, path):
         """Load data from text file."""
-        self.corr_print(f"Loading atmospheric extinction model from:\n {path}")
+        self.vprint(f"Loading atmospheric extinction model from:\n {path}")
         self.extinction_correction_wave, self.extinction_correction = np.loadtxt(path, unpack=True)
 
     def extinction(self, wavelength, airmass):
@@ -85,7 +85,7 @@ class AtmosphericExtCorrection(CorrectionBase):
             airmass = force_airmass
 
         if self.extinction_correction is not None:
-            self.corr_print(f"Applying model-based extinction correction to Data Container ({airmass:.2f} airmass)")
+            self.vprint(f"Applying model-based extinction correction to Data Container ({airmass:.2f} airmass)")
             extinction = self.extinction(data_container_out.wavelength, airmass)
             if self.model_from_file:
                 comment = ' '.join(["- Data corrected for extinction using file :",

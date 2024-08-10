@@ -43,7 +43,7 @@ class CorrectionBase(ABC, VerboseMixin):
     apply :
         Abstract method that must be implemented in a subclass to apply the 
         correction.
-    corr_print(msg, level='info') :
+    vprint(msg, level='info') :
         Logs a message at the specified level.
     log_correction(datacontainer, status='applied', **extra_comments) :
         Logs the status of the correction in the DataContainer, with additional

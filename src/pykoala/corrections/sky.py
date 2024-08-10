@@ -1010,7 +1010,7 @@ class SkySubsCorrection(CorrectionBase):
         # Copy input datacube to store the changes
         dc_out = copy.deepcopy(dc)
 
-        self.corr_print("Applying sky subtraction")
+        self.vprint("Applying sky subtraction")
 
         if pca:
             dc_out.intensity, dc_out.variance = self.skymodel.substract_pca(
@@ -1105,14 +1105,14 @@ class TelluricCorrection(CorrectionBase):
             Fraction of the data to use for correction (default is 0.5).
         """
         super().__init__(**correction_kwargs)
-        self.corr_print(
+        self.vprint(
             "Obtaining telluric correction using spectrophotometric star...")
 
         self.data_container = data_container
 
         # Store basic data
         if self.data_container is not None:
-            self.corr_print(
+            self.vprint(
                 "Estimating telluric correction using input observation")
             self.data_container = data_container
             self.wlm = self.data_container.wavelength
@@ -1133,12 +1133,12 @@ class TelluricCorrection(CorrectionBase):
             self.bad_pixels_mask = np.isfinite(self.spectra) & np.isfinite(self.spectra_var
                                                                            ) & (self.spectra / self.spectra_var > 0)
         elif telluric_correction_file is not None:
-            self.corr_print(
+            self.vprint(
                 f"Reading telluric correction from input file {telluric_correction_file}")
             self.wlm, self.telluric_correction = np.loadtxt(
                 telluric_correction_file, unpack=True)
         elif telluric_correction is not None and wavelength is not None:
-            self.corr_print("Using user-provided telluric correction")
+            self.vprint("Using user-provided telluric correction")
             self.telluric_correction = telluric_correction
             self.wlm = wavelength
         else:
@@ -1357,7 +1357,7 @@ class TelluricCorrection(CorrectionBase):
 
         # Copy input RSS for storage the changes implemented in the task
         rss_out = copy.deepcopy(rss)
-        self.corr_print("Applying telluric correction to this star...")
+        self.vprint("Applying telluric correction to this star...")
         rss_out.intensity *= self.telluric_correction
         rss_out.variance *= self.telluric_correction**2
         self.log_correction(rss, status='applied')
@@ -1396,7 +1396,7 @@ class TelluricCorrection(CorrectionBase):
         filename : str, optional
             The name of the output file.
         """
-        self.corr_print(f"Saving telluric correction into file {filename}")
+        self.vprint(f"Saving telluric correction into file {filename}")
         np.savetxt(filename, np.array(
             [self.wlm, self.telluric_correction]).T, **kwargs)
 
