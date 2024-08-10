@@ -228,7 +228,7 @@ def combine_rss(list_of_rss, combine_method='nansum'):
         raise NotImplementedError("Implement user-defined combining methods")
     # TODO: Update the metadata as well
     new_rss = RSS(intensity=new_intensity, variance=new_variance,
-                  wavelength=rss.wavelength, log=rss.log, info=rss.info)
+                  wavelength=rss.wavelength, history=rss.history, info=rss.info)
     return new_rss
 
 

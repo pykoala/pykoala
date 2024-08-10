@@ -12,6 +12,7 @@ from astropy.wcs import WCS
 from astropy.coordinates import SkyCoord
 from photutils.aperture import SkyCircularAperture, aperture_photometry, ApertureStats
 
+from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.rss import RSS
 from pykoala.cubing import Cube
@@ -67,8 +68,8 @@ def crosscorrelate_im_apertures(ref_aperture_flux, ref_aperture_flux_err,
     -------
     - results
     """
-    print("Cross-correlating image to list of apertures")
-    print("Input number of apertures: ", len(ref_aperture_flux))
+    vprint("Cross-correlating image to list of apertures")
+    vprint(f"Input number of apertures: {len(ref_aperture_flux)}")
     # Renormalize the reference aperture
     ref_ap_norm = np.nanmean(ref_aperture_flux)
     ref_flux = ref_aperture_flux / ref_ap_norm
@@ -105,7 +106,7 @@ def crosscorrelate_im_apertures(ref_aperture_flux, ref_aperture_flux_err,
         idx = np.unravel_index(i, sampling[0].shape)
         sampling[:2, idx[0], idx[1]] = (flux_diff, flax_ratio)
 
-    print("Computing the offset solution")
+    vprint("Computing the offset solution")
     weights = np.exp(- (sampling[0] + np.abs(1 - sampling[1])) / 2)
     weights /= np.nansum(weights)
     # Minimum
@@ -263,13 +264,14 @@ class AncillaryDataCorrection(CorrectionBase):
                 continue
             data_containers_footprint.append(footprint)
 
-        self.vprint("Object footprint: ", data_containers_footprint)
+        self.vprint("Object footprint: %s", data_containers_footprint)
         # Select a rectangle containing all footprints
         max_ra, max_dec = np.nanmax(data_containers_footprint, axis=(0, 1))
         min_ra, min_dec = np.nanmin(data_containers_footprint, axis=(0, 1))
         ra_cen, dec_cen = (max_ra + min_ra) / 2, (max_dec + min_dec) / 2
         ra_width, dec_width = max_ra - min_ra, max_dec - min_dec
-        self.vprint("Combined footprint Fov: ", ra_width * 60, dec_width * 60)
+        self.vprint("Combined footprint Fov: %s",
+                    [ra_width * 60, dec_width * 60])
         return (ra_cen, dec_cen), (ra_width, dec_width)
     
     def query_image(self, survey='PS', filters='r', im_extra_size_arcsec=30,
@@ -597,7 +599,7 @@ class AncillaryDataCorrection(CorrectionBase):
             "Applying astrometry offset correction to DC (RA, DEC): ",
             ra_dec_offset)
         dc.update_coordinates(offset=np.array(ra_dec_offset) / 3600)
-        self.record_history(dc, status='applied',
+        self.record_correction(dc, status='applied',
                             ra_offset_arcsec=str(ra_dec_offset[0]),
                             dec_offset_arcsec=str(ra_dec_offset[1]),
                             )

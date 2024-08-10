@@ -581,7 +581,6 @@ class Cube(SpectraContainer):
             self.hdul_extensions_map = {"INTENSITY": "INTENSITY",
                                         "VARIANCE": "VARIANCE"}
         if self.hdul is not None:
-            self.vprint("[Cube] Initialising cube from input HDUL")
             self.hdul = hdul
         elif file_path is not None:
             self.load_hdul(file_path)
@@ -630,7 +629,6 @@ class Cube(SpectraContainer):
         self.history.load_from_header(self.hdul[0].header)
 
     def load_hdul(self, path_to_file):
-        self.vprint(f"[Cube] Loading HDUL {path_to_file}")
         self.hdul = fits.open(path_to_file)
         pass
 
@@ -641,7 +639,6 @@ class Cube(SpectraContainer):
 
     def get_wcs_from_header(self):
         """Create a WCS from HDUL header."""
-        self.vprint("[Cube] Reading WCS")
         self.wcs = WCS(self.hdul[self.hdul_extensions_map['INTENSITY']].header)
 
     def get_wavelength(self):

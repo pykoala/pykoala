@@ -22,7 +22,7 @@ from astropy.io import fits
 # =============================================================================
 # PyKOALA modules
 # =============================================================================
-
+from pykoala import vprint
 # =============================================================================
 # Ancillary Functions - RSS Related
 # =============================================================================
@@ -302,7 +302,7 @@ def smooth_spectrum(wlm, s, wave_min=0, wave_max=0, step=50, exclude_wlm=[[0, 0]
     """
 
     if verbose:
-        print("\n> Computing smooth spectrum...")
+        vprint("\n> Computing smooth spectrum...")
 
     if wave_min == 0:
         wave_min = wlm[0]
@@ -320,8 +320,8 @@ def smooth_spectrum(wlm, s, wave_min=0, wave_max=0, step=50, exclude_wlm=[[0, 0]
         if next_wave < wave_max:
             if next_wave > exclude_wlm[exclude][0] and next_wave < exclude_wlm[exclude][1]:
                 if verbose:
-                    print("  Skipping ", next_wave,
-                          " as it is in the exclusion range [", exclude_wlm[exclude][0], ",", exclude_wlm[exclude][1], "]")
+                    vprint(f"  Skipping {next_wave}"
+                           + f" as it is in the exclusion range [{exclude_wlm[exclude][0]}, {exclude_wlm[exclude][1]}]")
 
             else:
                 corte_index = corte_index+1
@@ -345,7 +345,7 @@ def smooth_spectrum(wlm, s, wave_min=0, wave_max=0, step=50, exclude_wlm=[[0, 0]
     for i in range(len(running_wave)):
         if np.isnan(running_step_median[i]):
             if verbose:
-                print("  There is a nan in ", running_wave[i])
+                vprint(f"There is a nan in {running_wave[i]}")
         else:
             _running_wave_.append(running_wave[i])
             _running_step_median_.append(running_step_median[i])
@@ -390,8 +390,8 @@ def smooth_spectrum(wlm, s, wave_min=0, wave_max=0, step=50, exclude_wlm=[[0, 0]
                             exclude_wlm[i][1], color='r', alpha=0.1)
         plt.show()
         plt.close()
-        print('  Weights for getting smooth spectrum:  fit_median =',
-              weight_fit_median, '    fit_median_interpolated =', (1-weight_fit_median))
+        vprint(f"Weights for getting smooth spectrum:\n fit_median ={weight_fit_median}"
+               + f"\n Fit_median_interpolated = {(1-weight_fit_median)}")
 
     # (fit_median+fit_median_interpolated)/2      # Decide if fit_median or fit_median_interpolated
     return weight_fit_median*fit_median + (1-weight_fit_median)*fit_median_interpolated

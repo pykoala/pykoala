@@ -20,6 +20,8 @@ from astropy.wcs import WCS
 import requests
 import time
 from io import StringIO
+
+from pykoala import vprint
  
 class PSQuery:
 

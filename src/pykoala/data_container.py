@@ -67,7 +67,7 @@ class HistoryRecord(object):
 # =============================================================================
 
 
-class DataContainerHistory(object, VerboseMixin):
+class DataContainerHistory(VerboseMixin):
     """Data reduction history logger class.
 
     This class stores the data reduction history of a DataContainer by creating
@@ -139,7 +139,6 @@ class DataContainerHistory(object, VerboseMixin):
             List containing the comments of this record. Lines will be splited
             into different elements of the log.
         """
-        self.vprint(f"Logging record > {title}:{comments}")
         if tag is not None and tag not in self.tags:
             self.tags.append(tag)
         record = HistoryRecord(title=title, comments=comments, tag=tag)
@@ -247,10 +246,6 @@ class DataContainerHistory(object, VerboseMixin):
     def show(self):
         for record in self.record_entries:
             print(record.to_str())
-
-    def vprint(self, *mssg):
-        if self.verbose:
-            print("[Log] ", *mssg)
 
     def __call__(self, *args, **kwargs):
         self.log_record(*args, **kwargs)
@@ -533,14 +528,17 @@ class SpectraContainer(DataContainer):
         pass
 
     def __init__(self, **kwargs):
+
+        super().__init__(**kwargs)
+
         if "wavelength" in kwargs.keys():
             self._wavelength = kwargs["wavelength"]
         else:
-            print(
+            self.print(
                 "WARNING: No `wavelength` vector supplied; creating empty `SpectraContainer`"
             )
             self._wavelength = u.Quantity([], u.AA)
-        super().__init__(**kwargs)
+        
 
 
 # =============================================================================

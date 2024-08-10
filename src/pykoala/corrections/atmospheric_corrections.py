@@ -14,8 +14,7 @@ import os
 # =============================================================================
 # KOALA packages
 # =============================================================================
-# Modular
-# from koala.ancillary import vprint
+from pkoala import vprint
 from pykoala.rss import RSS
 from pykoala.cubing import Cube
 from pykoala.corrections.correction import CorrectionBase
@@ -104,7 +103,7 @@ class AtmosphericExtCorrection(CorrectionBase):
 
         data_container_out.intensity *= extinction
         data_container_out.variance *= extinction**2
-        self.record_history(data_container_out, status='applied',
+        self.record_correction(data_container_out, status='applied',
                             comment=comment)
         return data_container_out
 
@@ -131,7 +130,7 @@ def get_adr(data_container, max_adr=0.5, pol_deg=2, plot=False):
                          median_com[0][finite_mask], deg=pol_deg)
         polfit_x = np.poly1d(p_x)(data_container.wavelength)
     else:
-        print("[ADR] ERROR: Could not compute ADR-x, all NaN")
+        vprint("[ADR] ERROR: Could not compute ADR-x, all NaN")
         polfit_x = np.zeros_like(data_container.wavelength)
 
     finite_mask = np.isfinite(median_com[1])
@@ -140,7 +139,7 @@ def get_adr(data_container, max_adr=0.5, pol_deg=2, plot=False):
                          median_com[1][finite_mask], deg=pol_deg)
         polfit_y = np.poly1d(p_y)(data_container.wavelength)
     else:
-        print("[ADR] ERROR: Could not compute ADR-y, all NaN")
+        vprint("[ADR] ERROR: Could not compute ADR-y, all NaN")
         polfit_y = np.zeros_like(data_container.wavelength)
     
 

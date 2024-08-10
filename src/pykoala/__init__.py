@@ -28,16 +28,16 @@ def log_into_file(filename, logger_name='pykoala', level='INFO'):
     logger.setLevel(level.upper())
 
 
-def vprint(msg, level='info'):
+def vprint(msg, *args, **kwargs):
     """
     Convenience function for using with the pykoala generic logger.
     """
     logger = logging.getLogger('pykoala')
-    print_method = getattr(logger, level.lower())
-    print_method(msg)
+    print_method = getattr(logger, kwargs.get('level', 'info').lower())
+    print_method(msg, *args, **kwargs)
 
 
-class VerboseMixin(object):
+class VerboseMixin():
 
     @property
     def logger(self):

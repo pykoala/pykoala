@@ -18,6 +18,7 @@ import os
 # =============================================================================
 # KOALA packages
 # =============================================================================
+from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.rss import RSS
 from pykoala.cubing import Cube
@@ -433,7 +434,7 @@ class FluxCalibration(CorrectionBase):
         for file in files:
             names.append(file.split('.')[0].split('_')[0])
             if verbose:
-                print(" - Standard star file: {}\n   · Name: {}"
+                vprint(" - Standard star file: {}\n   · Name: {}"
                       .format(file, names[-1]))
         return np.array(names), files
 
@@ -469,8 +470,9 @@ class FluxCalibration(CorrectionBase):
             if len(matched_name) > 0:
                 if len(matched_name) > 1:
                     self.vprint("WARNING: More than one file found")
-                self.vprint("Input name {}, matches {}".format(name, matched_name),
-                                f"\n Selecting {matched_name[-1]}")
+                self.vprint(
+                    "Input name {}, matches {}".format(name, matched_name)
+                    + f"\nSelecting {matched_name[-1]}")
                 path = os.path.join(os.path.dirname(__file__), '..',
                                     'input_data', 'spectrophotometric_stars',
                                     matched_name[-1] + ".dat")
@@ -481,9 +483,9 @@ class FluxCalibration(CorrectionBase):
             self.calib_wave, self.calib_spectra = np.loadtxt(path, unpack=True, usecols=(0, 1))
         return self.calib_wave, self.calib_spectra
 
-    @staticmethod
-    def get_response_curve(wave, obs_spectra, ref_spectra,
-                           pol_deg=None, spline=False, spline_args={}, gauss_smooth_sigma=None, plot=False,
+    def get_response_curve(self, wave, obs_spectra, ref_spectra,
+                           pol_deg=None, spline=False, spline_args={},
+                           gauss_smooth_sigma=None, plot=False,
                            mask_absorption=True):
         """
         Computes the response curve from observed and reference spectra.
@@ -516,12 +518,12 @@ class FluxCalibration(CorrectionBase):
         response_fig : matplotlib.figure.Figure
             Figure of the response curve plot, if plot is True.
         """
-        print("Computing spectrophotometric response")
+        self.vprint("Computing spectrophotometric response")
         dwave = np.diff(wave)
         wave_edges = np.hstack((wave[0] - dwave[0] / 2, wave[:-1] + dwave / 2,
                                 wave[-1] + dwave[-1] / 2))
         if mask_absorption:
-            print("Masking lines")
+            self.vprint("Masking lines")
             lines_mask = mask_lines(wave)
             obs_spectra = np.interp(wave, wave[lines_mask],
                                     obs_spectra[lines_mask])
@@ -611,7 +613,7 @@ class FluxCalibration(CorrectionBase):
         """
 
         if data_container.is_corrected(self.name):
-            print("Data already calibrated")
+            self.vprint("Data already calibrated")
             return data_container
 
         if response is None:
@@ -638,7 +640,7 @@ class FluxCalibration(CorrectionBase):
         # Apply the correction
         data_container.intensity /= response
         data_container.variance /= response**2
-        self.record_history(data_container, status='applied',
+        self.record_correction(data_container, status='applied',
                             units=str(response_units) + ' counts / (erg/s/AA/cm2)')
         return data_container
 
