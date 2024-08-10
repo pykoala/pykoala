@@ -59,6 +59,8 @@ class RSS(SpectraContainer):
     def __init__(self, **kwargs):
         assert ('wavelength' in kwargs)
         assert ('intensity' in kwargs)
+        if "logger" not in kwargs:
+            kwargs['logger'] = "pykoala.rss"
         super().__init__(**kwargs)
 
     def get_centre_of_mass(self, wavelength_step=1, stat=np.nanmedian, power=1.0):
@@ -133,7 +135,7 @@ class RSS(SpectraContainer):
         else:
             raise NameError(
                 "Either `new_fib_coord` or `new_fib_coord_offset` must be provided")
-        self.log('update_coords', "Offset-coords updated")
+        self.history('update_coords', "Offset-coords updated")
         self.vprint("[RSS] Offset-coords updated")
 
     # =============================================================================
@@ -195,7 +197,7 @@ class RSS(SpectraContainer):
         hdul.verify('fix')
         hdul.writeto(filename, overwrite=overwrite, checksum=checksum)
         hdul.close()
-        print(f"[RSS] File saved as {filename}")
+        self.vprint(f"[RSS] File saved as {filename}")
 
 
 # =============================================================================
