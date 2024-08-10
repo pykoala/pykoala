@@ -1019,7 +1019,7 @@ class SkySubsCorrection(CorrectionBase):
             dc_out.intensity, dc_out.variance = self.skymodel.substract(
                 dc_out.intensity, dc_out.variance)
 
-        self.log_correction(dc_out, status='applied')
+        self.record_history(dc_out, status='applied')
         if plot:
             fig = self.plot_correction(dc, dc_out, **plot_kwargs)
         else:
@@ -1360,7 +1360,7 @@ class TelluricCorrection(CorrectionBase):
         self.vprint("Applying telluric correction to this star...")
         rss_out.intensity *= self.telluric_correction
         rss_out.variance *= self.telluric_correction**2
-        self.log_correction(rss, status='applied')
+        self.record_history(rss, status='applied')
         return rss_out
 
     def interpolate_model(self, wavelength, update=True):

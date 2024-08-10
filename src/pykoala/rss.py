@@ -2,7 +2,6 @@
 # Basics packages
 # =============================================================================
 import numpy as np
-import os
 from datetime import datetime
 # =============================================================================
 # Astropy and associated packages
@@ -12,7 +11,6 @@ from astropy.io import fits
 # KOALA packages
 # =============================================================================
 from pykoala import __version__
-from pykoala import vprint
 from pykoala.data_container import SpectraContainer
 
 
@@ -136,7 +134,7 @@ class RSS(SpectraContainer):
             raise NameError(
                 "Either `new_fib_coord` or `new_fib_coord_offset` must be provided")
         self.log('update_coords', "Offset-coords updated")
-        print("[RSS] Offset-coords updated")
+        self.vprint("[RSS] Offset-coords updated")
 
     # =============================================================================
     # Save an RSS object (corrections applied) as a separate .fits file
@@ -176,7 +174,7 @@ class RSS(SpectraContainer):
             "%d_%m_%Y_%H_%M_%S"), "creation date / last change"
 
         # Fill the header with the log information
-        primary.header = self.log.dump_to_header(primary.header)
+        primary.header = self.history.dump_to_header(primary.header)
 
         # primary_hdu.header = self.header
         # Create a list of HDU

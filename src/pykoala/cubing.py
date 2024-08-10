@@ -625,7 +625,7 @@ class Cube(SpectraContainer):
         # TODO
         #self.info = {}
         #self.fill_info()
-        self.log.load_from_header(self.hdul[0].header)
+        self.history.load_from_header(self.hdul[0].header)
 
     def load_hdul(self, path_to_file):
         print(f"[Cube] Loading HDUL {path_to_file}")
@@ -722,7 +722,7 @@ class Cube(SpectraContainer):
             "%d_%m_%Y_%H_%M_%S"), "creation date / last change"
 
         # Fill the header with the log information
-        primary.header = self.log.dump_to_header(primary.header)
+        primary.header = self.history.dump_to_header(primary.header)
 
         # Create a list of HDU
         hdu_list = [primary]

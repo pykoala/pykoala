@@ -104,7 +104,7 @@ class AtmosphericExtCorrection(CorrectionBase):
 
         data_container_out.intensity *= extinction
         data_container_out.variance *= extinction**2
-        self.log_correction(data_container_out, status='applied',
+        self.record_history(data_container_out, status='applied',
                             comment=comment)
         return data_container_out
 

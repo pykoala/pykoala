@@ -24,7 +24,7 @@ class HistoryRecord(object):
     Attributes
     ----------
     - title: (str)
-        Title of the entry.
+        Title of the record.
     - comments: (str)
         List of strings the information to be stored.
 
@@ -32,7 +32,7 @@ class HistoryRecord(object):
     -------
     - to_str:
         Return a string containing the information of
-        the entry.
+        the record.
     """
 
     def __init__(self, title, comments, tag=None) -> None:
@@ -57,7 +57,7 @@ class HistoryRecord(object):
             )
 
     def to_str(self, title=True):
-        """Convert the entry into a string."""
+        """Convert the record into a string."""
         comments = "\n".join(self.comments)
         if title:
             comments = f"{self.title}: " + comments
@@ -86,18 +86,18 @@ class DataContainerHistory(object, VerboseMixin):
         # Initialise the verbose logger
         self.logger = kwargs.get("logger", "pykoala")
         self.verbose = kwargs.get("verbose", True)
-        self.log_entries = []
+        self.record_entries = []
         self.tags = []
         self.verbose = kwargs.get("verbose", True)
 
         if list_of_entries is not None:
-            self.initialise_log(list_of_entries)
+            self.initialise_record(list_of_entries)
 
-    def initialise_log(self, list_of_entries):
-        """Initialise the log from a set of input entries.
+    def initialise_record(self, list_of_entries):
+        """Initialise the record from a set of input entries.
 
-        This method initialises the log using a collection of entries. The
-        input can be in the form of a, interable consisting of LogEntry objects
+        This method initialises the record using a collection of entries. The
+        input can be in the form of a, interable consisting of HistoryRecord objects
         or an interable containing a 2 or 3 elements iterable (title, comments)
         or (title, comments, tag).
 
@@ -109,89 +109,89 @@ class DataContainerHistory(object, VerboseMixin):
         Returns
         -------
         """
-        for entry in list_of_entries:
-            if isinstance(entry, HistoryRecord):
-                self.log_entries.append(entry)
-            elif isinstance(entry, tuple) or isinstance(entry, list):
-                if len(entry) == 2:
-                    title, comments = entry
+        for record in list_of_entries:
+            if isinstance(record, HistoryRecord):
+                self.record_entries.append(record)
+            elif isinstance(record, tuple) or isinstance(record, list):
+                if len(record) == 2:
+                    title, comments = record
                     tag = None
-                elif len(entry) == 3:
-                    title, comments, tag = entry
+                elif len(record) == 3:
+                    title, comments, tag = record
                 else:
                     raise NameError(
-                        "Input entry must contain two (title, comments) or"
+                        "Input record must contain two (title, comments) or"
                         + " three (title, comments, tag) elements"
                     )
-                entry = HistoryRecord(title=title, comments=comments, tag=tag)
+                record = HistoryRecord(title=title, comments=comments, tag=tag)
             else:
-                raise NameError(f"Unrecognized input entry of type {entry.__class__}")
-            self.log_entries.append(entry)
+                raise NameError(f"Unrecognized input record of type {record.__class__}")
+            self.record_entries.append(record)
 
-    def log_entry(self, title, comments, tag=None):
-        """Include a new entry in the log.
+    def log_record(self, title, comments, tag=None):
+        """Include a new record in the history.
 
         Parameters
         ----------
         - title: (str)
-            Title of the entry.
+            Title of the record.
         - comments: (list or str, default=None)
-            List containing the comments of this entry. Lines will be splited
+            List containing the comments of this record. Lines will be splited
             into different elements of the log.
         """
-        self.vprint(f"Logging entry > {title}:{comments}")
+        self.vprint(f"Logging record > {title}:{comments}")
         if tag is not None and tag not in self.tags:
             self.tags.append(tag)
-        entry = HistoryRecord(title=title, comments=comments, tag=tag)
-        self.log_entries.append(entry)
+        record = HistoryRecord(title=title, comments=comments, tag=tag)
+        self.record_entries.append(record)
 
-    def is_entry(self, title, comment=None):
-        """Find an entry that contains the input information.
+    def is_record(self, title, comment=None):
+        """Find an record that contains the input information.
 
         Parameters
         -----------
         - title: (str)
-            Title of the entry.
+            Title of the record.
         - comment: (str, default=None)
-            If provided, the match will require the entry to contain the input
+            If provided, the match will require the record to contain the input
             comment.
 
         Returns
         -------
         - found: (bool)
-            `True` if the entry is found, `False` otherwise.
+            `True` if the record is found, `False` otherwise.
         """
-        for entry in self.log_entries:
-            if entry.title == title:
+        for record in self.record_entries:
+            if record.title == title:
                 if comment is not None:
-                    if comment in entry.comments:
+                    if comment in record.comments:
                         return True
                 else:
                     return True
         return False
 
-    def find_entry(self, title="", comment="", tag=""):
+    def find_record(self, title="", comment="", tag=""):
         """Return all entries matching a given title.
 
         Parameters
         ----------
         - title: (str, default='')
-            Entry title str.
+            record title str.
         - comment: (str, default='')
-            Entry comment str.
+            record comment str.
         - tag: (str, default='')
-            Entry tag str.
+            record tag str.
         Returns
         -------
         - entries: (list)
             List of entries associated to the input title, comment and tag.
         """
         return [
-            entry
-            for entry in self.log_entries
-            if (title in entry.title)
-            and (comment in entry.to_str(title=False))
-            and (tag in str(entry.tag))
+            record
+            for record in self.record_entries
+            if (title in record.title)
+            and (comment in record.to_str(title=False))
+            and (tag in str(record.tag))
         ]
 
     def dump_to_header(self, header=None):
@@ -211,8 +211,8 @@ class DataContainerHistory(object, VerboseMixin):
         else:
             index = len(self.get_entries_from_header(header))
 
-        for entry in self.log_entries:
-            header["PYKOALA" + str(index)] = (entry.to_str(title=False), entry.title)
+        for record in self.record_entries:
+            header["PYKOALA" + str(index)] = (record.to_str(title=False), record.title)
             index += 1
         return header
 
@@ -229,8 +229,8 @@ class DataContainerHistory(object, VerboseMixin):
         """
         self.vprint("Writting log into text file")
         with open(file, "w") as f:
-            for entry in self.log_entries:
-                f.write(entry.to_str() + "\n")
+            for record in self.record_entries:
+                f.write(record.to_str() + "\n")
 
     def get_entries_from_header(self, header):
         """Get entries created by PyKOALA from an input FITS Header."""
@@ -242,18 +242,18 @@ class DataContainerHistory(object, VerboseMixin):
     def load_from_header(self, header):
         """Load the Log from a FITS Header."""
         list_of_entries = self.get_entries_from_header(header)
-        self.log_entries = list(list_of_entries)
+        self.record_entries = list(list_of_entries)
 
     def show(self):
-        for entry in self.log_entries:
-            print(entry.to_str())
+        for record in self.record_entries:
+            print(record.to_str())
 
     def vprint(self, *mssg):
         if self.verbose:
             print("[Log] ", *mssg)
 
     def __call__(self, *args, **kwargs):
-        self.log_entry(*args, **kwargs)
+        self.log_record(*args, **kwargs)
 
 
 # =============================================================================
@@ -378,7 +378,7 @@ class DataMask(object):
 # =============================================================================
 
 
-class DataContainer(ABC):
+class DataContainer(ABC, VerboseMixin):
     """
     Abstract class for data containers.
 
@@ -450,7 +450,12 @@ class DataContainer(ABC):
         self._mask = kwargs.get("mask", DataMask(shape=self.intensity.shape))
         self.info = kwargs.get("info", dict())
         self.fill_info()
-        self.history = kwargs.get("history", DataContainerHistory())
+        # Setup datacontainer logging/verbosity and history
+        self.logger = kwargs.get("logger", "pykoala.dc")
+        self.verbose = kwargs.get("verbose", True)
+        self.history = kwargs.get("history",
+                                  DataContainerHistory(logger=self.logger,
+                                                       verbose=self.verbose))
 
     def fill_info(self):
         """Check the keywords of info and fills them with placeholders."""
@@ -462,7 +467,7 @@ class DataContainer(ABC):
 
     def is_corrected(self, correction):
         """Check if a Correction has been applied by checking the DataContainerHistory"""
-        if self.log.is_entry(title=correction):
+        if self.history.is_record(title=correction):
             return True
         else:
             return False

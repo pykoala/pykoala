@@ -184,7 +184,7 @@ class ThroughputCorrection(CorrectionBase):
 
         rss_out.intensity = rss_out.intensity / throughput.throughput_data
         rss_out.variance = rss_out.variance / throughput.throughput_data**2
-        self.log_correction(rss_out, status='applied')
+        self.record_history(rss_out, status='applied')
         return rss_out
 
 # =============================================================================

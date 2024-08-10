@@ -103,7 +103,7 @@ class WavelengthCorrection(CorrectionBase):
             rss_out.intensity[i] = flux_conserving_interpolation(
                 x, x - self.offset.offset_data[i], rss.intensity[i])
 
-        self.log_correction(rss_out, status='applied')
+        self.record_history(rss_out, status='applied')
         return rss_out
 
 # =============================================================================

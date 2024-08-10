@@ -597,7 +597,7 @@ class AncillaryDataCorrection(CorrectionBase):
             "Applying astrometry offset correction to DC (RA, DEC): ",
             ra_dec_offset)
         dc.update_coordinates(offset=np.array(ra_dec_offset) / 3600)
-        self.log_correction(dc, status='applied',
+        self.record_history(dc, status='applied',
                             ra_offset_arcsec=str(ra_dec_offset[0]),
                             dec_offset_arcsec=str(ra_dec_offset[1]),
                             )

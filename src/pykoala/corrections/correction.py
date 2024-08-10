@@ -43,7 +43,7 @@ class CorrectionBase(ABC, VerboseMixin):
         correction.
     vprint(msg, level='info') :
         Logs a message at the specified level.
-    log_correction(datacontainer, status='applied', **extra_comments) :
+    record_history(datacontainer, status='applied', **extra_comments) :
         Logs the status of the correction in the DataContainer, with additional
         information if provided.
 
@@ -56,7 +56,7 @@ class CorrectionBase(ABC, VerboseMixin):
     -----
     When implementing a new correction, ensure that the `apply` method correctly
     applies the intended transformation to the DataContainer and that the 
-    operation is logged via the `log_correction` method.
+    operation is logged via the `record_history` method.
 
     """
 
@@ -89,7 +89,7 @@ class CorrectionBase(ABC, VerboseMixin):
     def apply(self):
         raise NotImplementedError("Each class needs to implement the `apply` method")
 
-    def log_correction(self, datacontainer, status='applied', **extra_comments):
+    def record_history(self, datacontainer, status='applied', **extra_comments):
         """
         Logs the status of the correction in the DataContainer.
 
@@ -115,7 +115,7 @@ class CorrectionBase(ABC, VerboseMixin):
         if status not in ['applied', 'failed']:
             raise KeyError("Correction log status can only be 'applied' or 'failed'")
         
-        datacontainer.log(self.name, status, tag='correction')
+        datacontainer.history(self.name, status, tag='correction')
         for k, v in extra_comments.items():
-            datacontainer.log(self.name, f"{k} {v}", tag='correction')
+            datacontainer.history(self.name, f"{k} {v}", tag='correction')
         
