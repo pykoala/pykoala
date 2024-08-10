@@ -25,7 +25,7 @@ def log_into_file(filename, logger_name='pykoala', level='INFO'):
     datefmt="%Y/%m/%d %H:%M")
     hdlr.setFormatter(fmt)
     logger.addHandler(hdlr) 
-    logger.setLevel(level)
+    logger.setLevel(level.upper())
 
 
 def vprint(msg, level='info'):
@@ -33,7 +33,7 @@ def vprint(msg, level='info'):
     Convenience function for using with the pykoala generic logger.
     """
     logger = logging.getLogger('pykoala')
-    print_method = getattr(logger, level)
+    print_method = getattr(logger, level.lower())
     print_method(msg)
 
 
