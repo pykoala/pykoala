@@ -3,8 +3,6 @@ Base Correction class
 """
 
 from abc import ABC, abstractmethod
-import logging
-
 from pykoala import VerboseMixin
 
 class CorrectionBase(ABC, VerboseMixin):

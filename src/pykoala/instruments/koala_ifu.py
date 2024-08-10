@@ -17,7 +17,7 @@ from astropy.wcs import WCS
 # KOALA packages
 # =============================================================================
 from pykoala import vprint  # Template to create the info variable 
-from pykoala.data_container import HistoryLog
+from pykoala.data_container import DataContainerHistory
 from pykoala.rss import RSS
 
 def airmass_from_header(header):
@@ -125,7 +125,7 @@ def read_rss(file_path,
     """TODO."""
     # Blank dictionary for the log
     if log is None:
-        log = HistoryLog(verbose=verbose)
+        log = DataContainerHistory(verbose=verbose)
     if header is None:
         # Blank Astropy Header object for the RSS header
         # Example how to add header value at the end

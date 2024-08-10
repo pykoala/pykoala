@@ -18,7 +18,7 @@ from astropy import units as u
 # KOALA packages
 # =============================================================================
 from pykoala.rss import RSS
-from pykoala.data_container import HistoryLog
+from pykoala.data_container import DataContainerHistory
 
 def weave_rss(filename):
     '''Read a WEAVE "single exposure" file (i.e. row-stacked spectra for just one arm)'''
@@ -32,7 +32,7 @@ def weave_rss(filename):
         variance = np.where(hdu[4].data > 0, 1/hdu[4].data, np.nan)
         fibtable = Table.read(hdu['FIBTABLE'])
 
-    log = HistoryLog()
+    log = DataContainerHistory()
     info = {}
 
     print(f'Targets in {filename}:')

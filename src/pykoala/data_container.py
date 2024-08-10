@@ -11,12 +11,12 @@ from astropy import units as u
 
 # from astropy.nddata import bitmask
 # from pykoala.exceptions.exceptions import NoneAttrError
-
+from pykoala import VerboseMixin
 
 # =============================================================================
 
 
-class LogEntry(object):
+class HistoryRecord(object):
     """Log information unit.
 
     This class represents a unit of information stored in a log.
@@ -67,7 +67,7 @@ class LogEntry(object):
 # =============================================================================
 
 
-class HistoryLog(object):
+class DataContainerHistory(object, VerboseMixin):
     """Data reduction history logger class.
 
     This class stores the data reduction history of a DataContainer by creating
@@ -82,12 +82,10 @@ class HistoryLog(object):
     #TODO
     """
 
-    verbose = True
-    log_entries = None
-    tags = None
-
     def __init__(self, list_of_entries=None, **kwargs):
-        self.vprint("Initialising history log")
+        # Initialise the verbose logger
+        self.logger = kwargs.get("logger", "pykoala")
+        self.verbose = kwargs.get("verbose", True)
         self.log_entries = []
         self.tags = []
         self.verbose = kwargs.get("verbose", True)
@@ -112,7 +110,7 @@ class HistoryLog(object):
         -------
         """
         for entry in list_of_entries:
-            if isinstance(entry, LogEntry):
+            if isinstance(entry, HistoryRecord):
                 self.log_entries.append(entry)
             elif isinstance(entry, tuple) or isinstance(entry, list):
                 if len(entry) == 2:
@@ -125,7 +123,7 @@ class HistoryLog(object):
                         "Input entry must contain two (title, comments) or"
                         + " three (title, comments, tag) elements"
                     )
-                entry = LogEntry(title=title, comments=comments, tag=tag)
+                entry = HistoryRecord(title=title, comments=comments, tag=tag)
             else:
                 raise NameError(f"Unrecognized input entry of type {entry.__class__}")
             self.log_entries.append(entry)
@@ -144,7 +142,7 @@ class HistoryLog(object):
         self.vprint(f"Logging entry > {title}:{comments}")
         if tag is not None and tag not in self.tags:
             self.tags.append(tag)
-        entry = LogEntry(title=title, comments=comments, tag=tag)
+        entry = HistoryRecord(title=title, comments=comments, tag=tag)
         self.log_entries.append(entry)
 
     def is_entry(self, title, comment=None):
@@ -238,7 +236,7 @@ class HistoryLog(object):
         """Get entries created by PyKOALA from an input FITS Header."""
         list_of_entries = []
         for title, key in zip(header.comments["PYKOALA*"], header["PYKOALA*"]):
-            list_of_entries.append(LogEntry(title=title, comments=header[key]))
+            list_of_entries.append(HistoryRecord(title=title, comments=header[key]))
         return list_of_entries
 
     def load_from_header(self, header):
@@ -397,7 +395,7 @@ class DataContainer(ABC):
         Pixel flags.
     info : dict
         Parameters describing the data.
-    log : HistoryLog
+    log : DataContainerHistory
         History log reporting the data reduction steps undertaken so far.
 
     Methods
@@ -452,7 +450,7 @@ class DataContainer(ABC):
         self._mask = kwargs.get("mask", DataMask(shape=self.intensity.shape))
         self.info = kwargs.get("info", dict())
         self.fill_info()
-        self.log = kwargs.get("log", HistoryLog())
+        self.history = kwargs.get("history", DataContainerHistory())
 
     def fill_info(self):
         """Check the keywords of info and fills them with placeholders."""
@@ -463,7 +461,7 @@ class DataContainer(ABC):
         return copy.deepcopy(self)
 
     def is_corrected(self, correction):
-        """Check if a Correction has been applied by checking the HistoryLog"""
+        """Check if a Correction has been applied by checking the DataContainerHistory"""
         if self.log.is_entry(title=correction):
             return True
         else:
