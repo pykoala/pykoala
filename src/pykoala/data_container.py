@@ -534,7 +534,7 @@ class SpectraContainer(DataContainer):
         if "wavelength" in kwargs.keys():
             self._wavelength = kwargs["wavelength"]
         else:
-            self.print(
+            self.vprint(
                 "WARNING: No `wavelength` vector supplied; creating empty `SpectraContainer`"
             )
             self._wavelength = u.Quantity([], u.AA)
