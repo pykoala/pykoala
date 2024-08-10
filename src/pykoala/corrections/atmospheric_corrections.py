@@ -14,7 +14,7 @@ import os
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from pkoala import vprint
+from pykoala import vprint
 from pykoala.rss import RSS
 from pykoala.cubing import Cube
 from pykoala.corrections.correction import CorrectionBase
