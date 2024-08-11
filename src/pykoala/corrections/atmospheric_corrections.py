@@ -49,7 +49,6 @@ class AtmosphericExtCorrection(CorrectionBase):
     def __init__(self,
                  extinction_correction=None,
                  extinction_correction_wave=None,
-                 extinction_file=default_extinction,
                  **correction_args):
         super().__init__(**correction_args)
         self.vprint("Initialising Atm ext. correction model.")
@@ -57,7 +56,6 @@ class AtmosphericExtCorrection(CorrectionBase):
         # Initialise variables
         self.extinction_correction = extinction_correction
         self.extinction_correction_wave = extinction_correction_wave
-        self.extinction_file = extinction_file
 
         if self.extinction_correction is None:
             self.model_from_file = True
@@ -65,10 +63,13 @@ class AtmosphericExtCorrection(CorrectionBase):
         else:
             self.model_from_file = True
 
-    def load_atmospheric_extinction(self, path):
-        """Load data from text file."""
-        self.vprint(f"Loading atmospheric extinction model from:\n {path}")
-        self.extinction_correction_wave, self.extinction_correction = np.loadtxt(path, unpack=True)
+    @classmethod
+    def from_text_file(cls, path=None, **kwargs):
+        if path is None:
+            path = cls.default_extinction
+        wavelength, extinct = np.loadtxt(path, unpack=True)
+        return cls(extinction_correction=extinct,
+                   extinction_correction_wave=wavelength)
 
     def extinction(self, wavelength, airmass):
         """Compute the atmospheric extinction for a given airmass"""
