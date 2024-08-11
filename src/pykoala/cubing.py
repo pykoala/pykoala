@@ -570,29 +570,32 @@ class Cube(SpectraContainer):
     n_rows = None
     x_size_arcsec = None
     y_size_arcsec = None
-
-    def __init__(self, hdul=None, file_path=None, 
-                 hdul_extensions_map=None, **kwargs):
+    hdul_extensions_map = {"INTENSITY": "INTENSITY", "VARIANCE": "VARIANCE"}
+    
+    def __init__(self, hdul=None, hdul_extensions_map=None, **kwargs):
 
         self.hdul = hdul
-        self.hdul_extensions_map = hdul_extensions_map
 
-        if self.hdul_extensions_map is None:
-            self.hdul_extensions_map = {"INTENSITY": "INTENSITY",
-                                        "VARIANCE": "VARIANCE"}
-        if self.hdul is not None:
-            self.hdul = hdul
-        elif file_path is not None:
-            self.load_hdul(file_path)
-        self.get_wcs_from_header()
+        if hdul_extensions_map is not None:
+            self.hdul_extensions_map = hdul_extensions_map
         if "logger" not in kwargs:
             kwargs['logger'] = "pykoala.cube"
         super().__init__(intensity=self.intensity,
                          variance=self.variance,
                          **kwargs)
+        self.get_wcs_from_header()
         self.parse_info_from_header()
         self.n_wavelength, self.n_rows, self.n_cols = self.intensity.shape
         self.get_wavelength()
+
+    @property
+    def hdul(self):
+        return self._hdul
+
+    @hdul.setter
+    def hdul(self, hdul):
+        assert isinstance(hdul, fits.HDUList)
+        self._hdul = hdul
 
     @property
     def intensity(self):
@@ -627,6 +630,30 @@ class Cube(SpectraContainer):
     @rss_variance.setter   
     def rss_variance(self, value):
         self.variance = value.T.reshape(self.variance.shape)
+
+    @classmethod
+    def from_fits(cls, path, hdul_extension_map=None, **kwargs):
+        """Make an instance of a Cube using an input path to a FITS file.
+        
+        Parameters
+        ----------
+        - path: str
+            Path to the FITS file. This file must be compliant with the pykoala
+            standards.
+        - hdul_extension_map: dict
+            Dictionary containing the mapping to access the extensions that
+            contain the intensity, and variance data
+            (e.g. {'INTENSITY': 1, 'VARIANCE': 'var'}).
+        - kwargs:
+            Arguments passed to the Cube class (see Cube documentation)
+        
+        Returns
+        -------
+        - cube: Cube
+            An instance of a `pykoala.cubing.Cube`.
+        """
+        with fits.open(path) as hdul:
+            return cls(hdul, hdul_extension_map, **kwargs)
 
     def parse_info_from_header(self):
         """Look into the primary header for pykoala information."""
