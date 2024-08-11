@@ -19,6 +19,8 @@ from astropy.modeling import models, fitting
 from astropy.table import QTable
 from astropy import stats
 from astropy import units as u
+import scipy.ndimage
+import scipy.signal
 # =============================================================================
 # KOALA packages
 # =============================================================================
@@ -239,6 +241,12 @@ class ContinuumEstimator:
             The estimated continuum of the input data.
         """
         continuum = scipy.signal.medfilt(data, window_size)
+        return continuum
+
+    @staticmethod
+    def percentile_continuum(data, percentile, window_size):
+        continuum = scipy.ndimage.percentile_filter(data, percentile,
+                                                    window_size)
         return continuum
 
     @staticmethod
