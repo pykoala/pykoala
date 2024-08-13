@@ -285,6 +285,22 @@ def interpolate_image_nonfinite(image):
     interp_image = interp(x, y)
     return interp_image
 
+def vac_to_air(vac_wl):
+    """Convert wavelength in vacuum to air using Morton (1991, ApJS, 77, 119).
+    
+    Parameters
+    ----------
+    - vac_wl: np.ndarray
+        Vector of vacuum wavelengths in Angstrom.
+    
+    Returns
+    -------
+    - air_wl: np.ndarray
+        Vector of air wavelengths in Angstrom
+    """
+    air_wl = vac_wl / (
+        1.0 + 2.735182e-4 + 131.4182 / vac_wl**2 + 2.76249e8 / vac_wl**4)
+    return air_wl
 
 # TODO: refactor
 def smooth_spectrum(wlm, s, wave_min=0, wave_max=0, step=50, exclude_wlm=[[0, 0]], order=7,
