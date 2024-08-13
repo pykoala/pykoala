@@ -10,7 +10,7 @@ from scipy.ndimage import median_filter, gaussian_filter, percentile_filter
 from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.rss import RSS
-from pykoala.ancillary import flux_conserving_interpolation
+from pykoala.ancillary import flux_conserving_interpolation, vac_to_air
 # from pykoala.corrections.sky import ContinuumEstimator
 
 
@@ -134,7 +134,9 @@ class SolarCrossCorrOffset(WavelengthCorrection):
                      'sun_mod_001.fits')
         with fits.open(path) as hdul:
             self.sun_wavelength = hdul[1].data['WAVELENGTH']
+            self.sun_wavelength = vac_to_air(self.sun_wavelength)
             self.sun_intensity = hdul[1].data['FLUX']
+
 
     def get_solar_features(self, solar_wavelength, solar_spectra,
                             window_size_aa=20):
