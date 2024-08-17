@@ -1,10 +1,8 @@
 # =============================================================================
 # Basics packages
 # =============================================================================
-from scipy import interpolate
 from matplotlib import pyplot as plt
 import numpy as np
-import copy
 import os
 
 # =============================================================================
@@ -15,8 +13,7 @@ import os
 # KOALA packages
 # =============================================================================
 from pykoala import vprint
-from pykoala.rss import RSS
-from pykoala.cubing import Cube
+from pykoala.data_container import SpectraContainer
 from pykoala.corrections.correction import CorrectionBase
 
 
@@ -53,14 +50,15 @@ class AtmosphericExtCorrection(CorrectionBase):
     def __init__(self,
                  extinction_correction=None,
                  extinction_correction_wave=None,
+                 extinction_correction_file='unknown',
                  **correction_args):
         super().__init__(**correction_args)
-        self.vprint("Initialising Atm ext. correction model.")
+        self.vprint("Initialising correction")
 
         # Initialise variables
         self.extinction_correction = extinction_correction
         self.extinction_correction_wave = extinction_correction_wave
-        self.extinction_file = correction_args.get("extinction_file", "unknown")
+        self.extinction_correction_file = extinction_correction_file
 
     @classmethod
     def from_text_file(cls, path=None):
@@ -69,7 +67,7 @@ class AtmosphericExtCorrection(CorrectionBase):
         wavelength, extinct = np.loadtxt(path, unpack=True)
         return cls(extinction_correction=extinct,
                    extinction_correction_wave=wavelength,
-                   extinction_file=path)
+                   extinction_correction_file=path)
 
     def extinction(self, wavelength, airmass):
         """Compute the atmospheric extinction for a given airmass and wavelength.
@@ -93,32 +91,44 @@ class AtmosphericExtCorrection(CorrectionBase):
                                           self.extinction_correction)
         return 10**(0.4 * airmass * extinction_correction)
 
-    def apply(self, data_container, airmass=None):
-        """Apply the Extinction Correction to a DataContainer"""
-        data_container_out = copy.deepcopy(data_container)
+    def apply(self, spectra_container, airmass=None):
+        """Apply the Extinction Correction to a DataContainer.
+        
+        Parameters
+        ----------
+        - airmass: float, optional
+            If provided, the extinction will be computed using this value,
+            otherwise the airmass stored at the `info` attribute will be used.
+        
+        Returns
+        -------
+        - corrected_spectra_container: SpectraContainer
+            SpectraContainer with the corrected intensity and variance.
+        """
+        assert isinstance(spectra_container, SpectraContainer)
+        spectra_container_out = spectra_container.copy()
         if airmass is None:
-            airmass = data_container.info['airmass']
+            airmass = spectra_container.info['airmass']
 
         if self.extinction_correction is not None:
             self.vprint("Applying model-based extinction correction to"
                         f"Data Container ({airmass:.2f} airmass)")
-            extinction = self.extinction(data_container_out.wavelength, airmass)
-            comment = (f"- atm. extinction file :{os.path.basename(self.extinction_file)}"
-                    + f"|airmass={airmass:.2f}")
+            extinction = self.extinction(spectra_container_out.wavelength, airmass)
+            comment = ("Atm. extinction file :" + os.path.basename(
+                        self.extinction_correction_file)
+                        + f"|airmass={airmass:.2f}")
         else:
             raise AttributeError("Extinction correction not provided")
 
         # Apply the correction
-        if type(data_container) is Cube:
-            extinction = np.expand_dims(extinction, axis=tuple(range(1, data_container.intensity.ndim)))
-        elif type(data_container) is RSS:
-            extinction = np.expand_dims(extinction, axis=0)
-
-        data_container_out.intensity *= extinction
-        data_container_out.variance *= extinction**2
-        self.record_correction(data_container_out, status='applied',
+        extinction = np.expand_dims(extinction, axis=0)
+        spectra_container_out.rss_intensity = (spectra_container_out.rss_intensity
+                                            * extinction)
+        spectra_container_out.rss_variance = (spectra_container_out.rss_variance
+                                           * extinction**2)
+        self.record_correction(spectra_container_out, status='applied',
                             comment=comment)
-        return data_container_out
+        return spectra_container_out
 
 
 # =============================================================================
