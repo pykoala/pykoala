@@ -11,6 +11,7 @@ from photutils.centroids import centroid_2dg, centroid_com
 # =============================================================================
 # KOALA packages
 # =============================================================================
+from pykoala import vprint
 from pykoala.exceptions.exceptions import ClassError, FitError, CalibrationError
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.rss import RSS
@@ -31,8 +32,8 @@ class AstrometryCorrection(CorrectionBase):
     name = 'Astrometry'
     verbose = True
 
-    def __init__(self, *args, **kwargs) -> None:
-        self.verbose = kwargs.get('verbose', True)
+    def __init__(self, **correction_args) -> None:
+        super().__init__(**correction_args)
 
     def register_centroids(self, data_set, object_name=None, qc_plot=False, **centroid_args):
         """Register a collection of DataContainers.
@@ -70,7 +71,7 @@ class AstrometryCorrection(CorrectionBase):
             try:
                 reference_pos = SkyCoord.from_name(object_name)
             except Exception as e:
-                self.corr_print(e)
+                self.vprint(e)
                 reference_pos = find_centroid_in_dc(data_set[0], **centroid_args)
         else:
             centroid_args['full_output'] = False
@@ -81,7 +82,8 @@ class AstrometryCorrection(CorrectionBase):
             wcs_list = []
             centroid_list = []
 
-        self.corr_print("Reference position: ", reference_pos)
+        self.vprint(f"Reference position: RA={reference_pos.ra}, "
+                    + f"DEC={reference_pos.dec})")
         offsets = []
         for data in data_set:
             if qc_plot:
@@ -94,8 +96,10 @@ class AstrometryCorrection(CorrectionBase):
 
             offset = [reference_pos.ra - centroid_world.ra, reference_pos.dec - centroid_world.dec]
             offsets.append(offset)
-            self.corr_print("Offset found (ra, dec): ", offset[0].to('arcsec'), offset[1].to('arcsec'),
-                            " (arcsec)")
+            self.vprint("Offset found (ra, dec): {}{} (arcsec)"
+                        .format(offset[0].to_value('arcsec'),
+                                offset[1].to_value('arcsec'))
+                        )
         if qc_plot:
             fig = qc_registration_centroids(images_list, wcs_list,
                                             offsets, reference_pos)
@@ -109,7 +113,7 @@ class AstrometryCorrection(CorrectionBase):
         """Register a collection of DataContainers.
 
         """
-        self.corr_print("Performing image cross-correlation")
+        self.vprint("Performing image cross-correlation")
         images = []
         wcs = []
         offsets = [[0 * u.deg, 0 * u.deg]]
@@ -145,12 +149,12 @@ class AstrometryCorrection(CorrectionBase):
     
     def apply(self, data_container, offset):
         if data_container.__class__ is RSS:
-            self.corr_print("Applying correction to RSS")
+            self.vprint("Applying correction to RSS")
 
             data_container.info['fib_ra'] += offset[0].to('deg').value
             data_container.info['fib_dec'] += offset[1].to('deg').value
 
-            self.log_correction(
+            self.record_correction(
                 data_container, status='applied',
                 offset=f"{offset[0].to('arcsec')}{offset[1].to('arcsec')} arcsec")
         elif data_container.__class__ is Cube:
@@ -206,7 +210,7 @@ def find_centroid_in_dc(data_container, wave_range=None,
         subbox = [[None, None], [None, None]]
 
     if data_container.__class__ is RSS:
-        print(
+        vprint(
             "[Registration]  Data provided in RSS format --> creating a dummy datacube")
         cube = make_dummy_cube_from_rss(data_container, quick_cube_pix_size)
         image = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
@@ -262,7 +266,7 @@ def register_interactive(data_set, quick_cube_pix_size=0.2, wave_range=None):
 
     for data in data_set:
         if type(data) is RSS:
-            print(
+            vprint(
                 "[Registration]  Data provided in RSS format --> creating a dummy datacube")
             cube_size_arcsec = (
                 data.info['fib_ra'].max(
@@ -304,7 +308,7 @@ def register_interactive(data_set, quick_cube_pix_size=0.2, wave_range=None):
     def mouse_event(event):
         """..."""
         centres.append([event.xdata / 3600, event.ydata / 3600])
-        print('x: {} and y: {}'.format(event.xdata, event.ydata))
+        vprint('x: {} and y: {}'.format(event.xdata, event.ydata))
 
     n_rss = len(data_set)
 

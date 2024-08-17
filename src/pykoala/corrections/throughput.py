@@ -74,17 +74,18 @@ class ThroughputCorrection(CorrectionBase):
     """
     name = "ThroughputCorrection"
     throughput = None
-    verbose = False
 
-    def __init__(self, **kwargs):
-        super().__init__()
+    def __init__(self, throughput=None, throughput_path=None,
+                 **correction_kwargs):
+        super().__init__(**correction_kwargs)
 
-        self.throughput = kwargs.get('throughput', Throughput())
-        if not isinstance(self.throughput, Throughput):
-            raise AttributeError(
-                "Input throughput must be an instance of Throughput class")
+        if throughput is None:
+            self.throughput = Throughput()
+        else:
+            assert isinstance(throughput, Throughput)
+            self.throughput = throughput
 
-        self.throughput.path = kwargs.get('throughput_path', None)
+        self.throughput.path = throughput_path
         if self.throughput.throughput_data is None and self.throughput.path is not None:
             self.throughput.load_fits(self.throughput_path)
 
@@ -183,7 +184,7 @@ class ThroughputCorrection(CorrectionBase):
 
         rss_out.intensity = rss_out.intensity / throughput.throughput_data
         rss_out.variance = rss_out.variance / throughput.throughput_data**2
-        self.log_correction(rss_out, status='applied')
+        self.record_correction(rss_out, status='applied')
         return rss_out
 
 # =============================================================================

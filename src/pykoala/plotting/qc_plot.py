@@ -111,8 +111,8 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
     # ------ Spectra -------
     units = 1.
     units_label = '(counts)'
-    if cube.log is not None:
-        entries = cube.log.find_entry(title='FluxCalibration', comment='units',
+    if cube.history is not None:
+        entries = cube.history.find_record(title='FluxCalibration', comment='units',
                                       tag='correction')
         print("Enrties found:", entries)
         for e in entries:

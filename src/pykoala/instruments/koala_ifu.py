@@ -18,8 +18,7 @@ from astropy.wcs import WCS
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from pykoala.ancillary import vprint  # Template to create the info variable 
-from pykoala.data_container import HistoryLog
+from pykoala import vprint  # Template to create the info variable 
 from pykoala.rss import RSS
 from pykoala.ancillary import print_counter,interpolate_image_nonfinite
 from pykoala.spectra.onedspec import fit_smooth_spectrum,trim_spectrum
@@ -123,17 +122,11 @@ def read_rss(file_path,
              intensity_axis=0,
              variance_axis=1,
              bad_fibres_list=None,
-             instrument=None,
-             verbose=False,
-             log=None,
              header=None,
              fibre_table=None,
              info=None
              ):
     """TODO."""
-    # Blank dictionary for the log
-    if log is None:
-        log = HistoryLog(verbose=verbose)
     if header is None:
         # Blank Astropy Header object for the RSS header
         # Example how to add header value at the end
@@ -142,30 +135,26 @@ def read_rss(file_path,
 
     file_name = os.path.basename(file_path)
 
-    vprint("\n> Reading RSS file", file_name, "created with", instrument, "...",
-           verbose=verbose)
-
+    vprint(f"\n> Reading KOALA RSS file {file_name}")
     #  Open fits file. This assumes that RSS objects are written to file as .fits.
     with fits.open(file_path) as rss_fits:
-        log('read', ' '.join(['- RSS read from ', file_name]))
         # Read intensity using rss_fits_file[0]
-        all_intensities = np.array(rss_fits[intensity_axis].data, dtype=np.float32)
+        all_intensities = np.array(rss_fits[intensity_axis].data,
+                                   dtype=np.float32)
         intensity = np.delete(all_intensities, bad_fibres_list, 0)
         # Bad pixel verbose summary
-        vprint("\n  Number of spectra in this RSS =", len(all_intensities),
-            ",  number of good spectra =", len(intensity),
-            " ,  number of bad spectra =", len(bad_fibres_list),
-            verbose=verbose)
+        vprint(f"Number of fibres in this RSS ={len(all_intensities)}"
+               + f"No. of good fibres = {len(intensity)}"
+               + f"No. of bad fibres = {len(bad_fibres_list)}")
         if bad_fibres_list is not None:
-            vprint("  Bad fibres =", bad_fibres_list, verbose=verbose)
-
+            vprint(f"Bad fibres = {bad_fibres_list}")
         # Read errors if exist a dedicated axis
         if variance_axis is not None:
             all_variances = rss_fits[variance_axis].data
             variance = np.delete(all_variances, bad_fibres_list, 0)
 
         else:
-            vprint("\n  WARNING! Variance extension not found in fits file!", verbose=verbose)
+            vprint("WARNING! Variance extension not found in fits file!")
             variance = np.full_like(intensity, fill_value=np.nan)
 
     # Create wavelength from wcs
@@ -175,15 +164,12 @@ def read_rss(file_path,
     # First Header value added by the PyKoala routine
     header.append(('DARKCORR', 'OMIT', 'Dark Image Subtraction'), end=True)
 
-    # Blank mask (all 0, i.e. making nothing) of the same shape of the data
-    mask = np.zeros_like(intensity)
-
-    return RSS(intensity=intensity,
+    rss = RSS(intensity=intensity,
                variance=variance,
                wavelength=wavelength,
-               info=info,
-               log=log,
-               )
+               info=info)
+    rss.history('read', ' '.join(['- RSS read from ', file_name]))
+    return rss
 
 def koala_rss(path_to_file, **kwargs):
     """
@@ -218,7 +204,6 @@ def koala_rss(path_to_file, **kwargs):
                    header=koala_header,
                    fibre_table=koala_fibre_table,
                    info=info,
-                   verbose = verbose
                    )
     return rss
 
@@ -412,11 +397,11 @@ def list_koala_fits_files_in_folder(path, verbose = True, use2=True, use3=False,
         for i in range(len(list_of_objetos)):
             for j in range(len(list_of_files[i])):
                 if j == 0: 
-                    print("  {:15s}  {}          {:.1f} s".format(list_of_objetos[i], list_of_files[i][0], list_of_exptimes[i][0]))
+                    vprint("  {:15s}  {}          {:.1f} s".format(list_of_objetos[i], list_of_files[i][0], list_of_exptimes[i][0]))
                 else:
-                    print("                   {}          {:.1f} s".format(list_of_files[i][j], list_of_exptimes[i][j]))
+                    vprint("                   {}          {:.1f} s".format(list_of_files[i][j], list_of_exptimes[i][j]))
                         
-        print("\n  They were obtained on {} using the grating {}".format(date, grating))
+        vprint("\n  They were obtained on {} using the grating {}".format(date, grating))
 
     if return_list: return list_of_objetos, list_of_files, list_of_exptimes, date, grating
 # #-----------------------------------------------------------------------------
