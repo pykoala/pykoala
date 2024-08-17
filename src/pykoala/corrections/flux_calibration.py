@@ -3,11 +3,8 @@
 # =============================================================================
 import numpy as np
 from scipy.optimize import curve_fit
-from scipy.ndimage import gaussian_filter1d
+from scipy.ndimage import median_filter
 from scipy.interpolate import interp1d, UnivariateSpline
-from scipy.ndimage import gaussian_filter1d
-from photutils.centroids import centroid_2dg
-import copy
 import matplotlib.pyplot as plt
 import os
 
@@ -81,7 +78,7 @@ class FluxCalibration(CorrectionBase):
 
     @classmethod
     def auto(cls, data, calib_stars, extract_args=None,
-             response_params=None, save=None, fnames=None, combine=False):
+             response_params=None, fnames=None, combine=False):
         """
         Automatic calibration process for extracting the calibration response curve from a set of stars.
 
@@ -97,8 +94,6 @@ class FluxCalibration(CorrectionBase):
         response_params : dict, optional
             Dictionary containing the parameters for computing the response curve from the stellar spectra.
             See the `FluxCalibration.get_response_curve` method.
-        save : str or None, optional
-            Path where the response curves will be saved.
         fnames : list or None, optional
             Filenames corresponding to the calibration stars.
         combine : bool, optional
@@ -128,7 +123,7 @@ class FluxCalibration(CorrectionBase):
             # Extract flux from std star
             vprint("Extracting stellar flux from data")
             result = FluxCalibration.extract_stellar_flux(
-                copy.deepcopy(data[i]), **extract_args)
+                data[i].copy(), **extract_args)
             flux_cal_results[name] = dict(extraction=result)
             # Interpolate to the observed wavelength
             vprint("Interpolating template to observed wavelength")
@@ -139,15 +134,13 @@ class FluxCalibration(CorrectionBase):
             vprint("Loading template spectra")
             ref_wave, ref_spectra = FluxCalibration.read_calibration_star(
                 name=calib_stars[i])
-
-            interp_s = flux_conserving_interpolation(mean_wave, ref_wave,
-                                                     ref_spectra)
-
-            flux_cal_results[name]['interp'] = interp_s
+            flux_cal_results[name]['ref_wavelength'] = ref_wave
+            flux_cal_results[name]['ref_spectra'] = ref_spectra
             # Compute the response curve
             resp_curve, resp_fig = FluxCalibration.get_response_curve(
-                mean_wave, result['optimal'][:, 0], interp_s,
+                mean_wave, result['optimal'][:, 0], ref_wave, ref_spectra,
                 **response_params)
+
             flux_cal_results[name]['wavelength'] = data[i].wavelength.copy()
             flux_cal_results[name]['response'] = resp_curve(
                 data[i].wavelength.copy())
@@ -364,30 +357,31 @@ class FluxCalibration(CorrectionBase):
         """"""
         vprint("Making stellar flux extraction plot")
         fig, axs = plt.subplots(ncols=2, nrows=2, figsize=(8, 8),
-                                gridspec_kw=dict(hspace=0.4, wspace=0.4),
                                 constrained_layout=True)
         # Plot in the sky
         ax = axs[0, 0]
         ax.set_title("Median intensity")
         mappable = ax.scatter(x, y, c=np.log10(np.nanmedian(data, axis=0)),
-                                cmap='nipy_spectral')
+                              cmap='nipy_spectral')
         plt.colorbar(mappable, ax=ax, label=r'$\log_{10}$(intensity)')
-        ax.plot(x0, y0, '+', ms=5, color='r')
+        ax.plot(x0, y0, '+', ms=10, color='fuchsia')
         # Plot cog
         ax = axs[1, 0]
+        ax.set_title("COG shape chromatic differences")
         cog = np.array(cog)
         cog /= cog[:, -1][:, np.newaxis]
         pct_cog = np.nanpercentile(cog, [16, 50, 84], axis=0)
         for p, pct in zip([16, 50, 84], pct_cog):
             ax.plot(rad, pct, label=f'Percentile {p}')
-        ax.set_yscale('log')
-        ax.set_xscale('log')
+        # ax.set_yscale('log')
+        # ax.set_xscale('log')
         ax.set_ylabel('Normalised Curve of Growth')
         ax.set_xlabel('Distance to COM (arcsec)')
         ax.grid(visible=True, which='both')
+        ax.legend()
         ax = axs[0, 1]
-        ax.plot(wavelength, residuals, '-o', color='k', lw=2)
-        ax.set_ylabel('Mean residuals')
+        ax.plot(wavelength, residuals, '-o', lw=2)
+        ax.set_ylabel('Mean model residuals (counts)')
         ax.set_xlabel('Wavelength')
         axs[1, 1].axis('off')
         plt.close(fig)
@@ -464,10 +458,10 @@ class FluxCalibration(CorrectionBase):
         return calib_wave, calib_spectra
 
     @staticmethod
-    def get_response_curve(wave, obs_spectra, ref_spectra,
+    def get_response_curve(obs_wave, obs_spectra, ref_wave, ref_spectra,
                            pol_deg=None, spline=False, spline_args={},
-                           gauss_smooth_sigma=None, plot=False,
-                           mask_absorption=True):
+                           median_filter_n=None, plot=False,
+                           mask_absorption=True, mask_zeros=True):
         """
         Computes the response curve from observed and reference spectra.
 
@@ -500,61 +494,84 @@ class FluxCalibration(CorrectionBase):
             Figure of the response curve plot, if plot is True.
         """
         vprint("Computing spectrophotometric response")
-        dwave = np.diff(wave)
-        wave_edges = np.hstack((wave[0] - dwave[0] / 2, wave[:-1] + dwave / 2,
-                                wave[-1] + dwave[-1] / 2))
+        if ref_wave[1] - ref_wave[0] < obs_wave[1] - obs_wave[0]:
+            int_ref_spectra = np.interp(obs_wave, ref_wave, ref_spectra)
+        else:
+            int_ref_spectra = flux_conserving_interpolation(obs_wave, ref_wave,
+                                                            ref_spectra)
+        raw_response = obs_spectra / int_ref_spectra
+        weights = np.ones_like(raw_response)
+
+
         if mask_absorption:
             vprint("Masking lines")
-            lines_mask = mask_lines(wave)
-            obs_spectra = np.interp(wave, wave[lines_mask],
-                                    obs_spectra[lines_mask])
-            ref_spectra = np.interp(wave, wave[lines_mask],
-                                    ref_spectra[lines_mask])
-        raw_response = obs_spectra / ref_spectra
+            lines_mask = mask_lines(obs_wave)
+            weights *= lines_mask
+            # obs_spectra = np.interp(obs_wave, obs_wave[lines_mask],
+            #                         obs_spectra[lines_mask])
+            # int_ref_spectra = np.interp(obs_wave, obs_wave[lines_mask],
+            #                             int_ref_spectra[lines_mask])
         
-        # Gaussian smoothing
-        if gauss_smooth_sigma is not None:
-            sigma_pixels = gauss_smooth_sigma / np.mean(dwave)
-            raw_response = gaussian_filter1d(
-                raw_response, sigma=sigma_pixels)
+        if mask_zeros:
+            vprint("Masking zeros")
+            mask = obs_spectra >= 0
+            weights *= mask
+            # obs_spectra = np.interp(obs_wave, obs_wave[mask],
+            #                         obs_spectra[mask])
+
+        # Median filtering
+        if median_filter_n is not None:
+            filtered_raw_response = median_filter(
+                raw_response, size=median_filter_n)
+
+            weights *= 1 / (1 + np.abs(raw_response - filtered_raw_response))**2
+            raw_response = filtered_raw_response
 
         # Polynomial interpolation
         if pol_deg is not None:
-            p_fit = np.polyfit(wave, raw_response, deg=pol_deg)
+            p_fit = np.polyfit(obs_wave, raw_response, deg=pol_deg,
+                                w=weights)
             response = np.poly1d(p_fit)
         # Linear interpolation
         elif spline:
-            response = UnivariateSpline(wave, raw_response, **spline_args)
+            response = UnivariateSpline(obs_wave, raw_response, w=weights,
+                                        **spline_args)
         else:
-            response = interp1d(wave, raw_response, fill_value=0, bounds_error=False)
+            response = interp1d(obs_wave, raw_response, fill_value=0, bounds_error=False)
             # Spline fit
             # response = UnivariateSpline(wave, obs_spectra / ref_spectra)
+        final_response = response(obs_wave)
+
         if plot:
             fig = plt.figure(figsize=(8, 4))
             ax = fig.add_subplot(211)
             ax.annotate('{}-deg polynomial fit'.format(pol_deg), xy=(0.05, 0.95), xycoords='axes fraction',
                         va='top', ha='left')
-            ax.annotate(r'Gaussian smoothin: $\sigma=${} AA'
-                        .format(gauss_smooth_sigma),
+            ax.annotate(r'Median filter size: {}'.format(median_filter_n),
                         xy=(0.05, 0.80), xycoords='axes fraction',
                         va='top', ha='left')
-            ax.plot(wave, obs_spectra / ref_spectra, '.-', color='k', lw=2, label='Obs/Ref')
-            ax.plot(wave, raw_response, '.-', color='orange', lw=2, label='Filtered')
-            ax.plot(wave, response(wave), 'r', label='Final response')
+            ax.plot(obs_wave, obs_spectra / int_ref_spectra, '.-', lw=2, label='Obs/Ref')
+            ax.plot(obs_wave, raw_response, '-', lw=2, label='Filtered')
+            ax.plot(obs_wave, final_response, label='Final response')
             ax.set_xlabel('Wavelength')
             ax.set_title(r'$R(\lambda) [\rm counts\,s^{-1} / (erg\, s^{-1}\, cm^{-2}\, AA^{-1})]$', fontsize=16)
             ax.set_ylabel(r'$R(\lambda)$', fontsize=16)
             ax.legend(loc='lower right')
-            ax.set_ylim(response(wave).min(), response(wave).max())
+            ax.set_ylim(final_response.min()*0.8, final_response.max()*1.2)
 
-            ax = fig.add_subplot(212)
-            ax.plot(wave,  ref_spectra, '.-', color='k', lw=2, label='Ref')
-            ax.plot(wave, obs_spectra / raw_response, '.-', color='orange', lw=2, label='Filtered')
-            ax.plot(wave, obs_spectra / response(wave), 'r', label='Final response')
+            ax = fig.add_subplot(212, sharex=ax)
+            ax.plot(ref_wave,  ref_spectra, '-', lw=2, label='Ref')
+            ax.plot(obs_wave, obs_spectra / raw_response, '-', lw=2, label='Filtered')
+            ax.plot(obs_wave, obs_spectra / final_response, label='Final response')
             ax.set_xlabel('Wavelength')
             ax.set_ylabel(r'$F$', fontsize=16)
-            ax.set_ylim(ref_spectra.min(), ref_spectra.max())
-            ax.legend(ncol=1)
+            ax.set_ylim(int_ref_spectra.min()*0.8, int_ref_spectra.max()*1.2)
+            ax.set_xlim(obs_wave.min(), obs_wave.max())
+            # ax.legend(ncol=1)
+            twax = ax.twinx()
+            twax.plot(obs_wave, weights, label='Relative weights', color='fuchsia',
+                      alpha=0.7, lw=0.7)
+            twax.legend()
             plt.close(fig)
             return response, fig
         else:
