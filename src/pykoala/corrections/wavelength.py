@@ -70,12 +70,16 @@ class WavelengthCorrection(CorrectionBase):
     offset = None
     verbose = False
 
-    def __init__(self, **kwargs):
-        super().__init__()
+    def __init__(self, offset_path=None, offset=None, **correction_kwargs):
+        super().__init__(**correction_kwargs)
 
-        path = kwargs.get('offset_path', None)
-        self.offset = kwargs.get('offset', WavelengthOffset(path=path))
-        assert isinstance(self.offset, WavelengthOffset)
+        path = offset_path
+        if offset is not None:
+            assert isinstance(offset, WavelengthOffset)
+            self.offset = offset
+        else:
+            self.offset = WavelengthOffset(path=path)
+        
 
     def apply(self, rss):
         """Apply a 2D wavelength offset model to a RSS.
@@ -99,7 +103,7 @@ class WavelengthCorrection(CorrectionBase):
             rss_out.intensity[i] = flux_conserving_interpolation(
                 x, x - self.offset.offset_data[i], rss.intensity[i])
 
-        self.log_correction(rss_out, status='applied')
+        self.record_correction(rss_out, status='applied')
         return rss_out
 
 # =============================================================================

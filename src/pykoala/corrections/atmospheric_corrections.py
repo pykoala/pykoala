@@ -14,8 +14,7 @@ import os
 # =============================================================================
 # KOALA packages
 # =============================================================================
-# Modular
-# from koala.ancillary import vprint
+from pykoala import vprint
 from pykoala.rss import RSS
 from pykoala.cubing import Cube
 from pykoala.corrections.correction import CorrectionBase
@@ -51,9 +50,9 @@ class AtmosphericExtCorrection(CorrectionBase):
                  extinction_correction=None,
                  extinction_correction_wave=None,
                  extinction_file=default_extinction,
-                 verbose=False):
-        self.verbose = verbose
-        self.corr_print("Initialising Atm ext. correction model.")
+                 **correction_args):
+        super().__init__(**correction_args)
+        self.vprint("Initialising Atm ext. correction model.")
 
         # Initialise variables
         self.extinction_correction = extinction_correction
@@ -68,7 +67,7 @@ class AtmosphericExtCorrection(CorrectionBase):
 
     def load_atmospheric_extinction(self, path):
         """Load data from text file."""
-        self.corr_print(f"Loading atmospheric extinction model from:\n {path}")
+        self.vprint(f"Loading atmospheric extinction model from:\n {path}")
         self.extinction_correction_wave, self.extinction_correction = np.loadtxt(path, unpack=True)
 
     def extinction(self, wavelength, airmass):
@@ -85,7 +84,7 @@ class AtmosphericExtCorrection(CorrectionBase):
             airmass = force_airmass
 
         if self.extinction_correction is not None:
-            self.corr_print(f"Applying model-based extinction correction to Data Container ({airmass:.2f} airmass)")
+            self.vprint(f"Applying model-based extinction correction to Data Container ({airmass:.2f} airmass)")
             extinction = self.extinction(data_container_out.wavelength, airmass)
             if self.model_from_file:
                 comment = ' '.join(["- Data corrected for extinction using file :",
@@ -104,7 +103,7 @@ class AtmosphericExtCorrection(CorrectionBase):
 
         data_container_out.intensity *= extinction
         data_container_out.variance *= extinction**2
-        self.log_correction(data_container_out, status='applied',
+        self.record_correction(data_container_out, status='applied',
                             comment=comment)
         return data_container_out
 
@@ -131,7 +130,7 @@ def get_adr(data_container, max_adr=0.5, pol_deg=2, plot=False):
                          median_com[0][finite_mask], deg=pol_deg)
         polfit_x = np.poly1d(p_x)(data_container.wavelength)
     else:
-        print("[ADR] ERROR: Could not compute ADR-x, all NaN")
+        vprint("[ADR] ERROR: Could not compute ADR-x, all NaN")
         polfit_x = np.zeros_like(data_container.wavelength)
 
     finite_mask = np.isfinite(median_com[1])
@@ -140,7 +139,7 @@ def get_adr(data_container, max_adr=0.5, pol_deg=2, plot=False):
                          median_com[1][finite_mask], deg=pol_deg)
         polfit_y = np.poly1d(p_y)(data_container.wavelength)
     else:
-        print("[ADR] ERROR: Could not compute ADR-y, all NaN")
+        vprint("[ADR] ERROR: Could not compute ADR-y, all NaN")
         polfit_y = np.zeros_like(data_container.wavelength)
     
 
