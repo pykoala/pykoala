@@ -616,9 +616,17 @@ class Cube(SpectraContainer):
     def rss_intensity(self):
         return np.reshape(self.intensity, (self.intensity.shape[0], self.intensity.shape[1]*self.intensity.shape[2])).T
 
+    @rss_intensity.setter   
+    def rss_intensity(self, value):
+        self.intensity = value.T.reshape(self.intensity.shape)
+
     @property
     def rss_variance(self):
         return np.reshape(self.variance, (self.variance.shape[0], self.variance.shape[1]*self.variance.shape[2])).T
+
+    @rss_variance.setter   
+    def rss_variance(self, value):
+        self.variance = value.T.reshape(self.variance.shape)
 
     def parse_info_from_header(self):
         """Look into the primary header for pykoala information."""

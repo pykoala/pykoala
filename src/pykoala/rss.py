@@ -52,9 +52,17 @@ class RSS(SpectraContainer):
     def rss_intensity(self):
         return self._intensity
 
+    @rss_intensity.setter
+    def rss_intensity(self, value):
+        self.intensity = value
+
     @property
     def rss_variance(self):
         return self._variance
+
+    @rss_variance.setter
+    def rss_variance(self, value):
+        self.variance = value
 
     def __init__(self, **kwargs):
         assert ('wavelength' in kwargs)
