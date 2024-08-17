@@ -543,8 +543,9 @@ class FluxCalibration(CorrectionBase):
         final_response = response(obs_wave)
 
         if plot:
-            fig = plt.figure(figsize=(8, 4))
-            ax = fig.add_subplot(211)
+            fig, axs = plt.subplots(nrows=2, constrained_layout=True,
+                                    sharex=True)
+            ax = axs[0]
             ax.annotate('{}-deg polynomial fit'.format(pol_deg), xy=(0.05, 0.95), xycoords='axes fraction',
                         va='top', ha='left')
             ax.annotate(r'Median filter size: {}'.format(median_filter_n),
@@ -556,10 +557,10 @@ class FluxCalibration(CorrectionBase):
             ax.set_xlabel('Wavelength')
             ax.set_title(r'$R(\lambda) [\rm counts\,s^{-1} / (erg\, s^{-1}\, cm^{-2}\, AA^{-1})]$', fontsize=16)
             ax.set_ylabel(r'$R(\lambda)$', fontsize=16)
-            ax.legend(loc='lower right')
+            ax.legend()
             ax.set_ylim(final_response.min()*0.8, final_response.max()*1.2)
 
-            ax = fig.add_subplot(212, sharex=ax)
+            ax = axs[1]
             ax.plot(ref_wave,  ref_spectra, '-', lw=2, label='Ref')
             ax.plot(obs_wave, obs_spectra / raw_response, '-', lw=2, label='Filtered')
             ax.plot(obs_wave, obs_spectra / final_response, label='Final response')
