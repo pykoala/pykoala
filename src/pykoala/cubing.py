@@ -15,7 +15,7 @@ from astropy.coordinates import SkyCoord
 # KOALA packages
 # =============================================================================
 from pykoala import ancillary
-from pykoala.data_container import DataContainer
+from pykoala.data_container import SpectraContainer
 from pykoala.plotting import qc_plot
 from pykoala import __version__
 from scipy.special import erf
@@ -552,7 +552,7 @@ def build_hdul(intensity, variance, primary_header_info=None, wcs=None):
 # Cube class
 # =============================================================================
 
-class Cube(DataContainer):
+class Cube(SpectraContainer):
     """This class represent a collection of Raw Stacked Spectra (RSS) interpolated over a 2D spatial grid.
     
     parent_rss
@@ -610,6 +610,14 @@ class Cube(DataContainer):
     def variance(self, variance_corr):
         print("[Cube] Updating HDUL variance")
         self.hdul[self.hdul_extensions_map['VARIANCE']].data = variance_corr
+
+    @property
+    def rss_intensity(self):
+        return np.reshape(self.intensity, (self.intensity.shape[0], self.intensity.shape[1]*self.intensity.shape[2])).T
+
+    @property
+    def rss_variance(self):
+        return np.reshape(self.variance, (self.variance.shape[0], self.variance.shape[1]*self.variance.shape[2])).T
 
     def parse_info_from_header(self):
         """Look into the primary header for pykoala information."""
@@ -714,7 +722,7 @@ class Cube(DataContainer):
             "%d_%m_%Y_%H_%M_%S"), "creation date / last change"
 
         # Fill the header with the log information
-        primary.header = self.dump_log_in_header(primary.header)
+        primary.header = self.log.dump_to_header(primary.header)
 
         # Create a list of HDU
         hdu_list = [primary]
@@ -769,4 +777,6 @@ def make_dummy_cube_from_rss(rss, spa_pix_arcsec=0.5, kernel_pix_arcsec=1.0):
                       kernel_size_arcsec=kernel_pix_arcsec)
     return cube
 
+# =============================================================================
 # Mr Krtxo \(ﾟ▽ﾟ)/
+#                                                       ... Paranoy@ Rulz! ;^D

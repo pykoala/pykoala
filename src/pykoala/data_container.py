@@ -1,18 +1,24 @@
 """
-This module contains the parent class that represents the data used during the
-reduction process
+This module contains the parent classes that represent the data used
+during the reduction process.
 """
+
+from abc import ABC, abstractmethod
 import numpy as np
 import copy
-
 from astropy.io.fits import Header, ImageHDU
-from astropy.nddata import bitmask
+from astropy import units as u
 
-from pykoala.exceptions.exceptions import NoneAttrError
+# from astropy.nddata import bitmask
+# from pykoala.exceptions.exceptions import NoneAttrError
+
+
+# =============================================================================
+
 
 class LogEntry(object):
     """Log information unit.
-    
+
     This class represents a unit of information stored in a log.
 
     Attributes
@@ -25,18 +31,19 @@ class LogEntry(object):
     Methods
     -------
     - to_str:
-        Return a string containing the information of 
+        Return a string containing the information of
         the entry.
     """
+
     def __init__(self, title, comments, tag=None) -> None:
         self.title = title
         self.comments = comments
         self.tag = tag
-    
+
     @property
     def comments(self):
         return self._comments
-    
+
     @comments.setter
     def comments(self, comments):
         if isinstance(comments, list):
@@ -44,8 +51,10 @@ class LogEntry(object):
         elif isinstance(comments, str):
             self._comments = comments.split("\n")
         else:
-            raise NameError("Input comments must be str or list of strings not:"
-                            + f" {comments.__class__}")
+            raise NameError(
+                "Input comments must be str or list of strings, not:"
+                + f" {comments.__class__}"
+            )
 
     def to_str(self, title=True):
         """Convert the entry into a string."""
@@ -54,9 +63,13 @@ class LogEntry(object):
             comments = f"{self.title}: " + comments
         return comments
 
+
+# =============================================================================
+
+
 class HistoryLog(object):
     """Data reduction history logger class.
-    
+
     This class stores the data reduction history of a DataContainer by creating
     consecutive log entries.
 
@@ -68,6 +81,7 @@ class HistoryLog(object):
     -------
     #TODO
     """
+
     verbose = True
     log_entries = None
     tags = None
@@ -76,14 +90,14 @@ class HistoryLog(object):
         self.vprint("Initialising history log")
         self.log_entries = []
         self.tags = []
-        self.verbose = kwargs.get('verbose', True)
+        self.verbose = kwargs.get("verbose", True)
 
         if list_of_entries is not None:
             self.initialise_log(list_of_entries)
-    
+
     def initialise_log(self, list_of_entries):
         """Initialise the log from a set of input entries.
-        
+
         This method initialises the log using a collection of entries. The
         input can be in the form of a, interable consisting of LogEntry objects
         or an interable containing a 2 or 3 elements iterable (title, comments)
@@ -109,16 +123,16 @@ class HistoryLog(object):
                 else:
                     raise NameError(
                         "Input entry must contain two (title, comments) or"
-                        + " three (title, comments, tag) elements")
+                        + " three (title, comments, tag) elements"
+                    )
                 entry = LogEntry(title=title, comments=comments, tag=tag)
             else:
-                raise NameError(
-                    "Unrecognized input entry of type {entry.__class__}")
+                raise NameError(f"Unrecognized input entry of type {entry.__class__}")
             self.log_entries.append(entry)
 
     def log_entry(self, title, comments, tag=None):
         """Include a new entry in the log.
-        
+
         Parameters
         ----------
         - title: (str)
@@ -135,7 +149,7 @@ class HistoryLog(object):
 
     def is_entry(self, title, comment=None):
         """Find an entry that contains the input information.
-        
+
         Parameters
         -----------
         - title: (str)
@@ -158,9 +172,9 @@ class HistoryLog(object):
                     return True
         return False
 
-    def find_entry(self, title='', comment='', tag=''):
+    def find_entry(self, title="", comment="", tag=""):
         """Return all entries matching a given title.
-        
+
         Parameters
         ----------
         - title: (str, default='')
@@ -174,13 +188,17 @@ class HistoryLog(object):
         - entries: (list)
             List of entries associated to the input title, comment and tag.
         """
-        return [entry for entry in self.log_entries if (title in entry.title)
-         and (comment in entry.to_str(title=False)) and (tag in str(entry.tag))]
-
+        return [
+            entry
+            for entry in self.log_entries
+            if (title in entry.title)
+            and (comment in entry.to_str(title=False))
+            and (tag in str(entry.tag))
+        ]
 
     def dump_to_header(self, header=None):
         """Write the log into a astropy.fits.Header.
-        
+
         Save the entries of the log in a Header. All entries will be saved using
         card names `PYKOALAnumber`, where number corresponds to an index ranging
         from 0 to the number of entries contained in the log.
@@ -196,14 +214,13 @@ class HistoryLog(object):
             index = len(self.get_entries_from_header(header))
 
         for entry in self.log_entries:
-            header['PYKOALA' + str(index)] = (
-                entry.to_str(title=False), entry.title)
+            header["PYKOALA" + str(index)] = (entry.to_str(title=False), entry.title)
             index += 1
         return header
 
     def dump_to_text(self, file):
         """Write the log into a text file
-        
+
         Parameters
         ----------
         - file: (str)
@@ -215,14 +232,12 @@ class HistoryLog(object):
         self.vprint("Writting log into text file")
         with open(file, "w") as f:
             for entry in self.log_entries:
-                f.write(
-                    entry.to_str() + "\n")
+                f.write(entry.to_str() + "\n")
 
     def get_entries_from_header(self, header):
         """Get entries created by PyKOALA from an input FITS Header."""
         list_of_entries = []
-        for title, key in zip(header.comments['PYKOALA*'],
-                                  header['PYKOALA*']):
+        for title, key in zip(header.comments["PYKOALA*"], header["PYKOALA*"]):
             list_of_entries.append(LogEntry(title=title, comments=header[key]))
         return list_of_entries
 
@@ -243,33 +258,42 @@ class HistoryLog(object):
         self.log_entry(*args, **kwargs)
 
 
+# =============================================================================
+
+
 class Parameter(object):
     """Class that represents some parameter and associated metadata"""
+
     def __init__(self) -> None:
         pass
-    
+
+
+# =============================================================================
+
+
 class DataMask(object):
     """A mask to store the pixel flags of DataContainers.
-    
+
     A mask to store the pixel flags of DataContainers.
 
     Attributes
     ----------
     - flag_map: dict, default={"CR": 2, "HP": 4, "DP": 8}
-        A mapping between the flag names and their numerical values expressed
-        in powers of two.
+        A mapping between the flag names and their numerical values
+        expressed in powers of two.
     - bitmask: (np.ndarray)
         The array containing the bit pixel mask.
     - masks: dict
-        A dictionary that stores the individual mask in the form of boolean arrays
-        for each flag name.
-    
+        A dictionary that stores the individual mask in the form of
+        boolean arrays for each flag name.
+
     Methods
     -------
     - flag_pixels
     - get_flag_map_from_bitmask
     - get_flag_map
     """
+
     def __init__(self, shape, flag_map=None):
         if flag_map is None:
             self.flag_map = {"BAD": (2, "Generic bad pixel flag")}
@@ -311,7 +335,7 @@ class DataMask(object):
 
     def get_flag_map(self, flag_name=None):
         """Return the boolean mask that corresponds to the input flags.
-        
+
         Parameters
         ----------
         - flag_name: str or iterable, default=None
@@ -337,22 +361,26 @@ class DataMask(object):
 
     def dump_to_hdu(self):
         """Return a ImageHDU containig the mask information.
-        
+
         Returns
         -------
         - hdu: ImageHDU
             An ImageHDU containing the bitmask information.
         """
         header = Header()
-        header['COMMENT'] = "Each flag KEY is stored using the convention FLAG_KEY"
+        header["COMMENT"] = "Each flag KEY is stored using the convention FLAG_KEY"
         for flag_name, value in self.flag_map.items():
             # Store the value and the description
             header[f"FLAG_{flag_name}"] = value
-        header['COMMENT'] = "A value of 0 means unmasked"
-        hdu = ImageHDU(name='BITMASK', data=self.bitmask, header=header)
+        header["COMMENT"] = "A value of 0 means unmasked"
+        hdu = ImageHDU(name="BITMASK", data=self.bitmask, header=header)
         return hdu
 
-class DataContainer(object):
+
+# =============================================================================
+
+
+class DataContainer(ABC):
     """
     Abstract class for data containers.
 
@@ -361,58 +389,157 @@ class DataContainer(object):
 
     Attributes
     ----------
-    intensity
-    variance
-    intensity_units
-    info
-    log
-    mask
-    mask_map
+    intensity : astropy.Quantity
+        Array with the counts/surface brightness/... at each pixel.
+    variance : astropy.Quantity
+        Uncertainties associated to the `intensity` values.
+    mask : DataMask
+        Pixel flags.
+    info : dict
+        Parameters describing the data.
+    log : HistoryLog
+        History log reporting the data reduction steps undertaken so far.
 
     Methods
     -------
     # TODO
     """
 
+    @property
+    def intensity(self):
+        """Array with the counts/surface brightness/... at each pixel."""
+        return self._intensity
+
+    @intensity.setter
+    def intensity(self, value):
+        self._intensity = value
+
+    @intensity.deleter
+    def intensity(self):
+        del self._intensity
+
+    @property
+    def variance(self):
+        """Uncertainties associated to the `intensity` values."""
+        return self._variance
+
+    @variance.setter
+    def variance(self, value):
+        self._variance = value
+
+    @variance.deleter
+    def variance(self):
+        del self._variance
+
+    @property
+    def mask(self):
+        """Pixel flags."""
+        return self._mask
+
+    @mask.setter
+    def mask(self, value):
+        self._mask = value
+
+    @mask.deleter
+    def mask(self):
+        del self._mask
+
     def __init__(self, **kwargs):
-        # Data
-        self.intensity = kwargs.get("intensity", None)
-        self.variance = kwargs.get("variance", None)
-        self.intensity_units = kwargs.get("intensity_units", None)
-        # Information and masking
+        self._intensity = kwargs["intensity"]
+        self._variance = kwargs.get(
+            "variance", np.full_like(self._intensity, np.nan, dtype=type(np.nan))
+        )
+        self._mask = kwargs.get("mask", DataMask(shape=self.intensity.shape))
         self.info = kwargs.get("info", dict())
-        if self.info is None:
-            self.info = dict()
-        self.log = kwargs.get("log", HistoryLog())
         self.fill_info()
-        self.mask = kwargs.get("mask", DataMask(shape=self.intensity.shape))
+        self.log = kwargs.get("log", HistoryLog())
 
     def fill_info(self):
         """Check the keywords of info and fills them with placeholders."""
-        if 'name' not in self.info.keys():
-            self.info['name'] = 'N/A'
+        if "name" not in self.info.keys():
+            self.info["name"] = "N/A"
 
-    def is_in_info(self, key):
-        """Check if a given keyword is stored in the info variable."""
-        if self.info is None:
-            raise NoneAttrError("info")
-        if key in self.info.keys():
-            return True
-        else:
-            return False
+    def copy(self):
+        return copy.deepcopy(self)
 
     def is_corrected(self, correction):
-        """Check if a Correction has been applied by checking the HistoryLog."""
+        """Check if a Correction has been applied by checking the HistoryLog"""
         if self.log.is_entry(title=correction):
             return True
         else:
             return False
 
-    def dump_log_in_header(self, header):
-        """Fill a FITS Header with the HistoryLog information."""
-        return self.log.dump_to_header(header)
 
-    def copy(self):
-        return copy.deepcopy(self)
-    
+# =============================================================================
+
+
+class SpectraContainer(DataContainer):
+    """
+    Abstract class for a `DataContainer` containing spectra (`RSS` or `Cube`).
+
+    Attributes
+    ----------
+    wavelength : astropy.Quantity
+        Wavelength array, common to all spectra.
+    n_wavelength : int
+        Number of wavekengths in the `wavelength` array.
+    n_spectra : int
+        Number of spectra in the `intensity` array.
+    intensity_rss : astropy.Quantity
+        `intensity` array, sorted as [`n_spectra`, `n_wavelength`].
+    variance_rss : astropy.Quantity
+        Uncertainties associated to `intensity_rss`.
+    """
+
+    @property
+    def wavelength(self):
+        """Pixel flags."""
+        return self._wavelength
+
+    @wavelength.setter
+    def wavelength(self, value):
+        self._wavelength = value
+
+    @wavelength.deleter
+    def wavelength(self):
+        del self._wavelength
+
+    @property
+    def n_wavelength(self):
+        """Pixel flags."""
+        return self._wavelength.size
+
+    @property
+    def n_spectra(self):
+        """Pixel flags."""
+        return self._intensity.size / self._wavelength.size
+
+    @property
+    @abstractmethod
+    def rss_intensity(self):
+        """
+        Return an array of spectra,
+        sorted as [`n_spectra`, `n_wavelength`].
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def rss_variance(self):
+        """Uncertainties associated to `intensity_rss`."""
+        pass
+
+    def __init__(self, **kwargs):
+        if "wavelength" in kwargs.keys():
+            self._wavelength = kwargs["wavelength"]
+        else:
+            print(
+                "WARNING: No `wavelength` vector supplied; creating empty `SpectraContainer`"
+            )
+            self._wavelength = u.Quantity([], u.AA)
+        super().__init__(**kwargs)
+
+
+# =============================================================================
 # Mr Krtxo \(ﾟ▽ﾟ)/
+#                                                       ... Paranoy@ Rulz! ;^D
