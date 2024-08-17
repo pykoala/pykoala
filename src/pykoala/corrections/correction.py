@@ -79,11 +79,7 @@ class CorrectionBase(ABC, VerboseMixin):
     @abstractmethod
     def name(self):
         """Abstract property for the name of the correction."""
-        return self._name
-
-    @name.setter
-    def name(self, value):
-        self._name = value
+        return None
 
     @abstractmethod
     def apply(self):
