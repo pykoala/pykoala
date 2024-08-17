@@ -2,7 +2,6 @@
 # Basics packages
 # =============================================================================
 import numpy as np
-import os
 from datetime import datetime
 # =============================================================================
 # Astropy and associated packages
@@ -12,8 +11,7 @@ from astropy.io import fits
 # KOALA packages
 # =============================================================================
 from pykoala import __version__
-from pykoala.ancillary import vprint
-from pykoala.data_container import DataContainer
+from pykoala.data_container import SpectraContainer
 
 
 # =============================================================================
@@ -21,7 +19,7 @@ from pykoala.data_container import DataContainer
 # =============================================================================
 
 
-class RSS(DataContainer):
+class RSS(SpectraContainer):
     """
     Data Container class for row-stacked spectra (RSS).
 
@@ -50,18 +48,28 @@ class RSS(DataContainer):
         Dictionary containing a log of the processes applied on the rss.   
     """
 
-    def __init__(self,
-                 intensity=None,
-                 wavelength=None,
-                 variance=None,
-                 info=None,
-                 log=None,
-                 ):
+    @property
+    def rss_intensity(self):
+        return self._intensity
 
-        # Intialise base class
-        super().__init__(intensity=intensity, variance=variance, info=info, log=log)
-        # Specific RSS attributes
-        self.wavelength = wavelength
+    @rss_intensity.setter
+    def rss_intensity(self, value):
+        self.intensity = value
+
+    @property
+    def rss_variance(self):
+        return self._variance
+
+    @rss_variance.setter
+    def rss_variance(self, value):
+        self.variance = value
+
+    def __init__(self, **kwargs):
+        assert ('wavelength' in kwargs)
+        assert ('intensity' in kwargs)
+        if "logger" not in kwargs:
+            kwargs['logger'] = "pykoala.rss"
+        super().__init__(**kwargs)
 
     def get_centre_of_mass(self, wavelength_step=1, stat=np.nanmedian, power=1.0):
         """Compute the center of mass (COM) based on the RSS fibre positions
@@ -135,8 +143,8 @@ class RSS(DataContainer):
         else:
             raise NameError(
                 "Either `new_fib_coord` or `new_fib_coord_offset` must be provided")
-        self.log('update_coords', "Offset-coords updated")
-        print("[RSS] Offset-coords updated")
+        self.history('update_coords', "Offset-coords updated")
+        self.vprint("[RSS] Offset-coords updated")
 
     # =============================================================================
     # Save an RSS object (corrections applied) as a separate .fits file
@@ -176,7 +184,7 @@ class RSS(DataContainer):
             "%d_%m_%Y_%H_%M_%S"), "creation date / last change"
 
         # Fill the header with the log information
-        primary.header = self.dump_log_in_header(primary.header)
+        primary.header = self.history.dump_to_header(primary.header)
 
         # primary_hdu.header = self.header
         # Create a list of HDU
@@ -197,7 +205,7 @@ class RSS(DataContainer):
         hdul.verify('fix')
         hdul.writeto(filename, overwrite=overwrite, checksum=checksum)
         hdul.close()
-        print(f"[RSS] File saved as {filename}")
+        self.vprint(f"[RSS] File saved as {filename}")
 
 
 # =============================================================================
@@ -228,7 +236,7 @@ def combine_rss(list_of_rss, combine_method='nansum'):
         raise NotImplementedError("Implement user-defined combining methods")
     # TODO: Update the metadata as well
     new_rss = RSS(intensity=new_intensity, variance=new_variance,
-                  wavelength=rss.wavelength, log=rss.log, info=rss.info)
+                  wavelength=rss.wavelength, history=rss.history, info=rss.info)
     return new_rss
 
 

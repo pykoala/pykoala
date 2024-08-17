@@ -7,11 +7,7 @@ import os
 
 from pykoala.corrections.throughput import Throughput
 
-#TODO: This is not working
-plt.style.use(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                 'pykoala.mplstyle')
-)
+plt.style.use('dark_background')
 
 throughput_cmap = plt.cm.get_cmap('jet').copy()
 throughput_cmap.set_extremes(bad='gray', under='black', over='fuchsia')
@@ -115,8 +111,8 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
     # ------ Spectra -------
     units = 1.
     units_label = '(counts)'
-    if cube.log is not None:
-        entries = cube.log.find_entry(title='FluxCalibration', comment='units',
+    if cube.history is not None:
+        entries = cube.history.find_record(title='FluxCalibration', comment='units',
                                       tag='correction')
         print("Enrties found:", entries)
         for e in entries:

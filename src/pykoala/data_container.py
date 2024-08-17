@@ -1,42 +1,49 @@
 """
-This module contains the parent class that represents the data used during the
-reduction process
+This module contains the parent classes that represent the data used
+during the reduction process.
 """
+
+from abc import ABC, abstractmethod
 import numpy as np
 import copy
-
 from astropy.io.fits import Header, ImageHDU
-from astropy.nddata import bitmask
+from astropy import units as u
 
-from pykoala.exceptions.exceptions import NoneAttrError
+# from astropy.nddata import bitmask
+# from pykoala.exceptions.exceptions import NoneAttrError
+from pykoala import VerboseMixin
 
-class LogEntry(object):
+# =============================================================================
+
+
+class HistoryRecord(object):
     """Log information unit.
-    
+
     This class represents a unit of information stored in a log.
 
     Attributes
     ----------
     - title: (str)
-        Title of the entry.
+        Title of the record.
     - comments: (str)
         List of strings the information to be stored.
 
     Methods
     -------
     - to_str:
-        Return a string containing the information of 
-        the entry.
+        Return a string containing the information of
+        the record.
     """
+
     def __init__(self, title, comments, tag=None) -> None:
         self.title = title
         self.comments = comments
         self.tag = tag
-    
+
     @property
     def comments(self):
         return self._comments
-    
+
     @comments.setter
     def comments(self, comments):
         if isinstance(comments, list):
@@ -44,19 +51,25 @@ class LogEntry(object):
         elif isinstance(comments, str):
             self._comments = comments.split("\n")
         else:
-            raise NameError("Input comments must be str or list of strings not:"
-                            + f" {comments.__class__}")
+            raise NameError(
+                "Input comments must be str or list of strings, not:"
+                + f" {comments.__class__}"
+            )
 
     def to_str(self, title=True):
-        """Convert the entry into a string."""
+        """Convert the record into a string."""
         comments = "\n".join(self.comments)
         if title:
             comments = f"{self.title}: " + comments
         return comments
 
-class HistoryLog(object):
+
+# =============================================================================
+
+
+class DataContainerHistory(VerboseMixin):
     """Data reduction history logger class.
-    
+
     This class stores the data reduction history of a DataContainer by creating
     consecutive log entries.
 
@@ -68,24 +81,23 @@ class HistoryLog(object):
     -------
     #TODO
     """
-    verbose = True
-    log_entries = None
-    tags = None
 
     def __init__(self, list_of_entries=None, **kwargs):
-        self.vprint("Initialising history log")
-        self.log_entries = []
+        # Initialise the verbose logger
+        self.logger = kwargs.get("logger", "pykoala")
+        self.verbose = kwargs.get("verbose", True)
+        self.record_entries = []
         self.tags = []
-        self.verbose = kwargs.get('verbose', True)
+        self.verbose = kwargs.get("verbose", True)
 
         if list_of_entries is not None:
-            self.initialise_log(list_of_entries)
-    
-    def initialise_log(self, list_of_entries):
-        """Initialise the log from a set of input entries.
-        
-        This method initialises the log using a collection of entries. The
-        input can be in the form of a, interable consisting of LogEntry objects
+            self.initialise_record(list_of_entries)
+
+    def initialise_record(self, list_of_entries):
+        """Initialise the record from a set of input entries.
+
+        This method initialises the record using a collection of entries. The
+        input can be in the form of a, interable consisting of HistoryRecord objects
         or an interable containing a 2 or 3 elements iterable (title, comments)
         or (title, comments, tag).
 
@@ -97,90 +109,93 @@ class HistoryLog(object):
         Returns
         -------
         """
-        for entry in list_of_entries:
-            if isinstance(entry, LogEntry):
-                self.log_entries.append(entry)
-            elif isinstance(entry, tuple) or isinstance(entry, list):
-                if len(entry) == 2:
-                    title, comments = entry
+        for record in list_of_entries:
+            if isinstance(record, HistoryRecord):
+                self.record_entries.append(record)
+            elif isinstance(record, tuple) or isinstance(record, list):
+                if len(record) == 2:
+                    title, comments = record
                     tag = None
-                elif len(entry) == 3:
-                    title, comments, tag = entry
+                elif len(record) == 3:
+                    title, comments, tag = record
                 else:
                     raise NameError(
-                        "Input entry must contain two (title, comments) or"
-                        + " three (title, comments, tag) elements")
-                entry = LogEntry(title=title, comments=comments, tag=tag)
+                        "Input record must contain two (title, comments) or"
+                        + " three (title, comments, tag) elements"
+                    )
+                record = HistoryRecord(title=title, comments=comments, tag=tag)
             else:
-                raise NameError(
-                    "Unrecognized input entry of type {entry.__class__}")
-            self.log_entries.append(entry)
+                raise NameError(f"Unrecognized input record of type {record.__class__}")
+            self.record_entries.append(record)
 
-    def log_entry(self, title, comments, tag=None):
-        """Include a new entry in the log.
-        
+    def log_record(self, title, comments, tag=None):
+        """Include a new record in the history.
+
         Parameters
         ----------
         - title: (str)
-            Title of the entry.
+            Title of the record.
         - comments: (list or str, default=None)
-            List containing the comments of this entry. Lines will be splited
+            List containing the comments of this record. Lines will be splited
             into different elements of the log.
         """
-        self.vprint(f"Logging entry > {title}:{comments}")
         if tag is not None and tag not in self.tags:
             self.tags.append(tag)
-        entry = LogEntry(title=title, comments=comments, tag=tag)
-        self.log_entries.append(entry)
+        record = HistoryRecord(title=title, comments=comments, tag=tag)
+        self.record_entries.append(record)
 
-    def is_entry(self, title, comment=None):
-        """Find an entry that contains the input information.
-        
+    def is_record(self, title, comment=None):
+        """Find an record that contains the input information.
+
         Parameters
         -----------
         - title: (str)
-            Title of the entry.
+            Title of the record.
         - comment: (str, default=None)
-            If provided, the match will require the entry to contain the input
+            If provided, the match will require the record to contain the input
             comment.
 
         Returns
         -------
         - found: (bool)
-            `True` if the entry is found, `False` otherwise.
+            `True` if the record is found, `False` otherwise.
         """
-        for entry in self.log_entries:
-            if entry.title == title:
+        for record in self.record_entries:
+            if record.title == title:
                 if comment is not None:
-                    if comment in entry.comments:
+                    if comment in record.comments:
                         return True
                 else:
                     return True
         return False
 
-    def find_entry(self, title='', comment='', tag=''):
+    def find_record(self, title="", comment="", tag=""):
         """Return all entries matching a given title.
-        
+
         Parameters
         ----------
         - title: (str, default='')
-            Entry title str.
+            record title str.
         - comment: (str, default='')
-            Entry comment str.
+            record comment str.
         - tag: (str, default='')
-            Entry tag str.
+            record tag str.
         Returns
         -------
         - entries: (list)
             List of entries associated to the input title, comment and tag.
         """
-        return [entry for entry in self.log_entries if (title in entry.title)
-         and (comment in entry.to_str(title=False)) and (tag in str(entry.tag))]
-
+        return [
+            record
+            for record in self.record_entries
+            if (title in record.title)
+            and (comment in record.to_str(title=False))
+            and (tag in str(record.tag))
+        ]
 
     def dump_to_header(self, header=None):
         """Write the log into a astropy.fits.Header.
-        
+
         Save the entries of the log in a Header. All entries will be saved using
         card names `PYKOALAnumber`, where number corresponds to an index ranging
         from 0 to the number of entries contained in the log.
@@ -195,15 +210,14 @@ class HistoryLog(object):
         else:
             index = len(self.get_entries_from_header(header))
 
-        for entry in self.log_entries:
-            header['PYKOALA' + str(index)] = (
-                entry.to_str(title=False), entry.title)
+        for record in self.record_entries:
+            header["PYKOALA" + str(index)] = (record.to_str(title=False), record.title)
             index += 1
         return header
 
     def dump_to_text(self, file):
         """Write the log into a text file
-        
+
         Parameters
         ----------
         - file: (str)
@@ -214,62 +228,65 @@ class HistoryLog(object):
         """
         self.vprint("Writting log into text file")
         with open(file, "w") as f:
-            for entry in self.log_entries:
-                f.write(
-                    entry.to_str() + "\n")
+            for record in self.record_entries:
+                f.write(record.to_str() + "\n")
 
     def get_entries_from_header(self, header):
         """Get entries created by PyKOALA from an input FITS Header."""
         list_of_entries = []
-        for title, key in zip(header.comments['PYKOALA*'],
-                                  header['PYKOALA*']):
-            list_of_entries.append(LogEntry(title=title, comments=header[key]))
+        for title, key in zip(header.comments["PYKOALA*"], header["PYKOALA*"]):
+            list_of_entries.append(HistoryRecord(title=title, comments=header[key]))
         return list_of_entries
 
     def load_from_header(self, header):
         """Load the Log from a FITS Header."""
         list_of_entries = self.get_entries_from_header(header)
-        self.log_entries = list(list_of_entries)
+        self.record_entries = list(list_of_entries)
 
     def show(self):
-        for entry in self.log_entries:
-            print(entry.to_str())
-
-    def vprint(self, *mssg):
-        if self.verbose:
-            print("[Log] ", *mssg)
+        for record in self.record_entries:
+            print(record.to_str())
 
     def __call__(self, *args, **kwargs):
-        self.log_entry(*args, **kwargs)
+        self.log_record(*args, **kwargs)
+
+
+# =============================================================================
 
 
 class Parameter(object):
     """Class that represents some parameter and associated metadata"""
+
     def __init__(self) -> None:
         pass
-    
+
+
+# =============================================================================
+
+
 class DataMask(object):
     """A mask to store the pixel flags of DataContainers.
-    
+
     A mask to store the pixel flags of DataContainers.
 
     Attributes
     ----------
     - flag_map: dict, default={"CR": 2, "HP": 4, "DP": 8}
-        A mapping between the flag names and their numerical values expressed
-        in powers of two.
+        A mapping between the flag names and their numerical values
+        expressed in powers of two.
     - bitmask: (np.ndarray)
         The array containing the bit pixel mask.
     - masks: dict
-        A dictionary that stores the individual mask in the form of boolean arrays
-        for each flag name.
-    
+        A dictionary that stores the individual mask in the form of
+        boolean arrays for each flag name.
+
     Methods
     -------
     - flag_pixels
     - get_flag_map_from_bitmask
     - get_flag_map
     """
+
     def __init__(self, shape, flag_map=None):
         if flag_map is None:
             self.flag_map = {"BAD": (2, "Generic bad pixel flag")}
@@ -311,7 +328,7 @@ class DataMask(object):
 
     def get_flag_map(self, flag_name=None):
         """Return the boolean mask that corresponds to the input flags.
-        
+
         Parameters
         ----------
         - flag_name: str or iterable, default=None
@@ -337,22 +354,26 @@ class DataMask(object):
 
     def dump_to_hdu(self):
         """Return a ImageHDU containig the mask information.
-        
+
         Returns
         -------
         - hdu: ImageHDU
             An ImageHDU containing the bitmask information.
         """
         header = Header()
-        header['COMMENT'] = "Each flag KEY is stored using the convention FLAG_KEY"
+        header["COMMENT"] = "Each flag KEY is stored using the convention FLAG_KEY"
         for flag_name, value in self.flag_map.items():
             # Store the value and the description
             header[f"FLAG_{flag_name}"] = value
-        header['COMMENT'] = "A value of 0 means unmasked"
-        hdu = ImageHDU(name='BITMASK', data=self.bitmask, header=header)
+        header["COMMENT"] = "A value of 0 means unmasked"
+        hdu = ImageHDU(name="BITMASK", data=self.bitmask, header=header)
         return hdu
 
-class DataContainer(object):
+
+# =============================================================================
+
+
+class DataContainer(ABC, VerboseMixin):
     """
     Abstract class for data containers.
 
@@ -361,58 +382,175 @@ class DataContainer(object):
 
     Attributes
     ----------
-    intensity
-    variance
-    intensity_units
-    info
-    log
-    mask
-    mask_map
+    intensity : astropy.Quantity
+        Array with the counts/surface brightness/... at each pixel.
+    variance : astropy.Quantity
+        Uncertainties associated to the `intensity` values.
+    mask : DataMask
+        Pixel flags.
+    info : dict
+        Parameters describing the data.
+    log : DataContainerHistory
+        History log reporting the data reduction steps undertaken so far.
 
     Methods
     -------
     # TODO
     """
 
+    @property
+    def intensity(self):
+        """Array with the counts/surface brightness/... at each pixel."""
+        return self._intensity
+
+    @intensity.setter
+    def intensity(self, value):
+        self._intensity = value
+
+    @intensity.deleter
+    def intensity(self):
+        del self._intensity
+
+    @property
+    def variance(self):
+        """Uncertainties associated to the `intensity` values."""
+        return self._variance
+
+    @variance.setter
+    def variance(self, value):
+        self._variance = value
+
+    @variance.deleter
+    def variance(self):
+        del self._variance
+
+    @property
+    def mask(self):
+        """Pixel flags."""
+        return self._mask
+
+    @mask.setter
+    def mask(self, value):
+        self._mask = value
+
+    @mask.deleter
+    def mask(self):
+        del self._mask
+
     def __init__(self, **kwargs):
-        # Data
-        self.intensity = kwargs.get("intensity", None)
-        self.variance = kwargs.get("variance", None)
-        self.intensity_units = kwargs.get("intensity_units", None)
-        # Information and masking
+        self._intensity = kwargs["intensity"]
+        self._variance = kwargs.get(
+            "variance", np.full_like(self._intensity, np.nan, dtype=type(np.nan))
+        )
+        self._mask = kwargs.get("mask", DataMask(shape=self.intensity.shape))
         self.info = kwargs.get("info", dict())
-        if self.info is None:
-            self.info = dict()
-        self.log = kwargs.get("log", HistoryLog())
         self.fill_info()
-        self.mask = kwargs.get("mask", DataMask(shape=self.intensity.shape))
+        # Setup datacontainer logging/verbosity and history
+        self.logger = kwargs.get("logger", "pykoala.dc")
+        self.verbose = kwargs.get("verbose", True)
+        self.history = kwargs.get("history",
+                                  DataContainerHistory(logger=self.logger,
+                                                       verbose=self.verbose))
 
     def fill_info(self):
         """Check the keywords of info and fills them with placeholders."""
-        if 'name' not in self.info.keys():
-            self.info['name'] = 'N/A'
-
-    def is_in_info(self, key):
-        """Check if a given keyword is stored in the info variable."""
-        if self.info is None:
-            raise NoneAttrError("info")
-        if key in self.info.keys():
-            return True
-        else:
-            return False
-
-    def is_corrected(self, correction):
-        """Check if a Correction has been applied by checking the HistoryLog."""
-        if self.log.is_entry(title=correction):
-            return True
-        else:
-            return False
-
-    def dump_log_in_header(self, header):
-        """Fill a FITS Header with the HistoryLog information."""
-        return self.log.dump_to_header(header)
+        if "name" not in self.info.keys():
+            self.info["name"] = "N/A"
 
     def copy(self):
         return copy.deepcopy(self)
-    
+
+    def is_corrected(self, correction):
+        """Check if a Correction has been applied by checking the DataContainerHistory"""
+        if self.history.is_record(title=correction):
+            return True
+        else:
+            return False
+
+
+# =============================================================================
+
+
+class SpectraContainer(DataContainer):
+    """
+    Abstract class for a `DataContainer` containing spectra (`RSS` or `Cube`).
+
+    Attributes
+    ----------
+    wavelength : astropy.Quantity
+        Wavelength array, common to all spectra.
+    n_wavelength : int
+        Number of wavekengths in the `wavelength` array.
+    n_spectra : int
+        Number of spectra in the `intensity` array.
+    intensity_rss : astropy.Quantity
+        `intensity` array, sorted as [`n_spectra`, `n_wavelength`].
+    variance_rss : astropy.Quantity
+        Uncertainties associated to `intensity_rss`.
+    """
+
+    @property
+    def wavelength(self):
+        """Pixel flags."""
+        return self._wavelength
+
+    @wavelength.setter
+    def wavelength(self, value):
+        self._wavelength = value
+
+    @wavelength.deleter
+    def wavelength(self):
+        del self._wavelength
+
+    @property
+    def n_wavelength(self):
+        """Pixel flags."""
+        return self._wavelength.size
+
+    @property
+    def n_spectra(self):
+        """Pixel flags."""
+        return self._intensity.size / self._wavelength.size
+
+    @property
+    @abstractmethod
+    def rss_intensity(self):
+        """
+        Return an array of spectra,
+        sorted as [`n_spectra`, `n_wavelength`].
+        """
+        pass
+
+    @rss_intensity.setter
+    @abstractmethod
+    def rss_intensity(self):
+        pass
+
+    @property
+    @abstractmethod
+    def rss_variance(self):
+        """Uncertainties associated to `intensity_rss`."""
+        pass
+
+    @rss_variance.setter
+    @abstractmethod
+    def rss_variance(self):
+        pass
+
+    def __init__(self, **kwargs):
+
+        super().__init__(**kwargs)
+
+        if "wavelength" in kwargs.keys():
+            self._wavelength = kwargs["wavelength"]
+        else:
+            self.vprint(
+                "WARNING: No `wavelength` vector supplied; creating empty `SpectraContainer`"
+            )
+            self._wavelength = u.Quantity([], u.AA)
+        
+
+
+# =============================================================================
 # Mr Krtxo \(ﾟ▽ﾟ)/
+#                                                       ... Paranoy@ Rulz! ;^D

@@ -15,9 +15,9 @@ from astropy.coordinates import SkyCoord
 # KOALA packages
 # =============================================================================
 from pykoala import ancillary
-from pykoala.data_container import DataContainer
+from pykoala.data_container import SpectraContainer
 from pykoala.plotting import qc_plot
-from pykoala import __version__
+from pykoala import __version__, vprint
 from scipy.special import erf
 
 class CubeStacking:
@@ -352,7 +352,7 @@ def interpolate_rss(rss, wcs, kernel,
     # Initialise cube data containers (intensity, variance, fibre weights)
     if datacube is None:
         datacube = np.zeros(wcs.array_shape)
-        print(f"[Cubing] Creating new datacube with dimensions: {wcs.array_shape}")
+        vprint(f"[Cubing] Creating new datacube with dimensions: {wcs.array_shape}")
     if datacube_var is None:
         datacube_var = np.zeros_like(datacube)
     if datacube_weight is None:
@@ -426,7 +426,7 @@ def build_cube(rss_set, wcs=None, wcs_params=None,
         includes the individual RSS coverage maps and the final weight/exposure
         maps.
     """
-    print('[Cubing] Starting cubing process')
+    vprint('[Cubing] Starting cubing process')
     if wcs is None and wcs_params is None:
         raise ValueError("User must provide either wcs or wcs_params values.")
     if wcs is None and wcs_params is not None:
@@ -436,7 +436,7 @@ def build_cube(rss_set, wcs=None, wcs_params=None,
     pixel_size = wcs.celestial.pixel_scale_matrix.diagonal().mean()
     pixel_size *= 3600
     kernel_scale = kernel_size_arcsec / pixel_size
-    print(
+    vprint(
         f"[Cubing] Initialising {kernel.__name__}"
         + f"\n Scale: {kernel_scale:.1f} (pixels)"
         + f"\n Truncation radius: {kernel_truncation_radius:.1f}")
@@ -444,7 +444,7 @@ def build_cube(rss_set, wcs=None, wcs_params=None,
                     truncation_radius=kernel_truncation_radius)
     
     # Create empty cubes for data, variance and weights - these will be filled and returned
-    print(f"[Cubing] Initialising new datacube with dimensions: {wcs.array_shape}")
+    vprint(f"[Cubing] Initialising new datacube with dimensions: {wcs.array_shape}")
     all_datacubes = np.zeros((len(rss_set), *wcs.array_shape))
     all_var = np.zeros_like(all_datacubes)
     all_w = np.zeros_like(all_datacubes)
@@ -482,8 +482,8 @@ def build_cube(rss_set, wcs=None, wcs_params=None,
     # Stacking
     stacking_method = kwargs.get("stack_method", CubeStacking.mad_clipping)
     stacking_args = kwargs.get("stack_method_args", {})
-    print(f"[Cubing] Stacking individual cubes using {stacking_method.__name__}")
-    print(f"[Cubing] Additonal arguments for stacking: {stacking_args}")
+    vprint(f"[Cubing] Stacking individual cubes using {stacking_method.__name__}")
+    vprint(f"[Cubing] Additonal arguments for stacking: {stacking_args}")
     datacube, datacube_var = stacking_method(
         all_datacubes, all_var, **stacking_args)
     info = dict(kernel_size_arcsec=kernel_size_arcsec,
@@ -552,7 +552,7 @@ def build_hdul(intensity, variance, primary_header_info=None, wcs=None):
 # Cube class
 # =============================================================================
 
-class Cube(DataContainer):
+class Cube(SpectraContainer):
     """This class represent a collection of Raw Stacked Spectra (RSS) interpolated over a 2D spatial grid.
     
     parent_rss
@@ -581,11 +581,12 @@ class Cube(DataContainer):
             self.hdul_extensions_map = {"INTENSITY": "INTENSITY",
                                         "VARIANCE": "VARIANCE"}
         if self.hdul is not None:
-            print("[Cube] Initialising cube from input HDUL")
             self.hdul = hdul
         elif file_path is not None:
             self.load_hdul(file_path)
         self.get_wcs_from_header()
+        if "logger" not in kwargs:
+            kwargs['logger'] = "pykoala.cube"
         super().__init__(intensity=self.intensity,
                          variance=self.variance,
                          **kwargs)
@@ -599,7 +600,7 @@ class Cube(DataContainer):
     
     @intensity.setter
     def intensity(self, intensity_corr):
-        print("[Cube] Updating HDUL INTENSITY")
+        self.vprint("[Cube] Updating HDUL INTENSITY")
         self.hdul[self.hdul_extensions_map['INTENSITY']].data = intensity_corr
 
     @property
@@ -608,34 +609,48 @@ class Cube(DataContainer):
 
     @variance.setter
     def variance(self, variance_corr):
-        print("[Cube] Updating HDUL variance")
+        self.vprint("[Cube] Updating HDUL variance")
         self.hdul[self.hdul_extensions_map['VARIANCE']].data = variance_corr
+
+    @property
+    def rss_intensity(self):
+        return np.reshape(self.intensity, (self.intensity.shape[0], self.intensity.shape[1]*self.intensity.shape[2])).T
+
+    @rss_intensity.setter   
+    def rss_intensity(self, value):
+        self.intensity = value.T.reshape(self.intensity.shape)
+
+    @property
+    def rss_variance(self):
+        return np.reshape(self.variance, (self.variance.shape[0], self.variance.shape[1]*self.variance.shape[2])).T
+
+    @rss_variance.setter   
+    def rss_variance(self, value):
+        self.variance = value.T.reshape(self.variance.shape)
 
     def parse_info_from_header(self):
         """Look into the primary header for pykoala information."""
-        print("[Cube] Looking for information in the primary header")
+        self.vprint("[Cube] Looking for information in the primary header")
         # TODO
         #self.info = {}
         #self.fill_info()
-        self.log.load_from_header(self.hdul[0].header)
+        self.history.load_from_header(self.hdul[0].header)
 
     def load_hdul(self, path_to_file):
-        print(f"[Cube] Loading HDUL {path_to_file}")
         self.hdul = fits.open(path_to_file)
         pass
 
     def close_hdul(self):
         if self.hdul is not None:
-            print(f"[Cube] Closing HDUL")
+            self.vprint(f"[Cube] Closing HDUL")
             self.hdul.close()
 
     def get_wcs_from_header(self):
         """Create a WCS from HDUL header."""
-        print("[Cube] Reading WCS")
         self.wcs = WCS(self.hdul[self.hdul_extensions_map['INTENSITY']].header)
 
     def get_wavelength(self):
-        print("[Cube] Constructing wavelength array")
+        self.vprint("[Cube] Constructing wavelength array")
         self.wavelength = self.wcs.spectral.array_index_to_world(
             np.arange(self.n_wavelength)).to('angstrom').value
         
@@ -714,7 +729,7 @@ class Cube(DataContainer):
             "%d_%m_%Y_%H_%M_%S"), "creation date / last change"
 
         # Fill the header with the log information
-        primary.header = self.dump_log_in_header(primary.header)
+        primary.header = self.history.dump_to_header(primary.header)
 
         # Create a list of HDU
         hdu_list = [primary]
@@ -729,7 +744,7 @@ class Cube(DataContainer):
         hdul = fits.HDUList(hdu_list)
         hdul.writeto(fname, overwrite=True)
         hdul.close()
-        print("[Cube] Cube saved at:\n {}".format(fname))
+        self.vprint("[Cube] Cube saved at:\n {}".format(fname))
 
     def update_coordinates(self, new_coords=None, offset=None):
         """Update the celestial coordinates of the Cube"""
@@ -737,14 +752,14 @@ class Cube(DataContainer):
                                                ra_dec_val=new_coords,
                                                ra_dec_offset=offset)
         # Update only the celestial axes
-        print("Previous CRVAL: ", self.wcs.celestial.wcs.crval,
+        self.vprint("Previous CRVAL: ", self.wcs.celestial.wcs.crval,
               "\nNew CRVAL: ", updated_wcs.wcs.crval)
         self.wcs.wcs.crval[:-1] = updated_wcs.wcs.crval
-        self.log('update_coords', "Offset-coords updated")
+        self.history('update_coords', "Offset-coords updated")
 
 def make_white_image_from_array(data_array, wavelength=None, **args):
     """Create a white image from a 3D data array."""
-    print(f"Creating a Cube of dimensions: {data_array.shape}")
+    vprint(f"Creating a Cube of dimensions: {data_array.shape}")
     cube = Cube(intensity=data_array, wavelength=wavelength)
     return cube.get_white_image()
 
@@ -769,4 +784,6 @@ def make_dummy_cube_from_rss(rss, spa_pix_arcsec=0.5, kernel_pix_arcsec=1.0):
                       kernel_size_arcsec=kernel_pix_arcsec)
     return cube
 
+# =============================================================================
 # Mr Krtxo \(ﾟ▽ﾟ)/
+#                                                       ... Paranoy@ Rulz! ;^D

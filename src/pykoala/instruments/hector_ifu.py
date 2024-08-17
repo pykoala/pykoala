@@ -16,7 +16,7 @@ from astropy.wcs import WCS
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from pykoala.ancillary import vprint  # Template to create the info variable 
+from pykoala import vprint  # Template to create the info variable 
 from pykoala.rss import read_rss
 
 
