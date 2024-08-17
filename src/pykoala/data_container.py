@@ -521,10 +521,20 @@ class SpectraContainer(DataContainer):
         """
         pass
 
+    @rss_intensity.setter
+    @abstractmethod
+    def rss_intensity(self):
+        pass
+
     @property
     @abstractmethod
     def rss_variance(self):
         """Uncertainties associated to `intensity_rss`."""
+        pass
+
+    @rss_variance.setter
+    @abstractmethod
+    def rss_variance(self):
         pass
 
     def __init__(self, **kwargs):
