@@ -483,8 +483,6 @@ class SkyModel(object):
         self.intensity = kwargs.get('intensity', None)
         self.variance = kwargs.get('variance', None)
         self.continuum = kwargs.get('continuum', None)
-        self.verbose = kwargs.get('verbose', True)
-
 
     def substract(self, data, variance, axis=-1, verbose=False):
         """
@@ -1071,14 +1069,16 @@ class TelluricCorrection(CorrectionBase):
     """
     name = "TelluricCorretion"
     telluric_correction = None
-
+    default_model_file = os.path.join(os.path.dirname(__file__), '..',
+                                      'input_data', 'sky_lines',
+                                      'telluric_lines.txt')
     def __init__(self,
-                 data_container=None,
-                 telluric_correction_file=None,
-                 telluric_correction=None,
-                 wavelength=None,
-                 n_fibres=10,
-                 frac=0.5,
+                #  data_container=None,
+                 telluric_correction,
+                 wavelength,
+                 telluric_correction_file="unknown",
+                #  n_fibres=10,
+                #  frac=0.5,
                  **correction_kwargs):
         """
         Initializes the TelluricCorrection object.
@@ -1101,122 +1101,94 @@ class TelluricCorrection(CorrectionBase):
             Fraction of the data to use for correction (default is 0.5).
         """
         super().__init__(**correction_kwargs)
-        self.vprint(
-            "Obtaining telluric correction using spectrophotometric star...")
 
-        self.data_container = data_container
+        self.telluric_correction = telluric_correction
+        self.wavelength = wavelength
+        self.telluric_correction_file = telluric_correction_file
 
-        # Store basic data
-        if self.data_container is not None:
-            self.vprint(
-                "Estimating telluric correction using input observation")
-            self.data_container = data_container
-            self.wlm = self.data_container.wavelength
+    @classmethod
+    def from_text_file(cls, path=None):
+        vprint("Initialising telluric correction from text file")
+        if path is None:
+            path = cls.default_extinction
+        wavelength, telluric_correction = np.loadtxt(path, unpack=True)
+        return cls(telluric_correction=telluric_correction,
+                   wavelength=wavelength,
+                   telluric_correction_file=path)
 
-            if self.data_container.__class__ is Cube:
-                self.spectra = self.data_container.get_integrated_light_frac(
-                    frac=frac)
-            elif self.data_container.__class__ is RSS:
-                integrated_fibre = np.nansum(
-                    self.data_container.intensity, axis=1)
-                # The n-brightest fibres
-                self.brightest_fibres = integrated_fibre.argsort()[-n_fibres:]
-                self.spectra = np.nansum(
-                    self.data_container.intensity[self.brightest_fibres], axis=0)
-                self.spectra_var = np.nansum(
-                    self.data_container.variance[self.brightest_fibres], axis=0)
-
-            self.bad_pixels_mask = np.isfinite(self.spectra) & np.isfinite(self.spectra_var
-                                                                           ) & (self.spectra / self.spectra_var > 0)
-        elif telluric_correction_file is not None:
-            self.vprint(
-                f"Reading telluric correction from input file {telluric_correction_file}")
-            self.wlm, self.telluric_correction = np.loadtxt(
-                telluric_correction_file, unpack=True)
-        elif telluric_correction is not None and wavelength is not None:
-            self.vprint("Using user-provided telluric correction")
-            self.telluric_correction = telluric_correction
-            self.wlm = wavelength
-        else:
-            raise TelluricNoFileError()
-
-    def telluric_from_smoothed_spec(self, exclude_wlm=None, step=10, weight_fit_median=0.5,
-                                    wave_min=None, wave_max=None, plot=True, verbose=False):
+    @classmethod
+    def from_smoothed_spectra_container(cls, spectra_container,
+                                        exclude_wlm=None, 
+                                        light_percentile=0.95,
+                                        median_window=10,
+                                        wave_min=None, wave_max=None,
+                                        plot=True):
         """
         Estimate the telluric correction function using the smoothed spectra of the input star.
 
         Parameters
         ----------
+        spectra_container: `pykoala.data_container.SpectraContainer`
+            SpectraContainer used to estimate the telluric absorption.
         exclude_wlm : list of lists, optional
             List of wavelength ranges to exclude from correction (default is None).
-        step : int, optional
+        light_percentile: float, optional
+            Percentile of light used to estimate the absorption. Default is 0.95.
+        median_window : int, optional
             Step size for smoothing (default is 10).
-        weight_fit_median : float, optional
-            Weight parameter for fitting median (default is 0.5).
         wave_min : float, optional
             Minimum wavelength to consider (default is None).
         wave_max : float, optional
             Maximum wavelength to consider (default is None).
         plot : bool, optional
             Whether to plot the correction (default is True).
-        verbose : bool, optional
-            Controls verbosity of logging messages (default is False).
 
         Returns
         -------
-        telluric_correction : array
+        telluric_correction : `TelluricCorrection`
             The computed telluric correction.
         """
-        self.telluric_correction = np.ones_like(self.wlm)
+        vprint("Initialising telluric correction from input STD star")
+        spectra = np.nanpercentile(spectra_container.rss_intensity,
+                                   light_percentile, axis=0)
+        telluric_correction = np.ones_like(spectra_container.wavelength)
         if wave_min is None:
-            wave_min = self.wlm[0]
+            wave_min = spectra_container.wavelength[0]
         if wave_max is None:
-            wave_max = self.wlm[-1]
+            wave_max = spectra_container.wavelength[-1]
         if exclude_wlm is None:
-            # TODO: This is quite dangerous
             exclude_wlm = [[6450, 6700], [6850, 7050], [7130, 7380]]
         # Mask containing the spectral points to include in the telluric correction
-        correct_mask = (self.wlm >= wave_min) & (self.wlm <= wave_max)
+        correct_mask = (spectra_container.wavelength >= wave_min) & (
+                        spectra_container.wavelength <= wave_max)
         # Mask user-provided spectral regions
-        spec_windows_mask = np.ones_like(self.wlm, dtype=bool)
+        spec_windows_mask = np.ones_like(correct_mask, dtype=bool)
         for window in exclude_wlm:
-            spec_windows_mask[(self.wlm >= window[0]) &
-                              (self.wlm <= window[1])] = False
+            spec_windows_mask[(spectra_container.wavelength >= window[0]) &
+                              (spectra_container.wavelength <= window[1])
+                              ] = False
         # Master mask used to compute the Telluric correction
         telluric_mask = correct_mask & spec_windows_mask
-        smooth_med_star = smooth_spectrum(self.wlm, self.spectra, wave_min=wave_min, wave_max=wave_max, step=step,
-                                          weight_fit_median=weight_fit_median,
-                                          exclude_wlm=exclude_wlm, plot=False, verbose=verbose)
-        self.telluric_correction[telluric_mask] = smooth_med_star[telluric_mask] / \
-            self.spectra[telluric_mask]
+        if not median_window % 2:
+            median_window += 1
+        smooth_med_star = ContinuumEstimator.medfilt_continuum(spectra,
+                                                               median_window)
+        telluric_correction[telluric_mask] = (smooth_med_star[telluric_mask]
+                                              / spectra[telluric_mask])
 
-        waves_for_tc_ = []
-        for rango in exclude_wlm:
-            if rango[0] < 6563. and rango[1] > 6563.:  # H-alpha is here, skip
-                self.vprint("  Skipping range with H-alpha...")
-            else:
-                index_region = np.where(
-                    (self.wlm >= rango[0]) & (self.wlm <= rango[1]))
-                waves_for_tc_.append(index_region)
-
-        waves_for_tc = []
-        for rango in waves_for_tc_:
-            waves_for_tc = np.concatenate(
-                (waves_for_tc, rango[0].tolist()), axis=None)
-
-        # Now, change the value in telluric_correction
-        for index in waves_for_tc:
-            i = np.int(index)
-            if smooth_med_star[i] / self.spectra[i] > 1.:
-                self.telluric_correction[i] = smooth_med_star[i] / \
-                    self.spectra[i]
         if plot:
-            fig = self.plot_correction(
+            fig = TelluricCorrection.plot_correction(
+                spectra_container, telluric_correction,
                 wave_min=wave_min, wave_max=wave_max, exclude_wlm=exclude_wlm)
-            return self.telluric_correction, fig
-        return self.telluric_correction
+        else:
+            fig = None
+        return cls(telluric_correction=telluric_correction,
+                   wavelength=spectra_container.wavelength), fig
 
-    def telluric_from_model(self, file='telluric_lines.txt', width=30, extra_mask=None, pol_deg=5, plot=False):
+    @classmethod
+    def from_model(cls, spectra_container, light_percentile=0.95,
+                   model_file=None, width=30,
+                   extra_mask=None, plot=False):
         """
         Estimate the telluric correction function using a model of telluric absorption lines.
 
@@ -1238,38 +1210,46 @@ class TelluricCorrection(CorrectionBase):
         telluric_correction : array
             The computed telluric correction.
         """
-        w_l_1, w_l_2, res_intensity, w_lines = np.loadtxt(
-            os.path.join(os.path.dirname(__file__), '..', 'input_data', 'sky_lines', file), unpack=True)
+        if model_file is None:
+            model_file = TelluricCorrection.default_model_file
+
+        w_l_1, w_l_2, res_intensity, w_lines = np.loadtxt(model_file, unpack=True)
+
         # Mask telluric regions
-        mask = np.ones_like(self.wlm, dtype=bool)
-        self.telluric_correction = np.ones(self.wlm.size, dtype=float)
+        mask = np.ones_like(spectra_container.wavelength, dtype=bool)
+        telluric_correction = np.ones(spectra_container.wavelength.size,
+                                      dtype=float)
         for b, r in zip(w_l_1, w_l_2):
-            mask[(self.wlm >= b - width) & (self.wlm <= r + width)] = False
+            mask[(spectra_container.wavelength >= b - width) & (
+                spectra_container.wavelength <= r + width)] = False
         if extra_mask is not None:
             mask = mask & extra_mask
-        std = np.nanstd(self.data_container.intensity, axis=0)
-        stellar = np.interp(self.wlm, self.wlm[mask & self.bad_pixels_mask],
-                            std[mask & self.bad_pixels_mask])
-        self.telluric_correction[~mask] = stellar[~mask] / std[~mask]
-
-        self.telluric_correction = np.clip(
-            self.telluric_correction, a_min=1, a_max=None)
+        std = np.nanstd(spectra_container.rss_intensity, axis=0)
+        stellar = np.interp(spectra_container.wavelength,
+                            spectra_container.wavelength[mask], std[mask])
+        telluric_correction[~mask] = stellar[~mask] / std[~mask]
+        telluric_correction = np.clip(telluric_correction, a_min=1, a_max=None)
         if plot:
-            fig = self.plot_correction(exclude_wlm=np.vstack((w_l_1 - width, w_l_2 + width)).T,
-                                       wave_min=self.wlm[0], wave_max=self.wlm[-1])
-            return self.telluric_correction, fig
-        return self.telluric_correction
+            fig = TelluricCorrection.plot_correction(
+                spectra_container, telluric_correction,
+                exclude_wlm=np.vstack((w_l_1 - width, w_l_2 + width)).T,
+                wave_min=spectra_container.wavelength[0],
+                wave_max=spectra_container.wavelength[-1])
+        else:
+            fig = None
+        return cls(telluric_correction=telluric_correction,
+                wavelength=spectra_container.wavelength), fig
+        
 
-    #FIXME> THIS IS BROKEN AND DOES NOT WORK
-    def plot_correction(self, fig_size=12, wave_min=None, wave_max=None,
-                        exclude_wlm=None, **kwargs):
+    @staticmethod
+    def plot_correction(spectra_container, telluric_correction,
+                        wave_min=None, wave_max=None, exclude_wlm=None,
+                        **kwargs):
         """
-        Plot the telluric correction.
+        Plot a telluric correction.
 
         Parameters
         ----------
-        fig_size : float, optional
-            Size of the figure (default is 12).
         wave_min : float, optional
             Minimum wavelength to display (default is None).
         wave_max : float, optional
@@ -1284,54 +1264,50 @@ class TelluricCorrection(CorrectionBase):
         fig : Figure
             The matplotlib figure object.
         """
-        fig = plt.figure(figsize=(fig_size, fig_size / 2.5))
-        ax = fig.add_subplot(111)
-        if self.data_container.__class__ is Cube:
-            self.vprint("  Telluric correction for this star (" +
-                  self.data_container.combined_cube.object + ") :")
-            ax.plot(self.wlm, self.spectra, color="b",
-                    alpha=0.3, label='Original')
-            ax.plot(self.wlm, self.spectra * self.telluric_correction,
-                    color="g", alpha=0.5, label='Telluric corrected')
-            ax.set_ylim(np.nanmin(self.spectra), np.nanmax(self.spectra))
-        else:
-            ax.set_title("Telluric correction using fibres {} (blue) and {} (red)"
-                         .format(self.brightest_fibres[0], self.brightest_fibres[1]))
-            ax.plot(self.wlm, self.data_container.intensity[self.brightest_fibres[0]], color="b",
-                    label='Original', lw=3, alpha=0.8)
-            ax.plot(self.wlm, self.data_container.intensity[self.brightest_fibres[0]] * self.telluric_correction,
-                    color="g", alpha=1, lw=0.8, label='Telluric corrected')
-            ax.plot(self.wlm, self.data_container.intensity[self.brightest_fibres[1]], color="r",
-                    label='Original', lw=3, alpha=0.8)
-            ax.plot(self.wlm,
-                    self.data_container.intensity[self.brightest_fibres[1]
-                                                  ] * self.telluric_correction,
-                    color="purple", alpha=1, lw=.8, label='Telluric corrected')
-            ax.set_ylim(np.nanpercentile(self.data_container.intensity[self.brightest_fibres[[0, 1]]], 1),
-                        np.nanpercentile(self.data_container.intensity[self.brightest_fibres[[0, 1]]], 99))
+        fig, ax = plt.subplots()
+        sorted_idx = spectra_container.get_spectra_sorted()
+        ax.set_title("Telluric correction using fibres {} (cyan) and {} (fuchsia)"
+                        .format(sorted_idx[-2], sorted_idx[-1]))
+
+        ax.plot(spectra_container.wavelength,
+                spectra_container.rss_intensity[sorted_idx[-2]], color="c",
+                label='Original', lw=3, alpha=0.8)
+        ax.plot(spectra_container.wavelength,
+                spectra_container.rss_intensity[sorted_idx[-2]]
+                * telluric_correction, color="deepskyblue",
+                label='Corrected', lw=1, alpha=0.8)
+
+        ax.plot(spectra_container.wavelength,
+                spectra_container.rss_intensity[sorted_idx[-1]], color="fuchsia",
+                label='Original', lw=3, alpha=0.8)
+        ax.plot(spectra_container.wavelength,
+                spectra_container.rss_intensity[sorted_idx[-1]]
+                * telluric_correction, color="purple",
+                label='Corrected', lw=1, alpha=0.8)
+        ax.set_ylim(np.nanpercentile(
+            spectra_container.rss_intensity[sorted_idx[-1]], [1, 99]))
         ax.legend(ncol=2)
-        ax.axvline(x=wave_min, color='k', linestyle='--')
-        ax.axvline(x=wave_max, color='k', linestyle='--')
-        ax.set_xlim(self.wlm[0] - 10, self.wlm[-1] + 10)
+        ax.axvline(x=wave_min, color='lime', linestyle='--')
+        ax.axvline(x=wave_max, color='lime', linestyle='--')
         ax.set_xlabel(r"Wavelength [$\mathrm{\AA}$]")
         if exclude_wlm is not None:
             for i in range(len(exclude_wlm)):
                 ax.axvspan(exclude_wlm[i][0],
-                           exclude_wlm[i][1], color='c', alpha=0.1)
+                           exclude_wlm[i][1], color='lightgreen', alpha=0.1)
         ax.minorticks_on()
         if kwargs.get('plot', False):
             plt.show()
         else:
-            plt.close(fig)
+            plt.close()
         return fig
 
-    def apply(self, rss, update=True):
+    def apply(self, spectra_container, update=True):
         """
         Apply the telluric correction to the input data.
 
         Parameters
         ----------
-        rss : array
+        spectra_container : array
             The input data to correct.
         verbose : bool, optional
             Controls verbosity of logging messages (default is True).
@@ -1347,17 +1323,22 @@ class TelluricCorrection(CorrectionBase):
         """
 
         # Check wavelength
-        if not rss.wavelength.size == self.wlm.size or not np.allclose(rss.wavelength, self.wlm, equal_nan=True):
+        if not spectra_container.wavelength.size == self.wavelength.size or not np.allclose(
+            spectra_container.wavelength, self.wavelength, equal_nan=True):
             self.vprint("Interpolating correction to input wavelength")
-            self.interpolate_model(rss.wavelength, update=update)
+            self.interpolate_model(spectra_container.wavelength, update=update)
+
+        if spectra_container.is_corrected(self.name):
+            self.vprint("Data already calibrated")
+            return spectra_container
 
         # Copy input RSS for storage the changes implemented in the task
-        rss_out = copy.deepcopy(rss)
+        spectra_container_out = spectra_container.copy()
         self.vprint("Applying telluric correction")
-        rss_out.intensity *= self.telluric_correction
-        rss_out.variance *= self.telluric_correction**2
-        self.record_correction(rss, status='applied')
-        return rss_out
+        spectra_container_out.rss_intensity *= self.telluric_correction
+        spectra_container_out.rss_variance *= self.telluric_correction**2
+        self.record_correction(spectra_container_out, status='applied')
+        return spectra_container_out
 
     def interpolate_model(self, wavelength, update=True):
         """
@@ -1376,11 +1357,11 @@ class TelluricCorrection(CorrectionBase):
             The interpolated telluric correction.
         """
         telluric_correction = np.interp(
-            wavelength, self.wlm, self.telluric_correction, left=1, right=1)
+            wavelength, self.wavelength, self.telluric_correction, left=1, right=1)
 
         if update:
             self.teluric_correction = telluric_correction
-            self.wlm = wavelength
+            self.wavelength = wavelength
         return telluric_correction
 
     def save(self, filename='telluric_correction.txt', **kwargs):
@@ -1394,7 +1375,7 @@ class TelluricCorrection(CorrectionBase):
         """
         self.vprint(f"Saving telluric correction into file {filename}")
         np.savetxt(filename, np.array(
-            [self.wlm, self.telluric_correction]).T, **kwargs)
+            [self.wavelength, self.telluric_correction]).T, **kwargs)
 
 
 def combine_telluric_corrections(list_of_telcorr, ref_wavelength):

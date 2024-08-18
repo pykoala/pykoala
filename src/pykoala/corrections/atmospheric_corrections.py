@@ -1,10 +1,8 @@
 # =============================================================================
 # Basics packages
 # =============================================================================
-from scipy import interpolate
 from matplotlib import pyplot as plt
 import numpy as np
-import copy
 import os
 
 # =============================================================================
@@ -15,8 +13,7 @@ import os
 # KOALA packages
 # =============================================================================
 from pykoala import vprint
-from pykoala.rss import RSS
-from pykoala.cubing import Cube
+from pykoala.data_container import SpectraContainer
 from pykoala.corrections.correction import CorrectionBase
 
 
@@ -33,79 +30,105 @@ class AtmosphericExtCorrection(CorrectionBase):
 
     Attributes
     ----------
-    - extinction_correction: (np.ndarray, optional, default=None)
-        Atmospheric extinction correction function.
-    - extinction_correction_wave: (np.ndarray, optional, default=None)
-        Atmospheric extinction correction function wavelength array.
-    - extinction_file: (str, default=input_data/observatory_extinction/ssoextinct.dat)
-        Path to a text file containing a wavelength, and a extinction - E(lambda) - column respectively.
+    - extinction_correction: np.ndarray, optional, default=None
+        Atmospheric extinction curve.
+    - extinction_correction_wave: np.ndarray, optional, default=None
+        Atmospheric extinction curve wavelength array.
+    - extinction_file: str
+        Path to a text file containing a wavelength, and a extinction curve.
         If None, a default extinction model will be used, corresponding to the extinction curve at Siding Spring Observatory.
-    - verbose: (bool, default=False)
+
+    See Also
+    --------
+    `pykoala.corrections.correction.CorrectionBase`: for a list of all
+    attributes.
     """
     name = "AtmosphericExtinction"
-    verbose = False
+    verbose = True
     default_extinction = os.path.join(os.path.dirname(__file__), '..', 'input_data',
                                       'observatory_extinction', 'ssoextinct.dat')
     def __init__(self,
                  extinction_correction=None,
                  extinction_correction_wave=None,
-                 extinction_file=default_extinction,
+                 extinction_correction_file='unknown',
                  **correction_args):
         super().__init__(**correction_args)
-        self.vprint("Initialising Atm ext. correction model.")
+        self.vprint("Initialising correction")
 
         # Initialise variables
         self.extinction_correction = extinction_correction
         self.extinction_correction_wave = extinction_correction_wave
-        self.extinction_file = extinction_file
+        self.extinction_correction_file = extinction_correction_file
 
-        if self.extinction_correction is None:
-            self.model_from_file = True
-            self.load_atmospheric_extinction(self.extinction_file)
-        else:
-            self.model_from_file = True
-
-    def load_atmospheric_extinction(self, path):
-        """Load data from text file."""
-        self.vprint(f"Loading atmospheric extinction model from:\n {path}")
-        self.extinction_correction_wave, self.extinction_correction = np.loadtxt(path, unpack=True)
+    @classmethod
+    def from_text_file(cls, path=None):
+        if path is None:
+            path = cls.default_extinction
+        wavelength, extinct = np.loadtxt(path, unpack=True)
+        return cls(extinction_correction=extinct,
+                   extinction_correction_wave=wavelength,
+                   extinction_correction_file=path)
 
     def extinction(self, wavelength, airmass):
-        """Compute the atmospheric extinction for a given airmass"""
-        extinction_correction = np.interp(wavelength, self.extinction_correction_wave, self.extinction_correction)
+        """Compute the atmospheric extinction for a given airmass and wavelength.
+        
+        Parameters
+        ----------
+        - wavelength: np.ndarray
+            Input array of wavelengths where to estimate the extinction.
+        - airmass: float
+            Target airmass at which the observation is performed.
+        
+        Returns
+        -------
+        - extinction:
+            Extinction function shuch that
+                   .. math::
+                    F_obs(lambda) = E(lambda) * F_int(lambda)
+        """
+        extinction_correction = np.interp(wavelength,
+                                          self.extinction_correction_wave,
+                                          self.extinction_correction)
         return 10**(0.4 * airmass * extinction_correction)
 
-    def apply(self, data_container, force_airmass=None, plot=False):
-        """Apply the Extinction Correction to a DataContainer"""
-        data_container_out = copy.deepcopy(data_container)
-        if force_airmass is None:
-            airmass = data_container.info['airmass']
-        else:
-            airmass = force_airmass
+    def apply(self, spectra_container, airmass=None):
+        """Apply the Extinction Correction to a DataContainer.
+        
+        Parameters
+        ----------
+        - airmass: float, optional
+            If provided, the extinction will be computed using this value,
+            otherwise the airmass stored at the `info` attribute will be used.
+        
+        Returns
+        -------
+        - corrected_spectra_container: SpectraContainer
+            SpectraContainer with the corrected intensity and variance.
+        """
+        assert isinstance(spectra_container, SpectraContainer)
+        spectra_container_out = spectra_container.copy()
+        if airmass is None:
+            airmass = spectra_container.info['airmass']
 
         if self.extinction_correction is not None:
-            self.vprint(f"Applying model-based extinction correction to Data Container ({airmass:.2f} airmass)")
-            extinction = self.extinction(data_container_out.wavelength, airmass)
-            if self.model_from_file:
-                comment = ' '.join(["- Data corrected for extinction using file :",
-                                    self.extinction_file, f"| airmass={airmass:.2f}"])
-            else:
-                comment = ' '.join(["- Data corrected for extinction using user-provided model",
-                                    f"| airmass={airmass:.2f}"])
+            self.vprint("Applying model-based extinction correction to"
+                        f"Data Container ({airmass:.2f} airmass)")
+            extinction = self.extinction(spectra_container_out.wavelength, airmass)
+            comment = ("Atm. extinction file :" + os.path.basename(
+                        self.extinction_correction_file)
+                        + f"|airmass={airmass:.2f}")
         else:
             raise AttributeError("Extinction correction not provided")
 
         # Apply the correction
-        if type(data_container) is Cube:
-            extinction = np.expand_dims(extinction, axis=tuple(range(1, data_container.intensity.ndim)))
-        elif type(data_container) is RSS:
-            extinction = np.expand_dims(extinction, axis=0)
-
-        data_container_out.intensity *= extinction
-        data_container_out.variance *= extinction**2
-        self.record_correction(data_container_out, status='applied',
+        extinction = np.expand_dims(extinction, axis=0)
+        spectra_container_out.rss_intensity = (spectra_container_out.rss_intensity
+                                            * extinction)
+        spectra_container_out.rss_variance = (spectra_container_out.rss_variance
+                                           * extinction**2)
+        self.record_correction(spectra_container_out, status='applied',
                             comment=comment)
-        return data_container_out
+        return spectra_container_out
 
 
 # =============================================================================

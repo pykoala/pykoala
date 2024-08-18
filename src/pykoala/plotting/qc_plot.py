@@ -24,38 +24,40 @@ def qc_throughput(throughput):
     -------
     - fig
     """
-    if type(throughput) is Throughput:
-        throughput = throughput.throughput_data
+
+    throughput_data = throughput.throughput_data
 
     fig = plt.figure(figsize=(10, 8))
     gs = fig.add_gridspec(3, 4, wspace=0.15, hspace=0.35)
 
     ax = fig.add_subplot(gs[0, 0:-1])
-    mappable = ax.imshow(throughput, origin='lower', cmap=throughput_cmap,
+    mappable = ax.imshow(throughput_data, origin='lower', cmap=throughput_cmap,
                          vmin=0.8, vmax=1.2, aspect='auto')
     plt.colorbar(mappable, ax=ax)
     ax.set_xlabel("wavelength axis")
     ax.set_ylabel("Fibre")
 
     ax = fig.add_subplot(gs[0, -1])
-    ax.hist(throughput.flatten(), bins=throughput.size // 1000, range=[0.5, 1.5],
+    ax.hist(throughput_data.flatten(), bins=throughput_data.size // 1000,
+            range=[0.5, 1.5],
             log=True)
     ax.set_ylabel("N pixels")
     ax.set_xlabel("Throughput value")
-    ax.set_ylim(10, throughput.size // 100)
+    ax.set_ylim(10, throughput_data.size // 100)
 
     ax = fig.add_subplot(gs[1, :])
-    fibre_idx = np.random.randint(low=0, high=throughput.shape[0], size=3)
+    fibre_idx = np.random.randint(low=0, high=throughput_data.shape[0], size=3)
     for idx in fibre_idx:
-        ax.plot(throughput[idx], label='Fibre {}'.format(idx), lw=0.7, alpha=0.8)
+        ax.plot(throughput_data[idx], label='Fibre {}'.format(idx),
+                lw=0.7, alpha=0.8)
     ax.set_ylim(0.75, 1.25)
     ax.set_xlabel("Spectral pixel")
     ax.legend(ncol=3)
 
     ax = fig.add_subplot(gs[-1, :])
-    wl_idx = np.random.randint(low=0, high=throughput.shape[1], size=3)
+    wl_idx = np.random.randint(low=0, high=throughput_data.shape[1], size=3)
     for idx in wl_idx:
-        ax.plot(throughput[:, idx].squeeze(),
+        ax.plot(throughput_data[:, idx].squeeze(),
                 label='Wave col {}'.format(idx), lw=0.7,
                 alpha=0.8)
     ax.set_ylim(0.75, 1.25)
