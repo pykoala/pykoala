@@ -1,7 +1,7 @@
 # =============================================================================
 # Basics packages
 # =============================================================================
-from os import path
+import os
 import numpy as np
 import copy
 from astropy.io import fits
@@ -56,7 +56,7 @@ class Throughput(object):
         - path: str
             Path to the FITS file containing the throughput data.
         """
-        if not path.isfile(path):
+        if not os.path.isfile(path):
             raise NameError(f"Throughput file {path} does not exists.")
         vprint(f"Loading throughput from {path}")
         with fits.open(path) as hdul:
