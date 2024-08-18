@@ -3,6 +3,7 @@ import numpy as np
 import copy
 from astropy.io import fits
 
+from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.rss import RSS
 from pykoala.ancillary import flux_conserving_interpolation
@@ -26,30 +27,35 @@ class WavelengthOffset(object):
         self.offset_data = offset_data
         self.offset_error = offset_error
 
-        if self.path is not None and self.offset_data is None:
-            self.load_fits()
-
-    def tofits(self, output_path):
+    def tofits(self, output_path=None):
+        if output_path is None:
+            if self.path is None:
+                raise NameError("Provide output path")
+            else:
+                output_path = self.path
         primary = fits.PrimaryHDU()
         data = fits.ImageHDU(data=self.offset_data, name='OFFSET')
         error = fits.ImageHDU(data=self.offset_error, name='OFFSET_ERR')
         hdul = fits.HDUList([primary, data, error])
         hdul.writeto(output_path, overwrite=True)
         hdul.close(verbose=True)
-        print(f"[wavelength offset] offset saved at {output_path}")
+        vprint(f"Wavelength offset saved at {output_path}")
 
-    def load_fits(self):
+    @classmethod
+    def from_fits(cls, path):
         """Load the offset data from a fits file.
 
         Loads offset values (extension 1) and
         associated errors (extension 2) from a fits file.
         """
-        if not os.path.isfile(self.path):
-            raise NameError(f"offset file {self.path} does not exist.")
-        print(f"[wavelength offset] Loading offset from {self.path}")
-        with fits.open(self.path) as hdul:
-            self.offset_data = hdul[1].data
-            self.offset_error = hdul[2].data
+        if not os.path.isfile(path):
+            raise NameError(f"offset file {path} does not exist.")
+        vprint(f"Loading wavelength offset from {path}")
+        with fits.open(path) as hdul:
+            offset_data = hdul[1].data
+            offset_error = hdul[2].data
+        return cls(offset_data=offset_data, offset_error=offset_error,
+                   path=path)
 
 
 class WavelengthCorrection(CorrectionBase):
@@ -73,13 +79,13 @@ class WavelengthCorrection(CorrectionBase):
     def __init__(self, offset_path=None, offset=None, **correction_kwargs):
         super().__init__(**correction_kwargs)
 
-        path = offset_path
-        if offset is not None:
-            assert isinstance(offset, WavelengthOffset)
-            self.offset = offset
-        else:
-            self.offset = WavelengthOffset(path=path)
-        
+        self.path = offset_path
+        self.offset = offset
+
+    @classmethod
+    def from_fits(cls, path):
+        return cls(offset=WavelengthOffset.from_fits(path=path),
+                   offset_path=path)
 
     def apply(self, rss):
         """Apply a 2D wavelength offset model to a RSS.
