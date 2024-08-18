@@ -1227,11 +1227,6 @@ class TelluricCorrection(CorrectionBase):
         std = np.nanstd(spectra_container.rss_intensity, axis=0)
         stellar = np.interp(spectra_container.wavelength,
                             spectra_container.wavelength[mask], std[mask])
-        
-        plt.figure()
-        plt.plot(spectra_container.wavelength, std)
-        # plt.plot(spectra_container.wavelength, stellar)
-        plt.show()
         telluric_correction[~mask] = stellar[~mask] / std[~mask]
         telluric_correction = np.clip(telluric_correction, a_min=1, a_max=None)
         if plot:
