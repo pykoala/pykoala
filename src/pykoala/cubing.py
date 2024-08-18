@@ -570,14 +570,15 @@ class Cube(SpectraContainer):
     n_rows = None
     x_size_arcsec = None
     y_size_arcsec = None
-    hdul_extensions_map = {"INTENSITY": "INTENSITY", "VARIANCE": "VARIANCE"}
+    default_hdul_extensions_map = {"INTENSITY": "INTENSITY",
+                                   "VARIANCE": "VARIANCE"}
     
     def __init__(self, hdul=None, hdul_extensions_map=None, **kwargs):
 
         self.hdul = hdul
 
         if hdul_extensions_map is not None:
-            self.hdul_extensions_map = hdul_extensions_map
+            self.hdul_extensions_map = self.default_hdul_extensions_map
         if "logger" not in kwargs:
             kwargs['logger'] = "pykoala.cube"
         super().__init__(intensity=self.intensity,
