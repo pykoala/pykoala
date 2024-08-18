@@ -5,7 +5,7 @@ from os import path
 import numpy as np
 import copy
 from astropy.io import fits
-from scipy.ndimage import median_filter
+from scipy.ndimage import median_filter, percentile_filter
 # from scipy.ndimage import gaussian_filter
 # =============================================================================
 # Astropy and associated packages
@@ -15,21 +15,25 @@ from scipy.ndimage import median_filter
 # KOALA packages
 # =============================================================================
 # Modular
+from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.rss import RSS
 from pykoala import ancillary
 
 
 class Throughput(object):
-    def __init__(self, path=None, throughput_data=None, throughput_error=None):
-        self.path = path
+    def __init__(self, throughput_data, throughput_error,
+                 throughput_file=None):
         self.throughput_data = throughput_data
         self.throughput_error = throughput_error
+        self.throughput_file = throughput_file
 
-        if self.path is not None and self.throughput_data is None:
-            self.load_fits()
-
-    def tofits(self, output_path):
+    def to_fits(self, output_path=None):
+        if output_path is None:
+            if self.throughput_file is None:
+                raise NameError("Provide output file name for saving throughput")
+            else:
+                output_path = self.throughput_file
         primary = fits.PrimaryHDU()
         thr = fits.ImageHDU(data=self.throughput_data,
                             name='THROU')
@@ -38,20 +42,27 @@ class Throughput(object):
         hdul = fits.HDUList([primary, thr, thr_err])
         hdul.writeto(output_path, overwrite=True)
         hdul.close(verbose=True)
-        print(f"[Throughput] Throughput saved at {output_path}")
+        vprint(f"Throughput saved at {output_path}")
 
-    def load_fits(self):
-        """Load the throughput data from a fits file.
+    @classmethod
+    def from_fits(cls, path):
+        """Creates a `Throughput` from an input FITS file.
+        
+        Throughput data must be stored in extension 1, and
+        associated errors in extension 2 of the HDUL.
 
-        Loads throughput values (extension 1) and
-        associated errors (extension 2) from a fits file.
+        Parameters
+        ----------
+        - path: str
+            Path to the FITS file containing the throughput data.
         """
-        if not path.isfile(self.path):
-            raise NameError(f"Throughput file {self.path} does not exists.")
-        print(f"[Throughput] Loading throughput from {self.path}")
-        with fits.open(self.path) as hdul:
-            self.throughput_data = hdul[1].data
-            self.throughput_error = hdul[2].data
+        if not path.isfile(path):
+            raise NameError(f"Throughput file {path} does not exists.")
+        vprint(f"Loading throughput from {path}")
+        with fits.open(path) as hdul:
+            throughput_data = hdul[1].data
+            throughput_error = hdul[2].data
+        return cls(throughput_data, throughput_error, path)
 
 
 class ThroughputCorrection(CorrectionBase):
@@ -89,10 +100,21 @@ class ThroughputCorrection(CorrectionBase):
         if self.throughput.throughput_data is None and self.throughput.path is not None:
             self.throughput.load_fits(self.throughput_path)
 
-    @staticmethod
-    def create_throughput_from_rss(rss_set, clear_nan=True,
-                                   statistic='median',
-                                   medfilt=None):
+    @classmethod
+    def from_file(cls, path):
+        """Creates a `ThroughputCorrection` using an input FITS file.
+        
+        Parameters
+        ----------
+        - path: str
+            Path to the FITS file containing the throughput data.
+        """
+        throughput = Throughput.from_fits(path)
+        return cls(throughput, path)
+
+    @classmethod
+    def from_rss(cls, rss_set, clear_nan=True, statistic='median', medfilt=5,
+                 pct_outliers=[5, 95]):
         """Compute the throughput map from a set of flat exposures.
 
         Given a set of flat exposures, this method will estimate the average
@@ -118,36 +140,44 @@ class ThroughputCorrection(CorrectionBase):
         fluxes = []
         for rss in rss_set:
             f = rss.intensity / rss.info['exptime']
+            f[f <= 0] = np.nan
             fluxes.append(f)
-        # Combine
+        # Combine all RSS
         combined_flux = stat_func(fluxes, axis=0)
         combined_flux_err = np.nanstd(fluxes, axis=0) / np.sqrt(len(fluxes))
 
-        # Normalize
+        # Normalize fibres
         reference_fibre = stat_func(combined_flux, axis=0)
         throughput_data = combined_flux / reference_fibre[np.newaxis, :]
 
         # Estimate the error
-        # throughput_error = np.nanstd(np.array(fluxes) / stat_func(fluxes, axis=1)[:, np.newaxis, :], axis=0)
         throughput_error = combined_flux_err / reference_fibre[np.newaxis, :]
 
+        p5, p95 = np.nanpercentile(throughput_data, pct_outliers, axis=1)
+        outliers_mask = (throughput_data - p5[:, np.newaxis] <= 0
+                         ) | (throughput_data - p95[:, np.newaxis] >= 0)
+        throughput_data[outliers_mask] = np.nan
+
         if clear_nan:
-            print("Nearest neighbour interpolation to remove NaN values")
-            throughput_data = ancillary.interpolate_image_nonfinite(
-                throughput_data)
-            throughput_error = ancillary.interpolate_image_nonfinite(
-                throughput_error**2)**0.5
+            pix = np.arange(throughput_data.shape[1])
+            for ith, (f, f_err) in enumerate(zip(throughput_data, throughput_error)):
+                mask = np.isfinite(f) & np.isfinite(f_err)
+                throughput_data[ith] = np.interp(pix, pix[mask], f[mask])
+                throughput_error[ith] = np.interp(pix, pix[mask], f_err[mask])
+
         if medfilt is not None:
-            print(f"Applying median filter (size={medfilt})")
-            throughput_data = median_filter(throughput_data, size=medfilt)
+            print(f"Applying median filter (size={medfilt} px)")
+            throughput_data = median_filter(throughput_data, size=medfilt,
+                                            axes=1)
             throughput_error = median_filter(
                 throughput_error**2, size=medfilt)**0.5
 
         throughput = Throughput(throughput_data=throughput_data,
                                 throughput_error=throughput_error)
-        return throughput
+        return cls(throughput)
 
-    def apply(self, rss, throughput=None, plot=True):
+
+    def apply(self, rss):
         """Apply a 2D throughput model to a RSS.
 
         Parameters
@@ -164,16 +194,7 @@ class ThroughputCorrection(CorrectionBase):
             Corrected RSS object.
         """
 
-        if throughput is None and self.throughput is not None:
-            throughput = self.throughput
-        else:
-            raise RuntimeError("Throughput not provided!")
-
-        if type(throughput) is not Throughput:
-            raise AttributeError(
-                "Input throughput must be an instance of Throughput class")
-
-        if type(rss) is not RSS:
+        if not isinstance(rss, RSS):
             raise ValueError(
                 "Throughput can only be applied to RSS data:\n input {}"
                 .format(type(rss)))
@@ -182,8 +203,8 @@ class ThroughputCorrection(CorrectionBase):
         # =============================================================================
         rss_out = copy.deepcopy(rss)
 
-        rss_out.intensity = rss_out.intensity / throughput.throughput_data
-        rss_out.variance = rss_out.variance / throughput.throughput_data**2
+        rss_out.intensity = rss_out.intensity / self.throughput.throughput_data
+        rss_out.variance = rss_out.variance / self.throughput.throughput_data**2
         self.record_correction(rss_out, status='applied')
         return rss_out
 
