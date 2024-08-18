@@ -122,11 +122,11 @@ class SolarCrossCorrOffset(WavelengthCorrection):
 
     name = "SolarCrossCorrelationOffset"
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.sun_wavelength = kwargs.get('sun_wavelength', None)
-        self.sun_intensity = kwargs.get('sun_intensity', None)
-    
+    def __init__(self, sun_wavelength, sun_intensity, **kwargs):
+        super().__init__(offset=WavelengthOffset(), **kwargs)
+        self.sun_wavelength = sun_wavelength
+        self.sun_intensity = sun_intensity
+
     @classmethod
     def from_fits(cls, path=None):
         if path is None:
@@ -279,12 +279,6 @@ class SolarCrossCorrOffset(WavelengthCorrection):
                 best_fit_idx, all_chi2.shape[:-1])
         best_sigma, best_shift = (pix_std_array[best_sigma_idx],
                                     pix_shift_array[best_vel_idx])
-        fig, ax = plt.subplots()
-        ax.plot([chi2[idx] for chi2, idx in zip(all_chi2.reshape(
-            (-1, all_chi2.shape[-1])).T, best_fit_idx)])
-        ax.set_xlabel("Fibre")
-        ax.set_ylabel("Best-fit " + r"$\sum_\lambda w(I - \hat{I}(s, \sigma))^2$")
-        plt.show()
 
         if inspect_fibres is not None:
             print("Inspecting input fibres")
@@ -307,6 +301,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
                                   pix_shift_array[best_vel_idx])
         for fibre in fibres:
             fig, ax = plt.subplots()
+            ax.set_title(f"Fibre: {fibre}")
             mappable = ax.pcolormesh(
                 pix_std_array, pix_shift_array, chi2[:, :, fibre],
                 cmap='gnuplot', norm=LogNorm())
@@ -326,6 +321,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
             fig, axs = plt.subplots(nrows=2, figsize=(12, 8),
                                     constrained_layout=True)
             ax = axs[0]
+            ax.set_title(f"Fibre: {fibre}")
             ax.plot(wavelength, sun_intensity, label='Model')
             ax.plot(wavelength, normalized_rss_intensity[fibre],
                     label='Fibre', lw=2)
