@@ -1101,8 +1101,6 @@ class TelluricCorrection(CorrectionBase):
             Fraction of the data to use for correction (default is 0.5).
         """
         super().__init__(**correction_kwargs)
-        self.vprint(
-            "Obtaining telluric correction using spectrophotometric star...")
 
         self.telluric_correction = telluric_correction
         self.wavelength = wavelength
@@ -1110,6 +1108,7 @@ class TelluricCorrection(CorrectionBase):
 
     @classmethod
     def from_text_file(cls, path=None):
+        vprint("Initialising telluric correction from text file")
         if path is None:
             path = cls.default_extinction
         wavelength, telluric_correction = np.loadtxt(path, unpack=True)
@@ -1149,6 +1148,7 @@ class TelluricCorrection(CorrectionBase):
         telluric_correction : `TelluricCorrection`
             The computed telluric correction.
         """
+        vprint("Initialising telluric correction from input STD star")
         spectra = np.nanpercentile(spectra_container.rss_intensity,
                                    light_percentile, axis=0)
         telluric_correction = np.ones_like(spectra_container.wavelength)
