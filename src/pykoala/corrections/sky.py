@@ -1530,12 +1530,12 @@ class WaveletFilter(object):
         axes[1, 0].sharey(axes[0, 0])
         ax = axes[-1, 0]
         axes[-1, 1].axis('off')
-        ax.plot(self.wavelength, self.sky, 'k-', alpha=.5,
+        ax.plot(self.wavelength, self.sky, alpha=.5, c='tomato',
                 label='sky (median coefficient)')
-        ax.fill_between(self.wavelength, self.sky_lo, self.sky_hi,
-                        color='k', alpha=0.1, label='uncertainty (16-84%)')
+        ax.fill_between(self.wavelength, self.sky_lo, self.sky_hi, color='r',
+                        alpha=0.1, label='uncertainty (16-84%)')
         ax.plot(self.wavelength, self.sky/self.sky_weight,
-                'r:', alpha=.5, label='unweighted sky')
+                alpha=.5, label='unweighted sky')
         ax.set_xlabel('wavelength [pix]')
         ax.set_ylabel(f'filtered (scale = {self.scale} pix)')
         ax.legend()
