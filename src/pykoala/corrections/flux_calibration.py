@@ -50,7 +50,7 @@ class FluxCalibration(CorrectionBase):
     verbosity = True
 
     def __init__(self, response=None, response_wavelength=None, response_units=1e16,
-                 **correction_kwargs):
+                 response_file=None, **correction_kwargs):
         """
         Initializes the FluxCalibration object.
 
@@ -66,7 +66,8 @@ class FluxCalibration(CorrectionBase):
 
         self.response_units = response_units  # erg/s/cm2/AA
         self.response_wavelength, self.response = response_wavelength, response
-
+        self.response_file = response_file
+    
     @classmethod
     def from_text_file(cls, path=None):
         if path is None:
