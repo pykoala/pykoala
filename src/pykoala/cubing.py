@@ -578,7 +578,10 @@ class Cube(SpectraContainer):
         self.hdul = hdul
 
         if hdul_extensions_map is not None:
+            self.hdul_extensions_map = hdul_extensions_map
+        else:
             self.hdul_extensions_map = self.default_hdul_extensions_map
+
         if "logger" not in kwargs:
             kwargs['logger'] = "pykoala.cube"
         super().__init__(intensity=self.intensity,
@@ -654,7 +657,7 @@ class Cube(SpectraContainer):
             An instance of a `pykoala.cubing.Cube`.
         """
         with fits.open(path) as hdul:
-            return cls(hdul, hdul_extension_map, **kwargs)
+            return cls(hdul, hdul_extension_map=hdul_extension_map, **kwargs)
 
     def parse_info_from_header(self):
         """Look into the primary header for pykoala information."""
