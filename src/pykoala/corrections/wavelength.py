@@ -126,16 +126,31 @@ class SolarCrossCorrOffset(WavelengthCorrection):
         super().__init__(**kwargs)
         self.sun_wavelength = kwargs.get('sun_wavelength', None)
         self.sun_intensity = kwargs.get('sun_intensity', None)
-        
-    def load_solar_spectra(self, path=None):
+    
+    @classmethod
+    def from_fits(cls, path=None):
         if path is None:
             path = os.path.join(os.path.dirname(__file__), '..',
                      'input_data', 'spectrophotometric_stars',
                      'sun_mod_001.fits')
         with fits.open(path) as hdul:
-            self.sun_wavelength = hdul[1].data['WAVELENGTH']
-            self.sun_wavelength = vac_to_air(self.sun_wavelength)
-            self.sun_intensity = hdul[1].data['FLUX']
+            sun_wavelength = hdul[1].data['WAVELENGTH']
+            sun_wavelength = vac_to_air(sun_wavelength)
+            sun_intensity = hdul[1].data['FLUX']
+        return cls(sun_wavelength=sun_wavelength,
+                   sun_intensity=sun_intensity)
+
+    @classmethod
+    def from_text_file(cls, path=None):
+        if path is None:
+            path = os.path.join(os.path.dirname(__file__), '..',
+                     'input_data', 'spectrophotometric_stars',
+                     'sun_mod_001.fits')
+        sun_wavelength, sun_intensity = np.loadtxt(path, unpack=True,
+                                                   usecols=(0, 1))
+        sun_wavelength = vac_to_air(sun_wavelength)
+        return cls(sun_wavelength=sun_wavelength,
+                   sun_intensity=sun_intensity)
 
 
     def get_solar_features(self, solar_wavelength, solar_spectra,
