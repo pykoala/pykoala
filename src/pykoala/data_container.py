@@ -549,7 +549,29 @@ class SpectraContainer(DataContainer):
             )
             self._wavelength = u.Quantity([], u.AA)
         
-
+    def get_spectra_sorted(self, wave_range=None):
+        """Get the RSS-wise sorted order of the intensity.
+        
+        Parameters
+        ----------
+        - wave_range: 2-element iterable, ooptional
+            Wavelength limits to compute the median intensity per spatial element.
+        
+        Returns
+        -------
+        - sorted_order:
+            Sorted list of indices.
+        """
+        if wave_range is None:
+            wave_mask = np.ones_like(self.wavelength, dtype=bool)
+            wave_mask[:100] = 0
+            wave_mask[-100:] = 0
+        else:
+            wave_mask = (self.wavelength >= wave_range[0]) & (
+                self.wavelength <= wave_range[1])
+        median_intensity = np.nanmedian(self.rss_intensity[:, wave_mask], axis=1)
+        median_intensity = np.nan_to_num(median_intensity)
+        return np.argsort(median_intensity)
 
 # =============================================================================
 # Mr Krtxo \(ﾟ▽ﾟ)/
