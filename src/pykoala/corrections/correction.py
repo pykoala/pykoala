@@ -75,6 +75,12 @@ class CorrectionBase(ABC, VerboseMixin):
         if log_filename is not None:
             self.log_into_file(log_filename, level=log_level)
 
+    def corr_print(self, msg, *args):
+        """Print a message."""
+        if self.verbose:
+            print("[Correction: {}] {}".format(self.name, msg), *args)
+
+
     @property
     @abstractmethod
     def name(self):
@@ -84,6 +90,7 @@ class CorrectionBase(ABC, VerboseMixin):
     @abstractmethod
     def apply(self):
         raise NotImplementedError("Each class needs to implement the `apply` method")
+    
 
     def record_correction(self, datacontainer, status='applied', **extra_comments):
         """
