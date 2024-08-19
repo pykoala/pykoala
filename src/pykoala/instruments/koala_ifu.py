@@ -949,7 +949,6 @@ def process_koala_rss(filename=None, path=None,
                       width_bl=20., kernel_median_cosmics=5, cosmic_higher_than=100., extra_factor=1.,
                       max_number_of_cosmics_per_fibre=12, 
                       only_plot_cosmics_cleaned = False,
-                      
                       print_summary=False, 
                       plot_final_rss=None,   # None: if a correction is done, it will plot it at the end 
                       plot_final_rss_title = None,   # log= True, gamma = 0.,fig_size=12,
@@ -1196,7 +1195,7 @@ def process_koala_rss(filename=None, path=None,
         corrections_done.append("big_telluric_residua_correction")
 
     if telluric_residua_at_6860_correction:          #TODO: This has to be a correction applied to data container
-        rss =     clean_telluric_residuals (rss, continuum=continuum_model_after_sky_correction,    
+        rss =     clean_telluric_residuals(rss, continuum=continuum_model_after_sky_correction,    
                                             max_dispersion = max_dispersion_for_6860,
                                             min_value_per_wave_for_fitting = min_value_per_wave_for_for_6860, #10, #50,
                                             interval_to_clean = [6850,6876],
