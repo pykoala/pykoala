@@ -173,6 +173,9 @@ def koala_rss(path_to_file, **kwargs):
     header = fits.getheader(path_to_file, 0) + fits.getheader(path_to_file, 2)
     koala_header = py_koala_header(header)
     # WCS
+    if "RADECSYS" in header:
+        header["RADECSYSa"] = header["RADECSYS"]
+        del header["RADECSYS"]
     koala_wcs = WCS(header)
     # Constructing Pykoala Spaxels table from 2dfdr spaxels table (data[2])
     fibre_table = fits.getdata(path_to_file, 2)
@@ -227,8 +230,6 @@ from pykoala.plotting.rss_plot import rss_image, rss_map
 # =============================================================================
 # Ignore warnings
 # =============================================================================
-import warnings
-warnings.filterwarnings('ignore')
 from astropy.utils.exceptions import AstropyWarning
 
 # #-----------------------------------------------------------------------------
@@ -636,9 +637,11 @@ def koalaRSS(filename,
     rss.koala.info = koala_info
     rss.koala.header = koala_header                     # Saving header
     rss.koala.fibre_table = koala_fibre_table           # Saving original koala fibre table as needed later
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', AstropyWarning)
-        rss.koala.wcs = WCS(header)   # Saving WCS, not sure if later needed, but for now it is there
+
+    if "RADECSYS" in header:
+        header["RADECSYSa"] = header["RADECSYS"]
+        del header["RADECSYS"]
+    rss.koala.wcs = WCS(header)   # Saving WCS, not sure if later needed, but for now it is there
     
     # Plot RSS image if requested  #!!!
     if plot: rss_image(rss, **kwargs)
