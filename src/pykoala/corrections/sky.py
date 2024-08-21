@@ -34,6 +34,21 @@ from pykoala.corrections.wavelength import WavelengthOffset
 from pykoala.data_container import DataContainer, RSS
 from pykoala.ancillary import check_unit
 
+# =============================================================================
+# Background estimators
+# =============================================================================
+def preserve_units(func):
+        def wrapper(data, *args, **kwargs):
+            result =  func(data, *args, **kwargs)
+            if isinstance(data, u.Quantity):
+                if not isinstance(result, u.Quantity):
+                    return result * data.unit
+                else:
+                    return result
+            else:
+                return result
+            
+        return wrapper
 
 #TODO: Move to a math module
 class BackgroundEstimator:
@@ -217,16 +232,6 @@ class ContinuumEstimator:
     pol_continuum(data, wavelength, pol_order=3, **polfit_kwargs)
         Estimate the continuum using polynomial fitting.
     """
-
-    @staticmethod
-    def preserve_units(func):
-        def wrapper(data, *args, **kwargs):
-            if isinstance(data, u.Quantity):
-                unit = data.unit
-            else:
-                unit = 1
-            return func(data, *args, **kwargs) * unit
-        return wrapper
 
     @staticmethod
     @preserve_units
