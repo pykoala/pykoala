@@ -133,7 +133,7 @@ All the corrections applied to the data are build upon the Correction base class
 ---
 ## Acknowledgements
 
-The successful development of this pipeline has been thanks to the efforts of Y. Ascasibar, T. Beard, G. Biviano, P. Corcho-Caballero, D. Dalae, L. Galbany, M. Gonzalez Bolivar, A. Gudalur Balasubramania, F. Jimenez-Ibarra, A. Lopez-Sanchez, M. Owers, B. Perez, N. Pidcock, B. Staples, J. Tocknell et al.
+The successful development of this pipeline has been possible thanks to the efforts of Y. Ascasibar, T. Beard, G. Biviano, P. Corcho-Caballero, D. Dalae, L. Galbany, M. Gonzalez Bolivar, A. Gudalur Balasubramania, F. Jimenez-Ibarra, A. Lopez-Sanchez, M. Owers, B. Perez, N. Pidcock, B. Staples, J. Tocknell et al.
 
 
 ## License and Acknowledgements
