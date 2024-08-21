@@ -22,10 +22,7 @@ from astropy import stats
 from astropy import units as u
 import scipy.ndimage
 import scipy.signal
-# =============================================================================
-# KOALA packages
-# =============================================================================
-# Modular
+
 from pykoala import vprint
 from pykoala.plotting.utils import new_figure, plot_image
 from pykoala.corrections.correction import CorrectionBase
@@ -221,6 +218,17 @@ class ContinuumEstimator:
     """
 
     @staticmethod
+    def preserve_units(func):
+        def wrapper(data, *args, **kwargs):
+            if isinstance(data, u.Quantity):
+                unit = data.unit
+            else:
+                unit = 1
+            return func(data, *args, **kwargs) * unit
+        return wrapper
+
+    @staticmethod
+    @preserve_units
     def medfilt_continuum(data, window_size=5):
         """
         Estimate the continuum using a median filter.
@@ -241,6 +249,7 @@ class ContinuumEstimator:
         return continuum
 
     @staticmethod
+    @preserve_units
     def percentile_continuum(data, percentile, window_size=5):
         """
         Estimate the continuum using a percentile filter.
@@ -264,6 +273,7 @@ class ContinuumEstimator:
         return continuum
 
     @staticmethod
+    @preserve_units
     def pol_continuum(data, wavelength, pol_order=3, **polfit_kwargs):
         """
         Estimate the continuum using polynomial fitting.
