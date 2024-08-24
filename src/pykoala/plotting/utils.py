@@ -116,7 +116,7 @@ def colour_map(fig, ax, cblabel, data,
                               stretch=stretch(**stretch_args),
                               clip=False)
     elif isinstance(norm, str):
-        norm = getattr(colors, norm)
+        norm = getattr(colors, norm)()
 
     if y is None:
         y = np.arange(data.shape[0])
@@ -126,7 +126,7 @@ def colour_map(fig, ax, cblabel, data,
     im = ax.imshow(data,
                    extent=(x[0]-(x[1]-x[0])/2, x[-1]+(x[-1]-x[-2])/2,
                            y[0]-(y[1]-y[0])/2, y[-1]+(y[-1]-y[-2])/2),
-                   interpolation='nearest', origin='lower',
+                   interpolation='none', origin='lower',
                    cmap=cmap,
                    norm=norm,
                    )
