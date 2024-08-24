@@ -12,7 +12,7 @@ from astropy.io import fits
 # =============================================================================
 from pykoala import __version__
 from pykoala.data_container import SpectraContainer
-
+from pykoala.plotting.utils import colour_map, new_figure
 
 # =============================================================================
 # RSS CLASS
@@ -222,6 +222,31 @@ class RSS(SpectraContainer):
                                        ) * np.count_nonzero(wave_mask)
         return integrated_fibres, integrated_variances
 
+    def plot_rss_image(self, data=None, data_label="", fig_args={}, cmap_args={},
+                       output_filename=None):
+        if data is None:
+            data = self.intensity
+            data_label = "Intensity"
+        fig, axs = new_figure(self.info['name'], **fig_args)
+        im, cb = colour_map(fig, axs[0, 0], data_label, data,
+                            **cmap_args)
+        if output_filename is not None:
+            fig.savefig(output_filename, bbox_inches="tight")
+        return fig
+
+    def plot_mask(self, fig_args={}, cmap_args={}, output_filename=None):
+        if "cmap" not in cmap_args:
+            cmap_args["cmap"] = "Accent"
+        fig = self.plot_rss_image(data=self.mask.bitmask, data_label="Bitmask",
+                            fig_args=fig_args, cmap_args=cmap_args,
+                            output_filename=output_filename)
+        return fig
+    
+    def get_spectrum(self):
+        pass
+
+    def plot_fibre(self):
+        pass
 
 # =============================================================================
 # Combine RSS (e.g., flats, twilights)
