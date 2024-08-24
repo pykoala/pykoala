@@ -133,9 +133,9 @@ def read_rss(file_path,
                                    dtype=np.float32)
         intensity = np.delete(all_intensities, bad_fibres_list, 0)
         # Bad pixel verbose summary
-        vprint(f"Number of fibres in this RSS ={len(all_intensities)}"
-               + f"No. of good fibres = {len(intensity)}"
-               + f"No. of bad fibres = {len(bad_fibres_list)}")
+        vprint(f"No. of fibres in this RSS ={len(all_intensities)}"
+               + f"\nNo. of good fibres = {len(intensity)}"
+               + f"\nNo. of bad fibres = {len(bad_fibres_list)}")
         if bad_fibres_list is not None:
             vprint(f"Bad fibres = {bad_fibres_list}")
         # Read errors if exist a dedicated axis
@@ -157,7 +157,8 @@ def read_rss(file_path,
     rss = RSS(intensity=intensity,
                variance=variance,
                wavelength=wavelength,
-               info=info)
+               info=info,
+               header=header)
     rss.history('read', ' '.join(['- RSS read from ', file_name]))
     return rss
 
@@ -194,7 +195,6 @@ def koala_rss(path_to_file):
                    intensity_axis=0,
                    variance_axis=1,
                    header=header,
-                   fibre_table=koala_fibre_table,
                    info=info,
                    )
     return rss
