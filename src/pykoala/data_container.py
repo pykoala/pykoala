@@ -392,6 +392,8 @@ class DataContainer(ABC, VerboseMixin):
         Parameters describing the data.
     log : DataContainerHistory
         History log reporting the data reduction steps undertaken so far.
+    header : astropy.fits.Header
+        FITS Header associated to the RSS.
 
     Methods
     -------
@@ -437,6 +439,15 @@ class DataContainer(ABC, VerboseMixin):
     def mask(self):
         del self._mask
 
+    @property
+    def header(self):
+        return self._header
+    
+    @header.setter
+    def header(self, value):
+        assert isinstance(value, Header)
+        self._header = value
+
     def __init__(self, **kwargs):
         self._intensity = kwargs["intensity"]
         self._variance = kwargs.get(
@@ -451,6 +462,7 @@ class DataContainer(ABC, VerboseMixin):
         self.history = kwargs.get("history",
                                   DataContainerHistory(logger=self.logger,
                                                        verbose=self.verbose))
+        self.header = kwargs.get("header", Header())
 
     def fill_info(self):
         """Check the keywords of info and fills them with placeholders."""
