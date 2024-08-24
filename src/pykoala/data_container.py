@@ -432,12 +432,18 @@ class DataContainer(ABC, VerboseMixin):
         del self._variance
 
     @property
+    def inverse_variance(self):
+        """Inverse variance associated to the `intensity` values."""
+        return 1 / self.variance
+
+    @property
     def snr(self):
+        """Signal-to-noise ratio defined as `intensity / variance**0.5`"""
         return self.intensity / self.variance**0.5
 
     @property
     def mask(self):
-        """Pixel flags."""
+        """`pykoala.data_container.DataMask` pixel mask."""
         return self._mask
 
     @mask.setter
@@ -450,6 +456,7 @@ class DataContainer(ABC, VerboseMixin):
 
     @property
     def header(self):
+        """FITS Header associated to the file."""
         return self._header
     
     @header.setter
