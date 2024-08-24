@@ -151,9 +151,12 @@ def colour_map(fig, ax, cblabel, data,
 
     return im, cb
 
-def fibre_map(fig, ax, cblabel,
-              rss, data,
-              s=100, cmap=default_cmap, norm=None, cbax=None):
+def fibre_map(fig, ax, cblabel, data, rss=None, fib_ra=None, fib_dec=None,
+              s=100, cmap=default_cmap, norm=None, cbax=None,
+              norm_interval=AsymmetricPercentileInterval,
+              interval_args={"lower_percentile": 1.0,
+                              "upper_percentile": 99.0},
+              stretch=PowerStretch, stretch_args={"a": 0.7}):
     """
     Plot a colour map of a physical magnitude defined on each fibre.
 
@@ -181,17 +184,17 @@ def fibre_map(fig, ax, cblabel,
     """
 
     if norm is None:
-        percentiles = np.array([1, 16, 50, 84, 99])
-        ticks = np.nanpercentile(data, percentiles)
-        linthresh = np.median(data[data > 0])
-        norm = colors.SymLogNorm(vmin=2*ticks[0]-ticks[1],
-                                 vmax=2*ticks[-1]-ticks[-2],
-                                 linthresh=linthresh)
-    else:
-        ticks = None
+        interval = norm_interval(**interval_args)
+        norm = ImageNormalize(data, interval=interval,
+                              stretch=stretch(**stretch_args),
+                              clip=False)
+    elif isinstance(norm, str):
+        norm = getattr(colors, norm)()
 
     s = np.prod(ax.bbox.size) / data.size / 2
-    im = ax.scatter(rss.info['fib_ra'], rss.info['fib_dec'], c=data,
+    if rss is not None:
+        fib_ra, fib_dec = rss.info['fib_ra'], rss.info['fib_dec']
+    im = ax.scatter(fib_ra, fib_dec, c=data,
                     s=s, cmap=cmap, norm=norm)
 
     if cbax is None:
@@ -204,10 +207,6 @@ def fibre_map(fig, ax, cblabel,
     if cbax:
         cb.ax.yaxis.set_label_position("left")
         cb.set_label(cblabel)
-        if ticks is not None:
-            cb.ax.set_yticks(ticks=ticks, labels=[f'{value:.3g} ({percent}\\%)'
-                                                  for value, percent in
-                                                  zip(ticks, percentiles)])
         cb.ax.tick_params(labelsize='small')
 
     return im, cb
