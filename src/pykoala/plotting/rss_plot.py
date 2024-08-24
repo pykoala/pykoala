@@ -121,7 +121,6 @@ def get_spectrum(data_container,
     ptitle = kwargs.get('ptitle', None)
     
     info = data_container.info
-    kinfo = data_container.koala.info
     wavelength = data_container.wavelength
     intensity =  data_container.intensity
     
@@ -183,24 +182,13 @@ def get_spectrum(data_container,
                 if ptitle is None: kwargs['ptitle'] = "Integrated spectrum adding {} spaxels in {}".format(n_spaxels, info["name"])
         
         else:
-            
-            if spaxel == "peak":
-                x = int(round(data_container.koala.x_max-0.25, 0))
-                y = int(round(data_container.koala.y_max-0.25, 0))
-                spaxel = [x,y]
-            else:
-                x,y = spaxel[1],spaxel[0]
-                
+            x,y = spaxel[1],spaxel[0]   
             spectrum = intensity[:,y,x]
             if ptitle is None : kwargs['ptitle'] = "Spaxel [{},{}] in {}".format(x,y, info["name"])
         
         if show_map: plot_map(data_container, spaxel = spaxel, spaxel_list=spaxel_list, **kwargs)
   
-    if plot:
-        vlines = kwargs.get('vlines', None)
-        if vlines is None: kwargs["vlines"] =[kinfo["valid_wave_min"],kinfo["valid_wave_max"]]
-        
-        
+    if plot:        
         quick_plot(wavelength, spectrum,
                   #ptitle = ptitle,
                   #vlines=[kinfo["valid_wave_min"],kinfo["valid_wave_max"]],
@@ -710,17 +698,12 @@ def rss_map(rss, variable=None, list_spectra=None,
     """
     verbose = kwargs.get('verbose', False)
     warnings = kwargs.get('warnings', verbose)
-    #plot =  kwargs.get('plot', False)
-    
-    if variable is None: 
-        #if instrument == "koala": 
-        try:
-            variable = rss.koala.integrated_fibre
-        except Exception:
-        #else:
-            variable = rss.integrated_fibre    # TODO!! ÁNGEL: I REALLY THINK THIS SHOULD BE THERE...
 
-    if cmap is None: cmap = fuego_color_map
+    if variable is None: 
+        variable, _ = rss.get_integrated_fibres()
+
+    if cmap is None:
+        cmap = fuego_color_map
 
     if gamma > 0: 
         norm=colors.PowerNorm(gamma=gamma)
@@ -751,14 +734,9 @@ def rss_map(rss, variable=None, list_spectra=None,
     fib_ra = rss.info["fib_ra"]
     fib_dec = rss.info["fib_dec"]
     
-    # For KOALA we can read RA_cen & DEC_cen directly, for new rss it is not possible now as it is not saved
-    if instrument == "koala":
-        RA_cen = rss.koala.info["RA_cen"]
-        DEC_cen = rss.koala.info["DEC_cen"]
-    else:
-        RA_cen = np.nanmedian(fib_ra)   # Tested and basically the same numbers, differences of 0.002" - 0.011" with respect KOALA values. 
-        DEC_cen = np.nanmedian(fib_dec)
-
+    RA_cen = fib_ra.mean()
+    DEC_cen = fib_dec.mean()
+    
     offset_RA_arcsec = (fib_ra - RA_cen) * 3600.
     offset_DEC_arcsec = (fib_dec - DEC_cen) * 3600.
 
