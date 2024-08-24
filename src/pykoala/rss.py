@@ -237,13 +237,14 @@ class RSS(SpectraContainer):
     def plot_mask(self, fig_args={}, cmap_args={}, output_filename=None):
         if "cmap" not in cmap_args:
             cmap_args["cmap"] = "Accent"
+        if "norm" not in cmap_args:
+            cmap_args["norm"] = "Normalize"
         fig = self.plot_rss_image(data=self.mask.bitmask, data_label="Bitmask",
                             fig_args=fig_args, cmap_args=cmap_args,
                             output_filename=output_filename)
         return fig
     
-    def get_spectrum(self):
-        pass
+    
 
     def plot_fibre(self):
         pass
