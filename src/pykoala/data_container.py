@@ -299,7 +299,7 @@ class DataMask(object):
     def __decode_bitmask(self, value):
         return np.bitwise_and(self.bitmask, value) > 0
 
-    def flag_pixels(self, mask, flag_name):
+    def flag_pixels(self, mask, flag_name, desc=""):
         """Add a pixel mask corresponding to a flag name.
 
         Add a pixel mask layer in the bitmask. If the mask already contains
@@ -312,7 +312,7 @@ class DataMask(object):
             Input pixel flag. It must have the same shape as the bitmask.
         """
         if flag_name not in self.flag_map:
-            self.add_new_flag(flag_name)
+            self.add_new_flag(flag_name, desc=desc)
         # Check that the bitmask does not already contain this flag
         bit_flag_map = self.get_flag_map_from_bitmask(flag_name)
         self.bitmask[bit_flag_map] -= self.flag_map[flag_name][0]
@@ -350,10 +350,10 @@ class DataMask(object):
         else:
             return self.bitmask > 0
 
-    def add_new_flag(self, name, value=None):
+    def add_new_flag(self, name, value=None, desc=""):
         if value is None:
             value = max([v[0] for v in self.flag_map.values()]) * 2
-        self.flag_map[name] = (value, "")
+        self.flag_map[name] = (value, desc)
         self.masks[name] = np.zeros(self.bitmask.shape, dtype=bool)
 
 
@@ -430,6 +430,10 @@ class DataContainer(ABC, VerboseMixin):
     @variance.deleter
     def variance(self):
         del self._variance
+
+    @property
+    def snr(self):
+        return self.intensity / self.variance**0.5
 
     @property
     def mask(self):
