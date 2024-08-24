@@ -152,8 +152,6 @@ def read_rss(file_path,
     wavelength_index = np.arange(ncol)
     wavelength = wcs.dropaxis(1).wcs_pix2world(wavelength_index, 0)[0]
     # First Header value added by the PyKoala routine
-    header.append(('DARKCORR', 'OMIT', 'Dark Image Subtraction'), end=True)
-
     rss = RSS(intensity=intensity,
                variance=variance,
                wavelength=wavelength,
