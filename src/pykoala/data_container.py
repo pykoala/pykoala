@@ -9,8 +9,6 @@ import copy
 from astropy.io.fits import Header, ImageHDU
 from astropy import units as u
 
-# from astropy.nddata import bitmask
-# from pykoala.exceptions.exceptions import NoneAttrError
 from pykoala import VerboseMixin
 
 # =============================================================================
@@ -314,7 +312,7 @@ class DataMask(object):
             Input pixel flag. It must have the same shape as the bitmask.
         """
         if flag_name not in self.flag_map:
-            raise NameError(f"Input flag name {flag_name} does not exist")
+            self.add_new_flag(flag_name)
         # Check that the bitmask does not already contain this flag
         bit_flag_map = self.get_flag_map_from_bitmask(flag_name)
         self.bitmask[bit_flag_map] -= self.flag_map[flag_name][0]
@@ -351,6 +349,13 @@ class DataMask(object):
                 return mask
         else:
             return self.bitmask > 0
+
+    def add_new_flag(self, name, value=None):
+        if value is None:
+            value = max([v[0] for v in self.flag_map.values()]) * 2
+        self.flag_map[name] = (value, "")
+        self.masks[name] = np.zeros(self.bitmask.shape, dtype=bool)
+
 
     def dump_to_hdu(self):
         """Return a ImageHDU containig the mask information.
