@@ -4,6 +4,14 @@ pykoala.corrections package
 Submodules
 ----------
 
+pykoala.corrections.astrometry module
+---------------------------------------------------
+
+.. automodule:: pykoala.corrections.astrometry
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 pykoala.corrections.atmospheric\_corrections module
 ---------------------------------------------------
 
@@ -41,6 +49,14 @@ pykoala.corrections.throughput module
 
 .. automodule:: pykoala.corrections.throughput
    :members:
+   :undoc-members:
+   :show-inheritance:
+
+pykoala.corrections.wavelength module
+-------------------------------------
+
+.. automodule:: pykoala.corrections.wavelength
+   :members: WavelengthOffset, WavelengthCorrection, SolarCrossCorrOffset
    :undoc-members:
    :show-inheritance:
 
