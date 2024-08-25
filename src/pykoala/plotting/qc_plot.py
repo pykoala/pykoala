@@ -46,23 +46,47 @@ def qc_throughput(throughput):
     ax.set_ylim(10, throughput_data.size // 100)
 
     ax = fig.add_subplot(gs[1, :])
+
+    median_wavelength_throughput = np.nanmedian(throughput_data, axis=0)
+    std_wavelength_throughput = np.nanmedian(
+        np.abs(throughput_data - median_wavelength_throughput[np.newaxis, :]),
+        axis=0) * 1.4826
+    ax.fill_between(np.arange(0, throughput_data.shape[1]),
+                    median_wavelength_throughput - std_wavelength_throughput,
+                    median_wavelength_throughput + std_wavelength_throughput,
+                    alpha=0.3, color='r', label='Median +/- (MAD * 1.4826)')
+    ax.plot(median_wavelength_throughput, label='Median',
+            lw=0.7, color='r')
+
     fibre_idx = np.random.randint(low=0, high=throughput_data.shape[0], size=3)
     for idx in fibre_idx:
         ax.plot(throughput_data[idx], label='Fibre {}'.format(idx),
-                lw=0.7, alpha=0.8)
+                lw=1., alpha=0.8)
     ax.set_ylim(0.75, 1.25)
     ax.set_xlabel("Spectral pixel")
     ax.legend(ncol=3)
 
     ax = fig.add_subplot(gs[-1, :])
+
+    median_fibre_throughput = np.nanmedian(throughput_data, axis=1)
+    std_fibre_throughput = np.nanmedian(
+        np.abs(throughput_data - median_fibre_throughput[:, np.newaxis]),
+        axis=1) * 1.4826
+    ax.fill_between(np.arange(0, throughput_data.shape[0]),
+                    median_fibre_throughput - std_fibre_throughput,
+                    median_fibre_throughput + std_fibre_throughput,
+                    alpha=0.3, color='r', label='Median +/- (MAD * 1.4826)')
+    ax.plot(median_fibre_throughput, label='Median',
+            lw=0.7, color='r')
+
     wl_idx = np.random.randint(low=0, high=throughput_data.shape[1], size=3)
     for idx in wl_idx:
         ax.plot(throughput_data[:, idx].squeeze(),
                 label='Wave col {}'.format(idx), lw=0.7,
-                alpha=0.8)
+                alpha=1.0)
     ax.set_ylim(0.75, 1.25)
     ax.set_xlabel("Fibre number")
-    ax.legend(ncol=3)
+    ax.legend(ncol=4)
     return fig
 
 
