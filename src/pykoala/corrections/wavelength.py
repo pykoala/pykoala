@@ -3,6 +3,7 @@ import numpy as np
 import copy
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
+from matplotlib.gridspec import GridSpec
 
 from astropy.io import fits
 from scipy.ndimage import median_filter, gaussian_filter, percentile_filter
@@ -21,8 +22,13 @@ class WavelengthOffset(object):
 
     Attributes
     ----------
-    offset_data : wavelength offset, in pixels
-    offset_error : standard deviation of `offset_data`
+    offset_data : np.ndarray
+        Wavelength offset, in pixels.
+    offset_error : np.ndarray
+        Standard deviation of ``offset_data``.
+    path: str
+        Filename path.
+
     """
     offset_data = None
     offset_error = None
@@ -33,6 +39,19 @@ class WavelengthOffset(object):
         self.offset_error = offset_error
 
     def tofits(self, output_path=None):
+        """Save the offset in a FITS file.
+        
+        Parameters
+        ----------
+        output_path: str, optional
+            FITS file name path. Default is None. If None, and ``self.path`` exists,
+            the original file is overwritten.
+
+        Notes
+        -----
+        The output fits file contains an empty PrimaryHDU, and two ImageHDU
+        ("OFFSET", "OFFSET_ERR") containing the offset data and associated error.
+        """
         if output_path is None:
             if self.path is None:
                 raise NameError("Provide output path")
@@ -89,6 +108,7 @@ class WavelengthCorrection(CorrectionBase):
 
     @classmethod
     def from_fits(cls, path):
+        """Initialise a WavelegnthOffset correction from an input FITS file."""
         return cls(offset=WavelengthOffset.from_fits(path=path),
                    offset_path=path)
 
@@ -128,26 +148,56 @@ class SolarCrossCorrOffset(WavelengthCorrection):
         self.sun_intensity = sun_intensity
 
     @classmethod
-    def from_fits(cls, path=None):
+    def from_fits(cls, path=None, extension=1):
+        """Initialise a WavelegnthOffset correction from an input FITS file.
+        
+        Parameters
+        ----------
+        path : str, optional
+            Path to the FITS file containing the reference Sun's spectra. The
+            file must contain an extension with a table including a ``WAVELENGTH``
+            and ``FLUX`` columns.The wavelength array must be angstrom in the
+            vacuum frame.
+        extension : int or str, optional
+            HDU extension containing the table. Default is 1.
+
+        Returns
+        -------
+        solar_offset_correction : SolarCrossCorrOffset
+            An instance of SolarCrossCorrOffset.
+        """
         if path is None:
             path = os.path.join(os.path.dirname(__file__), '..',
                      'input_data', 'spectrophotometric_stars',
                      'sun_mod_001.fits')
         with fits.open(path) as hdul:
-            sun_wavelength = hdul[1].data['WAVELENGTH']
+            sun_wavelength = hdul[extension].data['WAVELENGTH']
             sun_wavelength = vac_to_air(sun_wavelength)
-            sun_intensity = hdul[1].data['FLUX']
+            sun_intensity = hdul[extension].data['FLUX']
         return cls(sun_wavelength=sun_wavelength,
                    sun_intensity=sun_intensity)
 
     @classmethod
-    def from_text_file(cls, path=None):
-        if path is None:
-            path = os.path.join(os.path.dirname(__file__), '..',
-                     'input_data', 'spectrophotometric_stars',
-                     'sun_mod_001.fits')
+    def from_text_file(cls, path, loadtxt_args={}):
+        """Initialise a WavelegnthOffset correction from an input text file.
+        
+        Parameters
+        ----------
+        path: str
+            Path to the text file containing the reference Sun's spectra. The
+            text file must contain two columns consisting of the
+            vacuum wavelength array in angstrom and the solar flux or luminosity.
+        loadtxt_args: dict, optional
+            Additional arguments to be passed to ``numpy.loadtxt``.
+
+        Returns
+        -------
+        solar_offset_correction: SolarCrossCorrOffset
+            An instance of SolarCrossCorrOffset.
+        """
         sun_wavelength, sun_intensity = np.loadtxt(path, unpack=True,
-                                                   usecols=(0, 1))
+                                                   usecols=(0, 1),
+                                                   **loadtxt_args)
         sun_wavelength = vac_to_air(sun_wavelength)
         return cls(sun_wavelength=sun_wavelength,
                    sun_intensity=sun_intensity)
@@ -155,16 +205,44 @@ class SolarCrossCorrOffset(WavelengthCorrection):
 
     def get_solar_features(self, solar_wavelength, solar_spectra,
                             window_size_aa=20):
-        
+        """
+        Estimate the regions of the solar spectrum dominated by absorption features.
+
+        Notes
+        -----
+        First, a median filter is applied to estimate the upper envelope of the
+        continuum. Then, the median ratio between the solar spectra and the median-filtered
+        estimate is used to compute the relative weights:
+
+        .. math::
+            \\begin{equation}
+                w = \\left\\|\\frac{F_\\odot}{F_{cont}} - Median(\\frac{F_\\odot}{F_{cont}})\\right\\|
+            \\end{equation}
+
+        Parameters
+        ----------
+        solar_wavelength: numpy.ndarray
+            Solar spectra wavelengths array.
+        solar_spectra: numpy.ndarray
+            Array containing the flux of the solar spectra associated to a given
+            wavelength.
+        window_size_aa: int, optional
+            Size of a spectral window in angstrom to perform a median filtering
+            and estimate the underlying continuum. Default is 20 AA.
+
+        Returns
+        -------
+        weights: numpy.ndarray
+            Array of weights representing the prominance of an absorption feature.
+
+        """
+        self.vprint("Estimating regions of solar spectra dominated by absorption lines.")
         delta_pixel = int(window_size_aa
                           / (solar_wavelength[-1] - solar_wavelength[0])
                           * solar_wavelength.size)
         if delta_pixel % 2 == 0:
             delta_pixel += 1
-        # solar_continuum = ContinuumEstimator.medfilt_continuum(solar_spectra,
-        #                                                        delta_pixel)
         solar_continuum = median_filter(solar_spectra, delta_pixel)
-
         # Detect absorption features
         median_continuum_ratio = np.nanmedian(solar_spectra / solar_continuum)
         weights = np.abs(solar_spectra / solar_continuum -  median_continuum_ratio)
@@ -172,7 +250,37 @@ class SolarCrossCorrOffset(WavelengthCorrection):
 
     def compute_grid_of_models(self, pix_shift_array, pix_std_array, pix_array,
                               sun_intensity, weights):
-        print("Computing grid of models") #TODO
+        """Compute a grid of Solar spectra models convolved with a gaussian LSF.
+        
+        Parameters
+        ----------
+        pix_shift_array: 1D-np.array
+            Array containing the wavelength offsets expressed in pixels.
+        pix_std_array: 1D-np.array
+            Array containing the values of the gaussian LSF standard deviation
+            in pixels.
+        pix_array: 1D-np.array
+            Array of pixels to sample the grid of models.
+        sun_intensity: 1D-np.array
+            Array of solar fluxes associated to ``pix_array``.
+        weights: 1D-np.array
+            Array of absorption-features weights associated to ``sun_intensity``.
+        
+        Returns
+        -------
+        models_grid: numpy.ndarray
+            Grid of models with dimensions `(n, m, s)`, where `n`, `m` and `s`
+            correspond to the size of `pix_shift_array`, `pix_std_array`, and
+            `pix_array`, respectively.
+        weights_grid: numpy.ndarray
+            Grid of absorption-feature weights associated to `models_grid`.
+
+        See also
+        --------
+        :For more details on the computation of the weights array see :func:`get_solar_features`.
+
+        """
+        self.vprint("Computing grid of solar spectra models")
         models_grid = np.zeros((pix_shift_array.size, pix_std_array.size,
                            sun_intensity.size))
         weights_grid = np.zeros((pix_shift_array.size, pix_std_array.size,
@@ -195,23 +303,71 @@ class SolarCrossCorrOffset(WavelengthCorrection):
                     weights_grid[i, j] = interp_sun_weight
         return models_grid, weights_grid
 
-    def compute_shift_from_twilight(self, data_container, logspace=True,
+    def compute_shift_from_twilight(self, spectra_container,
                                     sun_window_size_aa=20, keep_features_frac=0.1,
                                     response_window_size_aa=200,
                                     wave_range=None,
-                                    pix_shift_array=np.arange(-5, 5, 0.1),
-                                    pix_std_array=np.arange(0.1, 3, 0.1),
+                                    pix_shift_array=None,
+                                    pix_std_array=None,
+                                    logspace=True, use_mean=True,
                                     inspect_fibres=None):
+        """Compute the wavelenght offset of between a given SpectraContainer and a reference Solar spectra.
+        
+        Parameters
+        ----------
+        spectra_container: `pykoala.data_container.SpectraContainer`
+            Spectra container (RSS or Cube) to cross-correlate with the reference
+            spectra.
+        sun_window_size_aa: int, optional
+            Size of a spectral window in angstrom to perform a median filtering
+            and estimate the underlying continuum. Default is 20 AA.
+            See `get_solar_features` for details.
+        keep_features_frac: float, optional
+            Fraction of absorption-features weights to keep. All values below
+            that threshold will be set to 0. Default is 0.1.
+        wave_range: list or tuple, optional
+            If provided, the cross-correlation will only be done in the provided
+            wavelength range. Default is None.
+        pix_shift_array: 1D-np.array, optional, default=np.arange(-5, 5, 0.1)
+            Array containing the wavelength offsets expressed in pixels.
+        pix_std_array: 1D-np.array, optional, default=np.arange(0.1, 3, 0.1)
+            Array containing the values of the gaussian LSF standard deviation
+            in pixels. See `compute_grid_of_models` for details.
+        logspace: bool, optional
+            If True, the cross-correlation will be perform using a logarithmic
+            sampling in terms of wavelength. Default is True.
+        use_mean: bool, optional
+            If True, the mean likelihood-weighted value of the wavelength offset
+            is used to create the `WavelengthOffsetCorrection`. Otherwise, the
+            best fit parameters of the input grid are used. Default is True.
+        inspect_fibres: list or tuple, optional
+            Iterable containing RSS-wise spectra indices. If provided, a
+            quality-control plot of each fibre is produced.
+        
+        Returns
+        -------
+        results: dict
+            The dictionary contains the ``best-fit`` and ``mean`` likelihood-weighted
+            values of ``pix_shift_array`` and ``pix_std_array`` in a tuple, respectively.
+            If ``inspect_fibres`` is not ``None``, it containes a list of figures
+            for each fibre included in ``inspect_fibres``.
+
+        """
+        if pix_shift_array is None:
+            pix_shift_array = np.arange(-5, 5, 0.1)
+        if pix_std_array is None:
+            pix_std_array = np.arange(0.1, 3, 0.1)
+
         if logspace:
-            new_wavelength = np.geomspace(data_container.wavelength[0],
-                                          data_container.wavelength[-1],
-                                          data_container.wavelength.size)
+            new_wavelength = np.geomspace(spectra_container.wavelength[0],
+                                          spectra_container.wavelength[-1],
+                                          spectra_container.wavelength.size)
             rss_intensity = np.array([flux_conserving_interpolation(
-                new_wavelength, data_container.wavelength, fibre
-                ) for fibre in data_container.rss_intensity])
+                new_wavelength, spectra_container.wavelength, fibre
+                ) for fibre in spectra_container.rss_intensity])
         else:
-            new_wavelength = data_container.wavelength
-            rss_intensity = data_container.rss_intensity
+            new_wavelength = spectra_container.wavelength
+            rss_intensity = spectra_container.rss_intensity
         
         # Interpolate the solar spectrum to the new grid of wavelengths
         sun_intensity = flux_conserving_interpolation(
@@ -230,7 +386,8 @@ class SolarCrossCorrOffset(WavelengthCorrection):
                 dtype=float)
         
         valid_pixels = weights > 0
-        print("Number of valid pixels: ", np.count_nonzero(valid_pixels))
+        self.vprint("Number of pixels with non-zero weights: "
+                    + f"{np.count_nonzero(valid_pixels)} out of {valid_pixels.size}")
 
         # Estimate the response curve for each individual fibre
         delta_pixel = int(response_window_size_aa
@@ -245,6 +402,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
         spectrograph_upper_env = percentile_filter(
             smoothed_r_spectrograph, 95, delta_pixel, axes=1)
         # Avoid regions dominated by telluric absorption
+        self.vprint("Including the masking of pixels dominated by telluric absorption")
         fibre_weights =  1 / (1  + (
                 spectrograph_upper_env / smoothed_r_spectrograph
                 - np.nanmedian(spectrograph_upper_env / smoothed_r_spectrograph)
@@ -261,7 +419,8 @@ class SolarCrossCorrOffset(WavelengthCorrection):
         all_chi2 = np.zeros((pix_shift_array.size,
                              pix_std_array.size,
                              rss_intensity.shape[0]))
-        print("Fitting models to data")
+        
+        self.vprint("Performing the cross-correlation with the grid of models")
         for i in range(pix_shift_array.size):
             all_chi2[i] = np.nansum(
                 (models_grid[i, :, np.newaxis]
@@ -272,68 +431,128 @@ class SolarCrossCorrOffset(WavelengthCorrection):
                     weights_grid[i, :, np.newaxis]
                     * fibre_weights[np.newaxis, :, :],
                     axis=-1)
-        
-        best_fit_idx = np.argmin(all_chi2.reshape((-1, all_chi2.shape[-1])),
+            
+        likelihood = np.exp(- (all_chi2 - all_chi2.min())/ 2)
+        likelihood /= np.nansum(likelihood, axis=(0, 1))[np.newaxis, np.newaxis, :]
+        mean_pix_shift = np.sum(likelihood.sum(axis=1)
+                                * pix_shift_array[:, np.newaxis], axis=0)
+        mean_std = np.sum(likelihood.sum(axis=0)
+                          * pix_std_array[:, np.newaxis], axis=0)
+
+        best_fit_idx = np.argmax(likelihood.reshape((-1, likelihood.shape[-1])),
                                  axis=0)
-        best_vel_idx, best_sigma_idx = np.unravel_index(
+        best_vel_idx, best_std_idx = np.unravel_index(
                 best_fit_idx, all_chi2.shape[:-1])
-        best_sigma, best_shift = (pix_std_array[best_sigma_idx],
+        best_sigma, best_shift = (pix_std_array[best_std_idx],
                                     pix_shift_array[best_vel_idx])
 
         if inspect_fibres is not None:
-            print("Inspecting input fibres")
-            self.inspect_fibres(inspect_fibres, pix_shift_array, pix_std_array,
-                                best_vel_idx, best_sigma_idx,
-                                all_chi2, models_grid, weights_grid,
-                                normalized_rss_intensity, new_wavelength)
-
-        self.offset.offset_data = -best_shift
+            self.vprint("Inspecting input fibres")
+            fibre_figures = self.inspect_fibres(
+                inspect_fibres, pix_shift_array, pix_std_array,
+                best_vel_idx, best_std_idx, mean_pix_shift, mean_std,
+                likelihood, models_grid, weights_grid, normalized_rss_intensity,
+                new_wavelength)
+        else:
+            fibre_figures= None
+        if use_mean:
+            self.vprint("Using mean likelihood-weighted values to compute the wavelength offset correction")
+            self.offset.offset_data = - mean_pix_shift
+        else:
+            self.vprint("Using best fit values to compute the wavelength offset correction")
+            self.offset.offset_data = - best_shift
+        
         self.offset.offset_error = np.full_like(best_shift, fill_value=np.nan)
 
-        return best_shift, best_sigma
+        return {"best-fit": (best_shift, best_sigma),
+                "mean": (mean_pix_shift, mean_std),
+                "fibre_figures": fibre_figures}
     
     def inspect_fibres(self, fibres, pix_shift_array, pix_std_array,
-                       best_vel_idx, best_sigma_idx, chi2,
+                       best_vel_idx, best_std_idx, mean_vel, mean_std,
+                       likelihood,
                        models_grid, weights_grid,
                        normalized_rss_intensity, wavelength):
-        
-        best_sigma, best_shift = (pix_std_array[best_sigma_idx],
+        """
+        Create a quality control plot of the solar cross-correlation process of each input fibre.
+
+        Parameters
+        ----------
+        fibres: iterable
+            List of input fibres to check.
+        pix_shift_array: 1D-np.array
+            Array containing the wavelength offsets expressed in pixels.
+        pix_std_array: 1D-np.array
+            Array containing the values of the gaussian LSF standard deviation
+            in pixels. See :func:`compute_grid_of_models` for details.
+        best_vel_idx: int
+            Index of ``pix_shift_array`` that correspond to the best fit.
+        best_std_idx: int
+            Index of ``pix_std_array`` that correspond to the best fit.
+        mean_vel: float
+            Mean likelihood-weighted values of ``pix_shift_array``.
+        mean_std: float
+            Mean likelihood-weighted values of ``pix_std_array``.
+        likelihood: numpy.ndarray:
+            Likelihood of the cross-correlation.
+        models_grid: numpy.ndarray
+            Grid of solar spectra models. See :func:`compute_grid_of_models` for details.
+        weights_grid: numpy.ndarray
+            Grid of solar spectra weights. See :func:`compute_grid_of_models` for details.
+        normalized_rss_intensity: numpy.ndarray
+            Array containing the RSS intensity values of a SpectraContainer including
+            the correction of the spectrograph response curve.
+        wavelength: np.array
+            Wavelength array associated to ``normalized_rss_intensity`` and ``models_grid``.
+
+        Returns
+        -------
+        fibres_figures: list
+            List of figures containing a QC plot of each fibre.
+        """
+        fibre_figures = []
+        best_sigma, best_shift = (pix_std_array[best_std_idx],
                                   pix_shift_array[best_vel_idx])
         for fibre in fibres:
-            fig, ax = plt.subplots()
-            ax.set_title(f"Fibre: {fibre}")
+            fig = plt.figure(constrained_layout=True, figsize=(10, 8))
+            gs = GridSpec(2, 4, figure=fig, wspace=0.25, hspace=0.25)
+
+            ax = fig.add_subplot(gs[0, 0])
             mappable = ax.pcolormesh(
-                pix_std_array, pix_shift_array, chi2[:, :, fibre],
-                cmap='gnuplot', norm=LogNorm())
+                pix_std_array, pix_shift_array, likelihood[:, :, fibre],
+                cmap='gnuplot',
+                norm=LogNorm(vmin=likelihood.max() / 1e2, vmax=likelihood.max()))
             plt.colorbar(mappable, ax=ax,
-                         label=r"$\sum_\lambda w(I - \hat{I}(s, \sigma))^2$")
-            ax.plot(best_sigma[fibre], best_shift[fibre], '+w',
+                         label=r"$e^(-\sum_\lambda w(I - \hat{I}(s, \sigma))^2 / 2)$")
+            ax.plot(best_sigma[fibre], best_shift[fibre], '+', color='cyan',
                     label=r'Best fit: $\Delta\lambda$='
                     + f'{best_shift[fibre]:.2}, ' + r'$\sigma$=' + f'{best_sigma[fibre]:.2f}')
+            ax.plot(mean_std[fibre], mean_vel[fibre], 'o', mec='lime', mfc='none',
+                    label=r'Mean value: $\Delta\lambda$='
+                    + f'{mean_vel[fibre]:.2}, ' + r'$\sigma$=' + f'{mean_std[fibre]:.2f}')
             ax.set_xlabel(r"$\sigma$ (pix)")
             ax.set_ylabel(r"$\Delta \lambda$ (pix)")
-            ax.legend()
+            ax.legend(bbox_to_anchor=(0., 1.05), loc='lower left', fontsize=7)
 
             sun_intensity = models_grid[best_vel_idx[fibre],
-                                        best_sigma_idx[fibre]]
+                                        best_std_idx[fibre]]
             weight = weights_grid[best_vel_idx[fibre],
-                                        best_sigma_idx[fibre]]
-            fig, axs = plt.subplots(nrows=2, figsize=(12, 8),
-                                    constrained_layout=True)
-            ax = axs[0]
+                                        best_std_idx[fibre]]
+
+            ax = fig.add_subplot(gs[0, 1:])
             ax.set_title(f"Fibre: {fibre}")
-            ax.plot(wavelength, sun_intensity, label='Model')
+            ax.plot(wavelength, sun_intensity, label='Sun Model')
             ax.plot(wavelength, normalized_rss_intensity[fibre],
                     label='Fibre', lw=2)
             twax = ax.twinx()
             twax.plot(wavelength, weight, c='fuchsia',
                     zorder=-1, alpha=0.5, label='Weight')
-            ax.legend()
+            ax.legend(fontsize=7)
             ax.set_ylabel("Intensity")
             ax.set_xlabel("Wavelength")
             twax.set_ylabel("Relative weight")
 
-            ax = axs[1]
+            ax = fig.add_subplot(gs[1, :])
             max_idx = np.argmax(weight)
             max_weight_range = range(np.max((max_idx - 80, 0)),
                   np.min((max_idx + 80, wavelength.size - 1)))
@@ -348,20 +567,16 @@ class SolarCrossCorrOffset(WavelengthCorrection):
             twax = ax.twinx()
             twax.plot(wavelength[max_weight_range], weight[max_weight_range],
                       c='fuchsia',
-                    zorder=-1, alpha=0.5, label='Weight')
+                    zorder=-1, alpha=0.5, label='Absorption-feature Weight')
             twax.axhline(0)
-            ax.annotate(r'Best fit: $\Delta\lambda$='
-                    + f'{best_shift[fibre]:.3}, ' + r'$\sigma$=' + f'{best_sigma[fibre]:.3f}',
-                    xy=(0.05, 0.95), xycoords='axes fraction', va='top')
-            twax.legend()
-            ax.legend()
-            
-
+            twax.legend(fontsize=7)
             ax.set_ylabel("Intensity")
             ax.set_xlabel("Wavelength")
             twax.set_ylabel("Relative weight")
             plt.show()
+            fibre_figures.append(fig)
         plt.close()
+        return fibre_figures
 
 
 # =============================================================================
