@@ -7,7 +7,8 @@ from astropy import units as u
 from astropy import constants
 from astropy.table import Table
 from astropy import stats
-from astropy.modeling.models import Gaussian1D, Lorentz1D, Chebyshev1D
+from astropy.modeling.models import Gaussian1D, Lorentz1D, Chebyshev1D, custom_model
+from astropy.modeling import Fittable1DModel, Parameter
 from astropy.modeling.fitting import LevMarLSQFitter, LinearLSQFitter, TRFLSQFitter
 
 from specutils import Spectrum1D
@@ -209,7 +210,7 @@ class ContinuumEstimator:
     """
 
     @staticmethod
-    def preserve_units(func):
+    def _preserve_units(func):
         def wrapper(data, *args, **kwargs):
             if isinstance(data, u.Quantity):
                 unit = data.unit
@@ -219,7 +220,7 @@ class ContinuumEstimator:
         return wrapper
 
     @staticmethod
-    @preserve_units
+    @_preserve_units
     def medfilt_continuum(data, window_size=5):
         """
         Estimate the continuum using a median filter.
@@ -240,14 +241,14 @@ class ContinuumEstimator:
         return continuum
 
     @staticmethod
-    @preserve_units
+    @_preserve_units
     def percentile_continuum(data, percentile, window_size):
         continuum = ndimage.percentile_filter(data, percentile,
                                                     window_size)
         return continuum
 
     @staticmethod
-    @preserve_units
+    @_preserve_units
     def pol_continuum(data, wavelength, pol_order=3, **polfit_kwargs):
         """
         Estimate the continuum using polynomial fitting.
@@ -337,49 +338,154 @@ class LSF_estimator:
             self.delta_lambda[(self.delta_lambda > 0) & (profile < threshold)])
         return right-left
 
+# =============================================================================
+# Emission line profile
+# =============================================================================
 
-class LineProfile:
+class LineProfile(Fittable1DModel):
+    """One dimensional emission line profile.
+    
+    Parameters
+    ----------
+    central_wavelength : float or `~astropy.units.Quantity`.
+        Centroid of the line.
+    flux : float or `~astropy.units.Quantity`.
+        Integrated flux of the line.
+    fwhm : float or `~astropy.units.Quantity`.
+        Full width at half maximum (FWHM).
 
-    def gaussian(central_wavelength, flux, fwhm,
-                 central_wavelength_bounds=None,
-                 flux_bounds=None,
-                 fwhm_bounds=None,
-                 **kwargs):
-        stddev = fwhm / 2.35482
-        profile = Gaussian1D(amplitude=flux / stddev / np.sqrt(2 * np.pi),
-                          mean=central_wavelength, stddev=stddev, **kwargs)
-        if central_wavelength_bounds is not None:
-            profile.mean.bounds = central_wavelength_bounds
-        if fwhm_bounds is not None:
-            profile.stddev.bounds = (fwhm_bounds[0] / 2.35482,
-                                     fwhm_bounds[1] / 2.35482)
-        else:
-            profile.stddev.bounds = (1e-1 * u.angstrom, 1e1 * u.angstrom)
-        if flux_bounds is not None:    
-            profile.amplitude.bounds = (
-                flux_bounds[0] / profile.stddev.bounds[1] / np.sqrt(2 * np.pi),
-                flux_bounds[1] / profile.stddev.bounds[0] / np.sqrt(2 * np.pi))
-        else:
-            profile.amplitude.bounds = (0 * flux.unit, None)
-        return profile
+     Notes
+    -----
+    Either all or none of input ``wavelength``, ``central_wavelength`` and
+    ``fwhm`` must be provided consistently with compatible units or as unitless
+    numbers.
+    """
 
-    def lorentzian(central_wavelength, flux, fwhm, **kwargs):
-        profile = Lorentz1D(amplitude= 2 * flux / np.pi / fwhm,
-                         x_0=central_wavelength, fwhm=fwhm, **kwargs)
-        profile.amplitude.bounds = (0 * flux.unit, None)
-        profile.fwhm.bounds = (1e-2 * u.angstrom, None)
-        return profile
+    central_wavelength = Parameter(default=1, description="Line profile centroid")
+    flux = Parameter(default=0, bounds=(0, None), description="Line integrated flux")
+    fwhm = Parameter(default=1, bounds=(1e-1 * u.angstrom, 1e1 * u.angstrom),
+                     description="Line profile full width at half maximum")
+
+    @property
+    def input_units(self):
+        if self.central_wavelength.input_unit is None:
+            return None
+        return {self.inputs[0]: self.central_wavelength.input_unit}
+
+    def _parameter_units_for_data_units(self, inputs_unit, outputs_unit):
+        return {
+            "central_wavelength": inputs_unit[self.inputs[0]],
+            "fwhm": inputs_unit[self.inputs[0]],
+            "flux": outputs_unit[self.outputs[0]],
+        }
+
+
+class GaussianLineProfile(LineProfile):
+    """Gaussian 1D line profile model adapted from `~astropy.modelling.models.Gaussian1D`."""
+    fwhm_to_sigma = 1 / 2.35482
+
+    def bounding_box(self, factor=3.5):
+        """
+        Tuple defining the default ``bounding_box`` limits,
+        ``(x_low, x_high)``.
+
+        Parameters
+        ----------
+        factor : float
+            The multiple of `stddev` used to define the limits.
+            The default is 3.5, corresponding to a relative error < 3e-4.
+        """
+        return (self.central_wavelength - factor * self.fwhm * self.fwhm_to_sigma,
+                self.central_wavelength + factor * self.fwhm * self.fwhm_to_sigma)
+
+    @staticmethod
+    def evaluate(wavelength, central_wavelength, flux, fwhm):
+        """
+        GaussianLineProfile model function.
+        """
+        sigma = fwhm / 2.35482
+        return flux / np.sqrt(2) / fwhm / sigma * np.exp(
+            -0.5 * ((wavelength - central_wavelength) / sigma)**2)
+
+    @staticmethod
+    def fit_deriv(wavelength, central_wavelength, flux, fwhm):
+        """
+        GaussianLineProfile model function derivatives.
+        """
+        sigma = fwhm / 2.35482
+        d_flux = np.exp(-0.5 / sigma**2 * (wavelength - central_wavelength) ** 2)
+        d_wave = flux * d_flux * (wavelength - central_wavelength) / sigma**2
+        d_sigma = flux * d_flux * (wavelength - central_wavelength) ** 2 / sigma**3
+        return [d_wave, d_flux, d_sigma * 2.35482]
+
+
+class LorentzianLineProfile(LineProfile):
+    """Lorentzian 1D line profile model adapted from `~astropy.modelling.models.Lorentz1D`."""
+
+    @staticmethod
+    def evaluate(wavelength, central_wavelength, flux, fwhm):
+        """One dimensional Lorentzian model function."""
+        gamma = fwhm / 2
+        return flux * gamma / np.pi / ((wavelength - central_wavelength)**2 + gamma**2)
+
+    @staticmethod
+    def fit_deriv(wavelength, central_wavelength, flux, fwhm):
+        """One dimensional Lorentzian model derivative with respect to parameters."""
+        gamma = fwhm / 2
+        d_flux = gamma / np.pi / ((wavelength - central_wavelength)**2 + gamma**2)
+        d_wave = flux / gamma / np.pi * d_flux * (
+            2 * wavelength - 2 * central_wavelength) / (
+                fwhm**2 + (wavelength - central_wavelength)**2)
+        d_fwhm = 2 * flux / gamma / np.pi * d_flux / fwhm * (1 - d_flux)
+        return [d_wave, d_flux, d_fwhm]
+
+    def bounding_box(self, factor=25):
+        """Tuple defining the default ``bounding_box`` limits,
+        ``(x_low, x_high)``.
+
+        Parameters
+        ----------
+        factor : float
+            The multiple of FWHM used to define the limits.
+            Default is chosen to include most (99%) of the
+            area under the curve, while still showing the
+            central feature of interest.
+
+        """
+        return (self.central_wavelength - factor * self.fwhm,
+                self.central_wavelength + factor * self.fwhm)
 
 
 class EmissionLine(object):
+    """A representation of an emission line.
+    
+    Attributes
+    ----------
+    central_wavelength : float or `~astropy.units.Quantity`.
+        Centroid of the line.
+    flux : float or `~astropy.units.Quantity`.
+        Integrated flux of the line.
+    fwhm : float or `~astropy.units.Quantity`.
+        Full width at half maximum (FWHM).
+    ion : str
+        Name of the atomic specie that originates the emission line.
+    profile : LineProfile
+        The line profile associated to this emission line.
+    
+    Methods
+    -------
+    sample_to(wavelenths)
+        Sample the emission line into a given array of wavelengths.
+
+    """
     def __init__(self, central_wavelength, flux, fwhm,
-                 ion='n/a', profile="gaussian", **profile_kwargs):
+                 ion='n/a', profile=GaussianLineProfile, **profile_kwargs):
         self.central_wavelength = central_wavelength
         self.flux = flux
         self.fwhm = fwhm
         self.ion = ion
         self.profile_kwargs = profile_kwargs
-        self.profile = getattr(LineProfile, profile)
+        self.profile = profile
 
     @property
     def central_wavelength(self):
@@ -424,6 +530,18 @@ class EmissionLine(object):
 
 
     def sample_to(self, wavelenths):
+        """Sample the emission line into the input array of wavelengths.
+        
+        Parameters
+        ----------
+        wavelengths : np.array or `~astropy.units.Quantity`.
+            Wavelength grid to sample the emission line profile.
+
+        Returns
+        -------
+        spectrum : `~specutils.Spectrum1D`
+            Spectrum containing the emission line profile.
+        """
         return Spectrum1D(spectral_axis=wavelenths, flux=self.profile(wavelenths))
 
 
