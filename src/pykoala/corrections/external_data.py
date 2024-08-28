@@ -19,6 +19,7 @@ from pykoala.data_container import Cube
 from pykoala.query import PSQuery
 from pykoala.ancillary import update_wcs_coords
 
+
 def crosscorrelate_im_apertures(ref_aperture_flux, ref_aperture_flux_err,
                                 ref_coord, image, wcs,
                                 ra_offset_range=[-10, 10],
@@ -27,13 +28,15 @@ def crosscorrelate_im_apertures(ref_aperture_flux, ref_aperture_flux_err,
                                 plot=True):
     """Cross-correlate an image with an input set of apertures.
     
+    Notes
+    -----
     This method performs a spatial cross-correlation between a list of input aperture fluxes
     and a reference image. For example, the aperture fluxes can simply correspond to the
     flux measured within a fibre or a set of aperture measured in a datacube.
     First, a grid of aperture position offsets is generated, and every iteration
     will compute the difference between the two sets. 
 
-    The figure of merit used can be defined as:
+    The figure of merit used is defined as:
         :math: `w=e^{-(A+B)/2}`
         where 
         :math: `A=\langle f_{Ap} - \hat{f_{Ap}} \rangle`

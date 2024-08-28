@@ -620,33 +620,7 @@ class SpectraContainer(DataContainer):
 
 
 class RSS(SpectraContainer):
-    """
-    Data Container class for row-stacked spectra (RSS).
-
-    Attributes
-    ----------
-    intensity : numpy.ndarray(float)
-        Intensity :math:``I_lambda``.
-        Axis 0 corresponds to spectral dimension
-        Axis 1 Corresponds to fibre ID
-    variance : numpy.ndarray(float)
-        Variance :math:`sigma^2_lambda`.
-        (note the square in the definition of the variance). Must have the
-        same dimensions as `intensity`
-    wavelength : numpy.ndarray(float)
-        Wavelength, expressed in Angstrom. It must have the same dimensions
-        as `intensity` along axis 0.
-    info : dict
-        Dictionary containing RSS information.
-        Important dictionary keys:
-        info['fib_ra'] - original RA fiber position
-        info['fib_dec'] - original DEC fiber position
-        info['exptime'] - exposure time in seconds
-        info['airmass'] - mean airmass during observation
-        info['name'] - Name reference
-    log : dict
-        Dictionary containing a log of the processes applied on the rss.   
-    """
+    """Data Container class for row-stacked spectra (RSS)."""
 
     @property
     def rss_intensity(self):
@@ -875,6 +849,7 @@ class RSS(SpectraContainer):
         - The `new_figure` function is used to create a new figure, and `colour_map` is used to plot the data.
         - If `fibre_range` or `wavelength_range` is specified, the data is sliced accordingly.
         - The plot is saved to `output_filename` if provided, otherwise the figure is returned for display or further manipulation.
+
         """
         x = self.wavelength
         y = np.arange(0, self.intensity.shape[0])
@@ -924,7 +899,7 @@ class RSS(SpectraContainer):
 
         See Also
         --------
-        `pykoala.rss.RSS.plot_rss_image` : For more detailed information about the parameters and usage.
+        :func:`plot_rss_image`.
         """
 
         if "cmap" not in cmap_args:
@@ -989,7 +964,7 @@ class RSS(SpectraContainer):
 
 
 class Cube(SpectraContainer):
-    """This class represent a collection of Raw Stacked Spectra (RSS) interpolated over a 2D spatial grid.
+    """This class represent a 3D data cube.
     
     parent_rss
     rss_mask
