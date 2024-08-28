@@ -405,13 +405,13 @@ class DataContainer(ABC, VerboseMixin):
 
     Attributes
     ----------
-    intensity : :class:astropy.Quantity`
+    intensity : :class:`astropy.Quantity`
         Array with the counts/surface brightness/... at each pixel.
-    variance : :class:astropy.Quantity`
+    variance : :class:`astropy.Quantity`
         Uncertainties associated to the ``intensity`` values.
-    inverse_variance : :class:astropy.Quantity`
+    inverse_variance : :class:`astropy.Quantity`
         Inverse variance associated to the ``intensity`` values.
-    snr : :class:astropy.Quantity`
+    snr : :class:`astropy.Quantity`
         Signal-to-noise ratio defined as ``intensity / variance**0.5``.
     mask : DataMask
         :class:`DataMask` pixel mask.
@@ -522,15 +522,15 @@ class SpectraContainer(DataContainer):
 
     Attributes
     ----------
-    wavelength : :class:astropy.Quantity`
+    wavelength : :class:`astropy.Quantity`
         Wavelength array, common to all spectra.
     n_wavelength : int
         Number of wavekengths in the `wavelength` array.
     n_spectra : int
         Number of spectra in the `intensity` array.
-    intensity_rss : :class:astropy.Quantity`
+    intensity_rss : :class:`astropy.Quantity`
         `intensity` array, sorted as [`n_spectra`, `n_wavelength`].
-    variance_rss : :class:astropy.Quantity`
+    variance_rss : :class:`astropy.Quantity`
         Uncertainties associated to `intensity_rss`.
     """
 
