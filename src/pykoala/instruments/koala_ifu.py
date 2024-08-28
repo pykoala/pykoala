@@ -7,7 +7,6 @@ This script contains the wrapper functions to build a PyKoala RSS object from KO
 # =============================================================================
 import numpy as np
 import os
-import copy
 # =============================================================================
 # Astropy and associated packages
 # =============================================================================
@@ -16,7 +15,7 @@ from astropy.wcs import WCS
 # =============================================================================
 # KOALA packages
 # =============================================================================
-from pykoala import vprint  # Template to create the info variable 
+from pykoala import vprint
 from pykoala.rss import RSS
 
 def airmass_from_header(header):
@@ -31,7 +30,7 @@ def airmass_from_header(header):
     return airmass
 
 
-def py_koala_header(header):
+def koala_header(header):
     """
     Copy 2dfdr headers values from extensions 0 and 2 needed for the initial
     header for PyKoala. (based in the header constructed in  save_rss_fits in
@@ -73,9 +72,9 @@ def py_koala_header(header):
              header.cards["CDELT2"],
              header.cards["CRPIX2"],
              ]
-    py_koala_header = fits.header.Header(cards=cards, copy=False)
-    py_koala_header = header
-    return py_koala_header
+    koala_header = fits.header.Header(cards=cards, copy=False)
+    koala_header = header
+    return koala_header
 
 def py_koala_fibre_table(fibre_table):
     """
@@ -115,7 +114,6 @@ def read_rss(file_path,
              variance_axis=1,
              bad_fibres_list=None,
              header=None,
-             fibre_table=None,
              info=None
              ):
     """TODO."""
@@ -135,9 +133,9 @@ def read_rss(file_path,
                                    dtype=np.float32)
         intensity = np.delete(all_intensities, bad_fibres_list, 0)
         # Bad pixel verbose summary
-        vprint(f"Number of fibres in this RSS ={len(all_intensities)}"
-               + f"No. of good fibres = {len(intensity)}"
-               + f"No. of bad fibres = {len(bad_fibres_list)}")
+        vprint(f"No. of fibres in this RSS ={len(all_intensities)}"
+               + f"\nNo. of good fibres = {len(intensity)}"
+               + f"\nNo. of bad fibres = {len(bad_fibres_list)}")
         if bad_fibres_list is not None:
             vprint(f"Bad fibres = {bad_fibres_list}")
         # Read errors if exist a dedicated axis
@@ -154,24 +152,22 @@ def read_rss(file_path,
     wavelength_index = np.arange(ncol)
     wavelength = wcs.dropaxis(1).wcs_pix2world(wavelength_index, 0)[0]
     # First Header value added by the PyKoala routine
-    header.append(('DARKCORR', 'OMIT', 'Dark Image Subtraction'), end=True)
-
     rss = RSS(intensity=intensity,
                variance=variance,
                wavelength=wavelength,
-               info=info)
+               info=info,
+               header=header)
     rss.history('read', ' '.join(['- RSS read from ', file_name]))
     return rss
 
-def koala_rss(path_to_file, **kwargs):
+def koala_rss(path_to_file):
     """
     A wrapper function that converts a file (not an RSS object) to a koala RSS object
     The paramaters used to build the RSS object e.g. bad spaxels, header etc all come from the original (non PyKoala) .fits file
     """
-    verbose = kwargs.get('verbose', False)
     
     header = fits.getheader(path_to_file, 0) + fits.getheader(path_to_file, 2)
-    koala_header = py_koala_header(header)
+    header = koala_header(header)
     # WCS
     if "RADECSYS" in header:
         header["RADECSYSa"] = header["RADECSYS"]
@@ -186,330 +182,22 @@ def koala_rss(path_to_file, **kwargs):
     # -1 to start in 0 rather than in 1
     # Create the dictionary containing relevant information
     info = {}
-    info['name'] = koala_header['OBJECT']
-    info['exptime'] = koala_header['EXPOSED']
-    info['fib_ra'] = np.rad2deg(koala_header['RACEN']) + koala_fibre_table.data['Delta_RA'] / 3600
-    info['fib_dec'] = np.rad2deg(koala_header['DECCEN']) + koala_fibre_table.data['Delta_DEC'] / 3600
-    info['airmass'] = airmass_from_header(koala_header)
+    info['name'] = header['OBJECT']
+    info['exptime'] = header['EXPOSED']
+    info['fib_ra'] = np.rad2deg(header['RACEN']) + koala_fibre_table.data['Delta_RA'] / 3600
+    info['fib_dec'] = np.rad2deg(header['DECCEN']) + koala_fibre_table.data['Delta_DEC'] / 3600
+    info['airmass'] = airmass_from_header(header)
     # Read RSS file into a PyKoala RSS object
     rss = read_rss(path_to_file, wcs=koala_wcs,
                    bad_fibres_list=bad_fibres_list,
                    intensity_axis=0,
                    variance_axis=1,
-                   header=koala_header,
-                   fibre_table=koala_fibre_table,
+                   header=header,
                    info=info,
                    )
     return rss
 
 
-# # ----------------------------------------------------------------------------
-# %% ===========================================================================
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------
-# # ANGEL TASKS FROM HERE
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------
-# %% ===========================================================================
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------
-# # Import tasks
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------
-import glob
-
-from pykoala.plotting.quick_plot import quick_plot
-from pykoala.plotting.rss_plot import rss_image, rss_map
-
-
-# =============================================================================
-# Ignore warnings
-# =============================================================================
-from astropy.utils.exceptions import AstropyWarning
-
-# #-----------------------------------------------------------------------------
-# %% ===========================================================================
-# #-----------------------------------------------------------------------------
-
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------
-# # General tasks
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------
-# %% ===========================================================================
-# #-----------------------------------------------------------------------------
-def list_koala_fits_files_in_folder(path, verbose = True, use2=True, use3=False, ignore_offsets=True, 
-                              skyflat_names=None, ignore_list=None, return_list=False):  
-    """
-    This task just reads the fits files in a folder and prints the KOALA-related fits files.
-    
-    The files are shown organised by name (in header). Exposition times are also given.
-    
-    Option of returning the list if return_list == True.
-
-    Parameters
-    ----------
-    path : string
-        path to data
-    verbose : Boolean, optional
-        Print the list. The default is True.
-    use2 : Boolean, optional
-        If True, the SECOND word of the name in fit files will be used
-    use3 : Boolean, optional
-        If True, the THIRD word of the name in fit files will be used
-    ignore_offsets : Boolean, optional
-        If True it will show all the fits files with the same name but different offsets together. The default is True.
-    skyflat_names : list of strings, optional
-        List with the names of the skyflat in fits file
-    ignore_list : list of strings, optional
-        List of words to ignore. The default is None.
-    return_list : Boolean, optional
-        Return the list. The default is False.
-
-    Raises
-    ------
-    NameError
-        DESCRIPTION.
-
-    Returns
-    -------
-    if return_list == True, it returns the list of files as: 
-        list_of_objetos, list_of_files, list_of_exptimes, date, grating
-
-    """
-    
-    #FIXME This task needs to be checked, it was used by Ángel old automatic script
-    #      but it is still useful for easy printing what the user has in a particular folder.
-    
-    list_of_objetos=[]
-    list_of_files=[]
-    list_of_exptimes=[]
-    if skyflat_names is None: skyflat_names = ["skyflat", "SKYFLAT", "SkyFlat"]
-
-    if ignore_list is None:  ignore_list = ["a", "b", "c", "d", "e", "f", "p", "pos", "Pos",
-                                             "A", "B", "C", "D", "E", "F", "P", "POS",
-                                             "p1", "p2","p3","p4","p5","p6",
-                                             "P1", "P2","P3","P4","P5","P6",
-                                             "pos1", "pos2","pos3","pos4","pos5","pos6",
-                                             "Pos1", "Pos2","Pos3","Pos4","Pos5","Pos6",
-                                             "POS1", "POS2","POS3","POS4","POS5","POS6"] 
-        
-    if verbose: print("\n> Listing 2dFdr fits files in folder",path,":\n")
-    
-    if path[-1] != "/" : path=path+"/"
-    date_ = ''  # TODO: This must be filled somehow. It is just for printing data
-    files_ = glob.glob(path + '*.fits')
-    if len(files_) == 0: raise NameError('No files found within folder '+path)
- 
-    # Ignore fits products from 2dFdr, darks, flats, arcs...
-    files=[]
-    for fitsName in sorted(files_):
-        include_this = True
-        if fitsName[-8:] == "tlm.fits" : include_this = False
-        if fitsName[-7:] == "im.fits" : include_this = False
-        if fitsName[-7:] == "ex.fits" : include_this = False  
-        
-        if include_this: 
-            hdulist = fits.open(fitsName)
-            try:
-                object_class = hdulist[0].header['NDFCLASS']
-                if object_class ==  "MFOBJECT": 
-                    files.append(fitsName) 
-                #else: print(object_class, fitsName)
-            except Exception:
-                pass
-
-    
-    for fitsName in sorted(files):
-                
-        check_file = True
-        if fitsName[-8:] != "red.fits" : 
-            check_file = False
-        if fitsName[0:8] == "combined" and check_file == False: 
-            check_file = True
-        for skyflat_name in skyflat_names:
-            if skyflat_name in fitsName : check_file = True
-        
-        hdulist = fits.open(fitsName)   # it was pyfits
-
-        object_fits = hdulist[0].header['OBJECT'].split(" ")
-    
-        if object_fits[0] in ["HD", "NGC", "IC"] or use2:
-            try:
-                if not ignore_offsets:
-                    object_fits[0]=object_fits[0]+object_fits[1]
-                elif object_fits[1] not in ignore_list:
-                    object_fits[0]=object_fits[0]+object_fits[1]
-            except Exception:
-                pass
-        if use3:
-            try:
-                if not ignore_offsets:
-                    object_fits[0]=object_fits[0]+object_fits[2]
-                elif object_fits[2] not in ignore_list:
-                    object_fits[0]=object_fits[0]+object_fits[2]
-            except Exception:
-                pass
-            
-        try:
-            exptime = hdulist[0].header['EXPOSED']
-        except Exception:
-            check_file = False 
-
-        grating = hdulist[0].header['GRATID']
-        try:
-            date_ = hdulist[0].header['UTDATE']
-        except Exception:
-            check_file = False 
-        hdulist.close()
-        
-        if check_file:
-            found=False
-            for i in range(len(list_of_objetos)):          
-                if list_of_objetos[i] == object_fits[0]:
-                    found=True
-                    list_of_files[i].append(fitsName)               
-                    list_of_exptimes[i].append(exptime)
-            if not found:
-                list_of_objetos.append(object_fits[0])
-                list_of_files.append([fitsName])
-                list_of_exptimes.append([exptime])
-             
-    date =date_[0:4]+date_[5:7]+date_[8:10]   
-             
-    if verbose:
-        for i in range(len(list_of_objetos)):
-            for j in range(len(list_of_files[i])):
-                if j == 0: 
-                    vprint("  {:15s}  {}          {:.1f} s".format(list_of_objetos[i], list_of_files[i][0], list_of_exptimes[i][0]))
-                else:
-                    vprint("                   {}          {:.1f} s".format(list_of_files[i][j], list_of_exptimes[i][j]))
-                        
-        vprint("\n  They were obtained on {} using the grating {}".format(date, grating))
-
-    if return_list: return list_of_objetos, list_of_files, list_of_exptimes, date, grating
-# #-----------------------------------------------------------------------------
-# %% ===========================================================================
-# #-----------------------------------------------------------------------------
-
-# =============================================================================
-# KOALA specifics
-# =============================================================================
-red_gratings = ["385R","1000R","2000R", "1000I", "1700D","1700I"]
-blue_gratings = ["580V" , "1500V" ,"1700B" , "3200B" , "2500V"]   
-
-koala_info_rss_dict= dict(rss_object_name = None,
-                          path_to_file = None,
-                          n_wave = None,
-                          n_spectra = None,
-                          spaxel_size = None,
-                          aaomega_arm = None,
-                          aaomega_grating = None,
-                          aaomega_dichroic = None, 
-                          KOALA_fov = None,
-                          position_angle = None,
-                          RA_centre_deg = None,
-                          DEC_centre_deg = None,
-                          exptime = None,
-                          description = None,
-                          valid_wave_min = None,
-                          valid_wave_max = None,
-                          valid_wave_min_index = None,
-                          valid_wave_max_index = None,
-                          brightest_line = None,
-                          brightest_line_wavelength = None,
-                          history = None,
-                          )
-
-koala_info_cube_dict= dict(cube_object_name = None,
-                           path_to_file = None,
-                           path_to_rss_file = None,
-                           #n_wave = None,
-                           #n_spectra = None,
-                           #spaxel_size = None,
-                           #aaomega_arm = None,
-                           aaomega_grating = None,
-                           aaomega_dichroic = None,
-                           #KOALA_fov = None,
-                           position_angle = None,
-                           description = None,
-                           valid_wave_min = None,
-                           valid_wave_max = None,
-                           valid_wave_min_index = None,
-                           valid_wave_max_index = None,
-                           valid_RA_spaxel_range = None,
-                           valid_DEC_spaxel_range = None,
-                           #brightest_line = None,
-                           #brightest_line_wavelength = None,
-                           history = None,
-                           )
-# =============================================================================
-# %% ==========================================================================
-# =============================================================================
-class KOALA_INFO(object):
-    """
-    Class KOALA_INFO. Add object rss.koala or cube.koala to store KOALA-specific information: 
-    - rss.koala.info : a dictionary with info, see variables in koala_info_rss_dict
-    - rss.header: header of the rss
-    - rss.wcs: WCS of the rss
-    - rss.fibre_table: fibre table of the rss
-    - rss.integrated_fibre: flux integrated in each fibre between  valid_wave_min and valid_wave_max (in koala.info)
-    - rss.integrated_fibre_sorted: list of fibres sorted from lowest integrated value [0] to highest [-1]
-    - rss.negative_fibres: list of fibres for which integrated fibre is NEGATIVE
-    - rss.mask: KOALA mask for EDGES
-    - rss.list_fibres_all_good_values: list of fibres for which all wavelengths are valid (central part of rss)
-    - rss.continuum_model_after_sky_correction: as it says
-    - rss.emission_lines_gauss_spectrum: after identifying emission lines, a spectrum with the Gaussian fits
-    - rss.redshifted_emission_lines_detected_dictionary: as it says
-    """
-    def __init__(self, **kwargs):
-        self.corrections_done = kwargs.get('corrections_done', None) 
-        self.history = kwargs.get('history', None) 
-        data_container = kwargs.get('data_container', 'rss')
-        if data_container == "cube":
-            self.info = kwargs.get('info', koala_info_cube_dict.copy())
-            self.integrated_map = kwargs.get('integrated_map', None)
-            
-            self.x_max = kwargs.get('x_max', None)
-            self.y_max = kwargs.get('y_max', None)
-            self.x_peaks = kwargs.get('x_peaks', None)
-            self.y_peaks = kwargs.get('y_peaks', None)
-            self.x_peak_median = kwargs.get('x_peak_median', None)
-            self.y_peak_median = kwargs.get('y_peak_median', None)
-            self.offset_from_center_x_arcsec_tracing = kwargs.get('offset_from_center_x_arcsec_tracing', None)
-            self.offset_from_center_y_arcsec_tracing = kwargs.get('offset_from_center_x_arcsec_tracing', None)
-            self.ADR =  kwargs.get('ADR', None)
-                        
-        else:            
-           self.info = kwargs.get('info', koala_info_rss_dict.copy())
-           self.header =  kwargs.get('header', None)
-           self.wcs = kwargs.get('wcs', None)
-           self.fibre_table =  kwargs.get('fibre_table', None)
-
-           self.integrated_fibre = kwargs.get('integrated_fibre', None)
-           self.integrated_fibre_sorted = kwargs.get('integrated_fibre_sorted', None)
-           self.integrated_fibre_variance = kwargs.get('integrated_fibre_variance', None)
-           self.negative_fibres = kwargs.get('negative_fibres', None)
-           self.mask = kwargs.get('mask', None)
-           self.list_fibres_all_good_values = kwargs.get('list_fibres_all_good_values', None)
-           self.continuum_model_after_sky_correction= kwargs.get('continuum_model_after_sky_correction', None)
-       
-           self.emission_lines_gauss_spectrum = kwargs.get('emission_lines_gauss_spectrum', None)
-           self.redshifted_emission_lines_detected_dictionary =  kwargs.get('redshifted_emission_lines_detected_dictionary', None)
-       #self.brightest_line = kwargs.get('brightest_line', None)
-       #self.brightest_line_wavelength = kwargs.get('brightest_line_wavelength', None)
-# #-----------------------------------------------------------------------------
-# %% ===========================================================================
-# #-----------------------------------------------------------------------------
 def koalaRSS(filename, 
              path=None, 
              rss_object_name = None, 
@@ -586,22 +274,22 @@ def koalaRSS(filename,
     
     # As now the header is not saved in koala_rss, let's do it again to save here key KOALA info
     header = fits.getheader(path_to_file, 0) + fits.getheader(path_to_file, 2)
-    koala_header = py_koala_header(header)
+    header = koala_header(header)
     
     # Add history
-    rss.koala.history = koala_header["HISTORY"]
+    rss.koala.history = header["HISTORY"]
     
-    koala_info['RA_centre_deg'] = koala_header["RACEN"] *180/np.pi
-    koala_info['DEC_centre_deg'] = koala_header["DECCEN"] *180/np.pi
-    koala_info['exptime'] = koala_header["EXPOSED"]
+    koala_info['RA_centre_deg'] = header["RACEN"] *180/np.pi
+    koala_info['DEC_centre_deg'] = header["DECCEN"] *180/np.pi
+    koala_info['exptime'] = header["EXPOSED"]
     
     # Get AAOmega Arm & gratings
-    if (koala_header['SPECTID'] == "RD"):      
+    if (header['SPECTID'] == "RD"):      
         koala_info['aaomega_arm'] = "red"
-    if (koala_header['SPECTID'] == "BL"):      
+    if (header['SPECTID'] == "BL"):      
         koala_info['aaomega_arm'] = "blue"    
-    koala_info['aaomega_grating'] = koala_header['GRATID']
-    koala_info['aaomega_dichroic'] = koala_header["DICHROIC"]
+    koala_info['aaomega_grating'] = header['GRATID']
+    koala_info['aaomega_dichroic'] = header["DICHROIC"]
     
     # Constructing Pykoala Spaxels table from 2dfdr spaxels table (data[2]) AGAIN to know WIDE/NARROW & spaxel_size
     fibre_table = fits.getdata(path_to_file, 2)
@@ -619,7 +307,7 @@ def koalaRSS(filename,
         KOALA_fov = 'NARROW: 28.3" x 15.3"'   
     koala_info['KOALA_fov']=KOALA_fov
     koala_info['spaxel_size']=spaxel_size 
-    koala_info['position_angle'] = koala_header['TEL_PA']
+    koala_info['position_angle'] = header['TEL_PA']
     
     # Check valid range (basic mask in PyKOALA)
     valid_wave_range_data = rss_valid_wave_range (rss)    
@@ -635,7 +323,7 @@ def koalaRSS(filename,
         
     # Saving the info to the rss object
     rss.koala.info = koala_info
-    rss.koala.header = koala_header                     # Saving header
+    rss.koala.header = header                     # Saving header
     rss.koala.fibre_table = koala_fibre_table           # Saving original koala fibre table as needed later
 
     if "RADECSYS" in header:
@@ -787,221 +475,6 @@ def compute_integrated_fibre(rss,
     rss.koala.negative_fibres = negative_fibres
     
     return rss
-# #-----------------------------------------------------------------------------
-# %% ===========================================================================
-# #-----------------------------------------------------------------------------
-def get_rss_mask(rss, **kwargs):   # THIS TASK SHOULD BE A CORRECTION CLASS, including apply() #TODO
-    """
-    Get easy mask for rss.    
-
-    Parameters
-    ----------
-    rss : Object
-        rss.
-    **kwargs : kwargs
-        where we can find verbose, warnings, plot...
-        For this task, the option is make_zeros, if True the masked values will be 0 instead of nan.
-
-    Returns
-    -------
-    Array
-        Mask
-    """
-    make_zeros=kwargs.get('make_zeros', False)
-
-    n_waves = len(rss.wavelength)
-    n_fibres = len(rss.intensity)
-    indeces_low = rss.koala.mask[0]
-    indeces_high = rss.koala.mask[1] 
-    if make_zeros:
-        mask = [   [0 if j < indeces_low[fibre] or j > indeces_high[fibre] else 1 for j in range(n_waves)]     for fibre in range(n_fibres)]            
-    else:
-        mask = [   [np.nan if j < indeces_low[fibre] or j > indeces_high[fibre] else 1 for j in range(n_waves)]     for fibre in range(n_fibres)]
-
-    return np.array(mask)
-# #-----------------------------------------------------------------------------
-# %% ===========================================================================
-# #-----------------------------------------------------------------------------
-
-
-
-
-
-# #-----------------------------------------------------------------------------
-# %% ===========================================================================
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------    
-# # PLOT tasks, originally in plotting.rss_plot
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------
-# %% ===========================================================================
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------
-
-
-
-
-
-
-
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------    
-# # This was in rss as it does not depend on instrument
-# #-----------------------------------------------------------------------------
-# #-----------------------------------------------------------------------------
-def rss_valid_wave_range(rss, **kwargs):
-    """
-    Provides the list of wavelengths with good values (non-nan) in edges.
-    
-    BE SURE YOU HAVE NOT CLEANED CCD DEFECTS if you are running this!!!
-
-    Parameters
-    ----------
-    rss : object
-        rss object.
-    **kwargs : kwargs
-        where we can find plot, verbose, warnings...
-
-    Returns
-    -------
-    A list of lists:
-        [0][0]: mask_first_good_value_per_fibre
-        [0][1]: mask_last_good_value_per_fibre
-        [1][0]: mask_max
-        [1][1]: mask_min
-        
-        [[mask_first_good_value_per_fibre, mask_last_good_value_per_fibre],
-         [mask_max, mask_min],
-         [w[mask_max], w[mask_min]], 
-         mask_list_fibres_all_good_values] 
-
-    """
-    
-    verbose = kwargs.get('verbose', False)
-    warnings = kwargs.get('warnings', False)
-    plot =  kwargs.get('plot', False)
-    
-    w = rss.wavelength
-    n_spectra = len(rss.intensity)
-    n_wave = len(rss.wavelength)
-    x = list(range(n_spectra))
-    
-    #  Check if file has 0 or nans in edges
-    if np.isnan(rss.intensity[0][-1]):
-        no_nans = False
-    else:
-        no_nans = True
-        if rss.intensity[0][-1] != 0:
-            if verbose or warnings: print(
-                "  Careful!!! pixel [0][-1], fibre = 0, wave = -1, that should be in the mask has a value that is not nan or 0 !!!!!", **kwargs)
-
-    if verbose and plot : print("\n  - Checking the left edge of the ccd...")
-
-    mask_first_good_value_per_fibre = []
-    for fibre in range(n_spectra):
-        found = 0
-        j = 0
-        while found < 1:
-            if no_nans:
-                if rss.intensity[fibre][j] == 0:
-                    j = j + 1
-                else:
-                    mask_first_good_value_per_fibre.append(j)
-                    found = 2
-            else:
-                if np.isnan(rss.intensity[fibre][j]):
-                    j = j + 1
-                else:
-                    mask_first_good_value_per_fibre.append(j)
-                    found = 2
-            if j > 101:
-                vprint((" No nan or 0 found in the fist 100 pixels, ", w[j], " for fibre", fibre), **kwargs)
-                mask_first_good_value_per_fibre.append(j)
-                found = 2
-
-    mask_max = np.nanmax(mask_first_good_value_per_fibre)
-    if plot:        
-        quick_plot(x, mask_first_good_value_per_fibre, ymax=mask_max + 1, xlabel="Fibre",
-                  ptitle="Left edge of the RSS", hlines=[mask_max], ylabel="First good pixel in RSS")
-
-    # Right edge, important for RED
-    if verbose and plot :  print("\n- Checking the right edge of the ccd...")
-    mask_last_good_value_per_fibre = []
-    mask_list_fibres_all_good_values = []
-
-    for fibre in range(n_spectra):
-        found = 0
-        j = n_wave - 1
-        while found < 1:
-            if no_nans:
-                if rss.intensity[fibre][j] == 0:
-                    j = j - 1
-                else:
-                    mask_last_good_value_per_fibre.append(j)
-                    if j == len(rss.intensity[0]) - 1:
-                        mask_list_fibres_all_good_values.append(fibre)
-                    found = 2
-            else:
-                if np.isnan(rss.intensity[fibre][j]):
-                    j = j - 1
-                else:
-                    mask_last_good_value_per_fibre.append(j)
-                    if j == len(rss.intensity[0]) - 1:
-                        mask_list_fibres_all_good_values.append(fibre)
-                    found = 2
-
-            if j < n_wave - 1 - 300:
-                if verbose: print((" No nan or 0 found in the last 300 pixels, ", w[j], " for fibre", fibre))
-                mask_last_good_value_per_fibre.append(j)
-                found = 2
-
-    mask_min = np.nanmin(mask_last_good_value_per_fibre)
-    if plot:
-        ptitle = "Fibres with all good values in the right edge of the RSS file : " + str(
-            len(mask_list_fibres_all_good_values))
-        quick_plot(x, mask_last_good_value_per_fibre, ymin=np.nanmin(mask_min),
-                  ymax=2050, hlines=[2047], xlabel="Fibre", ylabel="Last good pixel in RSS", ptitle=ptitle)
-
-    if verbose: 
-        print("\n  --> The valid range for this RSS is {:.2f} to {:.2f} ,  in pixels = [ {} ,{} ]".format(w[mask_max],
-                                                                                                    w[mask_min],
-                                                                                                    mask_max,
-                                                                                                    mask_min))
-
-    # rss.mask = [mask_first_good_value_per_fibre, mask_last_good_value_per_fibre]
-    # rss.mask_good_index_range = [mask_max, mask_min]
-    # rss.mask_good_wavelength_range = [w[mask_max], w[mask_min]]
-    # rss.mask_list_fibres_all_good_values = mask_list_fibres_all_good_values
-
-        print("\n> Returning [ [mask_first_good_value_per_fibre, mask_last_good_value_per_fibre], ")
-        print(  "              [mask_max, mask_min], ")
-        print(  "              [w[mask_max], w[mask_min]], ")
-        print(  "              mask_list_fibres_all_good_values ] ")
-    
-    # if verbose:
-        # print("\n> Mask stored in rss.mask !")
-        # print("  self.mask[0] contains the left edge, self.mask[1] the right edge")
-        # print("  Valid range of the data stored in self.mask_good_index_range (index)")
-        # print("                             and in self.mask_good_wavelength  (wavelenghts)")
-        # print("  Fibres with all good values (in right edge) in self.mask_list_fibres_all_good_values")
-    
-    #return [rss.mask,rss.mask_good_index_range,rss.mask_good_wavelength_range,rss.mask_list_fibres_all_good_values]
-    return [[mask_first_good_value_per_fibre, mask_last_good_value_per_fibre],
-            [mask_max, mask_min],
-            [w[mask_max], w[mask_min]], 
-            mask_list_fibres_all_good_values ] 
-    # if include_history:
-    #     self.history.append("- Mask obtainted using the RSS file, valid range of data:")
-    #     self.history.append(
-    #         "  " + str(w[mask_max]) + " to " + str(w[mask_min]) + ",  in pixels = [ " + str(
-    #             mask_max) + " , " + str(mask_min) + " ]")
-    #     # -----------------------------------------------------------------------------
-
-
-
-
 
 
 

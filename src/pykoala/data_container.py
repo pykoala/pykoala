@@ -9,8 +9,6 @@ import copy
 from astropy.io.fits import Header, ImageHDU
 from astropy import units as u
 
-# from astropy.nddata import bitmask
-# from pykoala.exceptions.exceptions import NoneAttrError
 from pykoala import VerboseMixin
 
 # =============================================================================
@@ -301,7 +299,7 @@ class DataMask(object):
     def __decode_bitmask(self, value):
         return np.bitwise_and(self.bitmask, value) > 0
 
-    def flag_pixels(self, mask, flag_name):
+    def flag_pixels(self, mask, flag_name, desc=""):
         """Add a pixel mask corresponding to a flag name.
 
         Add a pixel mask layer in the bitmask. If the mask already contains
@@ -314,7 +312,7 @@ class DataMask(object):
             Input pixel flag. It must have the same shape as the bitmask.
         """
         if flag_name not in self.flag_map:
-            raise NameError(f"Input flag name {flag_name} does not exist")
+            self.add_new_flag(flag_name, desc=desc)
         # Check that the bitmask does not already contain this flag
         bit_flag_map = self.get_flag_map_from_bitmask(flag_name)
         self.bitmask[bit_flag_map] -= self.flag_map[flag_name][0]
@@ -351,6 +349,13 @@ class DataMask(object):
                 return mask
         else:
             return self.bitmask > 0
+
+    def add_new_flag(self, name, value=None, desc=""):
+        if value is None:
+            value = max([v[0] for v in self.flag_map.values()]) * 2
+        self.flag_map[name] = (value, desc)
+        self.masks[name] = np.zeros(self.bitmask.shape, dtype=bool)
+
 
     def dump_to_hdu(self):
         """Return a ImageHDU containig the mask information.
@@ -392,6 +397,8 @@ class DataContainer(ABC, VerboseMixin):
         Parameters describing the data.
     log : DataContainerHistory
         History log reporting the data reduction steps undertaken so far.
+    header : astropy.fits.Header
+        FITS Header associated to the RSS.
 
     Methods
     -------
@@ -425,8 +432,18 @@ class DataContainer(ABC, VerboseMixin):
         del self._variance
 
     @property
+    def inverse_variance(self):
+        """Inverse variance associated to the `intensity` values."""
+        return 1 / self.variance
+
+    @property
+    def snr(self):
+        """Signal-to-noise ratio defined as `intensity / variance**0.5`"""
+        return self.intensity / self.variance**0.5
+
+    @property
     def mask(self):
-        """Pixel flags."""
+        """`pykoala.data_container.DataMask` pixel mask."""
         return self._mask
 
     @mask.setter
@@ -436,6 +453,16 @@ class DataContainer(ABC, VerboseMixin):
     @mask.deleter
     def mask(self):
         del self._mask
+
+    @property
+    def header(self):
+        """FITS Header associated to the file."""
+        return self._header
+    
+    @header.setter
+    def header(self, value):
+        assert isinstance(value, Header)
+        self._header = value
 
     def __init__(self, **kwargs):
         self._intensity = kwargs["intensity"]
@@ -451,6 +478,7 @@ class DataContainer(ABC, VerboseMixin):
         self.history = kwargs.get("history",
                                   DataContainerHistory(logger=self.logger,
                                                        verbose=self.verbose))
+        self.header = kwargs.get("header", Header())
 
     def fill_info(self):
         """Check the keywords of info and fills them with placeholders."""

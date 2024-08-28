@@ -12,7 +12,7 @@ from astropy.io import fits
 # =============================================================================
 from pykoala import __version__
 from pykoala.data_container import SpectraContainer
-
+from pykoala.plotting.utils import colour_map, new_figure, fibre_map
 
 # =============================================================================
 # RSS CLASS
@@ -121,9 +121,9 @@ class RSS(SpectraContainer):
 
         Parameters
         ----------
-        - new_fib_coord: (2, n) np.array(float), default=None
+        new_fib_coord: (2, n) np.array(float), default=None
             New fibre coordinates for ra and dec axis, expressed in *deg*.
-        - new_fib_coord_offset: np.ndarray, default=None
+        new_fib_coord_offset: np.ndarray, default=None
             Relative offset in *deg*. If `new_fib_coord` is provided, this will
             be ignored.
 
@@ -208,6 +208,185 @@ class RSS(SpectraContainer):
         self.vprint(f"[RSS] File saved as {filename}")
 
 
+    def get_integrated_fibres(self, wavelength_range=None):
+        """Compute the integrated intensity of the RSS fibres.
+        
+        Paramters
+        ---------
+        wavelength_range: 2-element iterable, optional
+            Wavelenght limits used to compute the integrated intensity.
+        
+        Returns
+        -------
+        integrated_fibres: 1D np.ndarray
+            Array containing the integrated flux.
+        integrated_variances: 1D np.ndarray
+            Array containing the integrated variance associated to each fibre.
+        """
+        if wavelength_range is not None:
+            wave_mask = (self.wavelength >= wavelength_range[0]) & (
+                self.wavelength <= wavelength_range[1]
+            )
+        else:
+            wave_mask = np.ones(self.wavelength.size, dtype=bool)
+
+        integrated_fibres = np.nanmean(self.intensity[:, wave_mask], axis=1
+                                       ) * np.count_nonzero(wave_mask)
+        integrated_variances = np.nanmean(self.variance[:, wave_mask], axis=1
+                                       ) * np.count_nonzero(wave_mask)
+        return integrated_fibres, integrated_variances
+
+    def plot_rss_image(self, data=None, data_label="", fig_args={}, cmap_args={},
+                       fibre_range=None,
+                       wavelength_range=None,
+                       output_filename=None):
+        """Plots a RSS image with optional data, fibre, and wavelength ranges.
+
+        Parameters
+        ----------
+        data : array-like, optional
+            The 2D array data to be plotted. If `None`, `intensity` is used.
+        data_label : str, optional
+            The color bar label for the data being plotted. Default is an empty string.
+        fig_args : dict, optional
+            Additional keyword arguments passed to `pykoala.plotting.utils.new_figure` for customizing the figure. 
+            Default is an empty dictionary.
+        cmap_args : dict, optional
+            Additional keyword arguments passed to the `pykoala.plotting.utils.colour_map` function for the colormap
+            and normalization.  Default is an empty dictionary.
+        fibre_range : tuple of int, optional
+            A tuple specifying the range of fibres to include in the plot (start, end).
+            If `None`, all fibres are included. Default is `None`.
+        wavelength_range : tuple of float, optional
+            A tuple specifying the range of wavelengths to include in the plot (start, end). If `None`, all wavelengths are included.
+            Default is `None`.
+        output_filename : str, optional
+            If provided, the plot is saved to the specified file path. Default is `None`.
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure
+            The figure object containing the plot.
+
+        Notes
+        -----
+        - The function uses the internal attributes `self.wavelength` and `self.intensity` to obtain default x-values 
+        (wavelengths) and y-values (fibre indices) if `data` is not provided.
+        - The `new_figure` function is used to create a new figure, and `colour_map` is used to plot the data.
+        - If `fibre_range` or `wavelength_range` is specified, the data is sliced accordingly.
+        - The plot is saved to `output_filename` if provided, otherwise the figure is returned for display or further manipulation.
+        """
+        x = self.wavelength
+        y = np.arange(0, self.intensity.shape[0])
+        if data is None:
+            data = self.intensity
+            data_label = "Intensity"
+        if fibre_range is not None:
+            fibre_range = range(*fibre_range)
+            data = data[fibre_range]
+            y = y[fibre_range]
+        if wavelength_range is not None:
+            wavelength_range = range(*np.searchsorted(self.wavelength, wavelength_range))
+            data = data[:, wavelength_range]
+            x = x[wavelength_range]
+
+        fig, axs = new_figure(self.info['name'], **fig_args)
+        im, cb = colour_map(fig, axs[0, 0], data_label, data,
+                            x=x, y=y,
+                            xlabel="Wavelength [AA]", ylabel="Fibre",
+                            **cmap_args)
+
+        if output_filename is not None:
+            fig.savefig(output_filename, bbox_inches="tight")
+        return fig
+
+    def plot_mask(self, fig_args={}, cmap_args={}, output_filename=None):
+        """Plots a mask image using the bitmask data.
+
+        This method creates a plot of the bitmask data using a predefined colormap and normalization settings.
+        It utilizes the `plot_rss_image` method to generate the plot.
+
+        Parameters
+        ----------
+        fig_args : dict, optional
+            Additional keyword arguments passed to the `new_figure` function for customizing the figure.
+            Default is an empty dictionary.
+        cmap_args : dict, optional
+            Additional keyword arguments passed to the `colour_map` function for customizing the colormap.
+            If not specified, the colormap is set to "Accent" and normalization to "Normalize". Default is an empty dictionary.
+        output_filename : str, optional
+            If provided, the plot is saved to the specified file path. Default is `None`.
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure
+            The figure object containing the plot.
+
+        See Also
+        --------
+        `pykoala.rss.RSS.plot_rss_image` : For more detailed information about the parameters and usage.
+        """
+
+        if "cmap" not in cmap_args:
+            cmap_args["cmap"] = "Accent"
+        if "norm" not in cmap_args:
+            cmap_args["norm"] = "Normalize"
+        fig = self.plot_rss_image(data=self.mask.bitmask, data_label="Bitmask",
+                            fig_args=fig_args, cmap_args=cmap_args,
+                            output_filename=output_filename)
+        return fig
+    
+    
+
+    def plot_fibre(self):
+        # TODO: THIS SHOULD BE A METHOD OF THE PARENT CLASS
+        pass
+
+    def plot_fibre_map(self, data=None, cblabel="", fig_args={},
+                       cmap_args={}, output_filename=None):
+        """
+        Plots a fibre map image, showing the spatial distribution of data across fibres.
+
+        This method generates a plot that visualizes the spatial distribution of
+        data across fibres, using the Right Ascension (RA) and Declination (Dec)
+        of each fibre. If no data is provided, it uses the integrated fibre intensity data.
+
+        Parameters
+        ----------
+        data : array-like, optional
+            The data to be plotted. If `None`, the method calls `self.get_integrated_fibres()`
+            to obtain the integrated fibre intensity data. Default is `None`.
+        
+        cblabel : str, optional
+            The label for the color bar representing the data being plotted. Default is an empty string.
+        
+        fig_args : dict, optional
+            Additional keyword arguments passed to the `new_figure` function for
+            customizing the figure. Default is an empty dictionary.
+        
+        cmap_args : dict, optional
+            Additional keyword arguments passed to the `fibre_map` function for
+            customizing the colormap. Default is an empty dictionary.
+        
+        output_filename : str, optional
+            If provided, the plot is saved to the specified file path. Default is `None`.
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure
+            The figure object containing the plot.
+        """
+        if data is None:
+            data, _ = self.get_integrated_fibres()
+            cblabel = "Integrated intensity"
+        fig, axs = new_figure(self.info['name'], **fig_args)
+        axs[0, 0].set_aspect('auto')
+        im, cb = fibre_map(fig, axs[0, 0], cblabel, data, fib_ra=self.info['fib_ra'],
+                         fib_dec=self.info['fib_dec'], **cmap_args)
+        if output_filename is not None:
+            fig.savefig(output_filename, bbox_inches="tight")
+        return fig
+    
 # =============================================================================
 # Combine RSS (e.g., flats, twilights)
 # =============================================================================
