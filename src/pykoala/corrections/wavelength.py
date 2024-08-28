@@ -13,7 +13,7 @@ from scipy.ndimage import median_filter, gaussian_filter, percentile_filter
 
 from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
-from pykoala.rss import RSS
+from pykoala.data_container import RSS
 from pykoala.ancillary import flux_conserving_interpolation, vac_to_air
 # from pykoala.corrections.sky import ContinuumEstimator
 

@@ -17,8 +17,9 @@ from photutils.centroids import centroid_2dg, centroid_com
 # =============================================================================
 from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
-from pykoala.rss import RSS
-from pykoala.cubing import Cube, make_dummy_cube_from_rss
+from pykoala.data_container import RSS
+from pykoala.cubing import make_dummy_cube_from_rss
+from pykoala.data_container import Cube
 from pykoala.ancillary import interpolate_image_nonfinite
 from pykoala.plotting.qc_plot import qc_registration_centroids
 

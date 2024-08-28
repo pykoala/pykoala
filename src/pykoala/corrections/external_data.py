@@ -14,8 +14,8 @@ from photutils.aperture import SkyCircularAperture, aperture_photometry, Apertur
 
 from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
-from pykoala.rss import RSS
-from pykoala.cubing import Cube
+from pykoala.data_container import RSS
+from pykoala.data_container import Cube
 from pykoala.query import PSQuery
 from pykoala.ancillary import update_wcs_coords
 
@@ -264,14 +264,13 @@ class AncillaryDataCorrection(CorrectionBase):
                 continue
             data_containers_footprint.append(footprint)
 
-        self.vprint("Object footprint: %s", data_containers_footprint)
         # Select a rectangle containing all footprints
         max_ra, max_dec = np.nanmax(data_containers_footprint, axis=(0, 1))
         min_ra, min_dec = np.nanmin(data_containers_footprint, axis=(0, 1))
         ra_cen, dec_cen = (max_ra + min_ra) / 2, (max_dec + min_dec) / 2
         ra_width, dec_width = max_ra - min_ra, max_dec - min_dec
-        self.vprint("Combined footprint Fov: %s",
-                    [ra_width * 60, dec_width * 60])
+        self.vprint("Combined footprint Fov: {}, {}".format(
+                    ra_width * 60, dec_width * 60))
         return (ra_cen, dec_cen), (ra_width, dec_width)
     
     def query_image(self, survey='PS', filters='r', im_extra_size_arcsec=30,
@@ -310,8 +309,8 @@ class AncillaryDataCorrection(CorrectionBase):
             (np.max(im_fov) * 3600 + im_extra_size_arcsec
              ) / PSQuery.pixelsize_arcsec)
         
-        self.vprint("Image center sky position (RA, DEC): ", im_pos)
-        self.vprint("Image size (pixels): ", im_size_pix)
+        self.vprint(f"Image center sky position (RA, DEC): {im_pos}")
+        self.vprint(f"Image size (pixels): {im_size_pix}")
         # Perform the query
         tab = PSQuery.getimage(*im_pos, size=im_size_pix, filters=filters)
         if len(tab) == 0:
@@ -596,8 +595,7 @@ class AncillaryDataCorrection(CorrectionBase):
 
     def apply(self, dc, ra_dec_offset):
         self.vprint(
-            "Applying astrometry offset correction to DC (RA, DEC): ",
-            ra_dec_offset)
+            f"Applying astrometry offset correction to DC (RA, DEC): {ra_dec_offset}")
         dc.update_coordinates(offset=np.array(ra_dec_offset) / 3600)
         self.record_correction(dc, status='applied',
                             ra_offset_arcsec=str(ra_dec_offset[0]),

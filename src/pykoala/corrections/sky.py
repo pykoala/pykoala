@@ -32,7 +32,7 @@ from pykoala.corrections.correction import CorrectionBase
 from pykoala.corrections.throughput import Throughput
 from pykoala.corrections.wavelength import WavelengthOffset
 from pykoala.data_container import DataContainer
-from pykoala.rss import RSS
+from pykoala.data_container import RSS
 
 # =============================================================================
 # Background estimators

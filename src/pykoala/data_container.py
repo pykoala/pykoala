@@ -20,11 +20,15 @@ and spectral dimension, respectively.
 from abc import ABC, abstractmethod
 import numpy as np
 import copy
+from datetime import datetime
 from astropy.io.fits import Header, ImageHDU
+from astropy.io import fits
+from astropy.wcs import WCS
 from astropy import units as u
 
-from pykoala import VerboseMixin
-
+from pykoala import VerboseMixin, __version__
+from pykoala import ancillary
+from pykoala.plotting.utils import colour_map, new_figure, fibre_map
 # =============================================================================
 
 
@@ -614,6 +618,613 @@ class SpectraContainer(DataContainer):
         median_intensity = np.nanmedian(self.rss_intensity[:, wave_mask], axis=1)
         median_intensity = np.nan_to_num(median_intensity)
         return np.argsort(median_intensity)
+
+
+class RSS(SpectraContainer):
+    """
+    Data Container class for row-stacked spectra (RSS).
+
+    Attributes
+    ----------
+    intensity : numpy.ndarray(float)
+        Intensity :math:``I_lambda``.
+        Axis 0 corresponds to spectral dimension
+        Axis 1 Corresponds to fibre ID
+    variance : numpy.ndarray(float)
+        Variance :math:`sigma^2_lambda`.
+        (note the square in the definition of the variance). Must have the
+        same dimensions as `intensity`
+    wavelength : numpy.ndarray(float)
+        Wavelength, expressed in Angstrom. It must have the same dimensions
+        as `intensity` along axis 0.
+    info : dict
+        Dictionary containing RSS information.
+        Important dictionary keys:
+        info['fib_ra'] - original RA fiber position
+        info['fib_dec'] - original DEC fiber position
+        info['exptime'] - exposure time in seconds
+        info['airmass'] - mean airmass during observation
+        info['name'] - Name reference
+    log : dict
+        Dictionary containing a log of the processes applied on the rss.   
+    """
+
+    @property
+    def rss_intensity(self):
+        return self._intensity
+
+    @rss_intensity.setter
+    def rss_intensity(self, value):
+        self.intensity = value
+
+    @property
+    def rss_variance(self):
+        return self._variance
+
+    @rss_variance.setter
+    def rss_variance(self, value):
+        self.variance = value
+
+    def __init__(self, **kwargs):
+        assert ('wavelength' in kwargs)
+        assert ('intensity' in kwargs)
+        if "logger" not in kwargs:
+            kwargs['logger'] = "pykoala.rss"
+        super().__init__(**kwargs)
+
+    def get_centre_of_mass(self, wavelength_step=1, stat=np.nanmedian, power=1.0):
+        """Compute the center of mass (COM) based on the RSS fibre positions
+
+        Parameters
+        ----------
+        wavelength_step: int, default=1
+            Number of wavelength points to consider for averaging the COM. When setting it to 1 it will average over
+            all wavelength points.
+        stat: function, default=np.median
+            Function to compute the COM over each wavelength range.
+        power: float (default=1.0)
+            Power the intensity to compute the COM.
+        Returns
+        -------
+        x_com: np.array(float)
+            Array containing the COM in the x-axis (RA, columns).
+        y_com: np.array(float)
+            Array containing the COM in the y-axis (DEC, rows).
+        """
+        ra = self.info["fib_ra"]
+        dec = self.info["fib_dec"]
+        ra_com = np.empty(self.wavelength.size)
+        dec_com = np.empty(self.wavelength.size)
+        for wave_range in range(0, self.wavelength.size, wavelength_step):
+            # Mean across all fibres
+            ra_com[wave_range: wave_range + wavelength_step] = np.nansum(
+                self.intensity[:, wave_range: wave_range +
+                               wavelength_step]**power * ra[:, np.newaxis],
+                axis=0) / np.nansum(self.intensity[:, wave_range: wave_range + wavelength_step]**power,
+                                    axis=0)
+            # Statistic (e.g., median, mean) per wavelength bin
+            ra_com[wave_range: wave_range + wavelength_step] = stat(
+                ra_com[wave_range: wave_range + wavelength_step])
+            dec_com[wave_range: wave_range + wavelength_step] = np.nansum(
+                self.intensity[:, wave_range: wave_range +
+                               wavelength_step]**power * dec[:, np.newaxis],
+                axis=0) / np.nansum(self.intensity[:, wave_range: wave_range + wavelength_step]**power,
+                                    axis=0)
+            dec_com[wave_range: wave_range + wavelength_step] = stat(
+                dec_com[wave_range: wave_range + wavelength_step])
+        return ra_com, dec_com
+
+    def update_coordinates(self, new_coords=None, offset=None):
+        """Update fibre coordinates.
+
+        Update the fibre sky position by providing new locations of relative
+        offsets.
+
+        Parameters
+        ----------
+        new_fib_coord: (2, n) np.array(float), default=None
+            New fibre coordinates for ra and dec axis, expressed in *deg*.
+        new_fib_coord_offset: np.ndarray, default=None
+            Relative offset in *deg*. If `new_fib_coord` is provided, this will
+            be ignored.
+
+        Returns
+        -------
+
+        """
+
+        self.info['ori_fib_ra'], self.info['ori_fib_dec'] = (self.info["fib_ra"].copy(),
+                                                             self.info["fib_dec"].copy())
+        if new_coords is not None:
+            self.info["fib_ra"] = new_coords[0]
+            self.info["fib_dec"] = new_coords[1]
+        elif offset is not None:
+            self.info["fib_ra"] += offset[0]
+            self.info["fib_dec"] += offset[1]
+        else:
+            raise NameError(
+                "Either `new_fib_coord` or `new_fib_coord_offset` must be provided")
+        self.history('update_coords', "Offset-coords updated")
+        self.vprint("[RSS] Offset-coords updated")
+
+    # =============================================================================
+    # Save an RSS object (corrections applied) as a separate .fits file
+    # =============================================================================
+    def to_fits(self, filename, primary_hdr_kw=None, overwrite=False, checksum=False):
+        """
+        Writes a RSS object to .fits
+
+        Ideally this would be used for RSS objects containing corrected data that need to be saved
+        during an intermediate step
+
+        Parameters
+        ----------
+        name: path-like object
+            File to write to. This can be a path to file written in string format with a meaningful name.
+        overwrite: bool, optional
+            If True, overwrite the output file if it exists. Raises an OSError if False and the output file exists. Default is False.
+        checksum: bool, optional
+            If True, adds both DATASUM and CHECKSUM cards to the headers of all HDU’s written to the file.
+        Returns
+        -------
+        """
+        if filename is None:
+            filename = 'cube_{}.fits.gz'.format(
+                datetime.now().strftime("%d_%m_%Y_%H_%M_%S"))
+        if primary_hdr_kw is None:
+            primary_hdr_kw = {}
+
+        # Create the PrimaryHDU with WCS information
+        primary = fits.PrimaryHDU()
+        for key, val in primary_hdr_kw.items():
+            primary.header[key] = val
+
+        # Include general information
+        primary.header['pykoala0'] = __version__, "PyKOALA version"
+        primary.header['pykoala1'] = datetime.now().strftime(
+            "%d_%m_%Y_%H_%M_%S"), "creation date / last change"
+
+        # Fill the header with the log information
+        primary.header = self.history.dump_to_header(primary.header)
+
+        # primary_hdu.header = self.header
+        # Create a list of HDU
+        hdu_list = [primary]
+        # Change headers for variance and INTENSITY
+        hdu_list.append(fits.ImageHDU(
+            data=self.intensity, name='INTENSITY',
+            # TODO: rescue the original header?
+            # header=self.wcs.to_header()
+        )
+        )
+        hdu_list.append(fits.ImageHDU(
+            data=self.variance, name='VARIANCE', header=hdu_list[-1].header))
+        # Store the mask information
+        hdu_list.append(self.mask.dump_to_hdu())
+        # Save fits
+        hdul = fits.HDUList(hdu_list)
+        hdul.verify('fix')
+        hdul.writeto(filename, overwrite=overwrite, checksum=checksum)
+        hdul.close()
+        self.vprint(f"[RSS] File saved as {filename}")
+
+
+    def get_integrated_fibres(self, wavelength_range=None):
+        """Compute the integrated intensity of the RSS fibres.
+        
+        Paramters
+        ---------
+        wavelength_range: 2-element iterable, optional
+            Wavelenght limits used to compute the integrated intensity.
+        
+        Returns
+        -------
+        integrated_fibres: 1D np.ndarray
+            Array containing the integrated flux.
+        integrated_variances: 1D np.ndarray
+            Array containing the integrated variance associated to each fibre.
+        """
+        if wavelength_range is not None:
+            wave_mask = (self.wavelength >= wavelength_range[0]) & (
+                self.wavelength <= wavelength_range[1]
+            )
+        else:
+            wave_mask = np.ones(self.wavelength.size, dtype=bool)
+
+        integrated_fibres = np.nanmean(self.intensity[:, wave_mask], axis=1
+                                       ) * np.count_nonzero(wave_mask)
+        integrated_variances = np.nanmean(self.variance[:, wave_mask], axis=1
+                                       ) * np.count_nonzero(wave_mask)
+        return integrated_fibres, integrated_variances
+
+    def plot_rss_image(self, data=None, data_label="", fig_args={}, cmap_args={},
+                       fibre_range=None,
+                       wavelength_range=None,
+                       output_filename=None):
+        """Plots a RSS image with optional data, fibre, and wavelength ranges.
+
+        Parameters
+        ----------
+        data : array-like, optional
+            The 2D array data to be plotted. If `None`, `intensity` is used.
+        data_label : str, optional
+            The color bar label for the data being plotted. Default is an empty string.
+        fig_args : dict, optional
+            Additional keyword arguments passed to `pykoala.plotting.utils.new_figure` for customizing the figure. 
+            Default is an empty dictionary.
+        cmap_args : dict, optional
+            Additional keyword arguments passed to the `pykoala.plotting.utils.colour_map` function for the colormap
+            and normalization.  Default is an empty dictionary.
+        fibre_range : tuple of int, optional
+            A tuple specifying the range of fibres to include in the plot (start, end).
+            If `None`, all fibres are included. Default is `None`.
+        wavelength_range : tuple of float, optional
+            A tuple specifying the range of wavelengths to include in the plot (start, end). If `None`, all wavelengths are included.
+            Default is `None`.
+        output_filename : str, optional
+            If provided, the plot is saved to the specified file path. Default is `None`.
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure
+            The figure object containing the plot.
+
+        Notes
+        -----
+        - The function uses the internal attributes `self.wavelength` and `self.intensity` to obtain default x-values 
+        (wavelengths) and y-values (fibre indices) if `data` is not provided.
+        - The `new_figure` function is used to create a new figure, and `colour_map` is used to plot the data.
+        - If `fibre_range` or `wavelength_range` is specified, the data is sliced accordingly.
+        - The plot is saved to `output_filename` if provided, otherwise the figure is returned for display or further manipulation.
+        """
+        x = self.wavelength
+        y = np.arange(0, self.intensity.shape[0])
+        if data is None:
+            data = self.intensity
+            data_label = "Intensity"
+        if fibre_range is not None:
+            fibre_range = range(*fibre_range)
+            data = data[fibre_range]
+            y = y[fibre_range]
+        if wavelength_range is not None:
+            wavelength_range = range(*np.searchsorted(self.wavelength, wavelength_range))
+            data = data[:, wavelength_range]
+            x = x[wavelength_range]
+
+        fig, axs = new_figure(self.info['name'], **fig_args)
+        im, cb = colour_map(fig, axs[0, 0], data_label, data,
+                            x=x, y=y,
+                            xlabel="Wavelength [AA]", ylabel="Fibre",
+                            **cmap_args)
+
+        if output_filename is not None:
+            fig.savefig(output_filename, bbox_inches="tight")
+        return fig
+
+    def plot_mask(self, fig_args={}, cmap_args={}, output_filename=None):
+        """Plots a mask image using the bitmask data.
+
+        This method creates a plot of the bitmask data using a predefined colormap and normalization settings.
+        It utilizes the `plot_rss_image` method to generate the plot.
+
+        Parameters
+        ----------
+        fig_args : dict, optional
+            Additional keyword arguments passed to the `new_figure` function for customizing the figure.
+            Default is an empty dictionary.
+        cmap_args : dict, optional
+            Additional keyword arguments passed to the `colour_map` function for customizing the colormap.
+            If not specified, the colormap is set to "Accent" and normalization to "Normalize". Default is an empty dictionary.
+        output_filename : str, optional
+            If provided, the plot is saved to the specified file path. Default is `None`.
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure
+            The figure object containing the plot.
+
+        See Also
+        --------
+        `pykoala.rss.RSS.plot_rss_image` : For more detailed information about the parameters and usage.
+        """
+
+        if "cmap" not in cmap_args:
+            cmap_args["cmap"] = "Accent"
+        if "norm" not in cmap_args:
+            cmap_args["norm"] = "Normalize"
+        fig = self.plot_rss_image(data=self.mask.bitmask, data_label="Bitmask",
+                            fig_args=fig_args, cmap_args=cmap_args,
+                            output_filename=output_filename)
+        return fig
+    
+    
+
+    def plot_fibre(self):
+        # TODO: THIS SHOULD BE A METHOD OF THE PARENT CLASS
+        pass
+
+    def plot_fibre_map(self, data=None, cblabel="", fig_args={},
+                       cmap_args={}, output_filename=None):
+        """
+        Plots a fibre map image, showing the spatial distribution of data across fibres.
+
+        This method generates a plot that visualizes the spatial distribution of
+        data across fibres, using the Right Ascension (RA) and Declination (Dec)
+        of each fibre. If no data is provided, it uses the integrated fibre intensity data.
+
+        Parameters
+        ----------
+        data : array-like, optional
+            The data to be plotted. If `None`, the method calls `self.get_integrated_fibres()`
+            to obtain the integrated fibre intensity data. Default is `None`.
+        
+        cblabel : str, optional
+            The label for the color bar representing the data being plotted. Default is an empty string.
+        
+        fig_args : dict, optional
+            Additional keyword arguments passed to the `new_figure` function for
+            customizing the figure. Default is an empty dictionary.
+        
+        cmap_args : dict, optional
+            Additional keyword arguments passed to the `fibre_map` function for
+            customizing the colormap. Default is an empty dictionary.
+        
+        output_filename : str, optional
+            If provided, the plot is saved to the specified file path. Default is `None`.
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure
+            The figure object containing the plot.
+        """
+        if data is None:
+            data, _ = self.get_integrated_fibres()
+            cblabel = "Integrated intensity"
+        fig, axs = new_figure(self.info['name'], **fig_args)
+        axs[0, 0].set_aspect('auto')
+        im, cb = fibre_map(fig, axs[0, 0], cblabel, data, fib_ra=self.info['fib_ra'],
+                         fib_dec=self.info['fib_dec'], **cmap_args)
+        if output_filename is not None:
+            fig.savefig(output_filename, bbox_inches="tight")
+        return fig
+
+
+class Cube(SpectraContainer):
+    """This class represent a collection of Raw Stacked Spectra (RSS) interpolated over a 2D spatial grid.
+    
+    parent_rss
+    rss_mask
+    intensity
+    variance
+    intensity
+    variance
+    wavelength
+    info
+
+    """
+    n_wavelength = None
+    n_cols = None
+    n_rows = None
+    x_size_arcsec = None
+    y_size_arcsec = None
+    default_hdul_extensions_map = {"INTENSITY": "INTENSITY",
+                                   "VARIANCE": "VARIANCE"}
+    
+    def __init__(self, hdul=None, hdul_extensions_map=None, **kwargs):
+
+        self.hdul = hdul
+
+        if hdul_extensions_map is not None:
+            self.hdul_extensions_map = hdul_extensions_map
+        else:
+            self.hdul_extensions_map = self.default_hdul_extensions_map
+
+        if "logger" not in kwargs:
+            kwargs['logger'] = "pykoala.cube"
+        super().__init__(intensity=self.intensity,
+                         variance=self.variance,
+                         **kwargs)
+        self.get_wcs_from_header()
+        self.parse_info_from_header()
+        self.n_wavelength, self.n_rows, self.n_cols = self.intensity.shape
+        self.get_wavelength()
+
+    @property
+    def hdul(self):
+        return self._hdul
+
+    @hdul.setter
+    def hdul(self, hdul):
+        print(hdul)
+        assert isinstance(hdul, fits.HDUList)
+        self._hdul = hdul
+
+    @property
+    def intensity(self):
+        return self.hdul[self.hdul_extensions_map['INTENSITY']].data
+    
+    @intensity.setter
+    def intensity(self, intensity_corr):
+        self.vprint("[Cube] Updating HDUL INTENSITY")
+        self.hdul[self.hdul_extensions_map['INTENSITY']].data = intensity_corr
+
+    @property
+    def variance(self):
+        return self.hdul[self.hdul_extensions_map['VARIANCE']].data
+
+    @variance.setter
+    def variance(self, variance_corr):
+        self.vprint("[Cube] Updating HDUL variance")
+        self.hdul[self.hdul_extensions_map['VARIANCE']].data = variance_corr
+
+    @property
+    def rss_intensity(self):
+        return np.reshape(self.intensity, (self.intensity.shape[0], self.intensity.shape[1]*self.intensity.shape[2])).T
+
+    @rss_intensity.setter   
+    def rss_intensity(self, value):
+        self.intensity = value.T.reshape(self.intensity.shape)
+
+    @property
+    def rss_variance(self):
+        return np.reshape(self.variance, (self.variance.shape[0], self.variance.shape[1]*self.variance.shape[2])).T
+
+    @rss_variance.setter   
+    def rss_variance(self, value):
+        self.variance = value.T.reshape(self.variance.shape)
+
+    @classmethod
+    def from_fits(cls, path, hdul_extension_map=None, **kwargs):
+        """Make an instance of a Cube using an input path to a FITS file.
+        
+        Parameters
+        ----------
+        - path: str
+            Path to the FITS file. This file must be compliant with the pykoala
+            standards.
+        - hdul_extension_map: dict
+            Dictionary containing the mapping to access the extensions that
+            contain the intensity, and variance data
+            (e.g. {'INTENSITY': 1, 'VARIANCE': 'var'}).
+        - kwargs:
+            Arguments passed to the Cube class (see Cube documentation)
+        
+        Returns
+        -------
+        - cube: Cube
+            An instance of a `pykoala.cubing.Cube`.
+        """
+        with fits.open(path) as hdul:
+            return cls(hdul, hdul_extension_map=hdul_extension_map, **kwargs)
+
+    def parse_info_from_header(self):
+        """Look into the primary header for pykoala information."""
+        self.vprint("[Cube] Looking for information in the primary header")
+        # TODO
+        #self.info = {}
+        #self.fill_info()
+        self.history.load_from_header(self.hdul[0].header)
+
+    def load_hdul(self, path_to_file):
+        self.hdul = fits.open(path_to_file)
+        pass
+
+    def close_hdul(self):
+        if self.hdul is not None:
+            self.vprint(f"[Cube] Closing HDUL")
+            self.hdul.close()
+
+    def get_wcs_from_header(self):
+        """Create a WCS from HDUL header."""
+        self.wcs = WCS(self.hdul[self.hdul_extensions_map['INTENSITY']].header)
+
+    def get_wavelength(self):
+        self.vprint("[Cube] Constructing wavelength array")
+        self.wavelength = self.wcs.spectral.array_index_to_world(
+            np.arange(self.n_wavelength)).to('angstrom').value
+        
+    def get_centre_of_mass(self, wavelength_step=1, stat=np.median, power=1.0):
+        """Compute the center of mass of the data cube."""
+        x = np.arange(0, self.n_cols, 1)
+        y = np.arange(0, self.n_rows, 1)
+        x_com = np.empty(self.n_wavelength)
+        y_com = np.empty(self.n_wavelength)
+        for wave_range in range(0, self.n_wavelength, wavelength_step):
+            x_com[wave_range: wave_range + wavelength_step] = np.nansum(
+                self.intensity[wave_range: wave_range + wavelength_step]**power * x[np.newaxis, np.newaxis, :],
+                axis=(1, 2)) / np.nansum(self.intensity[wave_range: wave_range + wavelength_step]**power, axis=(1, 2))
+            x_com[wave_range: wave_range + wavelength_step] = stat(x_com[wave_range: wave_range + wavelength_step])
+            y_com[wave_range: wave_range + wavelength_step] = np.nansum(
+                self.intensity[wave_range: wave_range + wavelength_step]**power * y[np.newaxis, :, np.newaxis],
+                axis=(1, 2)) / np.nansum(self.intensity[wave_range: wave_range + wavelength_step]**power, axis=(1, 2))
+            y_com[wave_range: wave_range + wavelength_step] = stat(y_com[wave_range: wave_range + wavelength_step])
+        return x_com, y_com
+
+    def get_integrated_light_frac(self, frac=0.5):
+        """Compute the integrated spectra that accounts for a given fraction of the total intensity."""
+        collapsed_intensity = np.nansum(self.intensity, axis=0)
+        sort_intensity = np.sort(collapsed_intensity, axis=(0, 1))
+        # Sort from highes to lowest luminosity
+        sort_intensity = np.flip(sort_intensity, axis=(0, 1))
+        cumulative_intensity = np.cumsum(sort_intensity, axis=(0, 1))
+        cumulative_intensity /= np.nanmax(cumulative_intensity)
+        pos = np.searchsorted(cumulative_intensity, frac)
+        return cumulative_intensity[pos]
+
+    def get_white_image(self, wave_range=None, s_clip=3.0, frequency_density=False):
+        """Create a white image."""
+        if wave_range is not None and self.wavelength is not None:
+            wave_mask = (self.wavelength >= wave_range[0]) & (self.wavelength <= wave_range[1])
+        else:
+            wave_mask = np.ones(self.wavelength.size, dtype=bool)
+        
+        if s_clip is not None:
+            std_dev = ancillary.std_from_mad(self.intensity[wave_mask], axis=0)
+            median = np.nanmedian(self.intensity[wave_mask], axis=0)
+
+            weights = (
+                (self.intensity[wave_mask] <= median[np.newaxis] + s_clip * std_dev[np.newaxis])
+                & (self.intensity[wave_mask] >= median[np.newaxis] - s_clip * std_dev[np.newaxis]))
+        else:
+            weights = np.ones_like(self.intensity[wave_mask])
+
+        if frequency_density:
+            freq_trans = self.wavelength**2 / 3e18
+        else:
+            freq_trans = np.ones_like(self.wavelength)
+
+        white_image = np.nansum(
+            self.intensity[wave_mask] * freq_trans[wave_mask, np.newaxis, np.newaxis] * weights, axis=0
+            ) / np.nansum(weights, axis=0)
+        return white_image
+
+    def to_fits(self, fname=None, primary_hdr_kw=None):
+        """Save the Cube into a FITS file."""
+        if fname is None:
+            fname = 'cube_{}.fits.gz'.format(
+                datetime.now().strftime("%d_%m_%Y_%H_%M_%S"))
+        if primary_hdr_kw is None:
+            primary_hdr_kw = {}
+
+        # Create the PrimaryHDU with WCS information 
+        primary = fits.PrimaryHDU()
+        for key, val in primary_hdr_kw.items():
+            primary.header[key] = val
+        
+        
+        # Include cubing information
+        primary.header['pykoala0'] = __version__, "PyKOALA version"
+        primary.header['pykoala1'] = datetime.now().strftime(
+            "%d_%m_%Y_%H_%M_%S"), "creation date / last change"
+
+        # Fill the header with the log information
+        primary.header = self.history.dump_to_header(primary.header)
+
+        # Create a list of HDU
+        hdu_list = [primary]
+        # Change headers for variance and INTENSITY
+        hdu_list.append(fits.ImageHDU(
+            data=self.intensity, name='INTENSITY', header=self.wcs.to_header()))
+        hdu_list.append(fits.ImageHDU(
+            data=self.variance, name='VARIANCE', header=hdu_list[-1].header))
+        # Store the mask information
+        hdu_list.append(self.mask.dump_to_hdu())
+        # Save fits
+        hdul = fits.HDUList(hdu_list)
+        hdul.writeto(fname, overwrite=True)
+        hdul.close()
+        self.vprint("[Cube] Cube saved at:\n {}".format(fname))
+
+    def update_coordinates(self, new_coords=None, offset=None):
+        """Update the celestial coordinates of the Cube"""
+        updated_wcs = ancillary.update_wcs_coords(self.wcs.celestial,
+                                        ra_dec_val=new_coords,
+                                        ra_dec_offset=offset)
+        # Update only the celestial axes
+        self.vprint(f"Previous CRVAL: {self.wcs.celestial.wcs.crval}"
+                    + f"\nNew CRVAL: {updated_wcs.wcs.crval}")
+        self.wcs.wcs.crval[:-1] = updated_wcs.wcs.crval
+        self.history('update_coords', "Offset-coords updated")
 
 # =============================================================================
 # Mr Krtxo \(ﾟ▽ﾟ)/

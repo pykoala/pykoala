@@ -19,8 +19,8 @@ import os
 from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.data_container import SpectraContainer
-from pykoala.rss import RSS
-from pykoala.cubing import Cube
+from pykoala.data_container import RSS
+from pykoala.data_container import Cube
 from pykoala.ancillary import (centre_of_mass, cumulative_1d_moffat, mask_lines,
                                flux_conserving_interpolation)
 

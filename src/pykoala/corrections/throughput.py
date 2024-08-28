@@ -20,7 +20,7 @@ from scipy.ndimage import median_filter, percentile_filter
 # Modular
 from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
-from pykoala.rss import RSS
+from pykoala.data_container import RSS
 from pykoala import ancillary
 
 
