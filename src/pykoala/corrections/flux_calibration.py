@@ -1,3 +1,8 @@
+"""
+This module contains the corrections for performing an absolute or relative
+flux calibration by accounting for the spectral sensitivity curve as function
+of wavelength.
+"""
 # =============================================================================
 # Basics packages
 # =============================================================================
@@ -7,10 +12,6 @@ from scipy.ndimage import median_filter
 from scipy.interpolate import interp1d, UnivariateSpline
 import matplotlib.pyplot as plt
 import os
-
-# =============================================================================
-# Astropy and associated packages
-# =============================================================================
 
 # =============================================================================
 # KOALA packages

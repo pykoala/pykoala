@@ -28,7 +28,7 @@ class CorrectionBase(ABC, VerboseMixin):
         to this file.
     log_level : int, optional
         Level of logging, which overrides the `verbose` attribute if provided
-        (for more details see https://docs.python.org/3/library/logging.html#logging-levels).
+        (for more details see `logging levels <https://docs.python.org/3/library/logging.html#logging-levels>`_.
 
     Methods
     -------
@@ -50,13 +50,13 @@ class CorrectionBase(ABC, VerboseMixin):
     Examples
     --------
     To create a new correction, subclass CorrectionBase and implement the 
-    `name`, `verbose`, and `apply` methods.
+    ``name``, ``verbose``, and ``apply`` methods.
 
     Notes
     -----
-    When implementing a new correction, ensure that the `apply` method correctly
+    When implementing a new correction, ensure that the ``apply`` method correctly
     applies the intended transformation to the DataContainer and that the 
-    operation is logged via the `record_correction` method.
+    operation is logged via the ``record_correction`` method.
 
     """
 
@@ -78,7 +78,7 @@ class CorrectionBase(ABC, VerboseMixin):
     @property
     @abstractmethod
     def name(self):
-        """Abstract property for the name of the correction."""
+        """Name of the correction."""
         return None
 
     @abstractmethod
@@ -95,7 +95,7 @@ class CorrectionBase(ABC, VerboseMixin):
 
         Parameters
         ----------
-        datacontainer : koala.DataContainer
+        datacontainer : :class:`pykoala.data_container.DataContainer`
             The data container to log the correction.
         status : str, optional
             Indicates the success of the correction. Should be either 'applied' 

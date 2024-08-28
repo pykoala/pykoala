@@ -1,5 +1,6 @@
 """
-sky module containing...TODO
+Module containing the corrections for estimating and correcting, and subtracting
+the contribution of the sky emission in DataContainers.
 """
 # =============================================================================
 # Basics packages
@@ -27,15 +28,11 @@ import scipy.signal
 # Modular
 from pykoala import vprint
 from pykoala.plotting.utils import new_figure, colour_map
-from pykoala.exceptions.exceptions import TelluricNoFileError
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.corrections.throughput import Throughput
 from pykoala.corrections.wavelength import WavelengthOffset
 from pykoala.data_container import DataContainer
 from pykoala.rss import RSS
-from pykoala.cubing import Cube
-# Original
-from pykoala.ancillary import smooth_spectrum
 
 # =============================================================================
 # Background estimators
@@ -244,7 +241,24 @@ class ContinuumEstimator:
         return continuum
 
     @staticmethod
-    def percentile_continuum(data, percentile, window_size):
+    def percentile_continuum(data, percentile, window_size=5):
+        """
+        Estimate the continuum using a percentile filter.
+
+        Parameters
+        ----------
+        data : np.ndarray
+            The input data array for which to compute the continuum.
+        percentile : list or tuple
+            The percentiles (0-100) to use for the continuum estimation.
+        window_size : int, optional
+            The size of the window over which to compute the percentile filter. Default is 5.
+
+        Returns
+        -------
+        continuum : np.ndarray
+            The estimated continuum of the input data.
+        """
         continuum = scipy.ndimage.percentile_filter(data, percentile,
                                                     window_size)
         return continuum
@@ -279,6 +293,7 @@ class ContinuumEstimator:
     @classmethod
     def lower_envelope(self, x, y, min_separation=None):
         '''
+        #TODO --> Refactor
         Fit lower envelope of a single spectrum:
         1) Find local minima, with a minimum separation `min_separation`.
         2) Interpolate linearly between them.
@@ -478,6 +493,7 @@ class SkyModel(object):
         **kwargs : dict, optional
             Dictionary of parameters to initialize the SkyModel.
             Accepted keys are:
+
             - wavelength : np.ndarray
                 1-D array representing the wavelengths of the sky model.
             - intensity : np.ndarray
@@ -651,7 +667,7 @@ class SkyModel(object):
 
         Returns
         -------
-        None
+
         """
         if path_to_table is not None:
             vprint(f"Loading input sky line table {path_to_table}")
@@ -706,12 +722,12 @@ class SkyModel(object):
 
         Parameters
         ----------
-        - show : bool
+        show : bool
             Show the resulting plot. Default is False.
 
         Returns
         -------
-        - fig : plt.Figure
+        fig : :class:`matplotlib.pyplot.Figure`
             Figure containing the Sky Model plot.
         """
         fig = plt.figure(constrained_layout=True)
@@ -941,16 +957,16 @@ class SkySubsCorrection(CorrectionBase):
 
         Parameters
         ----------
-        data_cont : DataContainer
+        data_cont : :class:`pykoala.data_container.DataContainer`
             The original DC before sky correction.
-        data_cont_corrected : DataContainer
+        data_cont_corrected : :class:`pykoala.data_container.DataContainer`
             The DC after sky correction.
         kwargs : dict
             Additional keyword arguments for `imshow`.
 
         Returns
         -------
-        fig : matplotlib.figure.Figure
+        fig : :class:`matplotlib.figure.Figure`
             The figure object containing the plots.
         """
         fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(10, 10),
@@ -990,7 +1006,7 @@ class SkySubsCorrection(CorrectionBase):
 
         Parameters
         ----------
-        dc : DataContainer
+        dc : :class:`pykoala.data_container.DataContainer`
             The DataContainer to be corrected.
         pca : bool, optional
             If True, use PCA-based sky subtraction. Default is False.
@@ -1003,7 +1019,7 @@ class SkySubsCorrection(CorrectionBase):
 
         Returns
         -------
-        dc_out : DataContainer
+        dc_out : :class:`pykoala.data_container.DataContainer`
             The corrected datacube.
         fig : matplotlib.figure.Figure or None
             The figure object containing the plots if `plot` is True, otherwise None.
@@ -1115,11 +1131,24 @@ class TelluricCorrection(CorrectionBase):
         self.telluric_correction_file = telluric_correction_file
 
     @classmethod
-    def from_text_file(cls, path=None):
+    def from_text_file(cls, path):
+        """Initialise a TelluricCorrection from a text file.
+        
+        Parameters
+        ----------
+        path : str
+            Path to the text file containing the telluric correction. The first
+            and second columns must contain the wavelength and telluric correction,
+            respectively.
+
+        Returns
+        -------
+        telluric_correction : :class:`TelluricCorrection`
+            The telluric correction.
+        """
         vprint("Initialising telluric correction from text file")
-        if path is None:
-            path = cls.default_extinction
-        wavelength, telluric_correction = np.loadtxt(path, unpack=True)
+        wavelength, telluric_correction = np.loadtxt(path, unpack=True,
+                                                     usecols=(0, 1))
         return cls(telluric_correction=telluric_correction,
                    wavelength=wavelength,
                    telluric_correction_file=path)
@@ -1155,6 +1184,8 @@ class TelluricCorrection(CorrectionBase):
         -------
         telluric_correction : `TelluricCorrection`
             The computed telluric correction.
+        fig : :class:`matplotlib.pyplot.Figure` or ``None``
+            If ``plot=True``, it corresponds to a quality control plot.
         """
         vprint("Initialising telluric correction from input STD star")
         spectra = np.nanpercentile(spectra_container.rss_intensity,
@@ -1194,8 +1225,7 @@ class TelluricCorrection(CorrectionBase):
                    wavelength=spectra_container.wavelength), fig
 
     @classmethod
-    def from_model(cls, spectra_container, light_percentile=0.95,
-                   model_file=None, width=30,
+    def from_model(cls, spectra_container, model_file=None, width=30,
                    extra_mask=None, plot=False):
         """
         Estimate the telluric correction function using a model of telluric absorption lines.
@@ -1215,8 +1245,10 @@ class TelluricCorrection(CorrectionBase):
 
         Returns
         -------
-        telluric_correction : array
+        telluric_correction : `TelluricCorrection`
             The computed telluric correction.
+        fig : :class:`matplotlib.pyplot.Figure` or ``None``
+            If ``plot=True``, it corresponds to a quality control plot.
         """
         if model_file is None:
             model_file = TelluricCorrection.default_model_file
@@ -1247,7 +1279,7 @@ class TelluricCorrection(CorrectionBase):
             fig = None
         return cls(telluric_correction=telluric_correction,
                 wavelength=spectra_container.wavelength), fig
-        
+
 
     @staticmethod
     def plot_correction(spectra_container, telluric_correction,
@@ -1269,7 +1301,7 @@ class TelluricCorrection(CorrectionBase):
 
         Returns
         -------
-        fig : Figure
+        fig : :class:`matplotlib.pyplot.Figure`
             The matplotlib figure object.
         """
         fig, ax = plt.subplots()
@@ -1311,23 +1343,19 @@ class TelluricCorrection(CorrectionBase):
 
     def apply(self, spectra_container, update=True):
         """
-        Apply the telluric correction to the input data.
+        Apply the telluric correction to the input :class:`SpectraContainer`.
 
         Parameters
         ----------
-        spectra_container : array
-            The input data to correct.
-        verbose : bool, optional
-            Controls verbosity of logging messages (default is True).
-        is_combined_cube : bool, optional
-            Whether the input is a combined cube (default is False).
+        spectra_container : :class:`SpectraContainer`
+            The input SpectraContainer to correct.
         update : bool, optional
             Whether to update the correction (default is True).
 
         Returns
         -------
-        rss_out : array
-            The corrected data.
+        rss_out : :class:`SpectraContainer`
+            The corrected copy of the input SpectraContainer.
         """
 
         # Check wavelength
@@ -1380,6 +1408,8 @@ class TelluricCorrection(CorrectionBase):
         ----------
         filename : str, optional
             The name of the output file.
+        **kwargs : dict
+            Extra arguments to be passed to :func:`numpy.savetxt`.
         """
         self.vprint(f"Saving telluric correction into file {filename}")
         np.savetxt(filename, np.array(
@@ -1387,7 +1417,20 @@ class TelluricCorrection(CorrectionBase):
 
 
 def combine_telluric_corrections(list_of_telcorr, ref_wavelength):
-    """Combine a list of input telluric corrections."""
+    """Combine a list of input telluric corrections.
+    
+    Parameters
+    ----------
+    list_of_telcorr : list
+        List of :class:`TelluricCorrection` instances to combine.
+    ref_wavelength : 1D np.ndarray
+        Reference array grid to interpolate each correction before the combination.
+
+    Returns
+    -------
+    combine_telcorr : :class:`TelluricCorrection`
+        TelluricCorretion resulting from combining the input list.
+    """
     vprint("Combining input telluric corrections")
     telluric_corrections = np.zeros(
         (len(list_of_telcorr), ref_wavelength.size))
@@ -1406,6 +1449,9 @@ def combine_telluric_corrections(list_of_telcorr, ref_wavelength):
 class WaveletFilter(object):
     '''
     Estimate overall fibre throughput and wavelength calibration based on sky emission lines (from wavelet transform).
+
+    Description
+    -----------
 
     Given a Row-Stacked Spectra (RSS) object:
     1. Estimate the FWHM of emission lines from the autocorrelation of the median (~ sky) spectrum.
@@ -1552,7 +1598,8 @@ class WaveletFilter(object):
 
 
 class SkySelfCalibration(CorrectionBase):
-    """Wavelength calibration, throughput, and sky model based on strong sky lines."""
+    """TODO> Finish documentaion
+    Wavelength calibration, throughput, and sky model based on strong sky lines."""
     name = "SkySelfCalibration"
     verbose = True
 
