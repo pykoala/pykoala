@@ -13,7 +13,7 @@ The Documentation is divided into four main categories:
    Quick visualization and quality control plots.
 
 Data Structures
-===============
+---------------
 
 .. toctree:: pykoala.data_container
    :maxdepth: 2
@@ -21,7 +21,7 @@ Data Structures
 
 
 Supported IFS Instruments
--------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The currently available instrument modules in `pykoala` are:
 
@@ -29,7 +29,7 @@ The currently available instrument modules in `pykoala` are:
 
 
 Data Corrections
-================
+----------------
  
 This section contains the different correction modules included in `pykoala`.
 
@@ -39,13 +39,13 @@ This section contains the different correction modules included in `pykoala`.
 
 
 Manipulating Spectra
-====================
+--------------------
 
 Tools for manipulating 1D spectra.
 
 
 Plotting tools
-==============
+--------------
 
 Useful methods for plotting and performing quality control tests.
 

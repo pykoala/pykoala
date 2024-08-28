@@ -31,8 +31,17 @@ Cube
    :undoc-members:
    :show-inheritance:
 
-Extra
--------------
+Special properties
+------------------
+
+All :class:`DataContainer` objects have two important attributes.
+
+- :class:`DataContainerHistory` tracks the data reduction processes storing all the relevant information that should be preserved in the final version.
+- :class:`DataMask` stores flagged pixels/fibres that can be used for multiple purposes.
+
+Below you can find documentation and details about their properties and methods.
+
+
 .. autoclass:: pykoala.data_container.DataContainerHistory
    :members:
    :undoc-members:
