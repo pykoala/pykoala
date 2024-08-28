@@ -1,6 +1,20 @@
 """
-This module contains the parent classes that represent the data used
-during the reduction process.
+This module contains the base classes that represent the data used
+during the reduction process of IFS data in `pykoala`.
+
+In a nutshell, `pykoala` interprets all sources of data
+(e.g., images, raw stacked spectra, data cubes) as a :class:`DataContainer` (DC).
+All DC include a series of common properties (e.g., ``intensity`` or ``variance``)
+as well as common methods for I/O, data reduction tracking history or data masking.
+
+A special type of data containers are the :class:`SpectraContainer`, which do not only
+include an ``intensity``, but also a ``wavelength`` property associated to each pixel along the
+spectral dimension of the data. This can be used to represent RSS or DataCubes commonly
+used in IFS, as well as, Multi Object Spectroscopy (MOS) datasets. In addition,
+all spectra containers must include a method for transforming the N-dimensional 
+``intensity`` and ``variance`` arrays into a 2D array (referred to as ``rss_intensity``)
+where the first and second dimensions correspond to the spatial (e.g. fibres, spaxels),
+and spectral dimension, respectively.
 """
 
 from abc import ABC, abstractmethod
