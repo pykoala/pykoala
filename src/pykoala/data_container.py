@@ -405,17 +405,21 @@ class DataContainer(ABC, VerboseMixin):
 
     Attributes
     ----------
-    intensity : astropy.Quantity
+    intensity : :class:astropy.Quantity`
         Array with the counts/surface brightness/... at each pixel.
-    variance : astropy.Quantity
-        Uncertainties associated to the `intensity` values.
+    variance : :class:astropy.Quantity`
+        Uncertainties associated to the ``intensity`` values.
+    inverse_variance : :class:astropy.Quantity`
+        Inverse variance associated to the ``intensity`` values.
+    snr : :class:astropy.Quantity`
+        Signal-to-noise ratio defined as ``intensity / variance**0.5``.
     mask : DataMask
-        Pixel flags.
+        :class:`DataMask` pixel mask.
     info : dict
         Parameters describing the data.
-    log : DataContainerHistory
+    log : :class:`DataContainerHistory`
         History log reporting the data reduction steps undertaken so far.
-    header : astropy.fits.Header
+    header : :class:`astropy.fits.Header`
         FITS Header associated to the RSS.
 
     Methods
@@ -425,7 +429,6 @@ class DataContainer(ABC, VerboseMixin):
 
     @property
     def intensity(self):
-        """Array with the counts/surface brightness/... at each pixel."""
         return self._intensity
 
     @intensity.setter
@@ -438,7 +441,6 @@ class DataContainer(ABC, VerboseMixin):
 
     @property
     def variance(self):
-        """Uncertainties associated to the `intensity` values."""
         return self._variance
 
     @variance.setter
@@ -451,17 +453,14 @@ class DataContainer(ABC, VerboseMixin):
 
     @property
     def inverse_variance(self):
-        """Inverse variance associated to the `intensity` values."""
         return 1 / self.variance
 
     @property
     def snr(self):
-        """Signal-to-noise ratio defined as `intensity / variance**0.5`"""
         return self.intensity / self.variance**0.5
 
     @property
     def mask(self):
-        """`pykoala.data_container.DataMask` pixel mask."""
         return self._mask
 
     @mask.setter
@@ -523,15 +522,15 @@ class SpectraContainer(DataContainer):
 
     Attributes
     ----------
-    wavelength : astropy.Quantity
+    wavelength : :class:astropy.Quantity`
         Wavelength array, common to all spectra.
     n_wavelength : int
         Number of wavekengths in the `wavelength` array.
     n_spectra : int
         Number of spectra in the `intensity` array.
-    intensity_rss : astropy.Quantity
+    intensity_rss : :class:astropy.Quantity`
         `intensity` array, sorted as [`n_spectra`, `n_wavelength`].
-    variance_rss : astropy.Quantity
+    variance_rss : :class:astropy.Quantity`
         Uncertainties associated to `intensity_rss`.
     """
 
