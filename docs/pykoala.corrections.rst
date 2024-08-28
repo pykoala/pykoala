@@ -1,10 +1,12 @@
-pykoala.corrections package
-===========================
+Corrections Library
+--------------
 
-Submodules
-----------
+.. automodule:: pykoala.corrections
+   :members: CorrectionBase
+   :undoc-members:
+   :show-inheritance:
 
-pykoala.corrections.astrometry module
+Astrometry
 ---------------------------------------------------
 
 .. automodule:: pykoala.corrections.astrometry
@@ -12,7 +14,7 @@ pykoala.corrections.astrometry module
    :undoc-members:
    :show-inheritance:
 
-pykoala.corrections.atmospheric\_corrections module
+Atmospheric Corrections
 ---------------------------------------------------
 
 .. automodule:: pykoala.corrections.atmospheric_corrections
@@ -20,15 +22,15 @@ pykoala.corrections.atmospheric\_corrections module
    :undoc-members:
    :show-inheritance:
 
-pykoala.corrections.correction module
--------------------------------------
+External data
+---------------------------------------------------
 
-.. automodule:: pykoala.corrections.correction
+.. automodule:: pykoala.corrections.external_data
    :members:
    :undoc-members:
    :show-inheritance:
 
-pykoala.corrections.flux\_calibration module
+Flux Calibration
 --------------------------------------------
 
 .. automodule:: pykoala.corrections.flux_calibration
@@ -36,7 +38,7 @@ pykoala.corrections.flux\_calibration module
    :undoc-members:
    :show-inheritance:
 
-pykoala.corrections.sky module
+Sky
 ------------------------------
 
 .. automodule:: pykoala.corrections.sky
@@ -44,7 +46,7 @@ pykoala.corrections.sky module
    :undoc-members:
    :show-inheritance:
 
-pykoala.corrections.throughput module
+Throughput
 -------------------------------------
 
 .. automodule:: pykoala.corrections.throughput
@@ -52,18 +54,10 @@ pykoala.corrections.throughput module
    :undoc-members:
    :show-inheritance:
 
-pykoala.corrections.wavelength module
+Wavelength
 -------------------------------------
 
 .. automodule:: pykoala.corrections.wavelength
    :members: WavelengthOffset, WavelengthCorrection, SolarCrossCorrOffset
-   :undoc-members:
-   :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: pykoala.corrections
-   :members:
    :undoc-members:
    :show-inheritance:
