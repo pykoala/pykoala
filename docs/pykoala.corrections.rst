@@ -1,5 +1,5 @@
 Corrections Library
---------------
+-------------------
 
 .. automodule:: pykoala.corrections
    :members: CorrectionBase

@@ -15,34 +15,13 @@ The Documentation is divided into four main categories:
 Data Structures
 ===============
 
-.. automodule:: pykoala.data_container
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-pykoala.rss module
-------------------
-
-.. automodule:: pykoala.rss
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-pykoala.cubing module
----------------------
-
-.. automodule:: pykoala.cubing
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. toctree:: pykoala.data_container
+   :maxdepth: 2
+   :caption: Available modules
 
 
 Supported IFS Instruments
----------------------
-
-.. toctree::
-   :maxdepth: 3
-   pykoala.instruments
+-------------------------
 
 The currently available instrument modules in `pykoala` are:
 
@@ -66,7 +45,7 @@ Tools for manipulating 1D spectra.
 
 
 Plotting tools
-===================
+==============
 
 Useful methods for plotting and performing quality control tests.
 
