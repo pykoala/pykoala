@@ -155,8 +155,8 @@ def get_adr(spectra_container : SpectraContainer, max_adr=0.5, pol_deg=2,
             plot=False):
     """Computes the ADR for a given DataContainer.
     
-    Notes
-    -----
+    Description
+    -----------
     This method computes the spatial shift as function of wavelength that a
     chromatic source light experiments due to the Atmospheric Differential
     Refraction (ADR).

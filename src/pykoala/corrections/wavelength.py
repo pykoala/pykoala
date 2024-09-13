@@ -244,8 +244,8 @@ class SolarCrossCorrOffset(WavelengthCorrection):
         """
         Estimate the regions of the solar spectrum dominated by absorption features.
 
-        Notes
-        -----
+        Description
+        -----------
         First, a median filter is applied to estimate the upper envelope of the
         continuum. Then, the median ratio between the solar spectra and the median-filtered
         estimate is used to compute the relative weights:

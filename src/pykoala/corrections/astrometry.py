@@ -43,8 +43,8 @@ class AstrometryCorrection(CorrectionBase):
     def register_centroids(self, data_set, object_name=None, qc_plot=False, **centroid_args):
         """Register a collection of DataContainers.
 
-        Notes
-        -----
+        Description
+        -----------
         The registration is performed by means of the function
         ``pykoala.corrections.astrometry.find_centroid_in_dc``. The first DataContainer
         will be used as reference, and the offset position of the star will be computed
@@ -209,8 +209,8 @@ def find_centroid_in_dc(data_container, wave_range=None,
                         full_output=False):
     """Find the the centre of light in a DataContainer.
 
-    Notes
-    -----
+    Description
+    -----------
 
     This method finds the centre of light on an image created from a
     DataContainer (RSS or Cube). The position is computed either by using
@@ -279,8 +279,8 @@ def find_centroid_in_dc(data_container, wave_range=None,
 def cross_correlate_images(list_of_images, oversample=100):
     """Compute a shift between several images using cross-correlation.
     
-    Notes
-    -----
+    Description
+    -----------
 
     Apply the :func:`skimage.registration.phase_cross_correlation` method to find 
     the shift of a list of images with respect to the first one.

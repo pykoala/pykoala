@@ -28,8 +28,8 @@ def crosscorrelate_im_apertures(ref_aperture_flux, ref_aperture_flux_err,
                                 plot=True):
     """Cross-correlate an image with an input set of apertures.
     
-    Notes
-    -----
+    Description
+    -----------
     This method performs a spatial cross-correlation between a list of input aperture fluxes
     and a reference image. For example, the aperture fluxes can simply correspond to the
     flux measured within a fibre or a set of aperture measured in a datacube.
