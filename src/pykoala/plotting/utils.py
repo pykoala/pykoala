@@ -8,6 +8,11 @@ from astropy.visualization import (MinMaxInterval, PercentileInterval,
                                    SqrtStretch, PowerStretch,
                                    ImageNormalize, AsymmetricPercentileInterval)
 
+THROUGHPUT_CMAP = plt.cm.get_cmap('seismic').copy()
+THROUGHPUT_CMAP.set_extremes(bad='gray', under='cyan', over='fuchsia')
+
+DEFAULT_CMAP = plt.get_cmap("gist_earth").copy()
+DEFAULT_CMAP.set_bad('gray')
 
 def new_figure(fig_name,
                tweak_axes=True,
@@ -73,13 +78,8 @@ def new_figure(fig_name,
 
     return fig, axes
 
-
-default_cmap = plt.get_cmap("gist_earth").copy()
-default_cmap.set_bad('gray')
-
-
 def colour_map(fig, ax, cblabel, data,
-               cmap=default_cmap,
+               cmap=DEFAULT_CMAP,
                xlabel=None, x=None,
                ylabel=None, y=None,
                cbax=None, norm=None,
@@ -160,7 +160,7 @@ def colour_map(fig, ax, cblabel, data,
     return im, cb
 
 def fibre_map(fig, ax, cblabel, data, rss=None, fib_ra=None, fib_dec=None,
-              s=100, cmap=default_cmap, norm=None, cbax=None,
+              s=100, cmap=DEFAULT_CMAP, norm=None, cbax=None,
               norm_interval=AsymmetricPercentileInterval,
               interval_args={"lower_percentile": 1.0,
                               "upper_percentile": 99.0},
@@ -174,7 +174,7 @@ def fibre_map(fig, ax, cblabel, data, rss=None, fib_ra=None, fib_dec=None,
         Figure where the colour map will be drawn.
     ax : mpl.Axes
         Axes where the colour map will be drawn.
-    cblabel : str
+    cblabel : str 
         Label of the colorbar
     rss : RSS
         Row-Stacked Spectra containing the fibre positions.
