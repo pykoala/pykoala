@@ -1,6 +1,9 @@
+"""
+Module for estimating and applying wavelength offset corrections related to
+inaccuracies in the original wavelength calibration.
+"""
 import os
 import numpy as np
-import copy
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 from matplotlib.gridspec import GridSpec
@@ -10,7 +13,7 @@ from scipy.ndimage import median_filter, gaussian_filter, percentile_filter
 
 from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
-from pykoala.rss import RSS
+from pykoala.data_container import RSS
 from pykoala.ancillary import flux_conserving_interpolation, vac_to_air
 # from pykoala.corrections.sky import ContinuumEstimator
 
@@ -43,8 +46,8 @@ class WavelengthOffset(object):
         
         Parameters
         ----------
-        output_path: str, optional
-            FITS file name path. Default is None. If None, and ``self.path`` exists,
+        output_path: str, optional, default=None
+            FITS file name path. If None, and ``self.path`` exists,
             the original file is overwritten.
 
         Notes
@@ -71,6 +74,16 @@ class WavelengthOffset(object):
 
         Loads offset values (extension 1) and
         associated errors (extension 2) from a fits file.
+
+        Parameters
+        ----------
+        path : str
+            Path to the FITS file containing the offset data.
+
+        Returns
+        -------
+        wavelength_offset : :class:`WavelengthOffset`
+            A :class:`WavelengthOffset` initialised with the input data.
         """
         if not os.path.isfile(path):
             raise NameError(f"offset file {path} does not exist.")
@@ -108,7 +121,18 @@ class WavelengthCorrection(CorrectionBase):
 
     @classmethod
     def from_fits(cls, path):
-        """Initialise a WavelegnthOffset correction from an input FITS file."""
+        """Initialise a WavelegnthOffset correction from an input FITS file.
+        
+        Parameters
+        ----------
+        path : str
+            Path to the FITS file containing the offset data.
+
+        Returns
+        -------
+        wave_correction : :class:`WavelengthCorrection`
+            A :class:`WavelengthCorrection` initialised with the input data.
+        """
         return cls(offset=WavelengthOffset.from_fits(path=path),
                    offset_path=path)
 
@@ -117,18 +141,18 @@ class WavelengthCorrection(CorrectionBase):
 
         Parameters
         ----------
-        rss : RSS
+        rss : :class:`pykoala.rss.RSS`
             Original Row-Stacked-Spectra object to be corrected.
 
         Returns
         -------
-        RSS
-            Corrected RSS object.
+        rss_corrected : :class:`pykoala.rss.RSS`
+            Corrected copy of the input RSS.
         """
 
         assert isinstance(rss, RSS)
 
-        rss_out = copy.deepcopy(rss)
+        rss_out = rss.copy()
         x = np.arange(rss.wavelength.size)
         for i in range(rss.intensity.shape[0]):
             rss_out.intensity[i] = flux_conserving_interpolation(
@@ -139,7 +163,19 @@ class WavelengthCorrection(CorrectionBase):
 
 
 class SolarCrossCorrOffset(WavelengthCorrection):
+    """WavelengthCorrection based on solar spectra cross-correlation.
+    
+    This class constructs a WavelengthOffset and applies the resulting correction
+    from a cross-correlation between a reference spectrum of the Sun and a twilight
+    exposure, dominated by solar spectra features.
 
+    Attributes
+    ----------
+    sun_intensity : np.ndarray
+        Reference solar spectrum.
+    sun_wavelength : np.ndarray
+        Wavelength vector associated to ``sun_intensity``
+    """
     name = "SolarCrossCorrelationOffset"
 
     def __init__(self, sun_wavelength, sun_intensity, **kwargs):
@@ -163,7 +199,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
 
         Returns
         -------
-        solar_offset_correction : SolarCrossCorrOffset
+        solar_offset_correction : :class:`SolarCrossCorrOffset`
             An instance of SolarCrossCorrOffset.
         """
         if path is None:
@@ -179,7 +215,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
 
     @classmethod
     def from_text_file(cls, path, loadtxt_args={}):
-        """Initialise a WavelegnthOffset correction from an input text file.
+        """Initialise a :class:`SolarCrossCorrOffset` correction from an input text file.
         
         Parameters
         ----------
@@ -192,7 +228,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
 
         Returns
         -------
-        solar_offset_correction: SolarCrossCorrOffset
+        solar_offset_correction: :class:`SolarCrossCorrOffset`
             An instance of SolarCrossCorrOffset.
         """
         sun_wavelength, sun_intensity = np.loadtxt(path, unpack=True,
@@ -208,8 +244,8 @@ class SolarCrossCorrOffset(WavelengthCorrection):
         """
         Estimate the regions of the solar spectrum dominated by absorption features.
 
-        Notes
-        -----
+        Description
+        -----------
         First, a median filter is applied to estimate the upper envelope of the
         continuum. Then, the median ratio between the solar spectra and the median-filtered
         estimate is used to compute the relative weights:

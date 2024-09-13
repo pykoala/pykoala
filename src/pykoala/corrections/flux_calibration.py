@@ -1,3 +1,8 @@
+"""
+This module contains the corrections for performing an absolute or relative
+flux calibration by accounting for the spectral sensitivity curve as function
+of wavelength.
+"""
 # =============================================================================
 # Basics packages
 # =============================================================================
@@ -9,17 +14,13 @@ import matplotlib.pyplot as plt
 import os
 
 # =============================================================================
-# Astropy and associated packages
-# =============================================================================
-
-# =============================================================================
 # KOALA packages
 # =============================================================================
 from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.data_container import SpectraContainer
-from pykoala.rss import RSS
-from pykoala.cubing import Cube
+from pykoala.data_container import RSS
+from pykoala.data_container import Cube
 from pykoala.ancillary import (centre_of_mass, cumulative_1d_moffat, mask_lines,
                                flux_conserving_interpolation)
 

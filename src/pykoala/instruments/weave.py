@@ -18,7 +18,7 @@ from astropy import units as u
 # KOALA packages
 # =============================================================================
 from pykoala import vprint
-from pykoala.rss import RSS
+from pykoala.data_container import RSS
 from pykoala.data_container import DataContainerHistory
 
 def weave_rss(filename):

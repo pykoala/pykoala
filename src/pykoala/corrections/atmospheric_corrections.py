@@ -1,13 +1,13 @@
+"""
+Atmospheric extinction and refraction effects corrections.
+"""
+
 # =============================================================================
 # Basics packages
 # =============================================================================
 from matplotlib import pyplot as plt
 import numpy as np
 import os
-
-# =============================================================================
-# Astropy and associated packages
-# =============================================================================
 
 # =============================================================================
 # KOALA packages
@@ -24,24 +24,25 @@ class AtmosphericExtCorrection(CorrectionBase):
     This module accounts for the brightness reduction caused due to the absorption of 
     photons by the atmosphere.
 
-    For a given observed (F_obs) and intrinsic flux F_int, the extinction E takes the form:
-    F_obs(lambda) = E(lambda) * F_int(lambda) = 10^(0.4 * airmass * eta(lambda))
-    where eta corresponds to the extinction curve that depends on the frequency.
+    For a given observed (:math:`F_{obs}`) and intrinsic flux (:math:`F_{int}`), the extinction
+    :math:`E` takes the form:
+
+    .. math::
+        F_{obs}(\lambda) = E(\lambda) * F_{int}(\lambda)
+        
+        E(\lambda) = 10^{0.4 \cdot airmass \cdot \eta(\lambda)}
+
+    where :math:`\eta` corresponds to the wavelength-dependent extinction curve.
 
     Attributes
     ----------
-    - extinction_correction: np.ndarray, optional, default=None
+    extinction_correction: np.ndarray, optional, default=None
         Atmospheric extinction curve.
-    - extinction_correction_wave: np.ndarray, optional, default=None
+    extinction_correction_wave: np.ndarray, optional, default=None
         Atmospheric extinction curve wavelength array.
-    - extinction_file: str
+    extinction_file: str
         Path to a text file containing a wavelength, and a extinction curve.
         If None, a default extinction model will be used, corresponding to the extinction curve at Siding Spring Observatory.
-
-    See Also
-    --------
-    `pykoala.corrections.correction.CorrectionBase`: for a list of all
-    attributes.
     """
     name = "AtmosphericExtinction"
     verbose = True
@@ -62,6 +63,20 @@ class AtmosphericExtCorrection(CorrectionBase):
 
     @classmethod
     def from_text_file(cls, path=None):
+        """Initialise the Correction from a text file.
+        
+        Parameters
+        ----------
+        path : str, optional, default=``self.default_extinction``
+            Path to the file containing the extinction curve. The first and 
+            second columns of the file must contain the wavelength and the value
+            of :math:`\eta(\lambda)`, respectively.
+        
+        Returns
+        -------
+        correction : AtmosphericExtCorrection
+            An atmospheric extinction correction.
+        """
         if path is None:
             path = cls.default_extinction
         wavelength, extinct = np.loadtxt(path, unpack=True)
@@ -74,17 +89,18 @@ class AtmosphericExtCorrection(CorrectionBase):
         
         Parameters
         ----------
-        - wavelength: np.ndarray
+        wavelength: np.ndarray
             Input array of wavelengths where to estimate the extinction.
-        - airmass: float
+        airmass: float
             Target airmass at which the observation is performed.
         
         Returns
         -------
-        - extinction:
-            Extinction function shuch that
-                   .. math::
-                    F_obs(lambda) = E(lambda) * F_int(lambda)
+        extinction: 1D np.ndarray
+            Extinction function :math:`E(\lambda)` shuch that
+
+            .. math::
+                F_{obs}(\lambda) = E(\lambda) \cdot F_{int}(\lambda)
         """
         extinction_correction = np.interp(wavelength,
                                           self.extinction_correction_wave,
@@ -96,13 +112,13 @@ class AtmosphericExtCorrection(CorrectionBase):
         
         Parameters
         ----------
-        - airmass: float, optional
+        airmass: float, optional
             If provided, the extinction will be computed using this value,
             otherwise the airmass stored at the `info` attribute will be used.
         
         Returns
         -------
-        - corrected_spectra_container: SpectraContainer
+        corrected_spectra_container: SpectraContainer
             SpectraContainer with the corrected intensity and variance.
         """
         assert isinstance(spectra_container, SpectraContainer)
@@ -135,12 +151,38 @@ class AtmosphericExtCorrection(CorrectionBase):
 # Atmospheric Differential Refraction
 # =============================================================================
 
-def get_adr(data_container, max_adr=0.5, pol_deg=2, plot=False):
-    """Computes the ADR for a given DataContainer."""
+def get_adr(spectra_container : SpectraContainer, max_adr=0.5, pol_deg=2,
+            plot=False):
+    """Computes the ADR for a given DataContainer.
+    
+    Description
+    -----------
+    This method computes the spatial shift as function of wavelength that a
+    chromatic source light experiments due to the Atmospheric Differential
+    Refraction (ADR).
+
+    Parameters
+    ----------
+    spectra_container: :class:`SpectraContainer`
+        Target SpectraContainer.
+    max_adr : float, optional, default=0.5
+        Maxium ADR correction expressed in arcseconds to prevent unreliable
+        results when analyzing low-SNR data.
+    pol_deg : int, optional, default=2
+        Polynomial order to model the dependance of the spatial shift as function
+        of wavelength.
+
+    Returns
+    -------
+    - ra_polfit: np.poly1d
+        Callable that returns the RA offset in arcseconds as function of wavelength.
+    - dec_polfit: np.poly1d
+        Callable that returns the DEC offset in arcseconds as function of wavelength.
+    """
     # Centre of mass using multiple power of the intensity
     com = []
     for i in range(1, 5):
-        com.append(data_container.get_centre_of_mass(power=i))
+        com.append(spectra_container.get_centre_of_mass(power=i))
     com = np.array(com) * 3600
     com -= np.nanmedian(com, axis=2)[:, :, np.newaxis]
     median_com = np.nanmedian(
@@ -149,44 +191,44 @@ def get_adr(data_container, max_adr=0.5, pol_deg=2, plot=False):
 
     finite_mask = np.isfinite(median_com[0])
     if finite_mask.any():
-        p_x = np.polyfit(data_container.wavelength[finite_mask],
+        p_x = np.polyfit(spectra_container.wavelength[finite_mask],
                          median_com[0][finite_mask], deg=pol_deg)
-        polfit_x = np.poly1d(p_x)(data_container.wavelength)
+        polfit_x = np.poly1d(p_x)(spectra_container.wavelength)
     else:
         vprint("[ADR] ERROR: Could not compute ADR-x, all NaN")
-        polfit_x = np.zeros_like(data_container.wavelength)
+        polfit_x = np.zeros_like(spectra_container.wavelength)
 
     finite_mask = np.isfinite(median_com[1])
     if finite_mask.any():
-        p_y = np.polyfit(data_container.wavelength[finite_mask],
+        p_y = np.polyfit(spectra_container.wavelength[finite_mask],
                          median_com[1][finite_mask], deg=pol_deg)
-        polfit_y = np.poly1d(p_y)(data_container.wavelength)
+        polfit_y = np.poly1d(p_y)(spectra_container.wavelength)
     else:
         vprint("[ADR] ERROR: Could not compute ADR-y, all NaN")
-        polfit_y = np.zeros_like(data_container.wavelength)
+        polfit_y = np.zeros_like(spectra_container.wavelength)
     
 
     if plot:
         fig = plt.figure(figsize=(10, 5))
         ax = fig.add_subplot(121)
-        ax.plot(data_container.wavelength, com[0, 0], label='COM', lw=0.7)
-        ax.plot(data_container.wavelength, com[1, 0], label='COM2', lw=0.7)
-        ax.plot(data_container.wavelength, com[2, 0], label='COM3', lw=0.7)
-        ax.plot(data_container.wavelength, com[3, 0], label='COM4', lw=0.7)
-        ax.plot(data_container.wavelength, median_com[0], c='k', label='Median', lw=0.7)
-        ax.plot(data_container.wavelength, polfit_x, c='fuchsia', label=f'pol. fit (deg={pol_deg})', lw=0.7)
+        ax.plot(spectra_container.wavelength, com[0, 0], label='COM', lw=0.7)
+        ax.plot(spectra_container.wavelength, com[1, 0], label='COM2', lw=0.7)
+        ax.plot(spectra_container.wavelength, com[2, 0], label='COM3', lw=0.7)
+        ax.plot(spectra_container.wavelength, com[3, 0], label='COM4', lw=0.7)
+        ax.plot(spectra_container.wavelength, median_com[0], c='k', label='Median', lw=0.7)
+        ax.plot(spectra_container.wavelength, polfit_x, c='fuchsia', label=f'pol. fit (deg={pol_deg})', lw=0.7)
         ax.set_ylim(-max_adr, max_adr)
         ax.legend(ncol=2, bbox_to_anchor=(0.5, 1), loc='lower center')
         ax.set_ylabel(r'$\Delta RA$ (arcsec)')
         ax.set_xlabel(r'$\lambda$')
 
         ax = fig.add_subplot(122)
-        ax.plot(data_container.wavelength, com[0, 1], label='COM', lw=0.7)
-        ax.plot(data_container.wavelength, com[1, 1], label='COM2', lw=0.7)
-        ax.plot(data_container.wavelength, com[2, 1], label='COM3', lw=0.7)
-        ax.plot(data_container.wavelength, com[3, 1], label='COM4', lw=0.7)
-        ax.plot(data_container.wavelength, median_com[1], c='k', label='Median', lw=0.7)
-        ax.plot(data_container.wavelength, polfit_y, c='fuchsia', label=f'pol. fit (deg={pol_deg})', lw=0.7)
+        ax.plot(spectra_container.wavelength, com[0, 1], label='COM', lw=0.7)
+        ax.plot(spectra_container.wavelength, com[1, 1], label='COM2', lw=0.7)
+        ax.plot(spectra_container.wavelength, com[2, 1], label='COM3', lw=0.7)
+        ax.plot(spectra_container.wavelength, com[3, 1], label='COM4', lw=0.7)
+        ax.plot(spectra_container.wavelength, median_com[1], c='k', label='Median', lw=0.7)
+        ax.plot(spectra_container.wavelength, polfit_y, c='fuchsia', label=f'pol. fit (deg={pol_deg})', lw=0.7)
         ax.set_ylim(-max_adr, max_adr)
         ax.legend(ncol=2, bbox_to_anchor=(0.5, 1), loc='lower center')
         ax.set_ylabel(r'$\Delta DEC$ (arcsec)')

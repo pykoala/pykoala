@@ -16,7 +16,7 @@ from astropy.wcs import WCS
 # KOALA packages
 # =============================================================================
 from pykoala import vprint
-from pykoala.rss import RSS
+from pykoala.data_container import RSS
 
 def airmass_from_header(header):
     """

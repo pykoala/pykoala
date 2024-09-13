@@ -1,3 +1,6 @@
+"""
+Module for estimating a fibre throughput correction.
+"""
 # =============================================================================
 # Basics packages
 # =============================================================================
@@ -17,11 +20,22 @@ from scipy.ndimage import median_filter, percentile_filter
 # Modular
 from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
-from pykoala.rss import RSS
+from pykoala.data_container import RSS
 from pykoala import ancillary
 
 
 class Throughput(object):
+    """Class that represents a throughput data set.
+    
+    Attributes
+    ----------
+    throughput_data : np.ndarray
+        Array containing the values of the throughput.
+    throughput_error : np.ndarray
+        Array containing the associated error of ``throughput_data``.
+    throughput_path : str
+        Path to the original file that was used to initialise the throughput.
+    """
     def __init__(self, throughput_data, throughput_error,
                  throughput_file=None):
         self.throughput_data = throughput_data
@@ -29,6 +43,22 @@ class Throughput(object):
         self.throughput_file = throughput_file
 
     def to_fits(self, output_path=None):
+        """Save the current throughput into a FITS file.
+
+        Description
+        -----------
+        The throughput information is stored in a FITS file that consists of:
+
+        - An empty primary HDu
+        - Two ImageHDUs containing the data (extension='THROU') and associated error (extension='THROUERR') of the throughput, respectively.
+
+        Parameters
+        ----------
+        output_path : str, optional, default=None
+            Path to the output file where the throughput information will be stored.
+            If None, and ``self.throughput_path`` is not ``None`` the original file
+            will be overwritten with the new data.
+        """
         if output_path is None:
             if self.throughput_file is None:
                 raise NameError("Provide output file name for saving throughput")
@@ -46,15 +76,20 @@ class Throughput(object):
 
     @classmethod
     def from_fits(cls, path):
-        """Creates a `Throughput` from an input FITS file.
+        """Create a :class:`Throughput` from an input FITS file.
         
-        Throughput data must be stored in extension 1, and
-        associated errors in extension 2 of the HDUL.
+        Throughput data and associated errors must be stored in HDUL extension 1,
+        and 2, respectively.
 
         Parameters
         ----------
-        - path: str
+        path: str
             Path to the FITS file containing the throughput data.
+
+        Returns
+        -------
+        throughput : :class:`Throughput`
+            A :class:`Throughput` initialised with the input data.
         """
         if not os.path.isfile(path):
             raise NameError(f"Throughput file {path} does not exists.")
@@ -74,11 +109,9 @@ class ThroughputCorrection(CorrectionBase):
 
     Attributes
     ----------
-    - name
-    -
     name : str
         Correction name, to be recorded in the log.
-    throughput : Throughput
+    throughput : :class:`Throughput`
         2D fibre throughput (n_fibres x n_wavelengths).
     verbose: bool
         False by default.
@@ -106,8 +139,13 @@ class ThroughputCorrection(CorrectionBase):
         
         Parameters
         ----------
-        - path: str
+        path: str
             Path to the FITS file containing the throughput data.
+        
+        Returns
+        -------
+        throughput_correction : :class:`ThroughputCorrection`
+            ThroughputCorrection initialised with the input Throughput data.
         """
         throughput = Throughput.from_fits(path)
         return cls(throughput, path)
@@ -115,22 +153,32 @@ class ThroughputCorrection(CorrectionBase):
     @classmethod
     def from_rss(cls, rss_set, clear_nan=True, statistic='median', medfilt=5,
                  pct_outliers=[5, 95]):
-        """Compute the throughput map from a set of flat exposures.
+        """Compute the throughput correctoin from a set of (dome/sky)flat exposures.
 
+        Description
+        -----------
         Given a set of flat exposures, this method will estimate the average
         efficiency of each fibre.
 
         Parameters
         ----------
-        - rss_set: (list)
+        rss_set: list
             List of RSS data.
-        - clean_nan: (bool, optional, default=True)
+        clean_nan: bool, optional, default=True
             If True, nan values will be replaced by a
             nearest neighbour interpolation.
-        - statistic: (str, optional, default='median')
+        statistic: str, optional, default='median'
             Set to 'median' or 'mean' to compute the throughput function.
-        - medfilt: (float, optional, default=None)
+        medfilt: float, optional, default=None
             If provided, apply a median filter to the throughput estimate.
+        pct_outliers : 2-element tupla
+            Percentile limits to clip outliers.
+
+        Returns
+        -------
+        throughput_correction : :class:`ThroughputCorrection`
+            ThroughputCorrection initialised with the resulting throughput
+            estimation.
         """
         if statistic == 'median':
             stat_func = np.nanmedian
@@ -182,27 +230,16 @@ class ThroughputCorrection(CorrectionBase):
 
         Parameters
         ----------
-        rss : RSS
-            Original Row-Stacked-Spectra object to be corrected.
-        throughput: Throughput
-            Throughput object to be applied.
-        plot : bool, optional, default=True
+        rss : :class:`pykoala.rss.RSS`
+            Original Row-Stacked-Spectra to be corrected.
 
         Returns
         -------
-        RSS
-            Corrected RSS object.
+        rss_corrected : :class:`pykoala.rss.RSS`
+            Corrected copy of the input RSS.
         """
-
-        if not isinstance(rss, RSS):
-            raise ValueError(
-                "Throughput can only be applied to RSS data:\n input {}"
-                .format(type(rss)))
-        # =============================================================================
-        # Copy input RSS for storage the changes implemented in the task
-        # =============================================================================
-        rss_out = copy.deepcopy(rss)
-
+        assert isinstance(rss, RSS), "Throughput can only be applied to RSS data"
+        rss_out = rss.copy()
         rss_out.intensity = rss_out.intensity / self.throughput.throughput_data
         rss_out.variance = rss_out.variance / self.throughput.throughput_data**2
         self.record_correction(rss_out, status='applied')

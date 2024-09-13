@@ -5,8 +5,6 @@ from matplotlib.gridspec import  GridSpec
 from matplotlib.collections import PatchCollection
 import os
 
-from pykoala.corrections.throughput import Throughput
-
 plt.style.use('dark_background')
 
 throughput_cmap = plt.cm.get_cmap('jet').copy()
