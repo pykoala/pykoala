@@ -1,13 +1,18 @@
 from matplotlib import pyplot as plt
 from matplotlib import colors
 from matplotlib.ticker import AutoMinorLocator
+from matplotlib.collections import PatchCollection
+from matplotlib.cm import ScalarMappable
 
 import numpy as np
 
+from astropy import units as u
 from astropy.visualization import (MinMaxInterval, PercentileInterval,
-                                   SqrtStretch, PowerStretch,
-                                   ImageNormalize, AsymmetricPercentileInterval)
+                                   AsymmetricPercentileInterval,
+                                   LinearStretch, SqrtStretch, PowerStretch,
+                                   ImageNormalize)
 
+plt.style.use('dark_background')
 THROUGHPUT_CMAP = plt.cm.get_cmap('seismic').copy()
 THROUGHPUT_CMAP.set_extremes(bad='gray', under='cyan', over='fuchsia')
 
@@ -219,6 +224,113 @@ def fibre_map(fig, ax, cblabel, data, rss=None, fib_ra=None, fib_dec=None,
 
     return im, cb
 
+def plot_fibres_on_ax(fig, ax, rss=None, x=None, y=None,
+                      fibre_diam=1.25 * u.arcsec, data=None, 
+                      patch_args={}, use_wcs=False, fix_limits=True,
+                      cmap=DEFAULT_CMAP, norm=None, cbax=None, cblabel=None, 
+                      norm_interval=MinMaxInterval, interval_args={},
+                      stretch=LinearStretch, stretch_args={}):
+    """
+    Plot a colour map of a physical magnitude defined on each fibre.
+
+    Parameters
+    ----------
+    fig : plt.Figure
+        Figure where the colour map will be drawn.
+    ax : mpl.Axes
+        Axes where the colour map will be drawn.
+    rss : RSS, optional, default=None
+        Row-Stacked Spectra containing the fibre positions.
+    x : np.ndarray or astropy.units.Quantity, optional, default=None
+        Fibre position values along the x axis.
+    y : np.ndarray or astropy.units.Quantity, optional, default=None
+        Fibre position values along the y axis.
+    fibre_diam : float or astropy.units.Quantity, optional, default=1.25 arcsec
+        Fibre diameter.
+    data : ndarray, optional, default=None
+        1D array to be represented. If None, fibres will appear as empty circles.
+    patch_args : dict, optional
+        Additional arguments passed to each fibre :class:`plt.Circle` patch.
+    use_wcs : bool, optional, default=False
+        If True, use axes WCS world transformation for plotting the patches.
+    fix_limits : bool, optional, default=True
+        If True, set the limits of the axes using the edge values of ``x`` and ``y``.
+    cmap : str or mpl.colors.Norm, optional
+        Colormap used to plot the values of ``data``.
+    norm : str or mpl.colors.Norm, optional
+        Normalization map for plotting ``data``.
+    cbax: mpl.Axes
+        Axes where the plt.Colorbar will be drawn.
+    clabel: str
+        Colorbar label.
+    norm_interval : astropy.visualization.BaseInterval, optional, default=MinMaxInterval
+        Interval to create a normalization map.
+    interval_args : dict
+        Additional arguments to be passed to the interval.
+    stretch : astropy.visualization.BaseStretch, optional, default=LinearStretch
+        Stretching used on the normalization map.
+    stretch_args : dict, optional
+        Additional arguments to be passed to stretch.
+    Returns
+    -------
+    ax : mpl.Axes
+    patch_collection : mpl.PatchCollection
+    cb : mpl.Colorbar
+    """
+    if rss is not None:
+        x = rss.info['fib_ra']
+        y = rss.info['fib_dec']
+    if not isinstance(x, u.Quantity):
+        x = x << u.degree
+        y = y << u.degree
+    if not isinstance(fibre_diam, u.Quantity):
+        fibre_diam = fibre_diam << u.degree    
+
+    if fix_limits:
+        ax.set_xlim((x.min() - fibre_diam).value,
+                    (x.max() + fibre_diam).value)
+        ax.set_ylim((y.min() - fibre_diam).value,
+                    (y.max() + fibre_diam).value)
+
+    if norm is None:
+        interval = norm_interval(**interval_args)
+        norm = ImageNormalize(data, interval=interval,
+                              stretch=stretch(**stretch_args),
+                              clip=False)
+    elif isinstance(norm, str):
+        norm = getattr(colors, norm)()
+
+    if data is not None:
+        colors = cmap(norm(data))
+        mappable = ScalarMappable(norm=norm, cmap=cmap)
+        if cbax is None:
+            cb = fig.colorbar(mappable, ax=ax, orientation='vertical', shrink=.9)
+            cbax = cb.ax
+        elif cbax is False:
+            cb = None
+        else:
+            cb = fig.colorbar(mappable, cax=cbax, orientation='vertical')
+        if cbax:
+            cb.ax.yaxis.set_label_position("left")
+            cb.set_label(cblabel)
+            cb.ax.tick_params(labelsize='small')
+    else:
+        colors = ["none"] * len(x)
+        cb = None
+
+    if "edgecolor" not in patch_args:
+        patch_args["edgecolor"] = "w"
+
+    if use_wcs:
+        patch_args["transform"] = ax.get_transform('world')
+
+    patches = [plt.Circle(
+        xy=(x_c, y_c), radius=fibre_diam.value / 2, facecolor=color, **patch_args
+        ) for x_c, y_c, color in zip(x.value, y.value, colors)]
+    patch_collection = PatchCollection(patches, match_original=True,
+                                       label='Fibre')
+    ax.add_collection(patch_collection)
+    return ax, patch_collection, cb
 
 def throughput_cmap_style(func):
     def wrapper(*args, **kwargs):
@@ -467,7 +579,6 @@ def qc_fibres_on_fov(fov_size, pixel_colum_pos, pixel_row_pos,
                           fc='none', ec='k', lw=2, label='Cube FoV')
     ax.add_patch(patch)
     ax.legend(handles=[patch])
-
 
 # =============================================================================
 # Star profile
