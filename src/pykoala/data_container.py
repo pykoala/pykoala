@@ -838,6 +838,14 @@ class RSS(SpectraContainer):
                                        ) * np.count_nonzero(wave_mask)
         return integrated_fibres, integrated_variances
 
+    def get_footprint(self):
+        """Compute the spatial fibre coverage of the RSS."""
+        min_ra, max_ra = self.info['fib_ra'].min(), self.info['fib_ra'].max()
+        min_dec, max_dec = self.info['fib_dec'].min(), self.info['fib_dec'].max()
+        footprint = np.array([[max_ra, max_dec], [max_ra, min_dec],
+                              [min_ra, max_dec], [min_ra, min_dec]])
+        return footprint
+
     def plot_rss_image(self, data=None, data_label="", fig_args={}, cmap_args={},
                        fibre_range=None,
                        wavelength_range=None,
@@ -1037,7 +1045,6 @@ class Cube(SpectraContainer):
 
     @hdul.setter
     def hdul(self, hdul):
-        print(hdul)
         assert isinstance(hdul, fits.HDUList)
         self._hdul = hdul
 
@@ -1179,6 +1186,10 @@ class Cube(SpectraContainer):
             self.intensity[wave_mask] * freq_trans[wave_mask, np.newaxis, np.newaxis] * weights, axis=0
             ) / np.nansum(weights, axis=0)
         return white_image
+
+    def get_footprint(self):
+        """Compute the spatial footprint of the datacube."""
+        return self.wcs.celestial.calc_footprint()
 
     def to_fits(self, fname=None, primary_hdr_kw=None):
         """Save the Cube into a FITS file."""
