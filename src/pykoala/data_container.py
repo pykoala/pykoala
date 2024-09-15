@@ -1103,8 +1103,8 @@ class Cube(SpectraContainer):
         - cube: Cube
             An instance of a `pykoala.cubing.Cube`.
         """
-        with fits.open(path) as hdul:
-            return cls(hdul, hdul_extension_map=hdul_extension_map, **kwargs)
+        hdul = fits.open(path)
+        return cls(hdul, hdul_extension_map=hdul_extension_map, **kwargs)
 
     def parse_info_from_header(self):
         """Look into the primary header for pykoala information."""
