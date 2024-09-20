@@ -16,7 +16,7 @@ from astropy.coordinates import SkyCoord
 # =============================================================================
 from pykoala import ancillary
 from pykoala.data_container import Cube
-from pykoala.plotting import qc_plot
+from pykoala.plotting.utils import qc_cubing,qc_fibres_on_fov
 from pykoala import __version__, vprint
 from scipy.special import erf
 
@@ -373,7 +373,7 @@ def interpolate_rss(rss, wcs, kernel,
         SkyCoord(rss.info['fib_ra'], rss.info['fib_dec'], unit='deg')
         )
     if qc_plots:
-        qc_fig = qc_plot.qc_fibres_on_fov(
+        qc_fig = qc_fibres_on_fov(
             datacube.shape[1:], fibre_pixel_pos_cols, fibre_pixel_pos_rows,
             fibre_diam=getattr(rss, 'fibre_diameter',
                                1.25 / kernel.pixel_scale_arcsec))
@@ -493,7 +493,7 @@ def build_cube(rss_set, wcs=None, wcs_params=None,
     cube = Cube(hdul=hdul, info=info)
     if qc_plots:
         # Compute the fibre coverage and exposure time maps
-        plots[f'weights'] = qc_plot.qc_cubing(all_w, all_exp)
+        plots[f'weights'] = qc_cubing(all_w, all_exp)
         return cube, plots
     return cube
 
