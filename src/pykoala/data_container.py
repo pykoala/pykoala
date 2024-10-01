@@ -28,7 +28,7 @@ from astropy import units as u
 
 from pykoala import VerboseMixin, __version__
 from pykoala import ancillary
-from pykoala.plotting.utils import colour_map, new_figure, fibre_map
+from pykoala.plotting.utils import plot_image, new_figure, fibre_map
 # =============================================================================
 
 
@@ -870,7 +870,7 @@ class RSS(SpectraContainer):
             Additional keyword arguments passed to `pykoala.plotting.utils.new_figure` for customizing the figure. 
             Default is an empty dictionary.
         cmap_args : dict, optional
-            Additional keyword arguments passed to the `pykoala.plotting.utils.colour_map` function for the colormap
+            Additional keyword arguments passed to the `pykoala.plotting.utils.plot_image` function for the colormap
             and normalization.  Default is an empty dictionary.
         fibre_range : tuple of int, optional
             A tuple specifying the range of fibres to include in the plot (start, end).
@@ -890,7 +890,7 @@ class RSS(SpectraContainer):
         -----
         - The function uses the internal attributes `self.wavelength` and `self.intensity` to obtain default x-values 
         (wavelengths) and y-values (fibre indices) if `data` is not provided.
-        - The `new_figure` function is used to create a new figure, and `colour_map` is used to plot the data.
+        - The `new_figure` function is used to create a new figure, and `plot_image` is used to plot the data.
         - If `fibre_range` or `wavelength_range` is specified, the data is sliced accordingly.
         - The plot is saved to `output_filename` if provided, otherwise the figure is returned for display or further manipulation.
 
@@ -910,7 +910,7 @@ class RSS(SpectraContainer):
             x = x[wavelength_range]
 
         fig, axs = new_figure(self.info['name'], **fig_args)
-        im, cb = colour_map(fig, axs[0, 0], data_label, data,
+        im, cb = plot_image(fig, axs[0, 0], data_label, data,
                             x=x, y=y,
                             xlabel="Wavelength [AA]", ylabel="Fibre",
                             **cmap_args)
@@ -931,7 +931,7 @@ class RSS(SpectraContainer):
             Additional keyword arguments passed to the `new_figure` function for customizing the figure.
             Default is an empty dictionary.
         cmap_args : dict, optional
-            Additional keyword arguments passed to the `colour_map` function for customizing the colormap.
+            Additional keyword arguments passed to the `plot_image` function for customizing the colormap.
             If not specified, the colormap is set to "Accent" and normalization to "Normalize". Default is an empty dictionary.
         output_filename : str, optional
             If provided, the plot is saved to the specified file path. Default is `None`.

@@ -135,7 +135,7 @@ class Throughput(object):
         # Throughput map
         ax = fig.add_subplot(gs[0, 0:-1])
         p_values = np.nanpercentile(self.throughput_data, pct)
-        im, cb = plot_utils.colour_map(fig, ax, cblabel="Throughput",
+        im, cb = plot_utils.plot_image(fig, ax, cblabel="Throughput",
                                        xlabel="wavelength axis",
                                        ylabel="Fibre",
                                        norm=plot_utils.colors.Normalize(

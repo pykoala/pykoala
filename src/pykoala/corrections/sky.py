@@ -27,7 +27,7 @@ import scipy.signal
 # =============================================================================
 # Modular
 from pykoala import vprint
-from pykoala.plotting.utils import new_figure, colour_map
+from pykoala.plotting.utils import new_figure, plot_image
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.corrections.throughput import Throughput
 from pykoala.corrections.wavelength import WavelengthOffset
@@ -1569,9 +1569,9 @@ class WaveletFilter(object):
         '''
         fig, axes = new_figure('wavelet_filter', nrows=3, ncols=2, sharey=False, gridspec_kw={
                                'width_ratios': [1, .02], 'hspace': 0., 'wspace': .1})
-        im, cb = colour_map(fig, axes[0, 0], 'wavelet coefficient', self.filtered,
+        im, cb = plot_image(fig, axes[0, 0], 'wavelet coefficient', self.filtered,
                             x=self.wavelength, ylabel='spec_id', cbax=axes[0, 1])
-        im, cb = colour_map(fig, axes[1, 0], 'sky-subtracted', self.filtered -
+        im, cb = plot_image(fig, axes[1, 0], 'sky-subtracted', self.filtered -
                             self.sky, x=self.wavelength, ylabel='spec_id', cbax=axes[1, 1])
         axes[1, 0].sharey(axes[0, 0])
         ax = axes[-1, 0]

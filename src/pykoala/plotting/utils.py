@@ -1,13 +1,8 @@
 from matplotlib import pyplot as plt
 from matplotlib import colors
-from matplotlib.colors import LogNorm
 from matplotlib.ticker import AutoMinorLocator
 from matplotlib.collections import PatchCollection
 from matplotlib.cm import ScalarMappable
-import numpy as np
-from matplotlib import pyplot as plt
-
-
 
 import numpy as np
 
@@ -17,7 +12,7 @@ from astropy.visualization import (MinMaxInterval, PercentileInterval,
                                    LinearStretch, SqrtStretch, PowerStretch,
                                    ImageNormalize)
 
-plt.style.use('dark_background')
+# plt.style.use('dark_background')
 THROUGHPUT_CMAP = plt.cm.get_cmap('seismic').copy()
 THROUGHPUT_CMAP.set_extremes(bad='gray', under='cyan', over='fuchsia')
 
@@ -29,8 +24,8 @@ def new_figure(fig_name,
                figsize=None,
                **kwargs):
     """
-    Close old version of the figure and create new one
-    with default sizes and format.
+    Close old version of the figure and create new one.
+    
 
     Parameters
     ----------
@@ -40,13 +35,13 @@ def new_figure(fig_name,
         Number of rows.
     ncols : int
         Number of columns.
-    sharex : str/bool, optional
+    sharex : str or bool, optional
         Whether panels share the x axis. True, False, or 'col'
         (default; x-axis shared accross columns)
-    sharey : str/bool, optional
+    sharey : str or bool, optional
         Whether panels share the y axis. True, False, or 'row'
         (default; y-axis shared accross rows)
-    **gridspec_kw : dict, optinal
+    **gridspec_kw : dict, optional
         Default sets height and width space to `{'hspace': 0, 'wspace': 0})`
 
     Returns
@@ -88,7 +83,7 @@ def new_figure(fig_name,
 
     return fig, axes
 
-def colour_map(fig, ax, cblabel, data,
+def plot_image(fig, ax, cblabel, data,
                cmap=DEFAULT_CMAP,
                xlabel=None, x=None,
                ylabel=None, y=None,
