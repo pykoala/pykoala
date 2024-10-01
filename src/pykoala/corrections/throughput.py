@@ -141,7 +141,7 @@ class Throughput(object):
                                        norm=plot_utils.colors.Normalize(
                                            vmin=p_values[0],
                                            vmax=2 - p_values[0]),
-                                        cmap=plot_utils.THROUGHPUT_CMAP,
+                                        cmap=plot_utils.SYMMETRIC_CMAP,
                                        data=self.throughput_data)
         # Histogram
         ax = fig.add_subplot(gs[0, -1])

@@ -13,8 +13,8 @@ from astropy.visualization import (MinMaxInterval, PercentileInterval,
                                    ImageNormalize)
 
 # plt.style.use('dark_background')
-THROUGHPUT_CMAP = plt.cm.get_cmap('seismic').copy()
-THROUGHPUT_CMAP.set_extremes(bad='gray', under='cyan', over='fuchsia')
+SYMMETRIC_CMAP = plt.cm.get_cmap('seismic').copy()
+SYMMETRIC_CMAP.set_extremes(bad='gray', under='cyan', over='fuchsia')
 
 DEFAULT_CMAP = plt.get_cmap("gist_earth").copy()
 DEFAULT_CMAP.set_bad('gray')
@@ -275,17 +275,7 @@ def plot_fibres(fig, ax, rss=None, x=None, y=None,
     ax.add_collection(patch_collection)
     return ax, patch_collection, cb
 
-def throughput_cmap_style(func):
-    def wrapper(*args, **kwargs):
-        plt.style.use('dark_background')
-        throughput_cmap = plt.cm.get_cmap('jet').copy()
-        throughput_cmap.set_extremes(bad='gray', under='black', over='fuchsia')
 
-        # Call the original function with the new style
-        return throughput_cmap
-    return wrapper
-
-@throughput_cmap_style
 def qc_throughput(throughput):
     """Create a quality control (QC) plot of a 2D throughput.
 
@@ -304,7 +294,7 @@ def qc_throughput(throughput):
     gs = fig.add_gridspec(3, 4, wspace=0.15, hspace=0.35)
 
     ax = fig.add_subplot(gs[0, 0:-1])
-    mappable = ax.imshow(throughput_data, origin='lower', cmap=throughput_cmap,
+    mappable = ax.imshow(throughput_data, origin='lower', cmap=SYMMETRIC_CMAP,
                          vmin=0.8, vmax=1.2, aspect='auto')
     plt.colorbar(mappable, ax=ax)
     ax.set_xlabel("wavelength axis")
