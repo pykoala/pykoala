@@ -1,8 +1,13 @@
 from matplotlib import pyplot as plt
 from matplotlib import colors
+from matplotlib.colors import LogNorm
 from matplotlib.ticker import AutoMinorLocator
 from matplotlib.collections import PatchCollection
 from matplotlib.cm import ScalarMappable
+import numpy as np
+from matplotlib import pyplot as plt
+
+
 
 import numpy as np
 
@@ -656,7 +661,7 @@ def qc_registration(rss_list, **kwargs):
         axs[i+1].scatter(rss.info['fib_ra'],
                    rss.info['fib_dec'],
                    c=np.nansum(rss.intensity, axis=1),
-                   norm=LogNorm(),
+                   norm=colors.LogNorm(),
                    marker='o', cmap='Greys_r',
                    )
         axs[i+1].axvline(0, c=cmap(i / (n_rss - 1)), lw=1.5)
