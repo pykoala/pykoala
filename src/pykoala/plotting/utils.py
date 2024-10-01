@@ -268,7 +268,8 @@ def plot_fibres(fig, ax, rss=None, x=None, y=None,
         patch_args["transform"] = ax.get_transform('world')
 
     patches = [plt.Circle(
-        xy=(x_c, y_c), radius=fibre_diam.value / 2, facecolor=color, **patch_args
+        xy=(x_c, y_c), radius=fibre_diam.to_value(x.unit) / 2, facecolor=color,
+        **patch_args
         ) for x_c, y_c, color in zip(x.value, y.value, colors)]
     patch_collection = PatchCollection(patches, match_original=True,
                                        label='Fibre')
