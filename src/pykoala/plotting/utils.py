@@ -164,72 +164,12 @@ def plot_image(fig, ax, cblabel, data,
 
     return im, cb
 
-def plot_fibres(fig, ax, cblabel, data, rss=None, fib_ra=None, fib_dec=None,
-              s=100, cmap=DEFAULT_CMAP, norm=None, cbax=None,
-              norm_interval=AsymmetricPercentileInterval,
-              interval_args={"lower_percentile": 1.0,
-                              "upper_percentile": 99.0},
-              stretch=PowerStretch, stretch_args={"a": 0.7}):
-    """
-    Plot a colour map of a physical magnitude defined on each fibre.
-
-    Parameters
-    ----------
-    fig : plt.Figure
-        Figure where the colour map will be drawn.
-    ax : mpl.Axes
-        Axes where the colour map will be drawn.
-    cblabel : str 
-        Label of the colorbar
-    rss : RSS
-        Row-Stacked Spectra containing the fibre positions.
-    data : ndarray
-        1D array to be represented.
-    cmap : str or mpl.colors.Norm
-    norm : mpl.colors.Norm
-    cbax: mpl.Axes
-        Axes where the colour bar will be drawn.
-
-    Returns
-    -------
-    im : mpl.AxesImage
-    cb : mpl.Colorbar
-    """
-
-    if norm is None:
-        interval = norm_interval(**interval_args)
-        norm = ImageNormalize(data, interval=interval,
-                              stretch=stretch(**stretch_args),
-                              clip=False)
-    elif isinstance(norm, str):
-        norm = getattr(colors, norm)()
-
-    s = np.prod(ax.bbox.size) / data.size / 2
-    if rss is not None:
-        fib_ra, fib_dec = rss.info['fib_ra'], rss.info['fib_dec']
-    im = ax.scatter(fib_ra, fib_dec, c=data,
-                    s=s, cmap=cmap, norm=norm)
-
-    if cbax is None:
-        cb = fig.colorbar(im, ax=ax, orientation='vertical', shrink=.9)
-        cbax = cb.ax
-    elif cbax is False:
-        cb = None
-    else:
-        cb = fig.colorbar(im, cax=cbax, orientation='vertical')
-    if cbax:
-        cb.ax.yaxis.set_label_position("left")
-        cb.set_label(cblabel)
-        cb.ax.tick_params(labelsize='small')
-
-    return im, cb
-
-def plot_fibres_on_ax(fig, ax, rss=None, x=None, y=None,
-                      fibre_diam=1.25 * u.arcsec, data=None, 
-                      patch_args={}, use_wcs=False, fix_limits=True,
-                      cmap=DEFAULT_CMAP, norm=None, cbax=None, cblabel=None, 
-                      norm_interval=MinMaxInterval, interval_args={},
-                      stretch=LinearStretch, stretch_args={}):
+def plot_fibres(fig, ax, rss=None, x=None, y=None,
+                fibre_diam=1.25 * u.arcsec, data=None, 
+                patch_args={}, use_wcs=False, fix_limits=True,
+                cmap=DEFAULT_CMAP, norm=None, cbax=None, cblabel=None, 
+                norm_interval=MinMaxInterval, interval_args={},
+                stretch=LinearStretch, stretch_args={}):
     """
     Plot a colour map of a physical magnitude defined on each fibre.
 
