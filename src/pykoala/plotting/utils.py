@@ -165,7 +165,7 @@ def plot_image(fig, ax, cblabel, data,
     return im, cb
 
 def plot_fibres(fig, ax, rss=None, x=None, y=None,
-                fibre_diam=1.25 * u.arcsec, data=None, 
+                fibre_diam=None, data=None, 
                 patch_args={}, use_wcs=False, fix_limits=True,
                 cmap=DEFAULT_CMAP, norm=None, cbax=None, cblabel=None, 
                 norm_interval=MinMaxInterval, interval_args={},
@@ -220,11 +220,14 @@ def plot_fibres(fig, ax, rss=None, x=None, y=None,
     if rss is not None:
         x = rss.info['fib_ra']
         y = rss.info['fib_dec']
+        fibre_diam = rss.fibre_diameter
+    else:
+        if fibre_diam is None:
+            raise ValueError("Must provide a fibre diameter value")
+
     if not isinstance(x, u.Quantity):
         x = x << u.degree
         y = y << u.degree
-    if not isinstance(fibre_diam, u.Quantity):
-        fibre_diam = fibre_diam << u.degree    
 
     if fix_limits:
         ax.set_xlim((x.min() - fibre_diam).value,
@@ -259,7 +262,7 @@ def plot_fibres(fig, ax, rss=None, x=None, y=None,
         cb = None
 
     if "edgecolor" not in patch_args:
-        patch_args["edgecolor"] = "w"
+        patch_args["edgecolor"] = "k"
 
     if use_wcs:
         patch_args["transform"] = ax.get_transform('world')
