@@ -164,7 +164,7 @@ def plot_image(fig, ax, cblabel, data,
 
     return im, cb
 
-def fibre_map(fig, ax, cblabel, data, rss=None, fib_ra=None, fib_dec=None,
+def plot_fibres(fig, ax, cblabel, data, rss=None, fib_ra=None, fib_dec=None,
               s=100, cmap=DEFAULT_CMAP, norm=None, cbax=None,
               norm_interval=AsymmetricPercentileInterval,
               interval_args={"lower_percentile": 1.0,

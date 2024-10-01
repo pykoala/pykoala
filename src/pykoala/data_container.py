@@ -28,7 +28,7 @@ from astropy import units as u
 
 from pykoala import VerboseMixin, __version__
 from pykoala import ancillary
-from pykoala.plotting.utils import plot_image, new_figure, fibre_map
+from pykoala.plotting.utils import plot_image, new_figure, plot_fibres
 # =============================================================================
 
 
@@ -961,7 +961,7 @@ class RSS(SpectraContainer):
         # TODO: THIS SHOULD BE A METHOD OF THE PARENT CLASS
         pass
 
-    def plot_fibre_map(self, data=None, cblabel="", fig_args={},
+    def plot_plot_fibres(self, data=None, cblabel="", fig_args={},
                        cmap_args={}, output_filename=None):
         """
         Plots a fibre map image, showing the spatial distribution of data across fibres.
@@ -984,7 +984,7 @@ class RSS(SpectraContainer):
             customizing the figure. Default is an empty dictionary.
         
         cmap_args : dict, optional
-            Additional keyword arguments passed to the `fibre_map` function for
+            Additional keyword arguments passed to the `plot_fibres` function for
             customizing the colormap. Default is an empty dictionary.
         
         output_filename : str, optional
@@ -1000,7 +1000,7 @@ class RSS(SpectraContainer):
             cblabel = "Integrated intensity"
         fig, axs = new_figure(self.info['name'], **fig_args)
         axs[0, 0].set_aspect('auto')
-        im, cb = fibre_map(fig, axs[0, 0], cblabel, data, fib_ra=self.info['fib_ra'],
+        im, cb = plot_fibres(fig, axs[0, 0], cblabel, data, fib_ra=self.info['fib_ra'],
                          fib_dec=self.info['fib_dec'], **cmap_args)
         if output_filename is not None:
             fig.savefig(output_filename, bbox_inches="tight")
