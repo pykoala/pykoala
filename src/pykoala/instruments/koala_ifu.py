@@ -10,6 +10,7 @@ import os
 # =============================================================================
 # Astropy and associated packages
 # =============================================================================
+from astropy import units as u
 from astropy.io import fits
 from astropy.wcs import WCS
 # =============================================================================
@@ -156,7 +157,8 @@ def read_rss(file_path,
                variance=variance,
                wavelength=wavelength,
                info=info,
-               header=header)
+               header=header,
+               fibre_diameter=1.25 * u.arcsec)
     rss.history('read', ' '.join(['- RSS read from ', file_name]))
     return rss
 
