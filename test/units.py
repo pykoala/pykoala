@@ -6,12 +6,19 @@ import os
 import pykoala.data_container as dc 
 import numpy as np
 
+#Pytest fixtures are similar to decorators. They are used 
+# for setting up the (and sometimes tearing down) the 
+# environment needed for tests. In this case, we are 
+# using it to create a temporary directory to store 
+# any test output. More info: 
+# https://docs.pytest.org/en/6.2.x/fixture.html#factories-as-fixtures
+
 @pytest.fixture(scope="session")
-def session_tmpdir(tmpdir_factory):
+def make_tmpdir(tmpdir_factory):
     session_dir = tmpdir_factory.mktemp("session_tmp")
     return session_dir
     
-class TestDataContainer:
+class TestDC:
 
     def test_history_record(self):
         t_hist_record = dc.HistoryRecord("Title for test",["comments","for","test"])
@@ -25,7 +32,7 @@ class TestDataContainer:
         assert type(t_hist_record_tostr.to_str()) == str
 
 
-    def test_data_container_history(self,session_tmpdir):
+    def test_data_container_history(self,make_tmpdir):
         list_of_entries = [['TITLE','COMMENTS','TAG'],['title_1','title_2','title_3']]
 
         log = dc.DataContainerHistory()
@@ -34,7 +41,7 @@ class TestDataContainer:
         log_expanded.initialise_record(list_of_entries=list_of_entries)
         
         log_expanded.log_record("NEW_TITLE", ['new_title_1'])
-        _tmp_file = session_tmpdir.join("session_file.txt")
+        _tmp_file = make_tmpdir.join("session_file.txt")
         _tmp_header = log.dump_to_header()
         log.dump_to_text(_tmp_file)
         _title_from_entry = log.get_entries_from_header(_tmp_header)[0].title
@@ -44,6 +51,8 @@ class TestDataContainer:
 
         #Commented line also works, but it is too confusing to read:
         #assert file.readlines()[0].rstrip('\n') == list_of_entries[0][0]+": "+list_of_entries[0][1] 
+
+        #Strcture for assert lines: assert condition_to_be_tested log_message_in_case_test_fails
         assert _tmp_file.readlines()[0].rstrip('\n') == "TITLE: COMMENTS", "dump_to_text() does not write correct record"
         assert log.is_record("TITLE"), "is_record() cannot find correct record"
         assert not log.is_record("INCORRECT TITLE"), "is_record() takes incorrect record as correct"
@@ -53,4 +62,27 @@ class TestDataContainer:
         assert _comments_from_entry[0] == 'COMMENTS', "get_entries_from_header() gets wrong comments"
 
 
+#   For some classes, we need some data to test the methods. 
+#   Here it is the proposed pseudo-code for these tests in test_data_mask (I include an assert True for completeness)  
+#
     def test_data_mask(self):
+#       preamble of tests (setting up the tmp directory with pixtures if needed):
+#       define_test_data_input = dc.DataMask(object)
+#       define data output to test (requires known output)  
+# 
+# 
+#       block of asserts for (almost) each method   
+#        
+        assert True
+
+    def test_data_container(self):
+        assert True
+
+    def test_spectra_container(self):
+        assert True
+
+    def test_rss(self):    
+        assert True 
+
+    def test_cube(self):
+        assert True
