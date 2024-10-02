@@ -73,7 +73,7 @@ class HistoryRecord(object):
             )
 
     def to_str(self, title=True):
-        """Convert the record into a string."""
+        """Convert the title record into a string."""
         comments = "\n".join(self.comments)
         if title:
             comments = f"{self.title}: " + comments
@@ -190,15 +190,15 @@ class DataContainerHistory(VerboseMixin):
 
         Parameters
         ----------
-        - title: (str, default='')
+        title: (str, default='')
             record title str.
-        - comment: (str, default='')
+        comment: (str, default='')
             record comment str.
-        - tag: (str, default='')
+        tag: (str, default='')
             record tag str.
         Returns
         -------
-        - entries: (list)
+        entries: (list)
             List of entries associated to the input title, comment and tag.
         """
         return [
@@ -599,12 +599,12 @@ class SpectraContainer(DataContainer):
         
         Parameters
         ----------
-        - wave_range: 2-element iterable, ooptional
+        wave_range: 2-element iterable, ooptional
             Wavelength limits to compute the median intensity per spatial element.
         
         Returns
         -------
-        - sorted_order:
+        sorted_order:
             Sorted list of indices.
         """
         if wave_range is None:
@@ -650,13 +650,13 @@ class RSS(SpectraContainer):
 
         Parameters
         ----------
-        wavelength_step: int, default=1
-            Number of wavelength points to consider for averaging the COM. When setting it to 1 it will average over
+        wavelength_step: int
+            Number of wavelength points to consider for averaging the COM. Default is 1. When setting it to 1 it will average over
             all wavelength points.
-        stat: function, default=np.median
-            Function to compute the COM over each wavelength range.
-        power: float (default=1.0)
-            Power the intensity to compute the COM.
+        stat: function
+            Function to compute the COM over each wavelength range. Default function is np.median
+        power: float 
+            Power the intensity to compute the COM. Default is 1.0
         Returns
         -------
         x_com: np.array(float)
@@ -785,7 +785,7 @@ class RSS(SpectraContainer):
     def get_integrated_fibres(self, wavelength_range=None):
         """Compute the integrated intensity of the RSS fibres.
         
-        Paramters
+        Parameters
         ---------
         wavelength_range: 2-element iterable, optional
             Wavelenght limits used to compute the integrated intensity.
