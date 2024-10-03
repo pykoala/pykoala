@@ -33,7 +33,8 @@ jobs:
     - name: Test with pytest
       run: |
         py.test --nbval-lax tutorials/reduction_sequence_science.ipynb tutorials/create_combined_throughput.ipynb tutorials/reduction_sequence_std_stars.ipynb tutorials/cubing.ipynb tutorials/data_container_mask.ipynb tutorials/koala_tutorial_1_intro.ipynb
-
+        make test-units
+        
   build-macos:
     runs-on: macos-latest
     strategy:
@@ -65,3 +66,4 @@ jobs:
     - name: Test with pytest
       run: |
         py.test --nbval-lax tutorials/reduction_sequence_science.ipynb tutorials/create_combined_throughput.ipynb tutorials/reduction_sequence_std_stars.ipynb tutorials/cubing.ipynb tutorials/data_container_mask.ipynb tutorials/koala_tutorial_1_intro.ipynb
+        make test-units
