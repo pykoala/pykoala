@@ -1,7 +1,7 @@
 # Makefile
 
 test-notebooks:
-	py.test --nbval-lax `cat successful_run_notebooks.txt`
+	py.test --nbval-lax `cat testable_notebooks.txt`
 
 test-units:
-	py.test -v test/test_units.py
+	py.test -v test/unit_tests.py

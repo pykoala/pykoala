@@ -638,39 +638,11 @@ class RSS(SpectraContainer):
     def rss_variance(self, value):
         self.variance = value
 
-    @property
-    def fibre_diameter(self):
-        """Angular diameter of the RSS fibres."""
-        return self._fibre_diameter
-    
-    @fibre_diameter.setter
-    def fibre_diameter(self, value):
-        assert isinstance(value, u.Quantity) or value is None, (
-            "Fibre diameter must be a astropy.units.Quantity")
-        self._fibre_diameter = value
-
-    @property
-    def sky_fibres(self):
-        """Indices of the RSS sky fibres."""
-        return self._sky_fibres
-    
-    @sky_fibres.setter
-    def sky_fibres(self, value):
-        self._sky_fibres = value
-
-    @property
-    def science_fibres(self):
-        """Indices of fibres with a science target."""
-        return np.delete(np.arange(self.intensity.shape[0]), self.sky_fibres)
-
     def __init__(self, **kwargs):
         assert ('wavelength' in kwargs)
         assert ('intensity' in kwargs)
         if "logger" not in kwargs:
             kwargs['logger'] = "pykoala.rss"
-
-        self.fibre_diameter = kwargs.get("fibre_diameter", None)
-        self.sky_fibres = kwargs.get("sky_fibres", [])
         super().__init__(**kwargs)
 
     def get_centre_of_mass(self, wavelength_step=1, stat=np.nanmedian, power=1.0):
