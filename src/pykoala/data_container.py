@@ -73,7 +73,7 @@ class HistoryRecord(object):
             )
 
     def to_str(self, title=True):
-        """Convert the title record into a string."""
+        """Convert the record into a string."""
         comments = "\n".join(self.comments)
         if title:
             comments = f"{self.title}: " + comments
@@ -190,15 +190,15 @@ class DataContainerHistory(VerboseMixin):
 
         Parameters
         ----------
-        title: (str, default='')
+        - title: (str, default='')
             record title str.
-        comment: (str, default='')
+        - comment: (str, default='')
             record comment str.
-        tag: (str, default='')
+        - tag: (str, default='')
             record tag str.
         Returns
         -------
-        entries: (list)
+        - entries: (list)
             List of entries associated to the input title, comment and tag.
         """
         return [
@@ -599,12 +599,12 @@ class SpectraContainer(DataContainer):
         
         Parameters
         ----------
-        wave_range: 2-element iterable, ooptional
+        - wave_range: 2-element iterable, ooptional
             Wavelength limits to compute the median intensity per spatial element.
         
         Returns
         -------
-        sorted_order:
+        - sorted_order:
             Sorted list of indices.
         """
         if wave_range is None:
@@ -638,11 +638,39 @@ class RSS(SpectraContainer):
     def rss_variance(self, value):
         self.variance = value
 
+    @property
+    def fibre_diameter(self):
+        """Angular diameter of the RSS fibres."""
+        return self._fibre_diameter
+    
+    @fibre_diameter.setter
+    def fibre_diameter(self, value):
+        assert isinstance(value, u.Quantity) or value is None, (
+            "Fibre diameter must be a astropy.units.Quantity")
+        self._fibre_diameter = value
+
+    @property
+    def sky_fibres(self):
+        """Indices of the RSS sky fibres."""
+        return self._sky_fibres
+    
+    @sky_fibres.setter
+    def sky_fibres(self, value):
+        self._sky_fibres = value
+
+    @property
+    def science_fibres(self):
+        """Indices of fibres with a science target."""
+        return np.delete(np.arange(self.intensity.shape[0]), self.sky_fibres)
+
     def __init__(self, **kwargs):
         assert ('wavelength' in kwargs)
         assert ('intensity' in kwargs)
         if "logger" not in kwargs:
             kwargs['logger'] = "pykoala.rss"
+
+        self.fibre_diameter = kwargs.get("fibre_diameter", None)
+        self.sky_fibres = kwargs.get("sky_fibres", [])
         super().__init__(**kwargs)
 
     def get_centre_of_mass(self, wavelength_step=1, stat=np.nanmedian, power=1.0):
@@ -650,13 +678,13 @@ class RSS(SpectraContainer):
 
         Parameters
         ----------
-        wavelength_step: int
-            Number of wavelength points to consider for averaging the COM. Default is 1. When setting it to 1 it will average over
+        wavelength_step: int, default=1
+            Number of wavelength points to consider for averaging the COM. When setting it to 1 it will average over
             all wavelength points.
-        stat: function
-            Function to compute the COM over each wavelength range. Default function is np.median
-        power: float 
-            Power the intensity to compute the COM. Default is 1.0
+        stat: function, default=np.median
+            Function to compute the COM over each wavelength range.
+        power: float (default=1.0)
+            Power the intensity to compute the COM.
         Returns
         -------
         x_com: np.array(float)
@@ -785,7 +813,7 @@ class RSS(SpectraContainer):
     def get_integrated_fibres(self, wavelength_range=None):
         """Compute the integrated intensity of the RSS fibres.
         
-        Parameters
+        Paramters
         ---------
         wavelength_range: 2-element iterable, optional
             Wavelenght limits used to compute the integrated intensity.
