@@ -17,7 +17,7 @@ from astropy import constants
 from astropy.table import Table
 from astropy.io import fits
 from astropy.wcs import WCS
-from astropy.nddata import CCDData
+from astropy.nddata import CCDData, StdDevUncertainty
 from astropy.coordinates import SkyCoord
 from photutils.aperture import SkyCircularAperture, ApertureStats
 
@@ -25,7 +25,7 @@ from photutils.aperture import SkyCircularAperture, ApertureStats
 from pykoala import vprint
 from pykoala.data_container import Cube, RSS
 from pykoala.ancillary import update_wcs_coords
-
+from pykoala.plotting import utils
 
 class QueryMixin:
     """Mixin with common methods for image queries to external databases."""
@@ -347,6 +347,15 @@ def query_image(data_containers, query=PSQuery, filters='r', im_extra_size_arcse
                             output_dir=im_output_dir)
     return images
 
+def get_aperture_photometry(coordinates, diameters, image : CCDData):
+    """TODO"""
+    apertures = SkyCircularAperture(coordinates, r=diameters / 2)
+    table = ApertureStats(image, apertures, sum_method='exact')
+    flux_in_ap = table.mean * np.sqrt(table.center_aper_area.value)
+    flux_in_ap_err = table.sum_err
+    return flux_in_ap, flux_in_ap_err
+
+
 def get_dc_aperture_flux(data_container, filter_name,
                          aperture_diameter=1.25 * u.arcsec,
                          sample_every=2):
@@ -418,18 +427,14 @@ def get_dc_aperture_flux(data_container, filter_name,
         yy, xx = np.meshgrid(rows, columns)
         coordinates = data_container.wcs.celestial.pixel_to_world(
             xx.flatten(), yy.flatten())
-        apertures = SkyCircularAperture(
-            coordinates, r=aperture_diameter / 2)
-        vprint(f"Total number of apertures: {len(apertures)}")
-        reference_table = ApertureStats(
-            data=synth_photo, error=synth_photo_err,
-        aperture=apertures, wcs=data_container.wcs.celestial, sum_method='exact')
-        # Compute the total flux in the aperture using the mean value
-        flux_in_ap = reference_table.mean * np.sqrt(
-            reference_table.center_aper_area.value)
-        # Compute standard error from the std
-        flux_in_ap_err = reference_table.sum_err
+        
+        flux_in_ap, flux_in_ap_err = get_aperture_photometry(
+            coordinates, diameters=aperture_diameter,
+            image=CCDData(data=synth_photo, uncertainty=StdDevUncertainty(
+                synth_photo_err),
+            wcs=data_container.wcs.celestial))
         result['wcs'] = data_container.wcs.celestial.deepcopy()
+
     elif isinstance(data_container, RSS):
         vprint("Using RSS fibre synthetic photometry as apertures")
         coordinates = SkyCoord(data_container.info['fib_ra'],
@@ -528,50 +533,7 @@ def get_dc_synthetic_photometry(filter, dc):
 
     synth_photo = dc.unravel_rss(synth_photo)
     synth_photo_err = dc.unravel_rss(synth_photo_err)
-
-    # if isinstance(dc, Cube):
-    #     spx_intensity = dc.intensity.reshape(
-    #             dc.intensity.shape[0], dc.intensity.shape[1] * dc.intensity.shape[2])
-    #     spx_var = dc.variance.reshape(spx_intensity.shape)
-    #     synth_photo = np.full(spx_intensity.shape[1], fill_value=np.nan)
-    #     synth_photo_err = np.full(spx_intensity.shape[1], fill_value=np.nan)
-    #     for ith, (intensity, var) in enumerate(zip(spx_intensity.T, spx_var.T)):
-    #         mask = np.isfinite(intensity) & np.isfinite(var)
-    #         if not mask.any():
-    #             continue
-    #         if not isinstance(intensity, u.Quantity):
-    #             intensity = intensity * 1e-16 * u.erg / u.s / u.cm**2 / u.angstrom
-    #             var = var * (1e-16 * u.erg / u.s / u.cm**2 / u.angstrom)**2
-    #         f_nu, f_nu_err = filter.get_fnu(intensity, var**0.5)
-    #         synth_photo[ith] = f_nu.to('Jy').value
-    #         synth_photo_err[ith] = f_nu_err.to('Jy').value
-    #     synth_photo = synth_photo.reshape(dc.intensity.shape[1:])
-    #     synth_photo_err = synth_photo_err.reshape(dc.intensity.shape[1:])
-    # elif isinstance(dc, RSS):
-    #     synth_photo = np.full(dc.intensity.shape[1], fill_value=np.nan)
-    #     synth_photo_err = np.full(dc.intensity.shape[1], fill_value=np.nan)
-    #     for ith, (intensity, var) in enumerate(zip(dc.intensity.T, dc.variance.T)):
-    #         mask = np.isfinite(intensity) & np.isfinite(var)
-    #         if not mask.any():
-    #             continue
-    #         if not isinstance(intensity, u.Quantity):
-    #             intensity = intensity * 1e-16 * u.erg / u.s / u.cm**2 / u.angstrom
-    #             var = var * (1e-16 * u.erg / u.s / u.cm**2 / u.angstrom)**2
-    #         f_nu, f_nu_err = filter.get_fnu(intensity, var**0.5)
-    #         synth_photo[ith] = f_nu.value
-    #         synth_photo_err[ith] = f_nu_err.value
-
     return synth_photo[0], synth_photo_err[0]
-
-
-def get_aperture_photometry(coordinates, diameters, image : CCDData):
-    """TODO"""
-    apertures = SkyCircularAperture(coordinates, r=diameters / 2)
-    table = ApertureStats(image, apertures, sum_method='exact')
-    flux_in_ap = table.mean * np.sqrt(table.center_aper_area.value)
-    flux_in_ap_err = table.sum_err
-    return flux_in_ap, flux_in_ap_err
-    
 
 def crosscorrelate_im_apertures(ref_aperture_flux, ref_aperture_flux_err,
                                 ref_coord, image,
@@ -774,40 +736,51 @@ def make_crosscorr_plot(results):
     plt.close(fig)
     return fig
 
-def make_plot_astrometry_offset(ref_image, ref_wcs, image, results):
-        """Plot the DC and ancillary data including the astrometry correction."""      
-        synt_sb = -2.5 * np.log10(ref_image.to_value("3631 Jy"))
+def make_plot_astrometry_offset(data_container, dc_synth_photo, image, results):
+        """Plot the DC and ancillary data including the astrometry correction.
+        
+        Parameters
+        ----------
+        dc_image : 
+        dc_wcs : 
+        image : 
+        """
+
+        synt_sb = -2.5 * np.log10(dc_synth_photo.to_value("3631 Jy"))
         im_sb = -2.5 * np.log10(
-            image['ccd'].data * image['ccd'].unit.to("3631 Jy") / image['pix_size']**2)
+            image['ccd'].data * image['ccd'].unit.to("3631 Jy")
+            / image['pix_size'].to_value("arcsec")**2)
 
-        fig = plt.figure(figsize=(10, 4), constrained_layout=True)
-        ax = fig.add_subplot(121, title='Original', projection=image['ccd'].wcs)
+        dc_contour_params = dict(levels=[17, 18, 19, 20, 21, 22], colors='r')
+        contour_params = dict(levels=[17, 18, 19, 20, 21, 22], colors='k')
 
-        contourf_params = dict(cmap='Spectral', levels=[18, 19, 20, 21, 22, 23],
-                               vmin=19, vmax=23, extend='both')
-        contour_params = dict(levels=[18, 19, 20, 21, 22, 23], colors='k')
+        fig, axs = utils.new_figure("Astrometry Offset", figsize=(10, 4),
+                                    ncols=2, sharex=True, sharey=True,
+                                    subplot_kw=dict(projection=image['ccd'].wcs),
+                                    gridspec_kw=dict(wspace=0.1),
+                                    squeeze=True,
+                                    tweak_axes=False
+                                    )
+        axs[0].set_title("Original")
+        axs[1].set_title("Corrected")
+        for ax in axs:
+            ax.coords.grid(True, color='orange', ls='solid')
+            ax.coords[0].set_format_unit('deg')
+            ax.contour(im_sb, **contour_params)
 
-        ax.coords.grid(True, color='orange', ls='solid')
-        ax.coords[0].set_format_unit('deg')
-        mappable = ax.contourf(im_sb, **contourf_params)
-        plt.colorbar(mappable, ax=ax,
-                     label=r"$\rm \log_{10}(F_\nu / 3631 Jy / arcsec^2)$")
-        ax.contour(synt_sb,
-                   transform=ax.get_transform(ref_wcs), **contour_params)
-        # Compute the correctec WCS
-        correct_wcs = update_wcs_coords(wcs=ref_wcs,
-                                    ra_dec_offset=(
-                                        results['offset_min'][0] / 3600,
-                                        results['offset_min'][1] / 3600))
+        if isinstance(data_container, Cube):
+            mappable = axs[0].contour(synt_sb, transform=axs[0].get_transform(
+                data_container.wcs.celestial), **dc_contour_params)
+            # Compute the correctec WCS
+            correct_wcs = update_wcs_coords(wcs=data_container.wcs.celestial,
+                                            ra_dec_offset=(
+                                            results['offset_min'][0] / 3600,
+                                            results['offset_min'][1] / 3600))
+            mappable = axs[1].contour(synt_sb, transform=axs[1].get_transform(correct_wcs),
+                           **dc_contour_params)
+        elif isinstance(data_container, RSS):
+            pass
+            
 
-        ax = fig.add_subplot(122, title='Corrected', projection=image['ccd'].wcs)
-        ax.coords.grid(True, color='orange', ls='solid')
-        ax.coords[0].set_format_unit('deg')
-        mappable = ax.contourf(im_sb, **contourf_params)
-        plt.colorbar(mappable, ax=ax,
-                     label=r"$\rm \log_{10}(F_\nu / 3631 Jy / arcsec^2)$")
-
-        ax.contour(synt_sb,
-                   transform=ax.get_transform(correct_wcs), **contour_params)
         plt.close(fig)
         return fig
