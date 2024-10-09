@@ -1,6 +1,7 @@
 """
 This module contains tools for measuring synthetic photometry from DataContainers
 as well as tools for retrieveing and manipulating external imaging data.
+
 """ 
 import os
 import requests
@@ -14,6 +15,7 @@ from astropy import constants
 from astropy.table import Table
 from astropy.io import fits
 from astropy.wcs import WCS
+from astropy.nddata import CCDData
 from astropy.coordinates import SkyCoord
 from photutils.aperture import SkyCircularAperture, ApertureStats
 
@@ -22,22 +24,62 @@ from pykoala import vprint
 from pykoala.data_container import Cube, RSS
 from pykoala.ancillary import update_wcs_coords
 
-class QueryMixin:
 
-    def download_image(url, fname):
-        """Download an image and write it to a binary file."""
+class QueryMixin:
+    """Mixin with common methods for image queries to external databases."""
+
+    def download_image(url, filename):
+        """Download an image and write it to a binary file.
+        
+        Parameters
+        ----------
+        url : str
+            URL to download the image.
+        filename : str
+            Name of the output binary file.
+        
+        Returns
+        -------
+        filename : str
+            Output filename. If the download is unsuccessful, the return value
+            is None.
+        """
         vprint(f"Downloading: {url}")
         try:
             r = requests.get(url)
         except Exception as e:
             vprint(f"ERROR: Download unsuccessful (error: {e})")
             return None
-        vprint(f"Saving file at: {fname}")
-        with open(fname,"wb") as f:
+        vprint(f"Saving file at: {filename}")
+        with open(filename,"wb") as f:
             f.write(r.content)
-        return fname
+        return filename
 
     def filename_from_pos(ra, dec, filter, survey):
+        """Convenience function for creating a filename based on the query information.
+        
+        This method creates a filename using the central (RA, DEC) values of the
+        querie, the filter name associated to the queried image, and the
+        survey/database name. The resulting filename uses the following convention:
+        ``SURVEY_query_RA_DEC_FILTER.fits``, where negative values of DEC include
+        the prefix ``n`` (i.e. `n30` for ``dec=-30``)
+
+        Parameters
+        ----------
+        ra : float
+            Reference RA position in deg.
+        dec : float
+            Reference DEC position in deg.
+        filter : str
+            Photometric filter name.
+        survey : str
+            Survey name.
+        
+        Returns
+        -------
+        filename : str
+            Output filename
+        """
         sign = np.sign(dec)
         if sign == -1:
             sign_str = 'n'
@@ -46,8 +88,18 @@ class QueryMixin:
         filename = f"{survey}_query_{ra:.4f}_{sign_str}{np.abs(dec):.4f}_{filter}.fits"
         return filename
 
+
 class LegacySurveyQuery(QueryMixin):
-    """Query to the LegacySurvey imaging data."""
+    """Utility to query `LegacySurvey <https://www.legacysurvey.org>`_ imaging data.
+    
+    Attributes
+    ----------
+    fitscutout : str
+        URL to the online cutout service.
+    dafault_layer : str, default=``ls-dr10``
+        LS layer used to perform the query.
+    pixelsize_arcsec : size of the pixels in angstrom.
+    """
     fitscutout = "https://www.legacysurvey.org/viewer/fits-cutout"
     default_layer = "ls-dr10"
     pixelsize_arcsec = 0.27
@@ -65,19 +117,42 @@ class LegacySurveyQuery(QueryMixin):
 
 
             if filename is not None:
-                intensity, wcs = cls.read_image(filename)
-                images[f"LS.{f}"] = {"intensity": intensity, "wcs":wcs,
+                ccd = cls.read_image(filename)
+                images[f"LS.{f}"] = {"ccd": ccd,
                                      "pix_size": cls.pixelsize_arcsec}
 
     def read_image(filename):
+        """Read a LS fits image.
+        
+        Parameters
+        ----------
+        filename : str
+            Path to the FITS file containing the image data.
+
+        Returns
+        -------
+        ccd : ``astropy.nddata.CCDData``
+            LS image data. The default data units are Jy.
+        """
         vprint("Opening Legacy Survey fits file")
-        with fits.open(filename) as hdul:
-            wcs = WCS(hdul[0].header)
-            intensity = hdul[0].data * 3631e-9  # Jy
-        return intensity, wcs
+        ccd = CCDData.read(filename, hdu=0, unit="adu")
+        # Convert ADU to Jy
+        ccd = ccd.multiply(3631e-9 << u.Jy / u.adu)
+        return ccd
+
 
 class PSQuery(QueryMixin):
-    """Query to the PANSTARRS (DR2) Survey."""
+    """Query to the PANSTARRS (DR2) Survey.
+    
+    Attributes
+    ----------
+    ps1filename : str
+        URL to the PS query service
+    fitscut : str
+        URL to the cutour service
+    pixelsize_arcsec : size of the pixels in angstrom.
+    """
+
     ps1filename = "https://ps1images.stsci.edu/cgi-bin/ps1filenames.py"
     fitscut = "https://ps1images.stsci.edu/cgi-bin/fitscut.cgi"
     pixelsize_arcsec = 0.25
@@ -178,26 +253,31 @@ class PSQuery(QueryMixin):
             output = os.path.join(output_dir, filename)
             filename = cls.download_image(row['url'], fname=output)
             if filename is not None:
-                intensity, wcs = cls.read_ps_fits(filename)
+                ccd = cls.read_ps_fits(filename)
                 images[f"PS1.{row['filter']}"] = {
-                        "intensity": intensity, "wcs":wcs,
-                        "pix_size": cls.pixelsize_arcsec}
+                        "ccd": ccd, "pix_size": cls.pixelsize_arcsec}
 
         return images
 
-    def read_ps_fits(fname):
-        """Load a PANSTARRS image."""
+    def read_ps_fits(filename):
+        """Load a PANSTARRS image.
+        
+        Parameters
+        ----------
+        filename : str
+            Path to the FITS file containing the image data.
+
+        Returns
+        -------
+        ccd : ``astropy.nddata.CCDData``
+            PS image data. The default data units are Jy.
+        """
         vprint("Opening PANSTARRS fits file")
-        with fits.open(fname) as hdul:
-            wcs = WCS(hdul[0].header)
-            zp = hdul[0].header['FPA.ZP']
-            exptime = hdul[0].header['exptime']
-            ps_pix_area = 0.25**2  # arcsec^2/pix
-            intensity_zp = 10**(0.4 * zp)
-            intensity = 3631 * hdul[0].data / intensity_zp / exptime
-            #sb = -2.5 * np.log10(hdul[0].data / ps_pix_area) + zp + 2.5*np.log10(exptime)
-            #intensity = 10**(-0.4 * sb) * 3631  # jy
-        return intensity, wcs
+        ccd = CCDData.read(filename, hdu=0, unit="adu")
+        # Convert ADU to Jy
+        ccd = ccd.multiply(3631 * 10**(-0.4 * ccd.header["FPA.ZP"]
+                                ) / ccd.header["exptime"] << u.Jy / u.adu)
+        return ccd
 
 
 def get_effective_sky_footprint(data_containers):
@@ -265,7 +345,8 @@ def query_image(data_containers, query=PSQuery, filters='r', im_extra_size_arcse
                             output_dir=im_output_dir)
     return images
 
-def get_dc_aperture_flux(data_container, filter_name, aperture_diameter=1.25,
+def get_dc_aperture_flux(data_container, filter_name,
+                         aperture_diameter=1.25 * u.arcsec,
                          sample_every=2):
     """Compute aperture fluxes from the DataContainers
 
@@ -310,16 +391,16 @@ def get_dc_aperture_flux(data_container, filter_name, aperture_diameter=1.25,
         raise ImportError("PST package not found")
 
     result = {}
-    
-    photometric_filter = Filter(filter_name=filter_name)
 
+    # Compute the synthetic photometry maps    
+    photometric_filter = Filter.from_svo(filter_name)
     synth_photo, synth_photo_err = get_synthetic_photometry(
         photometric_filter, data_container)
     result['synth_photo'] = synth_photo
     result['synth_photo_err'] = synth_photo_err
+
     if isinstance(data_container, Cube):
-        vprint("Computing aperture fluxes using Cube synthetic"
-                + "photometry")
+        vprint("Computing aperture fluxes using Cube synthetic photometry")
         # Create a grid of apertures equally spaced
         pix_size_arcsec = np.max(data_container.wcs.celestial.wcs.cdelt) * 3600
         delta_pix = aperture_diameter / pix_size_arcsec * sample_every
@@ -344,11 +425,12 @@ def get_dc_aperture_flux(data_container, filter_name, aperture_diameter=1.25,
         flux_in_ap_err = reference_table.sum_err
         result['wcs'] = data_container.wcs.celestial.deepcopy()
     elif isinstance(data_container, RSS):
-        vprint("Using RSS synthetic photometry as apertures")
+        vprint("Using RSS fibre synthetic photometry as apertures")
         coordinates = SkyCoord(data_container.info['fib_ra'],
                                data_container.info['fib_dec'])
         flux_in_ap, flux_in_ap_err = synth_photo, synth_photo_err
         result['wcs'] = None
+        aperture_diameter = data_container.fibre_diameter
 
     # Make a QC plot of the apertures
     fig = make_plot_apertures(
@@ -487,7 +569,7 @@ def make_plot_apertures(dc, synth_phot, synth_phot_err, ap_coords,
             marker='o', transform=ax.get_transform('world'),
             c= -2.5 * np.log10(ap_flux / 3631), vmin=16, vmax=23)
             plt.colorbar(mappable, ax=ax, label='SB (mag/aperture)')
-            ax = axs[1, 1]            
+            ax = axs[1, 1]
             mappable = ax.scatter(ap_coords.ra, ap_coords.dec,
             marker='o', transform=ax.get_transform('world'),
             c= ap_flux /ap_flux_err, vmin=0, vmax=10)
@@ -559,11 +641,22 @@ def get_synthetic_photometry(filter, dc):
 
     return synth_photo, synth_photo_err
 
+
+def get_aperture_photometry(coordinates, diameters, image : CCDData):
+    """TODO"""
+    apertures = SkyCircularAperture(coordinates, r=diameters / 2)
+    table = ApertureStats(image, apertures, sum_method='exact')
+    flux_in_ap = table.mean * np.sqrt(table.center_aper_area.value)
+    flux_in_ap_err = table.sum_err
+    return flux_in_ap, flux_in_ap_err
+    
+
 def crosscorrelate_im_apertures(ref_aperture_flux, ref_aperture_flux_err,
-                                ref_coord, image, wcs,
+                                ref_coord, image,
                                 ra_offset_range=[-10, 10],
                                 dec_offset_range=[-10, 10],
-                                offset_step=0.5, aperture_diameter=1.25,
+                                offset_step=0.5,
+                                aperture_diameter=1.25 << u.arcsec,
                                 plot=True):
     """Cross-correlate an image with an input set of apertures.
     
@@ -624,7 +717,8 @@ def crosscorrelate_im_apertures(ref_aperture_flux, ref_aperture_flux_err,
     dec_offset = np.arange(*dec_offset_range, offset_step)
 
     # Initialise the results variable
-    sampling = np.full((4, dec_offset.size, ra_offset.size), fill_value=np.nan)
+    sampling = np.full(
+        (4, dec_offset.size, ra_offset.size), fill_value=np.nan)
     sampling[2:4] = np.meshgrid(dec_offset, ra_offset, indexing='ij')
 
     for i, (ra_offset_arcsec, dec_offset_arcsec) in enumerate(
@@ -633,11 +727,12 @@ def crosscorrelate_im_apertures(ref_aperture_flux, ref_aperture_flux_err,
         new_coords = SkyCoord(
             ref_coord.ra + ra_offset_arcsec * u.arcsec,
             ref_coord.dec + dec_offset_arcsec * u.arcsec)
-        new_apertures = SkyCircularAperture(
-            new_coords, r=aperture_diameter / 2 * u.arcsec)
-        table = ApertureStats(image, new_apertures, wcs=wcs, sum_method='exact')
-        flux_in_ap = table.mean * np.sqrt(table.center_aper_area.value)
-        flux_in_ap_err = table.sum_err
+
+        flux_in_ap, flux_in_ap_err = get_aperture_photometry(
+        new_coords, diameters=aperture_diameter, image=image["ccd"])
+        flux_in_ap = flux_in_ap.value
+        flux_in_ap_err = flux_in_ap_err.value
+        # Renormalize the flux
         flux_in_ap_norm = np.nanmean(flux_in_ap)
         flux_in_ap /= flux_in_ap_norm
         flux_in_ap_err /= flux_in_ap_norm
@@ -664,18 +759,11 @@ def crosscorrelate_im_apertures(ref_aperture_flux, ref_aperture_flux_err,
     min_coords = SkyCoord(
             ref_coord.ra + ra_min * u.arcsec,
             ref_coord.dec + dec_min * u.arcsec)
-    apertures = SkyCircularAperture(
-        min_coords, r=aperture_diameter / 2 * u.arcsec)
-    table = ApertureStats(image, apertures, wcs=wcs, sum_method='exact')
-    min_flux_in_ap = table.mean * np.sqrt(table.center_aper_area.value)
-
-    mean_coords = SkyCoord(
-            ref_coord.ra + ra_mean * u.arcsec,
-            ref_coord.dec + dec_mean * u.arcsec)
-    apertures = SkyCircularAperture(
-        mean_coords, r=aperture_diameter / 2 * u.arcsec)
-    table = ApertureStats(image, apertures, wcs=wcs, sum_method='exact')
-    mean_flux_in_ap = table.mean * np.sqrt(table.center_aper_area.value)
+    flux_in_ap, flux_in_ap_err = get_aperture_photometry(
+        min_coords, diameters=aperture_diameter, image=image["ccd"])
+    flux_in_ap_norm = np.nanmean(flux_in_ap)
+    flux_in_ap /= flux_in_ap_norm
+    flux_in_ap_err /= flux_in_ap_norm
 
     results = {
         'offset_min': (ra_min, dec_min), 'offset_mean': (ra_mean, dec_mean),
@@ -756,10 +844,11 @@ def make_crosscorr_plot(results):
 def make_plot_astrometry_offset(ref_image, ref_wcs, image, results):
         """Plot the DC and ancillary data including the astrometry correction."""      
         synt_sb = -2.5 * np.log10(ref_image / 3631)
-        im_sb = -2.5 * np.log10(image['intensity'] / 3631 / image['pix_size']**2)
+        im_sb = -2.5 * np.log10(
+            image['ccd'].data * image['ccd'].unit.to("3631 Jy") / image['pix_size']**2)
 
         fig = plt.figure(figsize=(10, 4), constrained_layout=True)
-        ax = fig.add_subplot(121, title='Original', projection=image['wcs'])
+        ax = fig.add_subplot(121, title='Original', projection=image['ccd'].wcs)
 
         contourf_params = dict(cmap='Spectral', levels=[18, 19, 20, 21, 22, 23],
                                vmin=19, vmax=23, extend='both')
@@ -778,7 +867,7 @@ def make_plot_astrometry_offset(ref_image, ref_wcs, image, results):
                                         results['offset_min'][0] / 3600,
                                         results['offset_min'][1] / 3600))
 
-        ax = fig.add_subplot(122, title='Corrected', projection=image['wcs'])
+        ax = fig.add_subplot(122, title='Corrected', projection=image['ccd'].wcs)
         ax.coords.grid(True, color='orange', ls='solid')
         ax.coords[0].set_format_unit('deg')
         mappable = ax.contourf(im_sb, **contourf_params)
