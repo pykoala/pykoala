@@ -10,10 +10,9 @@ from astropy.visualization import (MinMaxInterval, PercentileInterval,
 
 
 def new_figure(fig_name,
+               tweak_axes=True,
                figsize=None,
-               nrows=1, ncols=1,
-               sharex='col', sharey='row',
-               gridspec_kw={'hspace': 0, 'wspace': 0}):
+               **subplots_kwargs):
     """
     Close old version of the figure and create new one
     with default sizes and format.
@@ -43,23 +42,32 @@ def new_figure(fig_name,
 
     plt.close(fig_name)
 
+    if "sharex" not in subplots_kwargs:
+        subplots_kwargs["sharex"] = "col"
+    if "sharex" not in subplots_kwargs:
+        subplots_kwargs["sharex"] = "row"
+    if "gridspec_kw" not in subplots_kwargs:
+        subplots_kwargs["gridspec_kw"] = {'hspace': 0, 'wspace': 0}
+    if "squeeze" not in subplots_kwargs:
+        subplots_kwargs["squeeze"] = False
+
     if figsize is None:
-        figsize = (9 + ncols, 4 + nrows)
+        figsize = (9 + subplots_kwargs["ncols"],
+                   4 + subplots_kwargs["nrows"])
+
     fig = plt.figure(fig_name, figsize=figsize)
-    axes = fig.subplots(nrows=nrows, ncols=ncols, squeeze=False,
-                        sharex=sharex, sharey=sharey,
-                        gridspec_kw=gridspec_kw,
-                        )
-    # fig.set_tight_layout(True)
-    for ax in axes.flat:
-        ax.xaxis.set_minor_locator(AutoMinorLocator())
-        ax.yaxis.set_minor_locator(AutoMinorLocator())
-        ax.tick_params(which='both', bottom=True,
-                       top=True, left=True, right=True)
-        ax.tick_params(which='major', direction='inout',
-                       length=8, grid_alpha=.3)
-        ax.tick_params(which='minor', direction='in', length=2, grid_alpha=.1)
-        ax.grid(True, which='both')
+    axes = fig.subplots(**subplots_kwargs)
+    fig.set_tight_layout(True)
+    if tweak_axes:
+        for ax in axes.flat:
+            ax.xaxis.set_minor_locator(AutoMinorLocator())
+            ax.yaxis.set_minor_locator(AutoMinorLocator())
+            ax.tick_params(which='both', bottom=True,
+                        top=True, left=True, right=True)
+            ax.tick_params(which='major', direction='inout',
+                        length=8, grid_alpha=.3)
+            ax.tick_params(which='minor', direction='in', length=2, grid_alpha=.1)
+            ax.grid(True, which='both')
 
     fig.suptitle(fig_name)
 
