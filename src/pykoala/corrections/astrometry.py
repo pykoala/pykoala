@@ -10,18 +10,136 @@ import numpy as np
 # Astropy and associated packages
 # =============================================================================
 from astropy import units as u
+from astropy import constants
 from astropy.coordinates import SkyCoord
 from photutils.centroids import centroid_2dg, centroid_com
+from astropy import units as u
+
 # =============================================================================
 # KOALA packages
 # =============================================================================
 from pykoala import vprint
-from pykoala.corrections.correction import CorrectionBase
+from pykoala.corrections.correction import CorrectionBase, CorrectionOffset
 from pykoala.data_container import RSS
 from pykoala.cubing import make_dummy_cube_from_rss
 from pykoala.data_container import Cube
 from pykoala.ancillary import interpolate_image_nonfinite
 from pykoala.plotting.utils import qc_registration_centroids
+from pykoala import photometry
+
+
+class AstrometryOffsetCorrection(CorrectionBase):
+    """Astrometry Offset correction class.
+
+    This class accounts for relative astrometric offsets.
+
+    Attributes
+    ----------
+    offset : AstrometryOffset
+        Fibre astrometric offset.
+    verbose: bool
+        False by default.
+    
+    See also
+    --------
+    :class:`CorrectionBase`
+
+    """
+    name = "AstrometryOffsetCorrection"
+    offset = None
+    verbose = False
+
+    def __init__(self, offset_path=None, offset=None, **correction_kwargs):
+        super().__init__(**correction_kwargs)
+
+        self.path = offset_path
+        self.offset = offset
+
+    @classmethod
+    def from_fits(cls, path):
+        """Initialise a AstrometryOffsetCorrection from an input FITS file.
+        
+        Parameters
+        ----------
+        path : str
+            Path to the FITS file containing the offset data.
+
+        Returns
+        -------
+        offset_correction : :class:`WavelengthCorrection`
+            A :class:`WavelengthCorrection` initialised with the input data.
+        """
+        return cls(offset=CorrectionOffset.from_fits(path=path),
+                   offset_path=path)
+
+    @classmethod
+    def from_external_image(cls, data_container, external_image, filter_name):
+        """Use a reference external image to compute the offset.
+        
+        Description
+        -----------
+        Estimate an astrometric offsets by crossmatching a reference image with
+        synthetic aperture photometry from the DataContainer.
+
+        Parameters
+        ----------
+        data_container : :class:`pykoala.data_container.DataContainer`
+            Target DataContainer.
+        external_image : dict
+            A dictionary containing the ``intensity`` of a reference image in
+            Jy, the associated WCS (``wcs``), and the pixels size ("pix_size")
+            expressed in arcseconds.
+        filter_name : str
+            Name of the filter passband associated to the external image.
+        
+        Returns
+        -------
+        :class:`AstrometryOffsetCorrection`
+        """
+        # Compute the synthetic photometry associated to the DataContainer
+        dc_photometry = photometry.get_dc_aperture_flux(
+            data_container, filter_name)
+        # Only include valid (finite-valued) apertures
+        mask = dc_photometry['aperture_mask']
+        vprint("Computing astrometric offsets")
+        results = photometry.crosscorrelate_im_apertures(
+            dc_photometry['aperture_flux'][mask],
+            dc_photometry['aperture_flux_err'][mask],
+            dc_photometry['coordinates'][mask],
+            external_image['intensity'],
+            external_image['wcs'])
+        # Make a QC plot with the resulting solution
+        fig = photometry.make_plot_astrometry_offset(
+            dc_photometry['synth_photo'],
+            dc_photometry['wcs'],
+            external_image, results)
+        results['offset_fig'] = fig
+
+        offset = np.array(results['offset_mean'])
+        return cls(offset=CorrectionOffset(offset_data=offset,
+                    offset_error=np.full_like(offset, fill_value=np.nan))
+                    ), results
+
+    def apply(self, data_container):
+        """Apply an astrometric offset correction to a DataContainer.
+
+        Parameters
+        ----------
+        data_container : :class:`pykoala.data_container.DataContainer`
+            DataContainer to be corrected.
+
+        Returns
+        -------
+        dc_corrected : :class:`pykoala.data_container.DataContainer`
+            Corrected copy of the input DC.
+        """
+        self.vprint(
+            f"Applying astrometry offset correction to DC (RA, DEC): {self.offset.offset_data}")
+        dc_out = data_container.copy()
+        dc_out.update_coordinates(offset=self.offset.offset_data / 3600)
+        self.record_correction(dc_out, status='applied')
+        return dc_out
+
 
 class AstrometryCorrection(CorrectionBase):
     """Perform astrometry-related corrections on DataContainers
