@@ -109,8 +109,7 @@ class AstrometryOffsetCorrection(CorrectionBase):
             external_image)
         # Make a QC plot with the resulting solution
         fig = photometry.make_plot_astrometry_offset(
-            dc_photometry['synth_photo'],
-            dc_photometry['wcs'],
+            data_container, dc_photometry['synth_photo'],
             external_image, results)
         results['offset_fig'] = fig
 
