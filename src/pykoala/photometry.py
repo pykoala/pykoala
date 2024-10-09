@@ -2,6 +2,8 @@
 This module contains tools for measuring synthetic photometry from DataContainers
 as well as tools for retrieveing and manipulating external imaging data.
 
+- External data query utilities
+- 
 """ 
 import os
 import requests
@@ -357,11 +359,10 @@ def get_dc_aperture_flux(data_container, filter_name,
 
     Parameters
     ----------
-    filter_names: list
-        A list of filter names to initialise a list of
-        :class:`pst.observables.Filter` objects.
-    dc_intensity_units: `astropy.units.Quantity`, default=1e-16 erg/s/AA/cm2
-        Intensity units of the DC.
+    data_container : :class:`pykoala.data_container.SpectraContainer`
+        DataContainer used to compute the synthetic photometry.
+    filter_name: str
+        Photometric filter name used to initalise a :class:`pst.observables.Filter`.
     aperture_diameter: float
         Diameter size of the circular apertures. In the case of an RSS, this
         will match the size of the fibres.
@@ -384,6 +385,10 @@ def get_dc_aperture_flux(data_container, filter_name,
         of `astropy.coordinates.Skycoord`.
         - aperture_mask: A mask for invalid aperture fluxes.
         - figs: A list of QC figures showing the .
+    
+    See also
+    --------
+    :class:`pst.observables.Filter`
     """
     try:
         from pst.observables import Filter
@@ -444,110 +449,6 @@ def get_dc_aperture_flux(data_container, filter_name,
     result['aperture_mask'] =  np.isfinite(flux_in_ap
                                            ) & np.isfinite(flux_in_ap_err)
     return result
-
-def get_dc_aperture_fluxes(data_containers, filter_names,
-                           aperture_diameter=1.25, sample_every=2):
-        """Compute aperture fluxes from the DataContainers
-        
-        This method computes a set of aperture fluxes from an input data container.
-        If the input DC is a Cube, a grid of equally-spaced apertures will be
-        computed. If the input DC is a RSS, the fibre positions will be used as
-        reference apertures.
-
-        Parameters
-        ----------
-        filter_names: list
-            A list of filter names to initialise a list of
-            :class:`pst.observables.Filter` objects.
-        dc_intensity_units: `astropy.units.Quantity`, default=1e-16 erg/s/AA/cm2
-            Intensity units of the DC.
-        aperture_diameter: float
-            Diameter size of the circular apertures. In the case of an RSS, this
-            will match the size of the fibres.
-        sample_every: int, default=2
-            Spatial aperture sampling in units of the aperture radius. If
-            `sample_every=2`, the aperture will be defined every two aperture
-            diameters in the image.
-
-        Returns
-        -------
-        dc_photometry: dict
-            A dictionary containing the results of the computation
-
-            - synth_photo: The synthetic photometry of the DC, it can be a list
-            of fluxes (if the input DC is a RSS) or an image (if DC is a Cube).
-            For more details, see the method `get_synthetic_photometry`.
-            - synth_photo_err: Associated error fo `synth_photo`.
-            - wcs: WCS of the DC. If the DC is a RSS it will be None.
-            - coordinates: Celestial position of the apertures stored as a list
-            of `astropy.coordinates.Skycoord`.
-            - aperture_mask: A mask for invalid aperture fluxes.
-            - figs: A list of QC figures showing the .
-        """
-        try:
-            from pst.observables import Filter
-        except:
-            raise ImportError("PST package not found")
-
-        dc_photometry = {}
-        for photo_filter in filter_names:
-            dc_photometry[photo_filter] = {
-                'synth_photo': [], 'synth_photo_err': [],
-                'wcs': [],
-                'coordinates': [], 'aperture_flux': [],
-                'aperture_flux_err': [],
-                'aperture_mask': [],
-                'figs': []}
-            photometric_filter = Filter(filter_name=photo_filter)
-            # Compute the synthetic photometry on each DC
-            for dc in data_containers:
-                synth_photo, synth_photo_err = get_synthetic_photometry(
-                    photometric_filter, dc)
-                dc_photometry[photo_filter]['synth_photo'].append(synth_photo)
-                dc_photometry[photo_filter]['synth_photo_err'].append(synth_photo_err)
-                if isinstance(dc, Cube):
-                    vprint("Computing aperture fluxes using Cube synthetic"
-                           + "photometry")
-                    # Create a grid of apertures equally spaced
-                    pix_size_arcsec = np.max(dc.wcs.celestial.wcs.cdelt) * 3600
-                    delta_pix = aperture_diameter / pix_size_arcsec * sample_every
-                    vprint("Creating a grid of circular aperture "
-                           + f"(rad={aperture_diameter / 2 / pix_size_arcsec:.2f}"
-                           + f" px) every {delta_pix:.1f} pixels")
-                    rows = np.arange(0, synth_photo.shape[0], delta_pix)
-                    columns = np.arange(0, synth_photo.shape[1], delta_pix)
-                    yy, xx = np.meshgrid(rows, columns)
-                    coordinates = dc.wcs.celestial.pixel_to_world(xx.flatten(), yy.flatten())
-                    apertures = SkyCircularAperture(
-                        coordinates, r=aperture_diameter / 2 * u.arcsec)
-                    vprint(f"Total number of apertures: {len(apertures)}")
-                    reference_table = ApertureStats(
-                        data=synth_photo, error=synth_photo_err,
-                    aperture=apertures, wcs=dc.wcs.celestial, sum_method='exact')
-                    # Compute the total flux in the aperture using the mean value
-                    flux_in_ap = reference_table.mean * np.sqrt(
-                        reference_table.center_aper_area.value)
-                    # Compute standard error from the std
-                    flux_in_ap_err = reference_table.sum_err
-                    dc_photometry[photo_filter]['wcs'].append(dc.wcs.celestial.deepcopy())
-                elif isinstance(dc, RSS):
-                    vprint("Using RSS synthetic photometry as apertures")
-                    coordinates = SkyCoord(dc.info['fib_ra'], dc.info['fib_dec'])
-                    flux_in_ap, flux_in_ap_err = synth_photo, synth_photo_err
-                    dc_photometry[photo_filter]['wcs'].append(None)
-
-                # Make a QC plot of the apertures
-                fig = make_plot_apertures(
-                    dc, synth_photo, synth_photo_err, coordinates, flux_in_ap,
-                    flux_in_ap_err)
-                # Store the results
-                dc_photometry[photo_filter]['figs'].append(fig)
-                dc_photometry[photo_filter]['coordinates'].append(coordinates)
-                dc_photometry[photo_filter]['aperture_flux'].append(flux_in_ap)
-                dc_photometry[photo_filter]['aperture_flux_err'].append(flux_in_ap_err)
-                dc_photometry[photo_filter]['aperture_mask'].append(
-                    np.isfinite(flux_in_ap) & np.isfinite(flux_in_ap_err))
-        return dc_photometry
 
 def make_plot_apertures(dc, synth_phot, synth_phot_err, ap_coords,
                             ap_flux, ap_flux_err):
