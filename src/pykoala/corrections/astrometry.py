@@ -86,9 +86,9 @@ class AstrometryOffsetCorrection(CorrectionBase):
         data_container : :class:`pykoala.data_container.DataContainer`
             Target DataContainer.
         external_image : dict
-            A dictionary containing the ``intensity`` of a reference image in
-            Jy, the associated WCS (``wcs``), and the pixels size ("pix_size")
-            expressed in arcseconds.
+            A dictionary containing the ``ccd`` of a reference image,
+            corresponding to an instance of astropy.nddata.CCDData, and the
+            pixels size ("pix_size") expressed in arcseconds.
         filter_name : str
             Name of the filter passband associated to the external image.
         
@@ -106,8 +106,7 @@ class AstrometryOffsetCorrection(CorrectionBase):
             dc_photometry['aperture_flux'][mask],
             dc_photometry['aperture_flux_err'][mask],
             dc_photometry['coordinates'][mask],
-            external_image['intensity'],
-            external_image['wcs'])
+            external_image)
         # Make a QC plot with the resulting solution
         fig = photometry.make_plot_astrometry_offset(
             dc_photometry['synth_photo'],
