@@ -1,9 +1,7 @@
 """
-This module contains tools for measuring synthetic photometry from DataContainers
+This module contains tools for creating synthetic photometry from DataContainers
 as well as tools for retrieveing and manipulating external imaging data.
 
-- External data query utilities
-- 
 """ 
 import os
 import requests
@@ -13,10 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from astropy import units as u
-from astropy import constants
 from astropy.table import Table
-from astropy.io import fits
-from astropy.wcs import WCS
 from astropy.nddata import CCDData, StdDevUncertainty
 from astropy.coordinates import SkyCoord
 from photutils.aperture import SkyCircularAperture, ApertureStats
@@ -106,17 +101,18 @@ class LegacySurveyQuery(QueryMixin):
     """
     fitscutout = "https://www.legacysurvey.org/viewer/fits-cutout"
     default_layer = "ls-dr10"
-    pixelsize_arcsec = 0.27 * u.arcsec
+    pixelsize_arcsec = 0.27 << u.arcsec
 
     @classmethod
-    def getimage(cls, ra, dec, size=240, filters="r", images={}, output_dir="."):
+    def getimage(cls, im_coords, size=240, filters="r", images={}, output_dir="."):
+        ra, dec = im_coords.ra.to_value("deg"), im_coords.dec.to_value("deg")
         for f in filters:
             url = cls.fitscutout
             url += f"?ra={ra:.5f}&dec={dec:.5f}&layer={cls.default_layer}"
             url += f"&pixscale={cls.pixelsize_arcsec}&bands={f}&size={size}"
             filename = cls.filename_from_pos(ra, dec, f, "ls")
             output = os.path.join(output_dir, filename)
-            filename = cls.download_image(url, fname=output)
+            filename = cls.download_image(url, filename=output)
 
 
             if filename is not None:
@@ -158,9 +154,10 @@ class PSQuery(QueryMixin):
 
     ps1filename = "https://ps1images.stsci.edu/cgi-bin/ps1filenames.py"
     fitscut = "https://ps1images.stsci.edu/cgi-bin/fitscut.cgi"
-    pixelsize_arcsec = 0.25 * u.arcsec
+    pixelsize_arcsec = 0.25 << u.arcsec
 
-    def getimages(tra, tdec, size=240, filters="grizy", format="fits", imagetypes="stack"):    
+    def getimages(tra, tdec, size=240, filters="grizy", format="fits",
+                  imagetypes="stack"):    
         """
 
         Description
@@ -205,8 +202,8 @@ class PSQuery(QueryMixin):
         return tab
 
     @classmethod
-    def getimage(cls, ra, dec, size=240, filters="grizy", format="fits", imagetypes="stack",
-                 images={}, output_dir="."):
+    def getimage(cls, im_coords, size=240, filters="grizy", format="fits",
+                 imagetypes="stack", images={}, output_dir="."):
         
         """Query ps1filenames.py service for multiple positions to get a list of images
         This adds a url column to the table to retrieve the cutout.
@@ -231,7 +228,8 @@ class PSQuery(QueryMixin):
             imagetypes = ",".join(imagetypes)
         # put the positions in an in-memory file object
         cbuf = StringIO()
-        cbuf.write('\n'.join(["{} {}".format(ra, dec)]))
+        cbuf.write('\n'.join(["{} {}".format(im_coords.ra.to_value("deg"),
+                                             im_coords.dec.to_value("deg"))]))
         cbuf.seek(0)
         # use requests.post to pass in positions as a file
         r = requests.post(cls.ps1filename, data=dict(filters=filters, type=imagetypes),
@@ -253,7 +251,7 @@ class PSQuery(QueryMixin):
             filename = f"ps_query_{row['ra']:.4f}_{sign_str}{np.abs(row['dec']):.4f}_{row['filter']}.fits"
             filename.replace("-", "n")
             output = os.path.join(output_dir, filename)
-            filename = cls.download_image(row['url'], fname=output)
+            filename = cls.download_image(row['url'], filename=output)
             if filename is not None:
                 ccd = cls.read_ps_fits(filename)
                 images[f"PS1.{row['filter']}"] = {
@@ -296,16 +294,17 @@ def get_effective_sky_footprint(data_containers):
     for dc in data_containers:
         data_containers_footprint.append(dc.get_footprint())
     # Select a rectangle containing all footprints
-    max_ra, max_dec = np.nanmax(data_containers_footprint, axis=(0, 1))
-    min_ra, min_dec = np.nanmin(data_containers_footprint, axis=(0, 1))
-    ra_cen, dec_cen = (max_ra + min_ra) / 2, (max_dec + min_dec) / 2
+    # TODO: Implement units on DC and remove << deg
+    max_ra, max_dec = np.nanmax(data_containers_footprint, axis=(0, 1)) << u.deg
+    min_ra, min_dec = np.nanmin(data_containers_footprint, axis=(0, 1)) << u.deg
+    centre_coordinates = SkyCoord((max_ra + min_ra) / 2, (max_dec + min_dec) / 2)
     ra_width, dec_width = max_ra - min_ra, max_dec - min_dec
-    vprint("Combined footprint Fov: {}, {}".format(ra_width * 60,
-                                                    dec_width * 60))
-    return (ra_cen, dec_cen), (ra_width, dec_width)
+    vprint("Combined footprint Fov: {}, {}".format(ra_width.to("arcmin"),
+                                                   dec_width.to("arcmin")))
+    return centre_coordinates, (ra_width, dec_width)
 
-def query_image(data_containers, query=PSQuery, filters='r', im_extra_size_arcsec=30,
-                im_output_dir='.'):
+def query_image(data_containers, query=PSQuery, filters='r',
+                im_extra_size_arcsec=30 << u.arcsec, im_output_dir='.'):
     """Perform a query of external images that overlap with the DataContainers.
     
     This method performs a query to the database of some photometric survey (e.g. PS)
@@ -335,20 +334,23 @@ def query_image(data_containers, query=PSQuery, filters='r', im_extra_size_arcse
 
     # Compute the effective footprint of all DC and use that as input for
     # the query
-    im_pos, im_fov = get_effective_sky_footprint(data_containers)
+    im_coords, im_fov = get_effective_sky_footprint(data_containers)
     # Convert the size to pixels
-    im_size_pix = int(
-        (np.max(im_fov) * 3600 + im_extra_size_arcsec
-            ) / query.pixelsize_arcsec)
-    vprint(f"Image center sky position (RA, DEC): {im_pos}")
+    ra_pixels = ((im_fov[0] + im_extra_size_arcsec) / query.pixelsize_arcsec
+                 ).to_value(u.dimensionless_unscaled)
+    dec_pixels = ((im_fov[1] + im_extra_size_arcsec) / query.pixelsize_arcsec
+                  ).to_value(u.dimensionless_unscaled)
+
+    im_size_pix = int(np.max([ra_pixels, dec_pixels]))
+    vprint(f"Image center sky position (RA, DEC): {im_coords}")
     vprint(f"Image size (pixels): {im_size_pix}")
     # Perform the query
-    images = query.getimage(*im_pos, size=im_size_pix, filters=filters,
+    images = query.getimage(im_coords, size=im_size_pix, filters=filters,
                             output_dir=im_output_dir)
     return images
 
-
-def get_aperture_photometry(coordinates, diameters, image : CCDData):
+def get_aperture_photometry(coordinates : SkyCoord, diameters : u.Quantity,
+                            image : CCDData):
     """Compute the aperture photometry from an input image.
     
     Convenient method to compute aperture photometry using multiple circular
@@ -379,7 +381,7 @@ def get_aperture_photometry(coordinates, diameters, image : CCDData):
 
 
 def get_dc_aperture_flux(data_container, filter_name,
-                         aperture_diameter=1.25 * u.arcsec,
+                         aperture_diameter=1.25 << u.arcsec,
                          sample_every=2, rss_fibres_pct=50.0):
     """Compute aperture fluxes from the DataContainers
 
@@ -401,6 +403,9 @@ def get_dc_aperture_flux(data_container, filter_name,
         Spatial aperture sampling in units of the aperture radius. If
         `sample_every=2`, the aperture will be defined every two aperture
         diameters in the image.
+    rss_fibres_pct : float, optional. Default=50
+        If the input DataContainer is :class:`RSS`, it determines the
+        flux percentile threshold used to select valid fibre apertures.
 
     Returns
     -------
@@ -438,11 +443,11 @@ def get_dc_aperture_flux(data_container, filter_name,
     if isinstance(data_container, Cube):
         vprint("Computing aperture fluxes using Cube synthetic photometry")
         # Create a grid of apertures equally spaced
-        pix_size_arcsec = np.max(
+        pix_size = np.max(
             data_container.wcs.celestial.wcs.cdelt) * 3600 * u.arcsec
-        delta_pix = aperture_diameter / pix_size_arcsec * sample_every
+        delta_pix = aperture_diameter / pix_size * sample_every
         vprint("Creating a grid of circular aperture "
-                + f"(rad={aperture_diameter / 2 / pix_size_arcsec:.2f}"
+                + f"(rad={aperture_diameter / 2 / pix_size:.2f}"
                 + f" px) every {delta_pix:.1f} pixels")
         rows = np.arange(0, synth_photo.shape[0], delta_pix)
         columns = np.arange(0, synth_photo.shape[1], delta_pix)
@@ -460,6 +465,7 @@ def get_dc_aperture_flux(data_container, filter_name,
     elif isinstance(data_container, RSS):
         vprint("Using RSS fibre synthetic photometry as apertures")
         mask = synth_photo > np.nanpercentile(synth_photo, rss_fibres_pct)
+        # TODO: this should be a method or an attribute of RSS.
         coordinates = SkyCoord(data_container.info['fib_ra'][mask],
                                data_container.info['fib_dec'][mask],
                                unit='deg')
@@ -482,45 +488,44 @@ def get_dc_aperture_flux(data_container, filter_name,
 
 def make_plot_apertures(dc, synth_phot, synth_phot_err, ap_coords,
                             ap_flux, ap_flux_err):
-        """Plot the synthetic aperture fluxes measured from a DC."""
-        if isinstance(dc, Cube):
-            fig, axs = plt.subplots(ncols=2, nrows=2, sharex=True, sharey=True,
-                                    subplot_kw={'projection': dc.wcs.celestial},
-                                    constrained_layout=True)
-            ax = axs[0, 0]
-            mappable = ax.imshow(-2.5 * np.log10(synth_phot.to_value("3631 Jy")), vmin=16, vmax=23,
-                                 interpolation='none')
-            plt.colorbar(mappable, ax=ax, label='SB (mag/pix)')
-            ax = axs[0, 1]
-            mappable = ax.imshow(synth_phot / synth_phot_err, vmin=0, vmax=10, cmap='jet',
-                                 interpolation='none')
-            plt.colorbar(mappable, ax=ax, label='Flux SNR')
-            ax = axs[1, 0]            
-            mappable = ax.scatter(ap_coords.ra, ap_coords.dec,
-            marker='o', transform=ax.get_transform('world'),
-            c= -2.5 * np.log10(ap_flux.to_value("3631 Jy")), vmin=16, vmax=23)
-            plt.colorbar(mappable, ax=ax, label='SB (mag/aperture)')
-            ax = axs[1, 1]
-            mappable = ax.scatter(ap_coords.ra, ap_coords.dec,
-            marker='o', transform=ax.get_transform('world'),
-            c= ap_flux /ap_flux_err, vmin=0, vmax=10)
-            plt.colorbar(mappable, ax=ax, label='Aper flux SNR')
-            for ax in axs.flatten():
-                ax.coords.grid(True, color='orange', ls='solid')
-                ax.coords[0].set_format_unit('deg')
-            plt.close(fig)
-        elif isinstance(dc, RSS):
-            fig, axs = plt.subplots(ncols=1, nrows=2, sharex=True, sharey=True,
-                                    constrained_layout=True)
-            mappable = axs[0].scatter(dc.info['fib_ra'], dc.info['fib_dec'],
-                                      c=synth_phot)
-            plt.colorbar(mappable)
-            mappable = axs[1].scatter(dc.info['fib_ra'], dc.info['fib_dec'],
-                                      c=synth_phot / synth_phot_err)
-            plt.colorbar(mappable)
-            #utils.fibre_map(fig, axs[0], )
-            # TODO: once plotting is homogeneized
-        return fig
+    """Plot the synthetic aperture fluxes measured from a DC."""
+    if isinstance(dc, Cube):
+        fig, axs = plt.subplots(ncols=2, nrows=2, sharex=True, sharey=True,
+                                subplot_kw={'projection': dc.wcs.celestial},
+                                constrained_layout=True)
+        ax = axs[0, 0]
+        mappable = ax.imshow(-2.5 * np.log10(synth_phot.to_value("3631 Jy")), vmin=16, vmax=23,
+                                interpolation='none')
+        plt.colorbar(mappable, ax=ax, label='SB (mag/pix)')
+        ax = axs[0, 1]
+        mappable = ax.imshow(synth_phot / synth_phot_err, vmin=0, vmax=10, cmap='jet',
+                                interpolation='none')
+        plt.colorbar(mappable, ax=ax, label='Flux SNR')
+        ax = axs[1, 0]            
+        mappable = ax.scatter(ap_coords.ra, ap_coords.dec,
+        marker='o', transform=ax.get_transform('world'),
+        c= -2.5 * np.log10(ap_flux.to_value("3631 Jy")), vmin=16, vmax=23)
+        plt.colorbar(mappable, ax=ax, label='SB (mag/aperture)')
+        ax = axs[1, 1]
+        mappable = ax.scatter(ap_coords.ra, ap_coords.dec,
+        marker='o', transform=ax.get_transform('world'),
+        c= ap_flux /ap_flux_err, vmin=0, vmax=10)
+        plt.colorbar(mappable, ax=ax, label='Aper flux SNR')
+        for ax in axs.flatten():
+            ax.coords.grid(True, color='orange', ls='solid')
+            ax.coords[0].set_format_unit('deg')
+        plt.close(fig)
+    elif isinstance(dc, RSS):
+        fig, axs = plt.subplots(ncols=1, nrows=2, sharex=True, sharey=True,
+                                constrained_layout=True)
+        mappable = axs[0].scatter(dc.info['fib_ra'], dc.info['fib_dec'],
+                                    c=synth_phot)
+        plt.colorbar(mappable, label="Flux")
+        mappable = axs[1].scatter(dc.info['fib_ra'], dc.info['fib_dec'],
+                                    c=synth_phot / synth_phot_err, label="SNR")
+        plt.colorbar(mappable)
+        # TODO: once plotting is homogeneized add RSS fibre map
+    return fig
 
 def get_dc_synthetic_photometry(filter, dc):
     """Compute synthetic photometry from a DataContainer.
@@ -806,6 +811,7 @@ def crosscorrelate_im_apertures(ref_aperture_flux, ref_coord, image,
         value = 1 / (np.nansum(flux_in_ap[mask] * ref_flux[mask]) / n_valid)
         return value
 
+    vprint("Performing minimization...")
     result = minimize(objective_function, x0=[0., 0.],
                       bounds=(ra_offset_range, dec_offset_range),
                       method="Powell",
@@ -824,9 +830,21 @@ def make_plot_astrometry_offset(data_container, dc_synth_photo, image, results):
         
         Parameters
         ----------
-        dc_image : 
-        dc_wcs : 
-        image : 
+        data_container : :class:`DataContainer`
+            DataContainer used during the cross-correlation.
+        dc_synth_photo : :class:`astropy.units.Quantity`
+            DataContainer synthetic photometry.
+        image : dict
+            Dictionary including the keys ``ccd`` and ``pix_size``, containing
+            the :class:`CCDData` and pixel size information of the reference
+            image.
+        results : dict
+            Dictionary containing the results of the cross-correlation.
+        
+        Returns
+        -------
+        fig : :class:`plt.Figure`
+            Figure containing the plots.
         """
 
         synt_sb = -2.5 * np.log10(dc_synth_photo.to_value("3631 Jy"))
