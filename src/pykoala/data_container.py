@@ -954,15 +954,9 @@ class RSS(SpectraContainer):
                             fig_args=fig_args, cmap_args=cmap_args,
                             output_filename=output_filename)
         return fig
-    
-    
 
-    def plot_fibre(self):
-        # TODO: THIS SHOULD BE A METHOD OF THE PARENT CLASS
-        pass
-
-    def plot_plot_fibres(self, data=None, cblabel="", fig_args={},
-                       cmap_args={}, output_filename=None):
+    def plot_fibres(self, data=None, cblabel="", fig_args={},
+                    cmap_args={}, output_filename=None):
         """
         Plots a fibre map image, showing the spatial distribution of data across fibres.
 
@@ -998,10 +992,16 @@ class RSS(SpectraContainer):
         if data is None:
             data, _ = self.get_integrated_fibres()
             cblabel = "Integrated intensity"
+        if "figsize" not in fig_args:
+            fig_args["figsize"] = (5, 5)
         fig, axs = new_figure(self.info['name'], **fig_args)
         axs[0, 0].set_aspect('auto')
-        im, cb = plot_fibres(fig, axs[0, 0], cblabel, data, fib_ra=self.info['fib_ra'],
-                         fib_dec=self.info['fib_dec'], **cmap_args)
+
+        ax, *_ = plot_fibres(
+            fig=fig, ax=axs[0, 0], cblabel=cblabel,
+            data=data, rss=self, **cmap_args)
+        ax.set_xlabel("RA (deg)")
+        ax.set_ylabel("DEC (deg)")
         if output_filename is not None:
             fig.savefig(output_filename, bbox_inches="tight")
         return fig
