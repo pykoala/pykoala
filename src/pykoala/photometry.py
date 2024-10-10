@@ -21,6 +21,7 @@ from astropy.nddata import CCDData, StdDevUncertainty
 from astropy.coordinates import SkyCoord
 from photutils.aperture import SkyCircularAperture, ApertureStats
 
+from scipy.optimize import minimize
 
 from pykoala import vprint
 from pykoala.data_container import Cube, RSS
@@ -565,13 +566,174 @@ def get_dc_synthetic_photometry(filter, dc):
 
     return synth_photo, synth_photo_err
 
-def crosscorrelate_im_apertures(ref_aperture_flux, ref_aperture_flux_err,
-                                ref_coord, image,
-                                ra_offset_range=[-10, 10],
-                                dec_offset_range=[-10, 10],
-                                offset_step=0.5,
-                                aperture_diameter=1.25 << u.arcsec,
-                                plot=True):
+# def crosscorrelate_im_apertures(ref_aperture_flux, ref_aperture_flux_err,
+#                                 ref_coord, image,
+#                                 ra_offset_range=[-10, 10],
+#                                 dec_offset_range=[-10, 10],
+#                                 offset_step=0.5,
+#                                 aperture_diameter=1.25 << u.arcsec,
+#                                 plot=True):
+#     """Cross-correlate an image with an input set of apertures.
+    
+#     Description
+#     -----------
+#     This method performs a spatial cross-correlation between a list of input aperture fluxes
+#     and a reference image. For example, the aperture fluxes can simply correspond to the
+#     flux measured within a fibre or a set of aperture measured in a datacube.
+#     First, a grid of aperture position offsets is generated, and every iteration
+#     will compute the difference between the two sets. 
+
+#     The figure of merit used is defined as:
+#         :math: `w=e^{-(A+B)/2}`
+#         where 
+#         :math: `A=\langle f_{Ap} - \hat{f_{Ap}} \rangle`
+#         :math: `B=|1 - \frac{\langle f_{Ap} \rangle}{\langle \hat{f_{Ap}} \rangle}|`
+#         where :math: `f_{Ap}, \hat{f_{Ap}` correspond to the aperture flux in the
+#         reference (DC) and ancillary data
+
+#     Parameters
+#     ----------
+#     ref_aperture_flux: np.ndarray
+#         A set of aperture fluxes measured in the target image.
+#     ref_aperture_flux_err: np.ndarray
+#         The associated errors of the aperture fluxes.
+#     ref_coords: astropy.coordinates.SkyCoord
+#         The celestial coordinates of each aperture.
+#     image: np.ndarray
+#         Pixel data associated to the reference image.
+#     wcs: astropy.wcs.WCS
+#         WCS associated to the reference image.
+#     ra_offset_range: list or tuple, default=[-10, 10],
+#         The range of offsets in RA to be explored in arcseconds.
+#         Defaul is +-10 arcsec.
+#     dec_offset_range: list or tuple, default=[-10, 10],
+#         The range of offsets in DEC to be explored in arcseconds.
+#         Defaul is +-10 arcsec.
+#     offset_step: float, default=0.5
+#         Offset step size in arcseconds. Default is 0.5.
+#     aperture_diameter: float, default=1.25
+#         Aperture diameter size in arcseconds. Default is 1.25.
+
+#     Returns
+#     -------
+#     results: dict
+#         Dictionary containing the cross-correlation results.
+#     """
+#     vprint("Cross-correlating image to list of apertures")
+#     vprint(f"Input number of apertures: {len(ref_aperture_flux)}")
+#     # Renormalize the reference aperture
+#     ref_ap_norm = np.nanmean(ref_aperture_flux)
+#     ref_flux = ref_aperture_flux / ref_ap_norm
+#     ref_flux_err = ref_aperture_flux_err / ref_ap_norm
+#     good_aper = np.isfinite(ref_flux) & (ref_flux > 0)
+#     vprint(f"Number of input apertures used: {np.count_nonzero(good_aper)}")
+#     # Make a grid of offsets
+#     ra_offset = np.arange(*ra_offset_range, offset_step)
+#     dec_offset = np.arange(*dec_offset_range, offset_step)
+
+#     # Initialise the results variable
+
+#     offset_sampling = np.meshgrid(dec_offset, ra_offset, indexing='ij')
+#     grid_flux_prod = np.full((dec_offset.size, ra_offset.size),
+#                               fill_value=np.nan)
+
+#     for i, (ra_offset_arcsec, dec_offset_arcsec) in enumerate(
+#         zip(offset_sampling[0].flatten(), offset_sampling[1].flatten())):
+#         # Create a set of apertures
+#         new_coords = SkyCoord(
+#             ref_coord.ra + ra_offset_arcsec * u.arcsec,
+#             ref_coord.dec + dec_offset_arcsec * u.arcsec)
+
+#         flux_in_ap, flux_in_ap_err = get_aperture_photometry(
+#         new_coords, diameters=aperture_diameter, image=image["ccd"])
+
+#         # Renormalize the flux
+#         flux_in_ap_norm = np.nanmean(flux_in_ap)
+#         flux_in_ap /= flux_in_ap_norm
+#         flux_in_ap_err /= flux_in_ap_norm
+#         # Ensure that none of the apertures contain NaN's/inf
+#         mask = np.isfinite(flux_in_ap) & good_aper
+#         n_valid = np.count_nonzero(mask)
+#         idx = np.unravel_index(i, grid_flux_prod.shape)
+#         grid_flux_prod[idx] = np.nansum(
+#             flux_in_ap[mask] * ref_flux[mask]) / n_valid
+
+#     vprint("Computing the offset solution")
+#     weights = np.nanmax(grid_flux_prod) - grid_flux_prod
+#     weights = np.exp(grid_flux_prod)
+#     weights /= np.nansum(weights)
+#     # Minimum
+#     min_pos = np.nanargmax(weights)
+#     min_pos = np.unravel_index(min_pos, grid_flux_prod.shape)
+
+#     ra_min = offset_sampling[1][min_pos]
+#     dec_min = offset_sampling[0][min_pos]
+#     ra_mean = np.nansum(offset_sampling[1] * weights)
+#     ra_var = np.nansum((offset_sampling[1] - ra_mean)**2 * weights)
+#     dec_mean = np.nansum(offset_sampling[0] * weights)
+#     dec_var = np.nansum((offset_sampling[0] - dec_mean)**2 * weights)
+
+#     results = {
+#         "offset_min": (ra_min, dec_min),
+#         "offset_mean": (ra_mean, dec_mean),
+#         "offset_var": (ra_var, dec_var),
+#         "ra_offset": ra_offset, "dec_offset": dec_offset,
+#         "offset_sampling": offset_sampling,
+#         "weights": weights}
+
+#     if plot:
+#         results['fig'] = make_crosscorr_plot(results)
+#     return results
+
+# def make_crosscorr_plot(results):
+#     """Make a plot showing the aperture flux cross-correlatation results.
+    
+#     Parameters
+#     ----------
+#     results: dict
+#         Dictionary containing the results returned by `crosscorrelate_im_apertures`.
+
+#     Returns
+#     -------
+#     fig : :class:`plt.Figure`
+#         Figure containing the plot.
+#     """
+#     ra_mean, dec_mean = results['offset_mean']
+#     ra_min, dec_min = results['offset_min']
+
+#     fig, ax = plt.subplots(ncols=1, nrows=1, constrained_layout=True,
+#                            figsize=(4, 4),
+#                            sharex=False, sharey=False)
+
+#     mappable = ax.pcolormesh(
+#         results['ra_offset'], results['dec_offset'], results['weights'],
+#         cmap='Spectral')
+#     ax.plot(ra_mean, dec_mean, 'o', ms=10, label='Mean', mec='k', mfc='none')
+#     ax.plot(ra_min, dec_min, 'k+', label='Max. like')
+#     #ax.legend(framealpha=0.1)
+#     ax.set_xlabel("RA offset (arcsec)")
+#     ax.set_ylabel("DEC offset (arcsec)")
+#     plt.colorbar(mappable, ax=ax, label='W',
+#                  orientation='horizontal', pad=0.2)
+    
+#     vax = ax.inset_axes((1.03, 0, .6, 1), sharey=ax)
+#     vax.plot(results['weights'].sum(axis=1), results['dec_offset'], 'k')
+#     vax.axhline(dec_min, color='b', label='Max. weight')
+#     vax.axhline(dec_mean, color='r', label='Avg.')
+#     vax.legend()
+
+#     hax = ax.inset_axes((0, 1.03, 1, .6), sharex=ax)
+#     hax.plot(results['ra_offset'], results['weights'].sum(axis=0), 'k')
+#     hax.axvline(ra_min, color='b')
+#     hax.axvline(ra_mean, color='r')
+
+#     plt.close(fig)
+#     return fig
+
+def crosscorrelate_im_apertures(ref_aperture_flux, ref_coord, image,
+                                ra_offset_range=[-10., 10.],
+                                dec_offset_range=[-10., 10.],
+                                aperture_diameter=1.25 << u.arcsec):
     """Cross-correlate an image with an input set of apertures.
     
     Description
@@ -579,38 +741,28 @@ def crosscorrelate_im_apertures(ref_aperture_flux, ref_aperture_flux_err,
     This method performs a spatial cross-correlation between a list of input aperture fluxes
     and a reference image. For example, the aperture fluxes can simply correspond to the
     flux measured within a fibre or a set of aperture measured in a datacube.
-    First, a grid of aperture position offsets is generated, and every iteration
-    will compute the difference between the two sets. 
 
-    The figure of merit used is defined as:
-        :math: `w=e^{-(A+B)/2}`
-        where 
-        :math: `A=\langle f_{Ap} - \hat{f_{Ap}} \rangle`
-        :math: `B=|1 - \frac{\langle f_{Ap} \rangle}{\langle \hat{f_{Ap}} \rangle}|`
-        where :math: `f_{Ap}, \hat{f_{Ap}` correspond to the aperture flux in the
-        reference (DC) and ancillary data
+    The objective function is defined as:
+        :math: `f(\Delta RA, \Delta DEC)= \frac{1}{\sum f_i \hat{f_i}(\Delta RA, \Delta DEC)}`
+        where :math: `f_i` and :math: `\hat{f_i}` correspond to the flux measured
+        within the reference and image apertures.
+
 
     Parameters
     ----------
     ref_aperture_flux: np.ndarray
         A set of aperture fluxes measured in the target image.
-    ref_aperture_flux_err: np.ndarray
-        The associated errors of the aperture fluxes.
     ref_coords: astropy.coordinates.SkyCoord
         The celestial coordinates of each aperture.
     image: np.ndarray
         Pixel data associated to the reference image.
-    wcs: astropy.wcs.WCS
-        WCS associated to the reference image.
     ra_offset_range: list or tuple, default=[-10, 10],
         The range of offsets in RA to be explored in arcseconds.
         Defaul is +-10 arcsec.
     dec_offset_range: list or tuple, default=[-10, 10],
         The range of offsets in DEC to be explored in arcseconds.
         Defaul is +-10 arcsec.
-    offset_step: float, default=0.5
-        Offset step size in arcseconds. Default is 0.5.
-    aperture_diameter: float, default=1.25
+    aperture_diameter: :class:`astropy.units.Quantity`, default=1.25 arcsec
         Aperture diameter size in arcseconds. Default is 1.25.
 
     Returns
@@ -623,111 +775,40 @@ def crosscorrelate_im_apertures(ref_aperture_flux, ref_aperture_flux_err,
     # Renormalize the reference aperture
     ref_ap_norm = np.nanmean(ref_aperture_flux)
     ref_flux = ref_aperture_flux / ref_ap_norm
-    ref_flux_err = ref_aperture_flux_err / ref_ap_norm
     good_aper = np.isfinite(ref_flux) & (ref_flux > 0)
     vprint(f"Number of input apertures used: {np.count_nonzero(good_aper)}")
     # Make a grid of offsets
-    ra_offset = np.arange(*ra_offset_range, offset_step)
-    dec_offset = np.arange(*dec_offset_range, offset_step)
 
-    # Initialise the results variable
-
-    offset_sampling = np.meshgrid(dec_offset, ra_offset, indexing='ij')
-    grid_flux_prod = np.full((dec_offset.size, ra_offset.size),
-                              fill_value=np.nan)
-
-    for i, (ra_offset_arcsec, dec_offset_arcsec) in enumerate(
-        zip(offset_sampling[0].flatten(), offset_sampling[1].flatten())):
-        # Create a set of apertures
+    def objective_function(offsets):
+        # Create the new aperture coordinates
         new_coords = SkyCoord(
-            ref_coord.ra + ra_offset_arcsec * u.arcsec,
-            ref_coord.dec + dec_offset_arcsec * u.arcsec)
+            ref_coord.ra + offsets[0] * u.arcsec,
+            ref_coord.dec + offsets[1] * u.arcsec)
 
-        flux_in_ap, flux_in_ap_err = get_aperture_photometry(
+        flux_in_ap, _ = get_aperture_photometry(
         new_coords, diameters=aperture_diameter, image=image["ccd"])
 
         # Renormalize the flux
         flux_in_ap_norm = np.nanmean(flux_in_ap)
         flux_in_ap /= flux_in_ap_norm
-        flux_in_ap_err /= flux_in_ap_norm
         # Ensure that none of the apertures contain NaN's/inf
         mask = np.isfinite(flux_in_ap) & good_aper
         n_valid = np.count_nonzero(mask)
-        idx = np.unravel_index(i, grid_flux_prod.shape)
-        grid_flux_prod[idx] = np.nansum(
-            flux_in_ap[mask] * ref_flux[mask]) / n_valid
+        value = 1 / (np.nansum(flux_in_ap[mask] * ref_flux[mask]) / n_valid)
+        return value
 
-    vprint("Computing the offset solution")
-    weights = np.nanmax(grid_flux_prod) - grid_flux_prod
-    weights = np.exp(grid_flux_prod)
-    weights /= np.nansum(weights)
-    # Minimum
-    min_pos = np.nanargmax(weights)
-    min_pos = np.unravel_index(min_pos, grid_flux_prod.shape)
+    result = minimize(objective_function, x0=[0., 0.],
+                      bounds=(ra_offset_range, dec_offset_range),
+                      method="Powell",
+                      tol=1e-9,
+                      )
+    vprint(f"Success : {result.success}")
+    vprint(f"Status : {result.status}")
+    vprint(f"Result : {result.x}")
+    vprint(f"Number of evaluations : {result.nfev}")
+    results = {"offset_min": result.x, "opt_results": result}
 
-    ra_min = offset_sampling[1][min_pos]
-    dec_min = offset_sampling[0][min_pos]
-    ra_mean = np.nansum(offset_sampling[1] * weights)
-    ra_var = np.nansum((offset_sampling[1] - ra_mean)**2 * weights)
-    dec_mean = np.nansum(offset_sampling[0] * weights)
-    dec_var = np.nansum((offset_sampling[0] - dec_mean)**2 * weights)
-
-    results = {
-        "offset_min": (ra_min, dec_min),
-        "offset_mean": (ra_mean, dec_mean),
-        "offset_var": (ra_var, dec_var),
-        "ra_offset": ra_offset, "dec_offset": dec_offset,
-        "offset_sampling": offset_sampling,
-        "weights": weights}
-
-    if plot:
-        results['fig'] = make_crosscorr_plot(results)
     return results
-    
-def make_crosscorr_plot(results):
-    """Make a plot showing the aperture flux cross-correlatation results.
-    
-    Parameters
-    ----------
-    results: dict
-        Dictionary containing the results returned by `crosscorrelate_im_apertures`.
-
-    Returns
-    -------
-    fig : :class:`plt.Figure`
-        Figure containing the plot.
-    """
-    ra_mean, dec_mean = results['offset_mean']
-    ra_min, dec_min = results['offset_min']
-
-    fig, ax = plt.subplots(ncols=1, nrows=1, constrained_layout=True,
-                           figsize=(4, 4),
-                           sharex=False, sharey=False)
-
-    mappable = ax.pcolormesh(
-        results['ra_offset'], results['dec_offset'], results['weights'],
-        cmap='Spectral')
-    ax.plot(ra_mean, dec_mean, 'o', ms=10, label='Mean', mec='k', mfc='none')
-    ax.plot(ra_min, dec_min, 'k+', label='Max. like')
-    #ax.legend(framealpha=0.1)
-    ax.set_xlabel("RA offset (arcsec)")
-    ax.set_ylabel("DEC offset (arcsec)")
-    plt.colorbar(mappable, ax=ax, label='W',
-                 orientation='horizontal', pad=0.2)
-    
-    vax = ax.inset_axes((1.03, 0, .6, 1), sharey=ax)
-    vax.plot(results['weights'].sum(axis=1), results['dec_offset'], 'k')
-    vax.axhline(dec_min, color='b', label='Max. weight')
-    vax.axhline(dec_mean, color='r', label='Avg.')
-    vax.legend()
-
-    hax = ax.inset_axes((0, 1.03, 1, .6), sharex=ax)
-    hax.plot(results['ra_offset'], results['weights'].sum(axis=0), 'k')
-    hax.axvline(ra_min, color='b')
-    hax.axvline(ra_mean, color='r')
-
-    plt.close(fig)
-    return fig
 
 def make_plot_astrometry_offset(data_container, dc_synth_photo, image, results):
         """Plot the DC and ancillary data including the astrometry correction.
