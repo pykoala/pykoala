@@ -243,8 +243,11 @@ def plot_fibres(fig, ax, rss=None, x=None, y=None,
     elif isinstance(norm, str):
         norm = getattr(colors, norm)()
 
+    if isinstance(cmap, str):
+        cmap = plt.get_cmap(cmap).copy()
+
     if data is not None:
-        colors = cmap(norm(data))
+        fib_colors = cmap(norm(data))
         mappable = ScalarMappable(norm=norm, cmap=cmap)
         if cbax is None:
             cb = fig.colorbar(mappable, ax=ax, orientation='vertical', shrink=.9)
@@ -258,7 +261,7 @@ def plot_fibres(fig, ax, rss=None, x=None, y=None,
             cb.set_label(cblabel)
             cb.ax.tick_params(labelsize='small')
     else:
-        colors = ["none"] * len(x)
+        fib_colors = ["none"] * len(x)
         cb = None
 
     if "edgecolor" not in patch_args:
@@ -270,7 +273,7 @@ def plot_fibres(fig, ax, rss=None, x=None, y=None,
     patches = [plt.Circle(
         xy=(x_c, y_c), radius=fibre_diam.to_value(x.unit) / 2, facecolor=color,
         **patch_args
-        ) for x_c, y_c, color in zip(x.value, y.value, colors)]
+        ) for x_c, y_c, color in zip(x.value, y.value, fib_colors)]
     patch_collection = PatchCollection(patches, match_original=True,
                                        label='Fibre')
     ax.add_collection(patch_collection)
