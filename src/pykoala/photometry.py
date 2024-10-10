@@ -114,7 +114,6 @@ class LegacySurveyQuery(QueryMixin):
             url += f"&pixscale={cls.pixelsize_arcsec}&bands={f}&size={size}"
             filename = cls.filename_from_pos(ra, dec, f, "ls")
             output = os.path.join(output_dir, filename)
-            print(output)
             filename = cls.download_image(url, fname=output)
 
 
@@ -243,7 +242,6 @@ class PSQuery(QueryMixin):
                 for (filename,ra,dec) in zip(tab["filename"],tab["ra"],tab["dec"])]
         # Retrieve each filter image
         for row in tab:
-            print(row)
             vprint(f"Retrieving cutout: ra={row['ra']}, dec={row['dec']}, filter={row['filter']}")
             sign = np.sign(row['dec'])
             if sign == -1:
@@ -285,11 +283,11 @@ class PSQuery(QueryMixin):
 def get_effective_sky_footprint(data_containers):
     """Compute the effective footprint containing all input DataContainers.
     
-    Return
-    ------
-    - centre: tuple
+    Returns
+    -------
+    centre: tuple
         Centre coordinates (ra_mean, dec_mean)
-    - width: tuple
+    width: tuple
         Window width (ra_max - ra_min, dec_max - dec_min)
     """
     data_containers_footprint = []
@@ -347,8 +345,30 @@ def query_image(data_containers, query=PSQuery, filters='r', im_extra_size_arcse
                             output_dir=im_output_dir)
     return images
 
+
 def get_aperture_photometry(coordinates, diameters, image : CCDData):
-    """TODO"""
+    """Compute the aperture photometry from an input image.
+    
+    Convenient method to compute aperture photometry using multiple circular
+    apertures. The flux within each aperture is computed as the mean value
+    multiplied by the exact number of pixels contained within.
+
+    Parameters
+    ----------
+    coordinates : :class:`astropy.coordinates.SkyCoord`
+        Celestial coordinates where to compute the apertures.
+    diameters : :class:`astropy.units.Quantity`
+        Diameter size of each aperture. It can be a single or
+        multiple values.
+    image : :class:`astropy.nddata.CCDData`
+
+    Returns
+    -------
+    flux_in_ap : :class:`astropy.units.Quantity`
+        Flux contained within each aperture.
+    flux_in_ap_err : :class:`astropy.units.Quantity`
+        Associated error to ``flux_in_ap``.
+    """
     apertures = SkyCircularAperture(coordinates, r=diameters / 2)
     table = ApertureStats(image, apertures, sum_method='exact')
     flux_in_ap = table.mean * np.sqrt(table.center_aper_area.value)
@@ -358,7 +378,7 @@ def get_aperture_photometry(coordinates, diameters, image : CCDData):
 
 def get_dc_aperture_flux(data_container, filter_name,
                          aperture_diameter=1.25 * u.arcsec,
-                         sample_every=2):
+                         sample_every=2, rss_fibres_pct=50.0):
     """Compute aperture fluxes from the DataContainers
 
     This method computes a set of aperture fluxes from an input data container.
@@ -437,9 +457,11 @@ def get_dc_aperture_flux(data_container, filter_name,
 
     elif isinstance(data_container, RSS):
         vprint("Using RSS fibre synthetic photometry as apertures")
-        coordinates = SkyCoord(data_container.info['fib_ra'],
-                               data_container.info['fib_dec'])
-        flux_in_ap, flux_in_ap_err = synth_photo, synth_photo_err
+        mask = synth_photo > np.nanpercentile(synth_photo, rss_fibres_pct)
+        coordinates = SkyCoord(data_container.info['fib_ra'][mask],
+                               data_container.info['fib_dec'][mask],
+                               unit='deg')
+        flux_in_ap, flux_in_ap_err = synth_photo[mask], synth_photo_err[mask]
         result['wcs'] = None
         aperture_diameter = data_container.fibre_diameter
 
@@ -486,8 +508,16 @@ def make_plot_apertures(dc, synth_phot, synth_phot_err, ap_coords,
                 ax.coords[0].set_format_unit('deg')
             plt.close(fig)
         elif isinstance(dc, RSS):
-            pass
-
+            fig, axs = plt.subplots(ncols=1, nrows=2, sharex=True, sharey=True,
+                                    constrained_layout=True)
+            mappable = axs[0].scatter(dc.info['fib_ra'], dc.info['fib_dec'],
+                                      c=synth_phot)
+            plt.colorbar(mappable)
+            mappable = axs[1].scatter(dc.info['fib_ra'], dc.info['fib_dec'],
+                                      c=synth_phot / synth_phot_err)
+            plt.colorbar(mappable)
+            #utils.fibre_map(fig, axs[0], )
+            # TODO: once plotting is homogeneized
         return fig
 
 def get_dc_synthetic_photometry(filter, dc):
@@ -514,8 +544,7 @@ def get_dc_synthetic_photometry(filter, dc):
     """
     # interpolate the filter response curve to the DC wavelength grid.
     filter.interpolate(dc.wavelength)
-    synth_photo = np.full((dc.rss_intensity.shape[0], 1), fill_value=np.nan
-                          ) << u.Jy
+    synth_photo = np.full((dc.rss_intensity.shape[0], 1), fill_value=np.nan) << u.Jy
     synth_photo_err = np.full_like(synth_photo, fill_value=np.nan)
 
     for ith, (intensity, variance) in enumerate(
@@ -531,9 +560,10 @@ def get_dc_synthetic_photometry(filter, dc):
         synth_photo[ith] = f_nu.to('Jy')
         synth_photo_err[ith] = f_nu_err.to('Jy')
 
-    synth_photo = dc.unravel_rss(synth_photo)
-    synth_photo_err = dc.unravel_rss(synth_photo_err)
-    return synth_photo[0], synth_photo_err[0]
+    synth_photo = np.squeeze(dc.rss_to_original(synth_photo))
+    synth_photo_err = np.squeeze(dc.rss_to_original(synth_photo_err))
+
+    return synth_photo, synth_photo_err
 
 def crosscorrelate_im_apertures(ref_aperture_flux, ref_aperture_flux_err,
                                 ref_coord, image,
@@ -594,8 +624,8 @@ def crosscorrelate_im_apertures(ref_aperture_flux, ref_aperture_flux_err,
     ref_ap_norm = np.nanmean(ref_aperture_flux)
     ref_flux = ref_aperture_flux / ref_ap_norm
     ref_flux_err = ref_aperture_flux_err / ref_ap_norm
-    good_aper = np.isfinite(ref_flux)
-
+    good_aper = np.isfinite(ref_flux) & (ref_flux > 0)
+    vprint(f"Number of input apertures used: {np.count_nonzero(good_aper)}")
     # Make a grid of offsets
     ra_offset = np.arange(*ra_offset_range, offset_step)
     dec_offset = np.arange(*dec_offset_range, offset_step)
@@ -603,12 +633,8 @@ def crosscorrelate_im_apertures(ref_aperture_flux, ref_aperture_flux_err,
     # Initialise the results variable
 
     offset_sampling = np.meshgrid(dec_offset, ra_offset, indexing='ij')
-    grid_flux_ratio = np.full((dec_offset.size, ra_offset.size),
+    grid_flux_prod = np.full((dec_offset.size, ra_offset.size),
                               fill_value=np.nan)
-    grid_flux_diff = np.full((dec_offset.size, ra_offset.size),
-                              fill_value=np.nan)
-    
-    # sampling[2:4] = np.meshgrid(dec_offset, ra_offset, indexing='ij')
 
     for i, (ra_offset_arcsec, dec_offset_arcsec) in enumerate(
         zip(offset_sampling[0].flatten(), offset_sampling[1].flatten())):
@@ -627,41 +653,31 @@ def crosscorrelate_im_apertures(ref_aperture_flux, ref_aperture_flux_err,
         # Ensure that none of the apertures contain NaN's/inf
         mask = np.isfinite(flux_in_ap) & good_aper
         n_valid = np.count_nonzero(mask)
-        flux_diff = np.nansum((flux_in_ap[mask] - ref_flux[mask])**2) / n_valid
-        flux_ratio = ref_ap_norm / flux_in_ap_norm
-        idx = np.unravel_index(i, grid_flux_ratio.shape)
-        grid_flux_ratio[idx] = flux_ratio
-        grid_flux_diff[idx] = flux_diff
-        # sampling[:2, idx[0], idx[1]] = (flux_diff, flax_ratio)
+        idx = np.unravel_index(i, grid_flux_prod.shape)
+        grid_flux_prod[idx] = np.nansum(
+            flux_in_ap[mask] * ref_flux[mask]) / n_valid
 
     vprint("Computing the offset solution")
-    weights = np.exp(- (grid_flux_diff + np.abs(1 - grid_flux_ratio)) / 2)
+    weights = np.nanmax(grid_flux_prod) - grid_flux_prod
+    weights = np.exp(grid_flux_prod)
     weights /= np.nansum(weights)
     # Minimum
     min_pos = np.nanargmax(weights)
-    min_pos = np.unravel_index(min_pos, grid_flux_diff.shape)
+    min_pos = np.unravel_index(min_pos, grid_flux_prod.shape)
 
     ra_min = offset_sampling[1][min_pos]
     dec_min = offset_sampling[0][min_pos]
     ra_mean = np.nansum(offset_sampling[1] * weights)
+    ra_var = np.nansum((offset_sampling[1] - ra_mean)**2 * weights)
     dec_mean = np.nansum(offset_sampling[0] * weights)
-
-    min_coords = SkyCoord(
-            ref_coord.ra + ra_min * u.arcsec,
-            ref_coord.dec + dec_min * u.arcsec)
-    flux_in_ap, flux_in_ap_err = get_aperture_photometry(
-        min_coords, diameters=aperture_diameter, image=image["ccd"])
-    flux_in_ap_norm = np.nanmean(flux_in_ap)
-    flux_in_ap /= flux_in_ap_norm
-    flux_in_ap_err /= flux_in_ap_norm
+    dec_var = np.nansum((offset_sampling[0] - dec_mean)**2 * weights)
 
     results = {
         "offset_min": (ra_min, dec_min),
         "offset_mean": (ra_mean, dec_mean),
+        "offset_var": (ra_var, dec_var),
         "ra_offset": ra_offset, "dec_offset": dec_offset,
         "offset_sampling": offset_sampling,
-        "grid_flux_ratio" : grid_flux_ratio,
-        "grid_flux_diff" : grid_flux_diff,
         "weights": weights}
 
     if plot:
@@ -684,51 +700,28 @@ def make_crosscorr_plot(results):
     ra_mean, dec_mean = results['offset_mean']
     ra_min, dec_min = results['offset_min']
 
-    fig, axs = plt.subplots(ncols=3, nrows=1, constrained_layout=True,
-                            figsize=(12, 4),
-                            sharex=False, sharey=False)
-    # Plot the flux offset
-    ax = axs[0]
-    mappable = ax.pcolormesh(
-        results['ra_offset'], results['dec_offset'],
-        results['grid_flux_diff']**0.5, cmap='Spectral')
-    ax.plot(ra_mean, dec_mean, 'k+', ms=10, label='Weighted')
-    ax.plot(ra_min, dec_min, 'k^', label='Minimum')
-    ax.set_xlabel("RA offset  (arcsec)")
-    ax.set_ylabel("DEC offset  (arcsec)")
-    plt.colorbar(mappable, ax=ax, label='A',
-                 orientation='horizontal', pad=0.2)
+    fig, ax = plt.subplots(ncols=1, nrows=1, constrained_layout=True,
+                           figsize=(4, 4),
+                           sharex=False, sharey=False)
 
-    ax = axs[1]
-    p95 = np.clip(np.nanpercentile(np.abs(1 - results['grid_flux_ratio']), 95),
-                  a_min=1, a_max=5)
-    mappable = ax.pcolormesh(results['ra_offset'], results['dec_offset'],
-                             np.abs(1 - results['grid_flux_ratio']),
-                             cmap='Spectral', vmin=-p95, vmax=p95)
-    ax.plot(ra_mean, dec_mean, 'k+', ms=10, label='Weighted')
-    ax.plot(ra_min, dec_min, 'k^', label='Minimum')
-    ax.set_xlabel("RA offset (arcsec)")
-    plt.colorbar(mappable, ax=ax, label='B',
-                 orientation='horizontal', pad=0.2)
-
-    ax = axs[2]
     mappable = ax.pcolormesh(
         results['ra_offset'], results['dec_offset'], results['weights'],
         cmap='Spectral')
-    ax.plot(ra_mean, dec_mean, 'k+', ms=10, label='Weighted')
-    ax.plot(ra_min, dec_min, 'k^', label='Minimum')
-    ax.legend()
+    ax.plot(ra_mean, dec_mean, 'o', ms=10, label='Mean', mec='k', mfc='none')
+    ax.plot(ra_min, dec_min, 'k+', label='Max. like')
+    #ax.legend(framealpha=0.1)
     ax.set_xlabel("RA offset (arcsec)")
+    ax.set_ylabel("DEC offset (arcsec)")
     plt.colorbar(mappable, ax=ax, label='W',
                  orientation='horizontal', pad=0.2)
     
-    vax = ax.inset_axes((1.03, 0, .7, 1))
+    vax = ax.inset_axes((1.03, 0, .6, 1), sharey=ax)
     vax.plot(results['weights'].sum(axis=1), results['dec_offset'], 'k')
     vax.axhline(dec_min, color='b', label='Max. weight')
     vax.axhline(dec_mean, color='r', label='Avg.')
     vax.legend()
 
-    hax = ax.inset_axes((0, 1.03, 1, .7))
+    hax = ax.inset_axes((0, 1.03, 1, .6), sharex=ax)
     hax.plot(results['ra_offset'], results['weights'].sum(axis=0), 'k')
     hax.axvline(ra_min, color='b')
     hax.axvline(ra_mean, color='r')
@@ -763,24 +756,34 @@ def make_plot_astrometry_offset(data_container, dc_synth_photo, image, results):
                                     )
         axs[0].set_title("Original")
         axs[1].set_title("Corrected")
+
         for ax in axs:
             ax.coords.grid(True, color='orange', ls='solid')
             ax.coords[0].set_format_unit('deg')
-            ax.contour(im_sb, **contour_params)
+            cs = ax.contour(im_sb, **contour_params)
 
         if isinstance(data_container, Cube):
-            mappable = axs[0].contour(synt_sb, transform=axs[0].get_transform(
+            cs = axs[0].contour(synt_sb, transform=axs[0].get_transform(
                 data_container.wcs.celestial), **dc_contour_params)
             # Compute the correctec WCS
             correct_wcs = update_wcs_coords(wcs=data_container.wcs.celestial,
                                             ra_dec_offset=(
                                             results['offset_min'][0] / 3600,
                                             results['offset_min'][1] / 3600))
-            mappable = axs[1].contour(synt_sb, transform=axs[1].get_transform(correct_wcs),
+            cs = axs[1].contour(synt_sb, transform=axs[1].get_transform(correct_wcs),
                            **dc_contour_params)
         elif isinstance(data_container, RSS):
-            pass
-            
-
+            # TODO: Temporal until the final rss plotting method is in place
+            mappable = axs[0].scatter(data_container.info['fib_ra'],
+                                      data_container.info['fib_dec'],
+                                      c=synt_sb,
+                                      transform=axs[0].get_transform("world"))
+            plt.colorbar(mappable, ax=axs[0])
+            mappable = axs[1].scatter(
+                data_container.info['fib_ra'] + results['offset_min'][0] / 3600,
+                data_container.info['fib_dec'] + results['offset_min'][1] / 3600,
+                c=synt_sb,
+                transform=axs[1].get_transform("world"))
+            plt.colorbar(mappable, ax=axs[1])
         plt.close(fig)
         return fig
