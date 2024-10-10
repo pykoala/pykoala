@@ -22,6 +22,7 @@ from astropy.coordinates import SkyCoord
 from photutils.aperture import SkyCircularAperture, ApertureStats
 
 from scipy.optimize import minimize
+from scipy.ndimage import gaussian_filter
 
 from pykoala import vprint
 from pykoala.data_container import Cube, RSS
@@ -733,7 +734,8 @@ def get_dc_synthetic_photometry(filter, dc):
 def crosscorrelate_im_apertures(ref_aperture_flux, ref_coord, image,
                                 ra_offset_range=[-10., 10.],
                                 dec_offset_range=[-10., 10.],
-                                aperture_diameter=1.25 << u.arcsec):
+                                aperture_diameter=1.25 << u.arcsec,
+                                smooth_image_sigma=1 << u.arcsec):
     """Cross-correlate an image with an input set of apertures.
     
     Description
@@ -778,6 +780,10 @@ def crosscorrelate_im_apertures(ref_aperture_flux, ref_coord, image,
     good_aper = np.isfinite(ref_flux) & (ref_flux > 0)
     vprint(f"Number of input apertures used: {np.count_nonzero(good_aper)}")
     # Make a grid of offsets
+    if smooth_image_sigma is not None:
+        image["ccd"].data = gaussian_filter(
+            image["ccd"].data,
+            smooth_image_sigma.to_value("arcsec") / image["pix_size"].to_value("arcsec"))
 
     def objective_function(offsets):
         # Create the new aperture coordinates
@@ -833,6 +839,7 @@ def make_plot_astrometry_offset(data_container, dc_synth_photo, image, results):
                                     subplot_kw=dict(projection=image['ccd'].wcs),
                                     gridspec_kw=dict(wspace=0.1),
                                     squeeze=True,
+                                    constrained_layout=True,
                                     tweak_axes=False
                                     )
         axs[0].set_title("Original")
@@ -859,12 +866,12 @@ def make_plot_astrometry_offset(data_container, dc_synth_photo, image, results):
                                       data_container.info['fib_dec'],
                                       c=synt_sb,
                                       transform=axs[0].get_transform("world"))
-            plt.colorbar(mappable, ax=axs[0])
+            #plt.colorbar(mappable, ax=axs[0])
             mappable = axs[1].scatter(
                 data_container.info['fib_ra'] + results['offset_min'][0] / 3600,
                 data_container.info['fib_dec'] + results['offset_min'][1] / 3600,
                 c=synt_sb,
                 transform=axs[1].get_transform("world"))
-            plt.colorbar(mappable, ax=axs[1])
+            plt.colorbar(mappable, ax=axs[1], label='Aperture magnitude')
         plt.close(fig)
         return fig
