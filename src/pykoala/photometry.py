@@ -766,6 +766,9 @@ def crosscorrelate_im_apertures(ref_aperture_flux, ref_coord, image,
         Defaul is +-10 arcsec.
     aperture_diameter: :class:`astropy.units.Quantity`, default=1.25 arcsec
         Aperture diameter size in arcseconds. Default is 1.25.
+    smooth_image_sigma: :class:`astropy.units.Quantity` or None, default=1 arcsec
+        Gaussian smoothing standard deviation applied to the reference image before
+        the cross-correlation. If ``None``, no smoothing is applied.
 
     Returns
     -------
