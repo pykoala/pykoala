@@ -584,7 +584,7 @@ class SpectraContainer(DataContainer):
 
     @abstractmethod
     def rss_to_original(self, rss_shape_data):
-        """Restore the shape of an RSS-like array into the original shape"""
+        """Reshape an RSS-like array into the original ``intensity`` shape."""
         pass
 
     def __init__(self, **kwargs):
@@ -1091,7 +1091,6 @@ class Cube(SpectraContainer):
         self.variance = value.T.reshape(self.variance.shape)
 
     def rss_to_original(self, rss_shape_data):
-        """Reshape an RSS-like array into a Cube-like shape."""
         return np.reshape(rss_shape_data.T, (rss_shape_data.shape[1],
                                              self.intensity.shape[1],
                                              self.intensity.shape[2]))
