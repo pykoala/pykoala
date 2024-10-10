@@ -12,7 +12,7 @@ from astropy.visualization import (MinMaxInterval, PercentileInterval,
 def new_figure(fig_name,
                tweak_axes=True,
                figsize=None,
-               **subplots_kwargs):
+               **kwargs):
     """
     Close old version of the figure and create new one
     with default sizes and format.
@@ -42,22 +42,22 @@ def new_figure(fig_name,
 
     plt.close(fig_name)
 
-    if "sharex" not in subplots_kwargs:
-        subplots_kwargs["sharex"] = "col"
-    if "sharex" not in subplots_kwargs:
-        subplots_kwargs["sharex"] = "row"
-    if "gridspec_kw" not in subplots_kwargs:
-        subplots_kwargs["gridspec_kw"] = {'hspace': 0, 'wspace': 0}
-    if "squeeze" not in subplots_kwargs:
-        subplots_kwargs["squeeze"] = False
+    if "sharex" not in kwargs:
+        kwargs["sharex"] = "col"
+    if "sharex" not in kwargs:
+        kwargs["sharex"] = "row"
+    if "gridspec_kw" not in kwargs:
+        kwargs["gridspec_kw"] = {'hspace': 0, 'wspace': 0}
+    if "squeeze" not in kwargs:
+        kwargs["squeeze"] = False
 
     if figsize is None:
-        figsize = (9 + subplots_kwargs["ncols"],
-                   4 + subplots_kwargs["nrows"])
+        figsize = (9 + kwargs.get("ncols", 1),
+                   4 + kwargs.get("nrows", 1))
 
-    fig = plt.figure(fig_name, figsize=figsize)
-    axes = fig.subplots(**subplots_kwargs)
-    fig.set_tight_layout(True)
+    fig, axes = plt.subplots(num=fig_name, figsize=figsize,
+                             **kwargs)
+
     if tweak_axes:
         for ax in axes.flat:
             ax.xaxis.set_minor_locator(AutoMinorLocator())
