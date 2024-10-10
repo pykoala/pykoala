@@ -583,7 +583,7 @@ class SpectraContainer(DataContainer):
         pass
 
     @abstractmethod
-    def unravel_rss(self, rss_shape_data):
+    def rss_to_original(self, rss_shape_data):
         """Restore the shape of an RSS-like array into the original shape"""
         pass
 
@@ -643,7 +643,7 @@ class RSS(SpectraContainer):
     def rss_variance(self, value):
         self.variance = value
 
-    def unravel_rss(self, rss_shape_data):
+    def rss_to_original(self, rss_shape_data):
         return rss_shape_data
 
     @property
@@ -1090,12 +1090,12 @@ class Cube(SpectraContainer):
     def rss_variance(self, value):
         self.variance = value.T.reshape(self.variance.shape)
 
-    def unravel_rss(self, rss_shape_data):
+    def rss_to_original(self, rss_shape_data):
         """Reshape an RSS-like array into a Cube-like shape."""
-        return np.reshape(rss_shape_data.T,
-                   (rss_shape_data.shape[1],
-                    self.intensity.shape[1], self.intensity.shape[2]))
-
+        return np.reshape(rss_shape_data.T, (rss_shape_data.shape[1],
+                                             self.intensity.shape[1],
+                                             self.intensity.shape[2]))
+        
     @classmethod
     def from_fits(cls, path, hdul_extension_map=None, **kwargs):
         """Make an instance of a Cube using an input path to a FITS file.
