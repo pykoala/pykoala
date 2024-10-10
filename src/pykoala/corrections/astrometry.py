@@ -73,13 +73,14 @@ class AstrometryOffsetCorrection(CorrectionBase):
                    offset_path=path)
 
     @classmethod
-    def from_external_image(cls, data_container, external_image, filter_name):
+    def from_external_image(cls, data_container, external_image, filter_name,
+                            **crosscorr_kwargs):
         """Use a reference external image to compute the offset.
         
         Description
         -----------
-        Estimate an astrometric offsets by crossmatching a reference image with
-        synthetic aperture photometry from the DataContainer.
+        Estimate an astrometric offsets by cross-correlating a reference image with
+        the DataContainer using mulitple aperture photometry.
 
         Parameters
         ----------
@@ -91,32 +92,34 @@ class AstrometryOffsetCorrection(CorrectionBase):
             pixels size ("pix_size") expressed in arcseconds.
         filter_name : str
             Name of the filter passband associated to the external image.
-        
+        crosscorr_kwargs : 
+            Additional arguments to be passed to :func:`crosscorrelate_im_apertures`.
+
         Returns
         -------
-        :class:`AstrometryOffsetCorrection`
+        astrometry_offset_correction : class:`AstrometryOffsetCorrection`
+            The resulting correction.
+        results : dict
+            Dictionary containing the results of the cross-correlation.
         """
         # Compute the synthetic photometry associated to the DataContainer
         dc_photometry = photometry.get_dc_aperture_flux(
             data_container, filter_name)
         # Only include valid (finite-valued) apertures
-        mask = dc_photometry['aperture_mask']
         vprint("Computing astrometric offsets")
         results = photometry.crosscorrelate_im_apertures(
-            dc_photometry['aperture_flux'][mask],
-            dc_photometry['aperture_flux_err'][mask],
-            dc_photometry['coordinates'][mask],
-            external_image)
+            dc_photometry['aperture_flux'][dc_photometry['aperture_mask']],
+            dc_photometry['coordinates'][dc_photometry['aperture_mask']],
+            external_image, **crosscorr_kwargs)
         # Make a QC plot with the resulting solution
         fig = photometry.make_plot_astrometry_offset(
             data_container, dc_photometry['synth_photo'],
             external_image, results)
         results['offset_fig'] = fig
 
-        offset = np.array(results['offset_mean'])
+        offset = np.array(results['offset_min'])
         return cls(offset=CorrectionOffset(offset_data=offset,
-                    offset_error=np.full_like(offset, fill_value=np.nan))
-                    ), results
+                   offset_error=np.full_like(offset, fill_value=np.nan))), results
 
     def apply(self, data_container):
         """Apply an astrometric offset correction to a DataContainer.
