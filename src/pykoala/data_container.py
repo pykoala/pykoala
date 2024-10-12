@@ -576,6 +576,8 @@ class DataContainer(ABC, VerboseMixin):
             header = self.wcs.to_header()
         else:
             header = None
+
+        # TODO : once units are implemented, record the units in the header
         hdu_list.append(fits.ImageHDU(
             data=self.intensity, name='INTENSITY',
             header=header
@@ -852,41 +854,18 @@ class RSS(SpectraContainer):
         Returns
         -------
         """
+
+        hdul = super().to_fits()
+
         if filename is None:
             filename = 'cube_{}.fits.gz'.format(
                 datetime.now().strftime("%d_%m_%Y_%H_%M_%S"))
         if primary_hdr_kw is None:
             primary_hdr_kw = {}
 
-        # Create the PrimaryHDU with WCS information
-        primary = fits.PrimaryHDU()
         for key, val in primary_hdr_kw.items():
-            primary.header[key] = val
+            hdul["PRIMARY"].header[key] = val
 
-        # Include general information
-        primary.header['pykoala0'] = __version__, "PyKOALA version"
-        primary.header['pykoala1'] = datetime.now().strftime(
-            "%d_%m_%Y_%H_%M_%S"), "creation date / last change"
-
-        # Fill the header with the log information
-        primary.header = self.history.dump_to_header(primary.header)
-
-        # primary_hdu.header = self.header
-        # Create a list of HDU
-        hdu_list = [primary]
-        # Change headers for variance and INTENSITY
-        hdu_list.append(fits.ImageHDU(
-            data=self.intensity, name='INTENSITY',
-            # TODO: rescue the original header?
-            # header=self.wcs.to_header()
-        )
-        )
-        hdu_list.append(fits.ImageHDU(
-            data=self.variance, name='VARIANCE', header=hdu_list[-1].header))
-        # Store the mask information
-        hdu_list.append(self.mask.dump_to_hdu())
-        # Save fits
-        hdul = fits.HDUList(hdu_list)
         hdul.verify('fix')
         hdul.writeto(filename, overwrite=overwrite, checksum=checksum)
         hdul.close()
