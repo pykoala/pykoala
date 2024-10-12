@@ -111,7 +111,8 @@ def hector_rss(path_to_file, bundle=''):
                    bad_fibres_list=bad_fibres,
                    header=header,
                    fibre_table=koala_fibre_table,
-                   info=info
+                   info=info,
+                   wcs=wcs
                    )
     return rss
 
