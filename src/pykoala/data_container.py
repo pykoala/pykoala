@@ -303,16 +303,25 @@ class DataMask(object):
     - get_flag_map
     """
 
-    def __init__(self, shape, flag_map=None):
+    def __init__(self, shape=None, flag_map=None, bitmask=None):
         if flag_map is None:
+            if bitmask is not None:
+                raise AttributeError(
+                    "Must provide a flag map to initialise DataMask")
             self.flag_map = {"BAD": (2, "Generic bad pixel flag")}
         else:
             self.flag_map = flag_map
         # Initialise the mask with all pixels being valid
-        self.bitmask = np.zeros(shape, dtype=int)
-        self.masks = {}
-        for key in self.flag_map.keys():
-            self.masks[key] = np.zeros(shape, dtype=bool)
+        if bitmask is None:
+            self.bitmask = np.zeros(shape, dtype=int)
+            self.masks = {}
+            for key in self.flag_map.keys():
+                self.masks[key] = np.zeros(shape, dtype=bool)
+        else:
+            self.bitmask = bitmask
+            self.masks = {}
+            for key in self.flag_map.keys():
+                self.masks[key] = self.get_flag_map_from_bitmask(key)
 
     def __decode_bitmask(self, value):
         return np.bitwise_and(self.bitmask, value) > 0
@@ -374,7 +383,6 @@ class DataMask(object):
         self.flag_map[name] = (value, desc)
         self.masks[name] = np.zeros(self.bitmask.shape, dtype=bool)
 
-
     def dump_to_hdu(self):
         """Return a ImageHDU containig the mask information.
 
@@ -392,6 +400,30 @@ class DataMask(object):
         hdu = ImageHDU(name="BITMASK", data=self.bitmask, header=header)
         return hdu
 
+    @classmethod
+    def from_hdu(cls, hdu):
+        """Create a DataMask from an input Header Data Unit.
+        
+        The input header must contain the data corresponding to the bit mask as
+        well as the corresponding flag information in the header.
+
+        Parameters
+        ----------
+        hdu : astropy.fits.HDU
+            Header Data Unit that stores the DataMask information.
+        
+        Returns
+        -------
+        datamask : :class:`DataMask`
+            The corresponding ``DataMask``.
+        """
+        flag_map = {}
+        for k in hdu.header.keys():
+            if "FLAG" in k:
+                name = k.replace("FLAG_", "")
+                value = hdu.header[k]
+                flag_map[name] = value
+        return cls(flag_map=flag_map, bitmask=hdu.data)
 
 # =============================================================================
 
@@ -512,6 +544,34 @@ class DataContainer(ABC, VerboseMixin):
         else:
             return False
 
+    def to_fits(self):
+        """Base method for storing a DataContainer in a FITS file."""
+        primary = fits.PrimaryHDU()
+        primary.header['pykoala0'] = __version__, "PyKOALA version"
+        primary.header['pykoala1'] = datetime.now().strftime(
+            "%d_%m_%Y_%H_%M_%S"), "creation date / last change"
+        # Fill the header with the log information
+        primary.header = self.history.dump_to_header(primary.header)
+        # Include the original header
+        primary.header.extend(self.header)
+
+        hdu_list = [primary]
+        # Change headers for variance and INTENSITY
+        if hasattr(self, "wcs"):
+            header = self.wcs.to_header()
+        else:
+            header = None
+        hdu_list.append(fits.ImageHDU(
+            data=self.intensity, name='INTENSITY',
+            header=header
+        )
+        )
+        hdu_list.append(fits.ImageHDU(
+            data=self.variance, name='VARIANCE', header=hdu_list[-1].header))
+        # Store the mask information
+        hdu_list.append(self.mask.dump_to_hdu())
+        hdul = fits.HDUList(hdu_list)
+        return hdul
 
 # =============================================================================
 
