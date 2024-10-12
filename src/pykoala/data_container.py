@@ -582,6 +582,11 @@ class SpectraContainer(DataContainer):
     def rss_variance(self):
         pass
 
+    @abstractmethod
+    def rss_to_original(self, rss_shape_data):
+        """Reshape an RSS-like array into the original ``intensity`` shape."""
+        pass
+
     def __init__(self, **kwargs):
 
         super().__init__(**kwargs)
@@ -637,6 +642,9 @@ class RSS(SpectraContainer):
     @rss_variance.setter
     def rss_variance(self, value):
         self.variance = value
+
+    def rss_to_original(self, rss_shape_data):
+        return rss_shape_data
 
     @property
     def fibre_diameter(self):
@@ -838,6 +846,14 @@ class RSS(SpectraContainer):
                                        ) * np.count_nonzero(wave_mask)
         return integrated_fibres, integrated_variances
 
+    def get_footprint(self):
+        """Compute the spatial fibre coverage of the RSS."""
+        min_ra, max_ra = self.info['fib_ra'].min(), self.info['fib_ra'].max()
+        min_dec, max_dec = self.info['fib_dec'].min(), self.info['fib_dec'].max()
+        footprint = np.array([[max_ra, max_dec], [max_ra, min_dec],
+                              [min_ra, max_dec], [min_ra, min_dec]])
+        return footprint
+
     def plot_rss_image(self, data=None, data_label="", fig_args={}, cmap_args={},
                        fibre_range=None,
                        wavelength_range=None,
@@ -1037,7 +1053,6 @@ class Cube(SpectraContainer):
 
     @hdul.setter
     def hdul(self, hdul):
-        print(hdul)
         assert isinstance(hdul, fits.HDUList)
         self._hdul = hdul
 
@@ -1075,6 +1090,11 @@ class Cube(SpectraContainer):
     def rss_variance(self, value):
         self.variance = value.T.reshape(self.variance.shape)
 
+    def rss_to_original(self, rss_shape_data):
+        return np.reshape(rss_shape_data.T, (rss_shape_data.shape[1],
+                                             self.intensity.shape[1],
+                                             self.intensity.shape[2]))
+        
     @classmethod
     def from_fits(cls, path, hdul_extension_map=None, **kwargs):
         """Make an instance of a Cube using an input path to a FITS file.
@@ -1096,8 +1116,8 @@ class Cube(SpectraContainer):
         - cube: Cube
             An instance of a `pykoala.cubing.Cube`.
         """
-        with fits.open(path) as hdul:
-            return cls(hdul, hdul_extension_map=hdul_extension_map, **kwargs)
+        hdul = fits.open(path)
+        return cls(hdul, hdul_extension_map=hdul_extension_map, **kwargs)
 
     def parse_info_from_header(self):
         """Look into the primary header for pykoala information."""
@@ -1179,6 +1199,10 @@ class Cube(SpectraContainer):
             self.intensity[wave_mask] * freq_trans[wave_mask, np.newaxis, np.newaxis] * weights, axis=0
             ) / np.nansum(weights, axis=0)
         return white_image
+
+    def get_footprint(self):
+        """Compute the spatial footprint of the datacube."""
+        return self.wcs.celestial.calc_footprint()
 
     def to_fits(self, fname=None, primary_hdr_kw=None):
         """Save the Cube into a FITS file."""
