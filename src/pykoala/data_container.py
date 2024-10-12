@@ -247,17 +247,32 @@ class DataContainerHistory(VerboseMixin):
             for record in self.record_entries:
                 f.write(record.to_str() + "\n")
 
-    def get_entries_from_header(self, header):
+    @classmethod
+    def get_entries_from_header(cls, header):
         """Get entries created by PyKOALA from an input FITS Header."""
         list_of_entries = []
         for title, key in zip(header.comments["PYKOALA*"], header["PYKOALA*"]):
-            list_of_entries.append(HistoryRecord(title=title, comments=header[key]))
+            list_of_entries.append(
+                HistoryRecord(title=title, comments=header[key]))
         return list_of_entries
 
-    def load_from_header(self, header):
-        """Load the Log from a FITS Header."""
-        list_of_entries = self.get_entries_from_header(header)
-        self.record_entries = list(list_of_entries)
+    @classmethod
+    def from_header(cls, header, **kwargs):
+        """Initialise the DataContainerHistory from a FITS Header.
+
+        Parameters
+        ----------
+        header : astropy.fits.Header
+            A Header that contains the history records.
+        **kwargs :
+            Additional arguments passed to DataContainerHistory constructor.
+        
+        Returns
+        -------
+        dc_history : :class:`DataContainerHistory`
+        """
+        list_of_entries = cls.get_entries_from_header(header)
+        return cls(list_of_entries=list_of_entries, **kwargs)
 
     def show(self):
         for record in self.record_entries:
@@ -1103,7 +1118,7 @@ class Cube(SpectraContainer):
                          variance=self.variance,
                          **kwargs)
         self.get_wcs_from_header()
-        self.parse_info_from_header()
+        self.history = DataContainerHistory.from_header(self.hdul[0].header)
         self.n_wavelength, self.n_rows, self.n_cols = self.intensity.shape
         self.get_wavelength()
 
@@ -1178,14 +1193,6 @@ class Cube(SpectraContainer):
         """
         hdul = fits.open(path)
         return cls(hdul, hdul_extension_map=hdul_extension_map, **kwargs)
-
-    def parse_info_from_header(self):
-        """Look into the primary header for pykoala information."""
-        self.vprint("[Cube] Looking for information in the primary header")
-        # TODO
-        #self.info = {}
-        #self.fill_info()
-        self.history.load_from_header(self.hdul[0].header)
 
     def load_hdul(self, path_to_file):
         self.hdul = fits.open(path_to_file)
