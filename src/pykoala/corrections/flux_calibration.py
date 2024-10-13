@@ -679,7 +679,7 @@ class FluxCalibration(CorrectionBase):
         # Apply the correction
         spectra_container_out.rss_intensity = (spectra_container_out.rss_intensity
                                            / response[np.newaxis, :])
-        spectra_container_out.rss_variance = (spectra_container_out.rss_intensity
+        spectra_container_out.rss_variance = (spectra_container_out.rss_variance
                                            / response[np.newaxis, :]**2)
         self.record_correction(spectra_container_out, status='applied',
                             units=str(response_units) + ' counts / (erg/s/AA/cm2)')
