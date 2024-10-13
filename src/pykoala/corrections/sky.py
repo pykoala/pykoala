@@ -33,7 +33,7 @@ from pykoala.corrections.throughput import Throughput
 from pykoala.corrections.wavelength import WavelengthOffset
 from pykoala.data_container import DataContainer
 from pykoala.data_container import RSS
-
+from pykoala.ancillary import check_unit
 # =============================================================================
 # Background estimators
 # =============================================================================
@@ -1127,7 +1127,7 @@ class TelluricCorrection(CorrectionBase):
         super().__init__(**correction_kwargs)
 
         self.telluric_correction = telluric_correction
-        self.wavelength = wavelength
+        self.wavelength = check_unit(wavelength, u.angstrom)
         self.telluric_correction_file = telluric_correction_file
 
     @classmethod
@@ -1157,7 +1157,7 @@ class TelluricCorrection(CorrectionBase):
     def from_smoothed_spectra_container(cls, spectra_container,
                                         exclude_wlm=None, 
                                         light_percentile=0.95,
-                                        median_window=10,
+                                        median_window=10 << u.angstrom,
                                         wave_min=None, wave_max=None,
                                         plot=True):
         """
@@ -1190,13 +1190,14 @@ class TelluricCorrection(CorrectionBase):
         vprint("Initialising telluric correction from input STD star")
         spectra = np.nanpercentile(spectra_container.rss_intensity,
                                    light_percentile, axis=0)
-        telluric_correction = np.ones_like(spectra_container.wavelength)
+        telluric_correction = np.ones(spectra_container.wavelength.size)
         if wave_min is None:
             wave_min = spectra_container.wavelength[0]
         if wave_max is None:
             wave_max = spectra_container.wavelength[-1]
         if exclude_wlm is None:
-            exclude_wlm = [[6450, 6700], [6850, 7050], [7130, 7380]]
+            exclude_wlm = np.array([[6450 , 6700], [6850, 7050], [7130, 7380]]
+                                   ) << u.angstrom
         # Mask containing the spectral points to include in the telluric correction
         correct_mask = (spectra_container.wavelength >= wave_min) & (
                         spectra_container.wavelength <= wave_max)
@@ -1225,8 +1226,8 @@ class TelluricCorrection(CorrectionBase):
                    wavelength=spectra_container.wavelength), fig
 
     @classmethod
-    def from_model(cls, spectra_container, model_file=None, width=30,
-                   extra_mask=None, plot=False):
+    def from_model(cls, spectra_container, model_file=None,
+                   width=30, extra_mask=None, plot=False):
         """
         Estimate the telluric correction function using a model of telluric absorption lines.
 
@@ -1253,10 +1254,12 @@ class TelluricCorrection(CorrectionBase):
         if model_file is None:
             model_file = TelluricCorrection.default_model_file
 
-        w_l_1, w_l_2, res_intensity, w_lines = np.loadtxt(model_file, unpack=True)
-
+        width = check_unit(width, u.angstrom)
+        w_l_1, w_l_2, _, _ = np.loadtxt(model_file, unpack=True)
+        w_l_1 = w_l_1 << u.angstrom
+        w_l_2 = w_l_2 << u.angstrom
         # Mask telluric regions
-        mask = np.ones_like(spectra_container.wavelength, dtype=bool)
+        mask = np.ones(spectra_container.wavelength.size, dtype=bool)
         telluric_correction = np.ones(spectra_container.wavelength.size,
                                       dtype=float)
         for b, r in zip(w_l_1, w_l_2):
@@ -1325,15 +1328,20 @@ class TelluricCorrection(CorrectionBase):
                 * telluric_correction, color="purple",
                 label='Corrected', lw=1, alpha=0.8)
         ax.set_ylim(np.nanpercentile(
-            spectra_container.rss_intensity[sorted_idx[-1]], [1, 99]))
+            spectra_container.rss_intensity[sorted_idx[-1]], [1, 99]).value)
+        ax.set_ylabel(f"Flux ({spectra_container.intensity.unit})")
         ax.legend(ncol=2)
-        ax.axvline(x=wave_min, color='lime', linestyle='--')
-        ax.axvline(x=wave_max, color='lime', linestyle='--')
+        ax.axvline(x=wave_min.to_value(spectra_container.wavelength.unit),
+                   color='lime', linestyle='--')
+        ax.axvline(x=wave_max.to_value(spectra_container.wavelength.unit),
+                   color='lime', linestyle='--')
         ax.set_xlabel(r"Wavelength [$\mathrm{\AA}$]")
         if exclude_wlm is not None:
             for i in range(len(exclude_wlm)):
-                ax.axvspan(exclude_wlm[i][0],
-                           exclude_wlm[i][1], color='lightgreen', alpha=0.1)
+                ax.axvspan(
+                    exclude_wlm[i][0].to_value(spectra_container.wavelength.unit),
+                    exclude_wlm[i][1].to_value(spectra_container.wavelength.unit),
+                    color='lightgreen', alpha=0.1)
         ax.minorticks_on()
         if kwargs.get('plot', False):
             plt.show()
