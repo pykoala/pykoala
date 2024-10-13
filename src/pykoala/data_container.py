@@ -128,6 +128,7 @@ class DataContainerHistory(VerboseMixin):
         for record in list_of_entries:
             if isinstance(record, HistoryRecord):
                 self.record_entries.append(record)
+                continue
             elif isinstance(record, tuple) or isinstance(record, list):
                 if len(record) == 2:
                     title, comments = record
@@ -251,6 +252,7 @@ class DataContainerHistory(VerboseMixin):
     def get_entries_from_header(cls, header):
         """Get entries created by PyKOALA from an input FITS Header."""
         list_of_entries = []
+
         for title, key in zip(header.comments["PYKOALA*"], header["PYKOALA*"]):
             list_of_entries.append(
                 HistoryRecord(title=title, comments=header[key]))
