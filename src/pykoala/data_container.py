@@ -725,12 +725,13 @@ class SpectraContainer(DataContainer):
         if "wavelength" in kwargs:
             self._wavelength = kwargs["wavelength"]
         else:
-            self.vprint(
-                "WARNING: No `wavelength` vector supplied; creating empty `SpectraContainer`"
-            )
-            #TODO: inconsistent. Recover once units are implemented
+            # TODO: re-implement with units refactoring
+            # self.vprint(
+            #     "WARNING: No `wavelength` vector supplied; creating empty `SpectraContainer`"
+            # )
             #self._wavelength = u.Quantity([], u.AA)
             self._wavelength = None
+
         
     def get_spectra_sorted(self, wave_range=None):
         """Get the RSS-wise sorted order of the intensity.
@@ -1263,16 +1264,20 @@ class Cube(SpectraContainer):
         if "logger" not in kwargs:
             kwargs['logger'] = "pykoala.cube"
 
-        super().__init__(intensity=self.intensity, variance=self.variance,
-                         **kwargs)
+        if "intensity" not in kwargs:
+            kwargs["intensity"] = self.intensity
+        if "variance" not in kwargs:
+            kwargs["variance"] = self.variance
+
+        super().__init__(**kwargs)
 
         if self.wcs is None:
             self.wcs = WCS(
                 self.hdul[self.hdul_extensions_map['INTENSITY']].header)
 
-        if self.n_wavelength == 0:
+        if self.wavelength is None:
             self.wavelength = self.wcs.spectral.array_index_to_world(
-            np.arange(self.n_wavelength)).to('angstrom').value
+            np.arange(self.intensity.shape[0])).to('angstrom').value
 
     def rss_to_original(self, rss_shape_data):
         return np.reshape(rss_shape_data.T, (rss_shape_data.shape[1],
@@ -1358,7 +1363,12 @@ class Cube(SpectraContainer):
                 datetime.now().strftime("%d_%m_%Y_%H_%M_%S"))
 
         hdul = self._to_hdul()
-        
+        # Fill the INFO extension
+        info_header = fits.Header()
+        info_header["NAME    "] = self.info.get("name", "N/A"), "Object name"
+        info_header["EXPTIME "] = self.info.get("exptime"), "exposure time (s)"
+        hdul.append(fits.BinTableHDU(name="INFO", data=None, header=info_header))
+
         # Save the HDUL into a FITS file.
         hdul.verify('fix')
         hdul.writeto(filename, overwrite=overwrite, checksum=checksum)
@@ -1372,28 +1382,48 @@ class Cube(SpectraContainer):
             self.hdul.close()
 
     @classmethod
-    def from_fits(cls, path, hdul_extension_map=None, **kwargs):
-        """Make an instance of a Cube using an input path to a FITS file.
+    def from_fits(cls, filename):
+        """Initialise an Cube from a FITS file.
         
+        Create an instance of an :class:`Cube` from a FITS file compliant with
+        PyKOALA format.
+
         Parameters
         ----------
-        - path: str
-            Path to the FITS file. This file must be compliant with the pykoala
-            standards.
-        - hdul_extension_map: dict
-            Dictionary containing the mapping to access the extensions that
-            contain the intensity, and variance data
-            (e.g. {'INTENSITY': 1, 'VARIANCE': 'var'}).
-        - kwargs:
-            Arguments passed to the Cube class (see Cube documentation)
-        
+        filename : str
+            Path to the FITS file that contains the RSS information. The FITS
+            file must contain the information required to create an instance of
+            an RSS:
+
+            - A primary HDU.
+                Used to initialise the :class:`DataContainerHistory`, and to
+                recover the ``header`` attribute containing the information of
+                the original header.
+            - An ``INTENSITY`` ImageHDU extension.
+                This extension must contain the data corresponding to the
+                ``intensity`` attribute. The header of this extension must also
+                contain the WCS information used to reconstruct the ``wavelength``
+                attribute.
+            - A ``VARIANCE`` ImageHDU extension
+                Same as ``INTENSITY`` for the ``variance`` attribute.
+            - A ``MASK`` ImageHDU extension
+                This extension must contain the data used to initialise the
+                :class:`DataMask` attribute. The header must contain the flag
+                information of every bit used.
+
         Returns
         -------
-        - cube: Cube
-            An instance of a `pykoala.cubing.Cube`.
+        rss : :class:`RSS`
+            An instance of an RSS.
+
         """
-        hdul = fits.open(path)
-        return cls(hdul, hdul_extension_map=hdul_extension_map, **kwargs)
+        hdul = fits.open(filename)
+        info = {}
+        info["name"] = hdul["INFO"].header.get("name")
+        info["exptime"] = hdul["INFO"].header.get("exptime")
+        dc_parameters = cls._dc_params_from_hdul(hdul)
+        dc_parameters["info"] = info
+        return cls(hdul, **dc_parameters)
 
 # =============================================================================
 # Mr Krtxo \(ﾟ▽ﾟ)/
