@@ -17,6 +17,7 @@ from scipy import optimize
 # Astropy and associated packages
 # =============================================================================
 from astropy.io import fits
+from astropy import units as u
 # =============================================================================
 
 # =============================================================================
@@ -26,6 +27,33 @@ from pykoala import vprint
 # =============================================================================
 # Ancillary Functions - RSS Related
 # =============================================================================
+
+def check_unit(quantity, default_unit=None):
+    """Check the units of an input quantity.
+    
+    Parameters
+    ----------
+    quantity : np.ndarray or astropy.units.Quantity
+        Input quantity.
+    default_unit : astropy.units.Quantity, default=None
+        If `quantity` has not units, it corresponds to the unit assigned to it.
+        Otherwise, it is used to check the equivalency with `quantity`.
+    """
+    if quantity is None:
+        return quantity
+    isq = isinstance(quantity, u.Quantity)
+    if isq and default_unit is not None:
+        if not quantity.unit.is_equivalent(default_unit):
+            raise u.UnitTypeError(
+                "Input quantity does not have the appropriate units")
+        else:
+            return quantity
+    elif not isq and default_unit is not None:
+        return quantity * default_unit
+    elif not isq and default_unit is None:
+        raise ValueError("Input value must be a astropy.units.Quantity")
+    else:
+        return quantity
 
 def detect_edge(rss):
     """
