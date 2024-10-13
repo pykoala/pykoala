@@ -21,8 +21,8 @@ from abc import ABC, abstractmethod
 import numpy as np
 import copy
 from datetime import datetime
-from astropy.io.fits import Header, ImageHDU
 from astropy.io import fits
+from astropy.table import Table
 from astropy.wcs import WCS
 from astropy import units as u
 
@@ -221,7 +221,7 @@ class DataContainerHistory(VerboseMixin):
 
         """
         if header is None:
-            header = Header()
+            header = fits.Header()
             index = 0
         else:
             index = len(self.get_entries_from_header(header))
@@ -406,13 +406,13 @@ class DataMask(object):
         - hdu: ImageHDU
             An ImageHDU containing the bitmask information.
         """
-        header = Header()
+        header = fits.Header()
         header["COMMENT"] = "Each flag KEY is stored using the convention FLAG_KEY"
         for flag_name, value in self.flag_map.items():
             # Store the value and the description
             header[f"FLAG_{flag_name}"] = value
         header["COMMENT"] = "A value of 0 means unmasked"
-        hdu = ImageHDU(name="BITMASK", data=self.bitmask, header=header)
+        hdu = fits.ImageHDU(name="BITMASK", data=self.bitmask, header=header)
         return hdu
 
     @classmethod
@@ -525,8 +525,17 @@ class DataContainer(ABC, VerboseMixin):
     
     @header.setter
     def header(self, value):
-        assert isinstance(value, Header)
+        assert isinstance(value, fits.Header), "Header must be an instance of astropy.fits.Header"
         self._header = value
+
+    @property
+    def wcs(self):
+        return self._wcs
+    
+    @wcs.setter
+    def wcs(self, value):
+        assert isinstance(value, WCS), "wcs must be an instance of astropy.wcs.WCS"
+        self._wcs = value
 
     def __init__(self, **kwargs):
         self._intensity = kwargs["intensity"]
@@ -542,7 +551,8 @@ class DataContainer(ABC, VerboseMixin):
         self.history = kwargs.get("history",
                                   DataContainerHistory(logger=self.logger,
                                                        verbose=self.verbose))
-        self.header = kwargs.get("header", Header())
+        self.header = kwargs.get("header", fits.Header())
+        self.wcs = kwargs.get("wcs", WCS())
 
     def fill_info(self):
         """Check the keywords of info and fills them with placeholders."""
@@ -571,13 +581,8 @@ class DataContainer(ABC, VerboseMixin):
         primary.header.extend(self.header)
 
         hdu_list = [primary]
-        # Change headers for variance and INTENSITY
-        if hasattr(self, "wcs"):
-            header = self.wcs.to_header()
-        else:
-            header = None
-
         # TODO : once units are implemented, record the units in the header
+        header = self.wcs.to_header()
         hdu_list.append(fits.ImageHDU(
             data=self.intensity, name='INTENSITY',
             header=header
@@ -858,7 +863,7 @@ class RSS(SpectraContainer):
         hdul = super().to_fits()
 
         if filename is None:
-            filename = 'cube_{}.fits.gz'.format(
+            filename = 'rss_{}.fits.gz'.format(
                 datetime.now().strftime("%d_%m_%Y_%H_%M_%S"))
         if primary_hdr_kw is None:
             primary_hdr_kw = {}
@@ -866,11 +871,30 @@ class RSS(SpectraContainer):
         for key, val in primary_hdr_kw.items():
             hdul["PRIMARY"].header[key] = val
 
+        # Fibre information table
+        pykoala_info_table = Table(names=["fib_ra", "fib_dec"],
+                                   data=[self.info["fib_ra", "fib_dec"]],
+                                   meta=dict(fib_ra="Fibre RA position (deg)",
+                                             fib_dec="Fibre DEC position (deg)")
+                                             )
+        info_header = fits.Header()
+        info_header["NAME    "] = self.info.get("name", "N/A"), "Object name"
+        info_header["EXPTIME "] = self.info["exptime"], "exposure time (s)"
+        info_header["FIBDIAM "] = self.fibre_diameter.to_value("arcsec"), "fibre diameter size (arcsec)"
+
+        hdul.append(fits.BinTableHDU(name="INFO", data=pykoala_info_table,
+                                     header=info_header))
+        # diameter size
+        # fibre position
         hdul.verify('fix')
         hdul.writeto(filename, overwrite=overwrite, checksum=checksum)
         hdul.close()
         self.vprint(f"[RSS] File saved as {filename}")
 
+    @classmethod
+    def from_fits(cls, filename):
+        with fits.open(filename) as hdul:
+            hdul[0]
 
     def get_integrated_fibres(self, wavelength_range=None):
         """Compute the integrated intensity of the RSS fibres.
