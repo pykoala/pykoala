@@ -8,14 +8,14 @@ Atmospheric extinction and refraction effects corrections.
 from matplotlib import pyplot as plt
 import numpy as np
 import os
-
+from astropy import units as u
 # =============================================================================
 # KOALA packages
 # =============================================================================
 from pykoala import vprint
 from pykoala.data_container import SpectraContainer
 from pykoala.corrections.correction import CorrectionBase
-
+from pykoala.ancillary import check_unit
 
 # =============================================================================
 class AtmosphericExtCorrection(CorrectionBase):
@@ -58,7 +58,8 @@ class AtmosphericExtCorrection(CorrectionBase):
 
         # Initialise variables
         self.extinction_correction = extinction_correction
-        self.extinction_correction_wave = extinction_correction_wave
+        self.extinction_correction_wave = check_unit(
+            extinction_correction_wave, u.angstrom)
         self.extinction_correction_file = extinction_correction_file
 
     @classmethod
@@ -81,10 +82,10 @@ class AtmosphericExtCorrection(CorrectionBase):
             path = cls.default_extinction
         wavelength, extinct = np.loadtxt(path, unpack=True)
         return cls(extinction_correction=extinct,
-                   extinction_correction_wave=wavelength,
+                   extinction_correction_wave=wavelength << u.angstrom,
                    extinction_correction_file=path)
 
-    def extinction(self, wavelength, airmass):
+    def extinction(self, wavelength : u.Quantity, airmass):
         """Compute the atmospheric extinction for a given airmass and wavelength.
         
         Parameters
