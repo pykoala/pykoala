@@ -29,8 +29,8 @@ def weave_rss(filename):
         wcs = WCS(header)
         pixels = np.arange(hdu[1].data.shape[1])
         wavelength = wcs.spectral.array_index_to_world(pixels)
-        intensity = hdu[3].data
-        variance = np.where(hdu[4].data > 0, 1/hdu[4].data, np.nan)
+        intensity = hdu[3].data << u.adu
+        variance = np.where(hdu[4].data > 0, 1/hdu[4].data, np.nan) << u.adu**2
         fibtable = Table.read(hdu['FIBTABLE'])
 
     log = DataContainerHistory()
@@ -47,8 +47,8 @@ def weave_rss(filename):
     info['name'] = main_target  # Name of the object
     info['exptime'] = header['EXPTIME']  # Total rss exposure time (seconds)
     info['airmass'] = header['AIRMASS']  # Airmass
-    info['fib_ra'] = fibtable['FIBRERA']
-    info['fib_dec'] = fibtable['FIBREDEC']
+    info['fib_ra'] = fibtable['FIBRERA'] << u.deg
+    info['fib_dec'] = fibtable['FIBREDEC'] << u.deg
     
     return RSS(intensity=intensity,
            wavelength=wavelength,
