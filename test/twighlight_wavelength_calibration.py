@@ -10,7 +10,7 @@ from pykoala.instruments.koala_ifu import koala_rss
 
 from pykoala.corrections.wavelength import SolarCrossCorrOffset
 from time import time
-from pykoala.plotting.utils import fibre_map
+from pykoala.plotting.utils import plot_fibres
 from matplotlib import pyplot as plt
 import numpy as np
 
@@ -27,9 +27,9 @@ shift, sigma = solar_correction.compute_shift_from_twilight(
     logspace=False)
 fig, axs = plt.subplots(ncols=2, constrained_layout=True, sharex=True, sharey=True,
                         figsize=(8, 4))
-fibre_map(fig, axs[0], r'$\Delta\lambda$ (pix)', rss, shift, norm=plt.Normalize(),
+plot_fibres(fig, axs[0], r'$\Delta\lambda$ (pix)', rss, shift, norm=plt.Normalize(),
           cmap='gnuplot')
-fibre_map(fig, axs[1], r'$\sigma$ (pix)', rss, sigma, norm=plt.Normalize(),
+plot_fibres(fig, axs[1], r'$\sigma$ (pix)', rss, sigma, norm=plt.Normalize(),
           cmap='gnuplot')
 rss_corrected = solar_correction.apply(rss)
 

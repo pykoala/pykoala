@@ -3,7 +3,9 @@ Base Correction class
 """
 
 from abc import ABC, abstractmethod
-from pykoala import VerboseMixin
+import os
+from astropy.io import fits
+from pykoala import VerboseMixin, vprint
 
 class CorrectionBase(ABC, VerboseMixin):
     """
@@ -114,4 +116,80 @@ class CorrectionBase(ABC, VerboseMixin):
         datacontainer.history(self.name, status, tag='correction')
         for k, v in extra_comments.items():
             datacontainer.history(self.name, f"{k} {v}", tag='correction')
+
+
+class CorrectionOffset(object):
+    """Relative Offset Data.
+
+    This class stores a 2D relative offset.
+
+    Attributes
+    ----------
+    offset_data : np.ndarray
+        offset correction data.
+    offset_error : np.ndarray
+        Standard deviation of ``offset_data``.
+    path: str
+        Filename path.
+
+    """
+    offset_data = None
+    offset_error = None
+
+    def __init__(self, path=None, offset_data=None, offset_error=None):
+        self.path = path
+        self.offset_data = offset_data
+        self.offset_error = offset_error
+
+    def tofits(self, output_path=None):
+        """Save the offset in a FITS file.
         
+        Parameters
+        ----------
+        output_path: str, optional, default=None
+            FITS file name path. If None, and ``self.path`` exists,
+            the original file is overwritten.
+
+        Notes
+        -----
+        The output fits file contains an empty PrimaryHDU, and two ImageHDU
+        ("OFFSET", "OFFSET_ERR") containing the offset data and associated error.
+        """
+        if output_path is None:
+            if self.path is None:
+                raise NameError("Provide output path")
+            else:
+                output_path = self.path
+        primary = fits.PrimaryHDU()
+        data = fits.ImageHDU(data=self.offset_data, name='OFFSET')
+        error = fits.ImageHDU(data=self.offset_error, name='OFFSET_ERR')
+        hdul = fits.HDUList([primary, data, error])
+        hdul.writeto(output_path, overwrite=True)
+        hdul.close(verbose=True)
+        vprint(f"{self.__class__.__name__} data saved at {output_path}")
+
+    @classmethod
+    def from_fits(cls, path):
+        """Load the offset data from a fits file.
+
+        Loads offset values (extension 1) and
+        associated errors (extension 2) from a fits file.
+
+        Parameters
+        ----------
+        path : str
+            Path to the FITS file containing the offset data.
+
+        Returns
+        -------
+        wavelength_offset : :class:`WavelengthOffset`
+            A :class:`WavelengthOffset` initialised with the input data.
+        """
+        if not os.path.isfile(path):
+            raise NameError(f"offset file {path} does not exist.")
+        vprint(f"Loading wavelength offset from {path}")
+        with fits.open(path) as hdul:
+            offset_data = hdul[1].data
+            offset_error = hdul[2].data
+        return cls(offset_data=offset_data, offset_error=offset_error,
+                   path=path)

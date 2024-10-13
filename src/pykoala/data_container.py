@@ -28,7 +28,7 @@ from astropy import units as u
 
 from pykoala import VerboseMixin, __version__
 from pykoala import ancillary
-from pykoala.plotting.utils import colour_map, new_figure, fibre_map
+from pykoala.plotting.utils import plot_image, new_figure, plot_fibres
 # =============================================================================
 
 
@@ -582,6 +582,11 @@ class SpectraContainer(DataContainer):
     def rss_variance(self):
         pass
 
+    @abstractmethod
+    def rss_to_original(self, rss_shape_data):
+        """Reshape an RSS-like array into the original ``intensity`` shape."""
+        pass
+
     def __init__(self, **kwargs):
 
         super().__init__(**kwargs)
@@ -637,6 +642,9 @@ class RSS(SpectraContainer):
     @rss_variance.setter
     def rss_variance(self, value):
         self.variance = value
+
+    def rss_to_original(self, rss_shape_data):
+        return rss_shape_data
 
     @property
     def fibre_diameter(self):
@@ -838,6 +846,14 @@ class RSS(SpectraContainer):
                                        ) * np.count_nonzero(wave_mask)
         return integrated_fibres, integrated_variances
 
+    def get_footprint(self):
+        """Compute the spatial fibre coverage of the RSS."""
+        min_ra, max_ra = self.info['fib_ra'].min(), self.info['fib_ra'].max()
+        min_dec, max_dec = self.info['fib_dec'].min(), self.info['fib_dec'].max()
+        footprint = np.array([[max_ra, max_dec], [max_ra, min_dec],
+                              [min_ra, max_dec], [min_ra, min_dec]])
+        return footprint
+
     def plot_rss_image(self, data=None, data_label="", fig_args={}, cmap_args={},
                        fibre_range=None,
                        wavelength_range=None,
@@ -854,7 +870,7 @@ class RSS(SpectraContainer):
             Additional keyword arguments passed to `pykoala.plotting.utils.new_figure` for customizing the figure. 
             Default is an empty dictionary.
         cmap_args : dict, optional
-            Additional keyword arguments passed to the `pykoala.plotting.utils.colour_map` function for the colormap
+            Additional keyword arguments passed to the `pykoala.plotting.utils.plot_image` function for the colormap
             and normalization.  Default is an empty dictionary.
         fibre_range : tuple of int, optional
             A tuple specifying the range of fibres to include in the plot (start, end).
@@ -874,7 +890,7 @@ class RSS(SpectraContainer):
         -----
         - The function uses the internal attributes `self.wavelength` and `self.intensity` to obtain default x-values 
         (wavelengths) and y-values (fibre indices) if `data` is not provided.
-        - The `new_figure` function is used to create a new figure, and `colour_map` is used to plot the data.
+        - The `new_figure` function is used to create a new figure, and `plot_image` is used to plot the data.
         - If `fibre_range` or `wavelength_range` is specified, the data is sliced accordingly.
         - The plot is saved to `output_filename` if provided, otherwise the figure is returned for display or further manipulation.
 
@@ -894,7 +910,7 @@ class RSS(SpectraContainer):
             x = x[wavelength_range]
 
         fig, axs = new_figure(self.info['name'], **fig_args)
-        im, cb = colour_map(fig, axs[0, 0], data_label, data,
+        im, cb = plot_image(fig, axs[0, 0], data_label, data,
                             x=x, y=y,
                             xlabel="Wavelength [AA]", ylabel="Fibre",
                             **cmap_args)
@@ -915,7 +931,7 @@ class RSS(SpectraContainer):
             Additional keyword arguments passed to the `new_figure` function for customizing the figure.
             Default is an empty dictionary.
         cmap_args : dict, optional
-            Additional keyword arguments passed to the `colour_map` function for customizing the colormap.
+            Additional keyword arguments passed to the `plot_image` function for customizing the colormap.
             If not specified, the colormap is set to "Accent" and normalization to "Normalize". Default is an empty dictionary.
         output_filename : str, optional
             If provided, the plot is saved to the specified file path. Default is `None`.
@@ -938,15 +954,9 @@ class RSS(SpectraContainer):
                             fig_args=fig_args, cmap_args=cmap_args,
                             output_filename=output_filename)
         return fig
-    
-    
 
-    def plot_fibre(self):
-        # TODO: THIS SHOULD BE A METHOD OF THE PARENT CLASS
-        pass
-
-    def plot_fibre_map(self, data=None, cblabel="", fig_args={},
-                       cmap_args={}, output_filename=None):
+    def plot_fibres(self, data=None, cblabel="", fig_args={},
+                    cmap_args={}, output_filename=None):
         """
         Plots a fibre map image, showing the spatial distribution of data across fibres.
 
@@ -968,7 +978,7 @@ class RSS(SpectraContainer):
             customizing the figure. Default is an empty dictionary.
         
         cmap_args : dict, optional
-            Additional keyword arguments passed to the `fibre_map` function for
+            Additional keyword arguments passed to the `plot_fibres` function for
             customizing the colormap. Default is an empty dictionary.
         
         output_filename : str, optional
@@ -982,10 +992,16 @@ class RSS(SpectraContainer):
         if data is None:
             data, _ = self.get_integrated_fibres()
             cblabel = "Integrated intensity"
+        if "figsize" not in fig_args:
+            fig_args["figsize"] = (5, 5)
         fig, axs = new_figure(self.info['name'], **fig_args)
         axs[0, 0].set_aspect('auto')
-        im, cb = fibre_map(fig, axs[0, 0], cblabel, data, fib_ra=self.info['fib_ra'],
-                         fib_dec=self.info['fib_dec'], **cmap_args)
+
+        ax, *_ = plot_fibres(
+            fig=fig, ax=axs[0, 0], cblabel=cblabel,
+            data=data, rss=self, **cmap_args)
+        ax.set_xlabel("RA (deg)")
+        ax.set_ylabel("DEC (deg)")
         if output_filename is not None:
             fig.savefig(output_filename, bbox_inches="tight")
         return fig
@@ -1037,7 +1053,6 @@ class Cube(SpectraContainer):
 
     @hdul.setter
     def hdul(self, hdul):
-        print(hdul)
         assert isinstance(hdul, fits.HDUList)
         self._hdul = hdul
 
@@ -1075,6 +1090,11 @@ class Cube(SpectraContainer):
     def rss_variance(self, value):
         self.variance = value.T.reshape(self.variance.shape)
 
+    def rss_to_original(self, rss_shape_data):
+        return np.reshape(rss_shape_data.T, (rss_shape_data.shape[1],
+                                             self.intensity.shape[1],
+                                             self.intensity.shape[2]))
+        
     @classmethod
     def from_fits(cls, path, hdul_extension_map=None, **kwargs):
         """Make an instance of a Cube using an input path to a FITS file.
@@ -1096,8 +1116,8 @@ class Cube(SpectraContainer):
         - cube: Cube
             An instance of a `pykoala.cubing.Cube`.
         """
-        with fits.open(path) as hdul:
-            return cls(hdul, hdul_extension_map=hdul_extension_map, **kwargs)
+        hdul = fits.open(path)
+        return cls(hdul, hdul_extension_map=hdul_extension_map, **kwargs)
 
     def parse_info_from_header(self):
         """Look into the primary header for pykoala information."""
@@ -1179,6 +1199,10 @@ class Cube(SpectraContainer):
             self.intensity[wave_mask] * freq_trans[wave_mask, np.newaxis, np.newaxis] * weights, axis=0
             ) / np.nansum(weights, axis=0)
         return white_image
+
+    def get_footprint(self):
+        """Compute the spatial footprint of the datacube."""
+        return self.wcs.celestial.calc_footprint()
 
     def to_fits(self, fname=None, primary_hdr_kw=None):
         """Save the Cube into a FITS file."""
