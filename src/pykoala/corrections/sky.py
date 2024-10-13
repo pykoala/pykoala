@@ -38,17 +38,18 @@ from pykoala.ancillary import check_unit
 # Background estimators
 # =============================================================================
 def preserve_units(func):
-        def wrapper(data, *args, **kwargs):
-            result =  func(data, *args, **kwargs)
-            if isinstance(data, u.Quantity):
-                if not isinstance(result, u.Quantity):
-                    return result * data.unit
-                else:
-                    return result
+    """Decorator that prevents the loss of units"""
+    def wrapper(data, *args, **kwargs):
+        result =  func(data, *args, **kwargs)
+        if isinstance(data, u.Quantity):
+            if not isinstance(result, u.Quantity):
+                return result * data.unit
             else:
                 return result
-            
-        return wrapper
+        else:
+            return result
+        
+    return wrapper
 
 #TODO: Move to a math module
 class BackgroundEstimator:
