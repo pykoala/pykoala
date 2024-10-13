@@ -45,7 +45,7 @@ def weave_rss(filename):
         if count > main_count:
             main_target = name
     info['name'] = main_target  # Name of the object
-    info['exptime'] = header['EXPTIME']  # Total rss exposure time (seconds)
+    info['exptime'] = header['EXPTIME'] << u.second # Total rss exposure time (seconds)
     info['airmass'] = header['AIRMASS']  # Airmass
     info['fib_ra'] = fibtable['FIBRERA'] << u.deg
     info['fib_dec'] = fibtable['FIBREDEC'] << u.deg
