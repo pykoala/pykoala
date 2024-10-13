@@ -926,25 +926,42 @@ class RSS(SpectraContainer):
     def from_fits(cls, filename):
         """Initialise an RSS from a FITS file.
         
+        Create an instance of an :class:`RSS` from a FITS file compliant with
+        PyKOALA format.
+
         Parameters
         ----------
         filename : str
-            Path to the FITS file that contains the RSS information. This FITS
-            must contain the information required to create an instance of an
-            RSS.
+            Path to the FITS file that contains the RSS information. The FITS
+            file must contain the information required to create an instance of
+            an RSS:
 
-            - A primary HDU
-            - An ``INTENSITY`` ImageHDU extension
+            - A primary HDU.
+                Used to initialise the :class:`DataContainerHistory`, and to
+                recover the ``header`` attribute containing the information of
+                the original header.
+            - An ``INTENSITY`` ImageHDU extension.
+                This extension must contain the data corresponding to the
+                ``intensity`` attribute. The header of this extension must also
+                contain the WCS information used to reconstruct the ``wavelength``
+                attribute.
             - A ``VARIANCE`` ImageHDU extension
+                Same as ``INTENSITY`` for the ``variance`` attribute.
             - A ``MASK`` ImageHDU extension
+                This extension must contain the data used to initialise the
+                :class:`DataMask` attribute. The header must contain the flag
+                information of every bit used.
             - A ``INFO`` BinaryTable HDU extension
+                A table containin the data to create the ``info`` attribute.
+                It must contain two columns with the fibre position
+                (``fib_ra``, ``fib_dec``). The header must include the ``exptime``
+                and optionally the ``name`` associated to the RSS.
         
         Returns
         -------
         rss : :class:`RSS`
             An instance of an RSS.
 
-        #TODO: add example section
         """
         with fits.open(filename) as hdul:
             # Extract the basic parameters to initialise a DC
