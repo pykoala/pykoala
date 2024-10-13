@@ -474,7 +474,7 @@ class DataContainer(ABC, VerboseMixin):
         return self._intensity
 
     @intensity.setter
-    def intensity(self, value):
+    def intensity(self, value : u.Quantity):
         self._intensity = value
 
     @intensity.deleter
@@ -490,7 +490,7 @@ class DataContainer(ABC, VerboseMixin):
         return self._variance
 
     @variance.setter
-    def variance(self, value):
+    def variance(self, value : u.Quantity):
         self._variance = value
 
     @variance.deleter
@@ -568,10 +568,11 @@ class DataContainer(ABC, VerboseMixin):
         self._wcs = value
 
     def __init__(self, **kwargs):
-        self._intensity = kwargs["intensity"]
-        self._variance = kwargs.get(
-            "variance", np.full_like(self._intensity, np.nan, dtype=type(np.nan))
-        )
+        self._intensity = ancillary.check_unit(kwargs["intensity"], u.adu)
+        self._variance = ancillary.check_unit(kwargs.get(
+            "variance",
+            np.full_like(self._intensity, np.nan, dtype=type(np.nan)),
+            u.adu))
         self._mask = kwargs.get("mask", DataMask(shape=self.intensity.shape))
         self.info = kwargs.get("info", dict())
         self.fill_info()
@@ -724,8 +725,8 @@ class SpectraContainer(DataContainer):
 
         super().__init__(**kwargs)
 
-        if "wavelength" in kwargs:
-            self._wavelength = kwargs["wavelength"]
+        if "wavelength" in kwargs.keys():
+            self._wavelength = ancillary.check_unit(kwargs["wavelength"], u.angstrom)
         else:
             # TODO: re-implement with units refactoring
             # self.vprint(
@@ -768,7 +769,7 @@ class RSS(SpectraContainer):
         return self._intensity
 
     @rss_intensity.setter
-    def rss_intensity(self, value):
+    def rss_intensity(self, value : u.Quantity):
         self.intensity = value
 
     @property
@@ -776,7 +777,7 @@ class RSS(SpectraContainer):
         return self._variance
 
     @rss_variance.setter
-    def rss_variance(self, value):
+    def rss_variance(self, value : u.Quantity):
         self.variance = value
 
     def rss_to_original(self, rss_shape_data):
@@ -788,10 +789,10 @@ class RSS(SpectraContainer):
         return self._fibre_diameter
     
     @fibre_diameter.setter
-    def fibre_diameter(self, value):
+    def fibre_diameter(self, value : u.Quantity):
         assert isinstance(value, u.Quantity) or value is None, (
             "Fibre diameter must be a astropy.units.Quantity")
-        self._fibre_diameter = value
+        self._fibre_diameter = ancillary.check_unit(value, u.arcsec)
 
     @property
     def sky_fibres(self):
