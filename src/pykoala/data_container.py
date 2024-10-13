@@ -878,22 +878,32 @@ class RSS(SpectraContainer):
     # Save an RSS object (corrections applied) as a separate .fits file
     # =============================================================================
     def to_fits(self, filename=None, overwrite=False, checksum=False):
-        """
-        Writes a RSS object to .fits
+        """Write the RSS into a FITS file.
 
-        Ideally this would be used for RSS objects containing corrected data that need to be saved
-        during an intermediate step
+        This method allows to store all the information contained in the RSS
+        into a FITS file composed of several extensions.
+        
+        The information is stored in the following HDU extensions
+
+        - ``PRIMARY``: contains the metadata associated to the :class:`DataContainerHistory`
+        as well as the original ``header`` of the RSS.
+        - ``INTENSITY``: contains the data associated to the ``intensity`` and
+        the WCS information.
+        - ``VARIANCE``: contains the data associated to the ``variance`` and
+        the WCS information.
+        - ``MASK``: contains the data associated to the ``mask`` attribute.
+        - ``INFO``: contains the data associated to the ``info`` attribute.
 
         Parameters
         ----------
-        name: path-like object
-            File to write to. This can be a path to file written in string format with a meaningful name.
+        filename: str
+            Output filename of the FITS file.
         overwrite: bool, optional
-            If True, overwrite the output file if it exists. Raises an OSError if False and the output file exists. Default is False.
+            If True, overwrite the output file if it exists.
         checksum: bool, optional
-            If True, adds both DATASUM and CHECKSUM cards to the headers of all HDU’s written to the file.
-        Returns
-        -------
+            If True, adds both DATASUM and CHECKSUM cards to the headers of all
+            HDU's written to the file.
+
         """
 
         hdul = self._to_hdul()
