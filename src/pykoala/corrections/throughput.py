@@ -22,7 +22,7 @@ from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.data_container import RSS
 from pykoala import ancillary
-
+from pykoala.plotting import utils as plot_utils
 
 class Throughput(object):
     """Class that represents a throughput data set.
@@ -99,6 +99,96 @@ class Throughput(object):
             throughput_error = hdul[2].data
         return cls(throughput_data, throughput_error, path)
 
+    def plot(self, pct=[1, 50, 99], random_seed=50):
+        """Plot the Throughput data.
+        
+        Description
+        -----------
+        The figure is composed of four panels. The top-row panels correspond
+        to a image of the Throughput values and the histogram distribution.
+        The panel in the middle row displays the Throughput values along the 
+        spectral axis of 3 randomly selected fibres, whereas the bottom panel
+        shows the Throughput values of 3 randomly selected columns along the fibre
+        direction.
+
+        Parameters
+        ----------
+        pct : list, optional, default=[1, 50, 99]
+            List of percentiles to compute. The first element will be used
+            to symmetrize the Throughput image colour bar and histogram with
+            respect to 1.
+        random_seed : int, optional, default=50
+            Random seed to use for generating random column/row indices.
+        
+        Returns
+        -------
+        fig : :class:`matplotlib.pyplot.Figure`
+            Figure containing the plots.
+        """
+        fig, ax = plot_utils.new_figure(
+            fig_name="throughput", figsize=(10, 8),
+            ncols=1, nrows=1
+            )
+        ax[0, 0].axis("off")
+        gs = fig.add_gridspec(3, 4, wspace=0.15, hspace=0.35)
+        
+        # Throughput map
+        ax = fig.add_subplot(gs[0, 0:-1])
+        p_values = np.nanpercentile(self.throughput_data, pct)
+        im, cb = plot_utils.plot_image(fig, ax, cblabel="Throughput",
+                                       xlabel="wavelength axis",
+                                       ylabel="Fibre",
+                                       norm=plot_utils.colors.Normalize(
+                                           vmin=p_values[0],
+                                           vmax=2 - p_values[0]),
+                                        cmap=plot_utils.SYMMETRIC_CMAP,
+                                       data=self.throughput_data)
+        # Histogram
+        ax = fig.add_subplot(gs[0, -1])
+        ax.hist(self.throughput_data.flatten(),
+                bins=self.throughput_data.size // 1000, range=[
+                    p_values[0] - 0.1, 2.1 - p_values[0]],
+                log=True)
+        for p_name, p in zip(pct, p_values):
+            ax.axvline(p, label=f"P{p_name}", ls=':')
+        ax.set_ylabel("N pixels")
+        ax.set_xlabel("Throughput value")
+        ax.set_ylim(10, self.throughput_data.size // 100)
+
+        ax = fig.add_subplot(gs[1, :])
+
+        median_wavelength_throughput = np.nanmedian(self.throughput_data, axis=0)
+        std_wavelength_throughput = np.nanmedian(
+            np.abs(self.throughput_data - median_wavelength_throughput[np.newaxis, :]),
+            axis=0) * 1.4826
+        ax.fill_between(np.arange(0, self.throughput_data.shape[1]),
+                        median_wavelength_throughput - std_wavelength_throughput,
+                        median_wavelength_throughput + std_wavelength_throughput,
+                        alpha=0.3, color='r', label='Median +/- (MAD * 1.4826)')
+        ax.plot(median_wavelength_throughput, label='Median',
+                lw=0.7, color='r')
+        np.random.seed(random_seed)
+        fibre_idx = np.random.randint(low=0, high=self.throughput_data.shape[0], size=3)
+        for idx in fibre_idx:
+            ax.plot(self.throughput_data[idx], label='Fibre {}'.format(idx),
+                    lw=1., alpha=0.8)
+        ax.set_ylim(0.75, 1.25)
+        ax.set_xlabel("Spectral pixel")
+        ax.legend(ncol=3)
+
+        ax = fig.add_subplot(gs[-1, :])
+        wl_idx = np.random.randint(low=0, high=self.throughput_data.shape[1],
+                                   size=3)
+        for idx in wl_idx:
+            ax.plot(self.throughput_data[:, idx].squeeze(),
+                    label='Wave column {}'.format(idx), lw=0.7,
+                    alpha=1.0)
+        ax.set_ylim(0.75, 1.25)
+        ax.set_xlabel("Fibre number")
+        ax.legend(ncol=4)
+        
+        return fig
+        
 
 class ThroughputCorrection(CorrectionBase):
     """

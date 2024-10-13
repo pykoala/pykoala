@@ -1,21 +1,31 @@
 from matplotlib import pyplot as plt
 from matplotlib import colors
 from matplotlib.ticker import AutoMinorLocator
+from matplotlib.collections import PatchCollection
+from matplotlib.cm import ScalarMappable
 
 import numpy as np
 
+from astropy import units as u
 from astropy.visualization import (MinMaxInterval, PercentileInterval,
-                                   SqrtStretch, PowerStretch,
-                                   ImageNormalize, AsymmetricPercentileInterval)
+                                   AsymmetricPercentileInterval,
+                                   LinearStretch, SqrtStretch, PowerStretch,
+                                   ImageNormalize)
 
+# plt.style.use('dark_background')
+SYMMETRIC_CMAP = plt.cm.get_cmap('seismic').copy()
+SYMMETRIC_CMAP.set_extremes(bad='gray', under='cyan', over='fuchsia')
+
+DEFAULT_CMAP = plt.get_cmap("gist_earth").copy()
+DEFAULT_CMAP.set_bad('gray')
 
 def new_figure(fig_name,
                tweak_axes=True,
                figsize=None,
                **kwargs):
     """
-    Close old version of the figure and create new one
-    with default sizes and format.
+    Close old version of the figure and create new one.
+    
 
     Parameters
     ----------
@@ -25,13 +35,13 @@ def new_figure(fig_name,
         Number of rows.
     ncols : int
         Number of columns.
-    sharex : str/bool, optional
+    sharex : str or bool, optional
         Whether panels share the x axis. True, False, or 'col'
         (default; x-axis shared accross columns)
-    sharey : str/bool, optional
+    sharey : str or bool, optional
         Whether panels share the y axis. True, False, or 'row'
         (default; y-axis shared accross rows)
-    **gridspec_kw : dict, optinal
+    **gridspec_kw : dict, optional
         Default sets height and width space to `{'hspace': 0, 'wspace': 0})`
 
     Returns
@@ -73,13 +83,8 @@ def new_figure(fig_name,
 
     return fig, axes
 
-
-default_cmap = plt.get_cmap("gist_earth").copy()
-default_cmap.set_bad('gray')
-
-
-def colour_map(fig, ax, cblabel, data,
-               cmap=default_cmap,
+def plot_image(fig, ax, cblabel, data,
+               cmap=DEFAULT_CMAP,
                xlabel=None, x=None,
                ylabel=None, y=None,
                cbax=None, norm=None,
@@ -159,12 +164,12 @@ def colour_map(fig, ax, cblabel, data,
 
     return im, cb
 
-def fibre_map(fig, ax, cblabel, data, rss=None, fib_ra=None, fib_dec=None,
-              s=100, cmap=default_cmap, norm=None, cbax=None,
-              norm_interval=AsymmetricPercentileInterval,
-              interval_args={"lower_percentile": 1.0,
-                              "upper_percentile": 99.0},
-              stretch=PowerStretch, stretch_args={"a": 0.7}):
+def plot_fibres(fig, ax, rss=None, x=None, y=None,
+                fibre_diam=None, data=None, 
+                patch_args={}, use_wcs=False, fix_limits=True,
+                cmap=DEFAULT_CMAP, norm=None, cbax=None, cblabel=None, 
+                norm_interval=MinMaxInterval, interval_args={},
+                stretch=LinearStretch, stretch_args={}):
     """
     Plot a colour map of a physical magnitude defined on each fibre.
 
@@ -174,22 +179,61 @@ def fibre_map(fig, ax, cblabel, data, rss=None, fib_ra=None, fib_dec=None,
         Figure where the colour map will be drawn.
     ax : mpl.Axes
         Axes where the colour map will be drawn.
-    cblabel : str
-        Label of the colorbar
-    rss : RSS
+    rss : RSS, optional, default=None
         Row-Stacked Spectra containing the fibre positions.
-    data : ndarray
-        1D array to be represented.
-    cmap : str or mpl.colors.Norm
-    norm : mpl.colors.Norm
+    x : np.ndarray or astropy.units.Quantity, optional, default=None
+        Fibre position values along the x axis.
+    y : np.ndarray or astropy.units.Quantity, optional, default=None
+        Fibre position values along the y axis.
+    fibre_diam : float or astropy.units.Quantity, optional, default=1.25 arcsec
+        Fibre diameter.
+    data : ndarray, optional, default=None
+        1D array to be represented. If None, fibres will appear as empty circles.
+    patch_args : dict, optional
+        Additional arguments passed to each fibre :class:`plt.Circle` patch.
+    use_wcs : bool, optional, default=False
+        If True, use axes WCS world transformation for plotting the patches.
+    fix_limits : bool, optional, default=True
+        If True, set the limits of the axes using the edge values of ``x`` and ``y``.
+    cmap : str or mpl.colors.Norm, optional
+        Colormap used to plot the values of ``data``.
+    norm : str or mpl.colors.Norm, optional
+        Normalization map for plotting ``data``.
     cbax: mpl.Axes
-        Axes where the colour bar will be drawn.
-
+        Axes where the plt.Colorbar will be drawn.
+    clabel: str
+        Colorbar label.
+    norm_interval : astropy.visualization.BaseInterval, optional, default=MinMaxInterval
+        Interval to create a normalization map.
+    interval_args : dict
+        Additional arguments to be passed to the interval.
+    stretch : astropy.visualization.BaseStretch, optional, default=LinearStretch
+        Stretching used on the normalization map.
+    stretch_args : dict, optional
+        Additional arguments to be passed to stretch.
     Returns
     -------
-    im : mpl.AxesImage
+    ax : mpl.Axes
+    patch_collection : mpl.PatchCollection
     cb : mpl.Colorbar
     """
+    if rss is not None:
+        x = rss.info['fib_ra']
+        y = rss.info['fib_dec']
+        fibre_diam = rss.fibre_diameter
+    else:
+        if fibre_diam is None:
+            raise ValueError("Must provide a fibre diameter value")
+
+    if not isinstance(x, u.Quantity):
+        x = x << u.degree
+        y = y << u.degree
+
+    if fix_limits:
+        ax.set_xlim((x.min() - fibre_diam).value,
+                    (x.max() + fibre_diam).value)
+        ax.set_ylim((y.min() - fibre_diam).value,
+                    (y.max() + fibre_diam).value)
 
     if norm is None:
         interval = norm_interval(**interval_args)
@@ -199,113 +243,41 @@ def fibre_map(fig, ax, cblabel, data, rss=None, fib_ra=None, fib_dec=None,
     elif isinstance(norm, str):
         norm = getattr(colors, norm)()
 
-    s = np.prod(ax.bbox.size) / data.size / 2
-    if rss is not None:
-        fib_ra, fib_dec = rss.info['fib_ra'], rss.info['fib_dec']
-    im = ax.scatter(fib_ra, fib_dec, c=data,
-                    s=s, cmap=cmap, norm=norm)
+    if isinstance(cmap, str):
+        cmap = plt.get_cmap(cmap).copy()
 
-    if cbax is None:
-        cb = fig.colorbar(im, ax=ax, orientation='vertical', shrink=.9)
-        cbax = cb.ax
-    elif cbax is False:
-        cb = None
+    if data is not None:
+        fib_colors = cmap(norm(data))
+        mappable = ScalarMappable(norm=norm, cmap=cmap)
+        if cbax is None:
+            cb = fig.colorbar(mappable, ax=ax, orientation='vertical', shrink=.9)
+            cbax = cb.ax
+        elif cbax is False:
+            cb = None
+        else:
+            cb = fig.colorbar(mappable, cax=cbax, orientation='vertical')
+        if cbax:
+            cb.ax.yaxis.set_label_position("left")
+            cb.set_label(cblabel)
+            cb.ax.tick_params(labelsize='small')
     else:
-        cb = fig.colorbar(im, cax=cbax, orientation='vertical')
-    if cbax:
-        cb.ax.yaxis.set_label_position("left")
-        cb.set_label(cblabel)
-        cb.ax.tick_params(labelsize='small')
+        fib_colors = ["none"] * len(x)
+        cb = None
 
-    return im, cb
+    if "edgecolor" not in patch_args:
+        patch_args["edgecolor"] = "k"
 
+    if use_wcs:
+        patch_args["transform"] = ax.get_transform('world')
 
-def throughput_cmap_style(func):
-    def wrapper(*args, **kwargs):
-        plt.style.use('dark_background')
-        throughput_cmap = plt.cm.get_cmap('jet').copy()
-        throughput_cmap.set_extremes(bad='gray', under='black', over='fuchsia')
-
-        # Call the original function with the new style
-        return throughput_cmap
-    return wrapper
-
-@throughput_cmap_style
-def qc_throughput(throughput):
-    """Create a quality control (QC) plot of a 2D throughput.
-
-    Parameters
-    ----------
-    throughput: np.ndarray or throughput.Throughput
-
-    Returns
-    -------
-    figure: matplotlib.Figure
-    """
-
-    throughput_data = throughput.throughput_data
-
-    fig = plt.figure(figsize=(10, 8))
-    gs = fig.add_gridspec(3, 4, wspace=0.15, hspace=0.35)
-
-    ax = fig.add_subplot(gs[0, 0:-1])
-    mappable = ax.imshow(throughput_data, origin='lower', cmap=throughput_cmap,
-                         vmin=0.8, vmax=1.2, aspect='auto')
-    plt.colorbar(mappable, ax=ax)
-    ax.set_xlabel("wavelength axis")
-    ax.set_ylabel("Fibre")
-
-    ax = fig.add_subplot(gs[0, -1])
-    ax.hist(throughput_data.flatten(), bins=throughput_data.size // 1000,
-            range=[0.5, 1.5],
-            log=True)
-    ax.set_ylabel("N pixels")
-    ax.set_xlabel("Throughput value")
-    ax.set_ylim(10, throughput_data.size // 100)
-
-    ax = fig.add_subplot(gs[1, :])
-
-    median_wavelength_throughput = np.nanmedian(throughput_data, axis=0)
-    std_wavelength_throughput = np.nanmedian(
-        np.abs(throughput_data - median_wavelength_throughput[np.newaxis, :]),
-        axis=0) * 1.4826
-    ax.fill_between(np.arange(0, throughput_data.shape[1]),
-                    median_wavelength_throughput - std_wavelength_throughput,
-                    median_wavelength_throughput + std_wavelength_throughput,
-                    alpha=0.3, color='r', label='Median +/- (MAD * 1.4826)')
-    ax.plot(median_wavelength_throughput, label='Median',
-            lw=0.7, color='r')
-
-    fibre_idx = np.random.randint(low=0, high=throughput_data.shape[0], size=3)
-    for idx in fibre_idx:
-        ax.plot(throughput_data[idx], label='Fibre {}'.format(idx),
-                lw=1., alpha=0.8)
-    ax.set_ylim(0.75, 1.25)
-    ax.set_xlabel("Spectral pixel")
-    ax.legend(ncol=3)
-
-    ax = fig.add_subplot(gs[-1, :])
-
-    median_fibre_throughput = np.nanmedian(throughput_data, axis=1)
-    std_fibre_throughput = np.nanmedian(
-        np.abs(throughput_data - median_fibre_throughput[:, np.newaxis]),
-        axis=1) * 1.4826
-    ax.fill_between(np.arange(0, throughput_data.shape[0]),
-                    median_fibre_throughput - std_fibre_throughput,
-                    median_fibre_throughput + std_fibre_throughput,
-                    alpha=0.3, color='r', label='Median +/- (MAD * 1.4826)')
-    ax.plot(median_fibre_throughput, label='Median',
-            lw=0.7, color='r')
-
-    wl_idx = np.random.randint(low=0, high=throughput_data.shape[1], size=3)
-    for idx in wl_idx:
-        ax.plot(throughput_data[:, idx].squeeze(),
-                label='Wave col {}'.format(idx), lw=0.7,
-                alpha=1.0)
-    ax.set_ylim(0.75, 1.25)
-    ax.set_xlabel("Fibre number")
-    ax.legend(ncol=4)
-    return fig
+    patches = [plt.Circle(
+        xy=(x_c, y_c), radius=fibre_diam.to_value(x.unit) / 2, facecolor=color,
+        **patch_args
+        ) for x_c, y_c, color in zip(x.value, y.value, fib_colors)]
+    patch_collection = PatchCollection(patches, match_original=True,
+                                       label='Fibre')
+    ax.add_collection(patch_collection)
+    return ax, patch_collection, cb
 
 def qc_cube(cube, spax_pct=[75, 90, 99]):
     """Create a quality control (QC) plot for a Cube.
@@ -468,7 +440,6 @@ def qc_fibres_on_fov(fov_size, pixel_colum_pos, pixel_row_pos,
     ax.add_patch(patch)
     ax.legend(handles=[patch])
 
-
 # =============================================================================
 # Star profile
 # =============================================================================
@@ -545,7 +516,7 @@ def qc_registration(rss_list, **kwargs):
         axs[i+1].scatter(rss.info['fib_ra'],
                    rss.info['fib_dec'],
                    c=np.nansum(rss.intensity, axis=1),
-                   norm=LogNorm(),
+                   norm=colors.LogNorm(),
                    marker='o', cmap='Greys_r',
                    )
         axs[i+1].axvline(0, c=cmap(i / (n_rss - 1)), lw=1.5)
