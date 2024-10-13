@@ -412,7 +412,7 @@ class DataMask(object):
             # Store the value and the description
             header[f"FLAG_{flag_name}"] = value
         header["COMMENT"] = "A value of 0 means unmasked"
-        hdu = fits.ImageHDU(name="BITMASK", data=self.bitmask, header=header)
+        hdu = fits.ImageHDU(name="MASK", data=self.bitmask, header=header)
         return hdu
 
     @classmethod
@@ -430,7 +430,7 @@ class DataMask(object):
         Returns
         -------
         datamask : :class:`DataMask`
-            The corresponding ``DataMask``.
+            An instance of ``DataMask``.
         """
         flag_map = {}
         for k in hdu.header.keys():
@@ -569,7 +569,7 @@ class DataContainer(ABC, VerboseMixin):
         else:
             return False
 
-    def to_fits(self):
+    def _to_hdul(self):
         """Base method for storing a DataContainer in a FITS file."""
         primary = fits.PrimaryHDU()
         primary.header['pykoala0'] = __version__, "PyKOALA version"
@@ -594,6 +594,32 @@ class DataContainer(ABC, VerboseMixin):
         hdu_list.append(self.mask.dump_to_hdu())
         hdul = fits.HDUList(hdu_list)
         return hdul
+
+    @classmethod
+    def _dc_params_from_hdul(cls, hdul):
+        """Extract the basic parameters used to instanciate a DataContainer from an HDUL.
+        
+        This method provides a 
+
+        Parameters
+        ----------
+        hdul : astropy.fits.HDUList
+            Input HDUL used to initialise the basic parameters of the DC.
+        """
+        dc_params = {}
+        dc_params["history"] = DataContainerHistory.from_header(
+            hdul["PRIMARY"].header)
+        # TODO: recover units once implemented
+        dc_params["intensity"] = hdul["INTENSITY"].data
+        dc_params["variance"] = hdul["VARIANCE"].data
+        dc_params["wcs"] = WCS(hdul["INTENSITY"].header)
+        dc_params["mask"] = DataMask.from_hdu(hdul["MASK"])
+        return dc_params
+    
+    @abstractmethod
+    def from_fits():
+        """Abstract factory method to instanciate a DataContainer from a FITS."""
+        pass
 
 # =============================================================================
 
@@ -860,7 +886,7 @@ class RSS(SpectraContainer):
         -------
         """
 
-        hdul = super().to_fits()
+        hdul = self._to_hdul()
 
         if filename is None:
             filename = 'rss_{}.fits.gz'.format(
@@ -884,8 +910,7 @@ class RSS(SpectraContainer):
 
         hdul.append(fits.BinTableHDU(name="INFO", data=pykoala_info_table,
                                      header=info_header))
-        # diameter size
-        # fibre position
+        # Save the HDUL into a FITS file.
         hdul.verify('fix')
         hdul.writeto(filename, overwrite=overwrite, checksum=checksum)
         hdul.close()
@@ -893,8 +918,40 @@ class RSS(SpectraContainer):
 
     @classmethod
     def from_fits(cls, filename):
+        """Initialise an RSS from a FITS file.
+        
+        Parameters
+        ----------
+        filename : str
+            Path to the FITS file that contains the RSS information. This FITS
+            must contain the information required to create an instance of an
+            RSS.
+
+            - A primary HDU
+            - An ``INTENSITY`` ImageHDU extension
+            - A ``VARIANCE`` ImageHDU extension
+            - A ``MASK`` ImageHDU extension
+            - A ``INFO`` BinaryTable HDU extension
+        
+        Returns
+        -------
+        rss : :class:`RSS`
+            An instance of an RSS.
+
+        #TODO: add example section
+        """
         with fits.open(filename) as hdul:
-            hdul[0]
+            # Extract the basic parameters to initialise a DC
+            dc_parameters = cls._dc_params_from_hdul(hdul)
+            # Extract RSS-specific information
+            info = {}
+            info["fib_ra"] = hdul["INFO"].data["fib_ra"]
+            info["fib_dec"] = hdul["INFO"].data["fib_dec"]
+            info["name"] = hdul["INFO"].header.get("name")
+            info["exptime"] = hdul["INFO"].header.get("exptime")
+            fibre_diameter = hdul["INFO"].header["fibdiam"] * u.arcsec
+
+        return cls(info=info, fibre_diameter=fibre_diameter, **dc_parameters)
 
     def get_integrated_fibres(self, wavelength_range=None):
         """Compute the integrated intensity of the RSS fibres.
