@@ -404,8 +404,8 @@ class GaussianLineProfile(LineProfile):
         GaussianLineProfile model function.
         """
         sigma = fwhm / 2.35482
-        return flux / np.sqrt(2) / fwhm / sigma * np.exp(
-            -0.5 * ((wavelength - central_wavelength) / sigma)**2)
+        f = flux / np.sqrt(2 * np.pi) / sigma
+        return f * np.exp(-0.5 * ((wavelength - central_wavelength) / sigma)**2)
 
     @staticmethod
     def fit_deriv(wavelength, central_wavelength, flux, fwhm):
@@ -413,9 +413,10 @@ class GaussianLineProfile(LineProfile):
         GaussianLineProfile model function derivatives.
         """
         sigma = fwhm / 2.35482
-        d_flux = np.exp(-0.5 / sigma**2 * (wavelength - central_wavelength) ** 2)
-        d_wave = flux * d_flux * (wavelength - central_wavelength) / sigma**2
-        d_sigma = flux * d_flux * (wavelength - central_wavelength) ** 2 / sigma**3
+        f = flux / np.sqrt(2 * np.pi) / sigma
+        d_flux = 1 / np.sqrt(2 * np.pi) / sigma * np.exp(-0.5 / sigma**2 * (wavelength - central_wavelength) ** 2)
+        d_wave = f * d_flux * (wavelength - central_wavelength) / sigma**2
+        d_sigma = flux / sigma * d_flux * ((wavelength - central_wavelength)** 2 / sigma**2 - 1)
         return [d_wave, d_flux, d_sigma * 2.35482]
 
 
@@ -426,17 +427,20 @@ class LorentzianLineProfile(LineProfile):
     def evaluate(wavelength, central_wavelength, flux, fwhm):
         """One dimensional Lorentzian model function."""
         gamma = fwhm / 2
-        return flux * gamma / np.pi / ((wavelength - central_wavelength)**2 + gamma**2)
+        f = flux * 2 / np.pi / fwhm
+        return f * gamma / np.pi / ((wavelength - central_wavelength)**2 + gamma**2)
 
     @staticmethod
     def fit_deriv(wavelength, central_wavelength, flux, fwhm):
         """One dimensional Lorentzian model derivative with respect to parameters."""
         gamma = fwhm / 2
+        f = flux * 2 / np.pi / fwhm
+
         d_flux = gamma / np.pi / ((wavelength - central_wavelength)**2 + gamma**2)
-        d_wave = flux / gamma / np.pi * d_flux * (
+        d_wave = f / gamma / np.pi * d_flux * (
             2 * wavelength - 2 * central_wavelength) / (
                 fwhm**2 + (wavelength - central_wavelength)**2)
-        d_fwhm = 2 * flux / gamma / np.pi * d_flux / fwhm * (1 - d_flux)
+        d_fwhm = 2 * f / gamma / np.pi * d_flux / fwhm * (1 - d_flux)
         return [d_wave, d_flux, d_fwhm]
 
     def bounding_box(self, factor=25):
