@@ -448,35 +448,27 @@ class DataContainer(ABC, VerboseMixin):
     """
     Abstract class for data containers.
 
-    This class might represent any kind of astronomical data: raw fits files,
-    Row Stacked Spectra obtained after tramline extraction or datacubes.
+    This class aims to represent any kind of astronomical data: detector (raw)
+    data, row stacked spectra (RSS) data containing fibre spectra or 3D data
+    cubes.
 
-    Attributes
-    ----------
-    intensity : :class:`astropy.Quantity`
-        Array with the counts/surface brightness/... at each pixel.
-    variance : :class:`astropy.Quantity`
-        Uncertainties associated to the ``intensity`` values.
-    inverse_variance : :class:`astropy.Quantity`
-        Inverse variance associated to the ``intensity`` values.
-    snr : :class:`astropy.Quantity`
-        Signal-to-noise ratio defined as ``intensity / variance**0.5``.
-    mask : DataMask
-        :class:`DataMask` pixel mask.
-    info : dict
-        Parameters describing the data.
-    log : :class:`DataContainerHistory`
-        History log reporting the data reduction steps undertaken so far.
-    header : :class:`astropy.fits.Header`
-        FITS Header associated to the RSS.
+    A DataContainer is an ensemble of data and metadata whose information is
+    stored across multiple attributes. The essential information is recorded in
+    the following attributes:
 
-    Methods
-    -------
-    # TODO
+    - ``intensity`` and ``variance`` are the fundamental attirbutes that contain the data.
+    - ``mask`` stores the data quality information associated to each resolution element (i.e. pixel, fibre, spaxel)
+    - ``info`` contains important metadata and data used during the reduction sequence.
+    - ``history`` keeps track of the data reduction process.
+
     """
 
     @property
     def intensity(self):
+        """
+        :class:`astropy.units.Quantity` containing the intensity of each resolution
+        element (pixel, fibre, spaxel).
+        """
         return self._intensity
 
     @intensity.setter
@@ -489,6 +481,10 @@ class DataContainer(ABC, VerboseMixin):
 
     @property
     def variance(self):
+        """
+        :class:`astropy.units.Quantity` uncertainties associated to the
+        ``intensity`` values.
+        """
         return self._variance
 
     @variance.setter
@@ -501,14 +497,23 @@ class DataContainer(ABC, VerboseMixin):
 
     @property
     def inverse_variance(self):
+        """
+        :class:`astropy.units.Quantity` inverse variance associated to the
+        ``intensity`` values.
+        """
         return 1 / self.variance
 
     @property
     def snr(self):
+        """
+        :class:`astropy.units.Quantity` Signal-to-noise ratio defined as
+        ``intensity / variance**0.5``.
+        """
         return self.intensity / self.variance**0.5
 
     @property
     def mask(self):
+        """:class:`DataMask` associated to ``intensity``."""
         return self._mask
 
     @mask.setter
@@ -520,8 +525,26 @@ class DataContainer(ABC, VerboseMixin):
         del self._mask
 
     @property
+    def info(self):
+        """:class:`dict` storing auxiliary data (name, exposure time, fibre position, etc.)."""
+        return self._info
+
+    @info.setter
+    def info(self, value):
+        self._info = value
+
+    @property
+    def history(self):
+        """:class:`DataContainerHistory` a log recording the data processing steps."""
+        return self._history
+    
+    @history.setter
+    def history(self, value):
+        self._history = value
+
+    @property
     def header(self):
-        """FITS Header associated to the file."""
+        """:class:`astropy.fits.Header` associated to the original file."""
         return self._header
     
     @header.setter
@@ -531,6 +554,10 @@ class DataContainer(ABC, VerboseMixin):
 
     @property
     def wcs(self):
+        """
+        :class:`astropy.wcs.WCS` world coordinate system associated to
+        ``intensity``.
+        """
         return self._wcs
     
     @wcs.setter
@@ -561,17 +588,18 @@ class DataContainer(ABC, VerboseMixin):
             self.info["name"] = "N/A"
 
     def copy(self):
+        """Return a copy of the DataContainer."""
         return copy.deepcopy(self)
 
     def is_corrected(self, correction):
-        """Check if a Correction has been applied by checking the DataContainerHistory"""
+        """Check if a ``Correction`` has been applied to the DataContainer."""
         if self.history.is_record(title=correction):
             return True
         else:
             return False
 
     def _to_hdul(self):
-        """Base method for storing a DataContainer in a FITS file."""
+        """Store the DataContainer in a FITS file."""
         primary = fits.PrimaryHDU()
         primary.header['pykoala0'] = __version__, "PyKOALA version"
         primary.header['pykoala1'] = datetime.now().strftime(
@@ -602,8 +630,6 @@ class DataContainer(ABC, VerboseMixin):
     @classmethod
     def _dc_params_from_hdul(cls, hdul):
         """Extract the basic parameters used to instanciate a DataContainer from an HDUL.
-        
-        This method provides a 
 
         Parameters
         ----------
@@ -636,25 +662,12 @@ class DataContainer(ABC, VerboseMixin):
 
 class SpectraContainer(DataContainer):
     """
-    Abstract class for a `DataContainer` containing spectra (`RSS` or `Cube`).
-
-    Attributes
-    ----------
-    wavelength : :class:`astropy.Quantity`
-        Wavelength array, common to all spectra.
-    n_wavelength : int
-        Number of wavekengths in the `wavelength` array.
-    n_spectra : int
-        Number of spectra in the `intensity` array.
-    intensity_rss : :class:`astropy.Quantity`
-        `intensity` array, sorted as [`n_spectra`, `n_wavelength`].
-    variance_rss : :class:`astropy.Quantity`
-        Uncertainties associated to `intensity_rss`.
+    A `DataContainer` containing spectra (`RSS` or `Cube`).
     """
 
     @property
     def wavelength(self):
-        """Pixel flags."""
+        """:class:`astropy.units.Quantity` wavelength array, common to all spectra."""
         return self._wavelength
 
     @wavelength.setter
@@ -667,20 +680,20 @@ class SpectraContainer(DataContainer):
 
     @property
     def n_wavelength(self):
-        """Pixel flags."""
+        """Number of wavekengths in the `wavelength` array"""
         return self._wavelength.size
 
     @property
     def n_spectra(self):
-        """Pixel flags."""
+        """Number of spectra in the `intensity` array."""
         return self._intensity.size / self._wavelength.size
 
     @property
     @abstractmethod
     def rss_intensity(self):
         """
-        Return an array of spectra,
-        sorted as [`n_spectra`, `n_wavelength`].
+        :class:`astropy.units.Quantity` ``intensity`` array sorted as
+        ``[n_spectra, n_wavelength]``.
         """
         pass
 
@@ -692,7 +705,7 @@ class SpectraContainer(DataContainer):
     @property
     @abstractmethod
     def rss_variance(self):
-        """Uncertainties associated to `intensity_rss`."""
+        """:class:`astropy.units.Quantity` uncertainties associated to ``intensity_rss``"""
         pass
 
     @rss_variance.setter
@@ -766,7 +779,7 @@ class RSS(SpectraContainer):
 
     @property
     def fibre_diameter(self):
-        """Angular diameter of the RSS fibres."""
+        """:class:`astropy.units.Quantity` angular diameter of the RSS fibres."""
         return self._fibre_diameter
     
     @fibre_diameter.setter
@@ -874,9 +887,6 @@ class RSS(SpectraContainer):
         self.history('update_coords', "Offset-coords updated")
         self.vprint("[RSS] Offset-coords updated")
 
-    # =============================================================================
-    # Save an RSS object (corrections applied) as a separate .fits file
-    # =============================================================================
     def to_fits(self, filename=None, overwrite=False, checksum=False):
         """Write the RSS into a FITS file.
 
@@ -885,12 +895,9 @@ class RSS(SpectraContainer):
         
         The information is stored in the following HDU extensions
 
-        - ``PRIMARY``: contains the metadata associated to the :class:`DataContainerHistory`
-        as well as the original ``header`` of the RSS.
-        - ``INTENSITY``: contains the data associated to the ``intensity`` and
-        the WCS information.
-        - ``VARIANCE``: contains the data associated to the ``variance`` and
-        the WCS information.
+        - ``PRIMARY``: contains the metadata associated to the :class:`DataContainerHistory` as well as the original ``header`` of the RSS.
+        - ``INTENSITY``: contains the data associated to the ``intensity`` and the WCS information.
+        - ``VARIANCE``: contains the data associated to the ``variance`` and the WCS information.
         - ``MASK``: contains the data associated to the ``mask`` attribute.
         - ``INFO``: contains the data associated to the ``info`` attribute.
 
