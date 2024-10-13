@@ -562,7 +562,7 @@ class DataContainer(ABC, VerboseMixin):
     
     @wcs.setter
     def wcs(self, value):
-        assert isinstance(value, WCS), "wcs must be an instance of astropy.wcs.WCS"
+        assert isinstance(value, WCS) or (value is None), "wcs must be an instance of astropy.wcs.WCS"
         self._wcs = value
 
     def __init__(self, **kwargs):
@@ -580,7 +580,7 @@ class DataContainer(ABC, VerboseMixin):
                                   DataContainerHistory(logger=self.logger,
                                                        verbose=self.verbose))
         self.header = kwargs.get("header", fits.Header())
-        self.wcs = kwargs.get("wcs", WCS())
+        self.wcs = kwargs.get("wcs", None)
 
     def fill_info(self):
         """Check the keywords of info and fills them with placeholders."""
@@ -722,13 +722,15 @@ class SpectraContainer(DataContainer):
 
         super().__init__(**kwargs)
 
-        if "wavelength" in kwargs.keys():
+        if "wavelength" in kwargs:
             self._wavelength = kwargs["wavelength"]
         else:
             self.vprint(
                 "WARNING: No `wavelength` vector supplied; creating empty `SpectraContainer`"
             )
-            self._wavelength = u.Quantity([], u.AA)
+            #TODO: inconsistent. Recover once units are implemented
+            #self._wavelength = u.Quantity([], u.AA)
+            self._wavelength = None
         
     def get_spectra_sorted(self, wave_range=None):
         """Get the RSS-wise sorted order of the intensity.
@@ -937,7 +939,7 @@ class RSS(SpectraContainer):
         hdul.verify('fix')
         hdul.writeto(filename, overwrite=overwrite, checksum=checksum)
         hdul.close()
-        self.vprint(f"[RSS] File saved as {filename}")
+        self.vprint(f"File saved as {filename}")
 
     @classmethod
     def from_fits(cls, filename):
@@ -1188,44 +1190,10 @@ class RSS(SpectraContainer):
 
 
 class Cube(SpectraContainer):
-    """This class represent a 3D data cube.
-    
-    parent_rss
-    rss_mask
-    intensity
-    variance
-    intensity
-    variance
-    wavelength
-    info
+    """:class:`SpectraContainer` associated to a 3D data cube."""
 
-    """
-    n_wavelength = None
-    n_cols = None
-    n_rows = None
-    x_size_arcsec = None
-    y_size_arcsec = None
     default_hdul_extensions_map = {"INTENSITY": "INTENSITY",
                                    "VARIANCE": "VARIANCE"}
-    
-    def __init__(self, hdul=None, hdul_extensions_map=None, **kwargs):
-
-        self.hdul = hdul
-
-        if hdul_extensions_map is not None:
-            self.hdul_extensions_map = hdul_extensions_map
-        else:
-            self.hdul_extensions_map = self.default_hdul_extensions_map
-
-        if "logger" not in kwargs:
-            kwargs['logger'] = "pykoala.cube"
-        super().__init__(intensity=self.intensity,
-                         variance=self.variance,
-                         **kwargs)
-        self.get_wcs_from_header()
-        self.history = DataContainerHistory.from_header(self.hdul[0].header)
-        self.n_wavelength, self.n_rows, self.n_cols = self.intensity.shape
-        self.get_wavelength()
 
     @property
     def hdul(self):
@@ -1255,8 +1223,20 @@ class Cube(SpectraContainer):
         self.hdul[self.hdul_extensions_map['VARIANCE']].data = variance_corr
 
     @property
+    def n_cols(self):
+        """Number of spaxel colums"""
+        return self.intensity.shape[2]
+
+    @property
+    def n_rows(self):
+        """Number of spaxel rows"""
+        return self.intensity.shape[1]
+
+    @property
     def rss_intensity(self):
-        return np.reshape(self.intensity, (self.intensity.shape[0], self.intensity.shape[1]*self.intensity.shape[2])).T
+        return np.reshape(self.intensity, (
+            self.intensity.shape[0],
+            self.intensity.shape[1] * self.intensity.shape[2])).T
 
     @rss_intensity.setter   
     def rss_intensity(self, value):
@@ -1264,59 +1244,41 @@ class Cube(SpectraContainer):
 
     @property
     def rss_variance(self):
-        return np.reshape(self.variance, (self.variance.shape[0], self.variance.shape[1]*self.variance.shape[2])).T
+        return np.reshape(self.variance, (
+            self.variance.shape[0],
+            self.variance.shape[1] * self.variance.shape[2])).T
 
     @rss_variance.setter   
     def rss_variance(self, value):
         self.variance = value.T.reshape(self.variance.shape)
 
+    def __init__(self, hdul=None, hdul_extensions_map=None, **kwargs):
+
+        self.hdul = hdul
+        if hdul_extensions_map is not None:
+            self.hdul_extensions_map = hdul_extensions_map
+        else:
+            self.hdul_extensions_map = self.default_hdul_extensions_map
+
+        if "logger" not in kwargs:
+            kwargs['logger'] = "pykoala.cube"
+
+        super().__init__(intensity=self.intensity, variance=self.variance,
+                         **kwargs)
+
+        if self.wcs is None:
+            self.wcs = WCS(
+                self.hdul[self.hdul_extensions_map['INTENSITY']].header)
+
+        if self.n_wavelength == 0:
+            self.wavelength = self.wcs.spectral.array_index_to_world(
+            np.arange(self.n_wavelength)).to('angstrom').value
+
     def rss_to_original(self, rss_shape_data):
         return np.reshape(rss_shape_data.T, (rss_shape_data.shape[1],
                                              self.intensity.shape[1],
                                              self.intensity.shape[2]))
-        
-    @classmethod
-    def from_fits(cls, path, hdul_extension_map=None, **kwargs):
-        """Make an instance of a Cube using an input path to a FITS file.
-        
-        Parameters
-        ----------
-        - path: str
-            Path to the FITS file. This file must be compliant with the pykoala
-            standards.
-        - hdul_extension_map: dict
-            Dictionary containing the mapping to access the extensions that
-            contain the intensity, and variance data
-            (e.g. {'INTENSITY': 1, 'VARIANCE': 'var'}).
-        - kwargs:
-            Arguments passed to the Cube class (see Cube documentation)
-        
-        Returns
-        -------
-        - cube: Cube
-            An instance of a `pykoala.cubing.Cube`.
-        """
-        hdul = fits.open(path)
-        return cls(hdul, hdul_extension_map=hdul_extension_map, **kwargs)
 
-    def load_hdul(self, path_to_file):
-        self.hdul = fits.open(path_to_file)
-        pass
-
-    def close_hdul(self):
-        if self.hdul is not None:
-            self.vprint(f"[Cube] Closing HDUL")
-            self.hdul.close()
-
-    def get_wcs_from_header(self):
-        """Create a WCS from HDUL header."""
-        self.wcs = WCS(self.hdul[self.hdul_extensions_map['INTENSITY']].header)
-
-    def get_wavelength(self):
-        self.vprint("[Cube] Constructing wavelength array")
-        self.wavelength = self.wcs.spectral.array_index_to_world(
-            np.arange(self.n_wavelength)).to('angstrom').value
-        
     def get_centre_of_mass(self, wavelength_step=1, stat=np.median, power=1.0):
         """Compute the center of mass of the data cube."""
         x = np.arange(0, self.n_cols, 1)
@@ -1376,43 +1338,6 @@ class Cube(SpectraContainer):
         """Compute the spatial footprint of the datacube."""
         return self.wcs.celestial.calc_footprint()
 
-    def to_fits(self, fname=None, primary_hdr_kw=None):
-        """Save the Cube into a FITS file."""
-        if fname is None:
-            fname = 'cube_{}.fits.gz'.format(
-                datetime.now().strftime("%d_%m_%Y_%H_%M_%S"))
-        if primary_hdr_kw is None:
-            primary_hdr_kw = {}
-
-        # Create the PrimaryHDU with WCS information 
-        primary = fits.PrimaryHDU()
-        for key, val in primary_hdr_kw.items():
-            primary.header[key] = val
-        
-        
-        # Include cubing information
-        primary.header['pykoala0'] = __version__, "PyKOALA version"
-        primary.header['pykoala1'] = datetime.now().strftime(
-            "%d_%m_%Y_%H_%M_%S"), "creation date / last change"
-
-        # Fill the header with the log information
-        primary.header = self.history.dump_to_header(primary.header)
-
-        # Create a list of HDU
-        hdu_list = [primary]
-        # Change headers for variance and INTENSITY
-        hdu_list.append(fits.ImageHDU(
-            data=self.intensity, name='INTENSITY', header=self.wcs.to_header()))
-        hdu_list.append(fits.ImageHDU(
-            data=self.variance, name='VARIANCE', header=hdu_list[-1].header))
-        # Store the mask information
-        hdu_list.append(self.mask.dump_to_hdu())
-        # Save fits
-        hdul = fits.HDUList(hdu_list)
-        hdul.writeto(fname, overwrite=True)
-        hdul.close()
-        self.vprint("[Cube] Cube saved at:\n {}".format(fname))
-
     def update_coordinates(self, new_coords=None, offset=None):
         """Update the celestial coordinates of the Cube"""
         updated_wcs = ancillary.update_wcs_coords(self.wcs.celestial,
@@ -1423,6 +1348,52 @@ class Cube(SpectraContainer):
                     + f"\nNew CRVAL: {updated_wcs.wcs.crval}")
         self.wcs.wcs.crval[:-1] = updated_wcs.wcs.crval
         self.history('update_coords', "Offset-coords updated")
+
+    def to_fits(self, filename=None, primary_hdr_kw={},overwrite=False,
+                checksum=False):
+        """Save the Cube into a FITS file."""
+        if filename is None:
+            filename = 'cube_{}_{}.fits.gz'.format(
+                self.info.get("name", "frame"),
+                datetime.now().strftime("%d_%m_%Y_%H_%M_%S"))
+
+        hdul = self._to_hdul()
+        
+        # Save the HDUL into a FITS file.
+        hdul.verify('fix')
+        hdul.writeto(filename, overwrite=overwrite, checksum=checksum)
+        hdul.close()
+        self.vprint(f"File saved as {filename}")
+
+    def close_hdul(self):
+        """Close the HDUL."""
+        if self.hdul is not None:
+            self.vprint(f"[Cube] Closing HDUL")
+            self.hdul.close()
+
+    @classmethod
+    def from_fits(cls, path, hdul_extension_map=None, **kwargs):
+        """Make an instance of a Cube using an input path to a FITS file.
+        
+        Parameters
+        ----------
+        - path: str
+            Path to the FITS file. This file must be compliant with the pykoala
+            standards.
+        - hdul_extension_map: dict
+            Dictionary containing the mapping to access the extensions that
+            contain the intensity, and variance data
+            (e.g. {'INTENSITY': 1, 'VARIANCE': 'var'}).
+        - kwargs:
+            Arguments passed to the Cube class (see Cube documentation)
+        
+        Returns
+        -------
+        - cube: Cube
+            An instance of a `pykoala.cubing.Cube`.
+        """
+        hdul = fits.open(path)
+        return cls(hdul, hdul_extension_map=hdul_extension_map, **kwargs)
 
 # =============================================================================
 # Mr Krtxo \(ﾟ▽ﾟ)/
