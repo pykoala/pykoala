@@ -568,11 +568,9 @@ class DataContainer(ABC, VerboseMixin):
         self._wcs = value
 
     def __init__(self, **kwargs):
-        self._intensity = ancillary.check_unit(kwargs["intensity"], u.adu)
-        self._variance = ancillary.check_unit(kwargs.get(
-            "variance",
-            np.full_like(self._intensity, np.nan, dtype=type(np.nan)),
-            u.adu))
+        self._intensity = kwargs["intensity"]
+        self._variance = kwargs.get("variance",
+            np.full_like(self._intensity, np.nan, dtype=type(np.nan)))
         self._mask = kwargs.get("mask", DataMask(shape=self.intensity.shape))
         self.info = kwargs.get("info", dict())
         self.fill_info()
