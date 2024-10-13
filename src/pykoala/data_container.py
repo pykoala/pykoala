@@ -437,7 +437,8 @@ class DataMask(object):
             if "FLAG" in k:
                 name = k.replace("FLAG_", "")
                 value = hdu.header[k]
-                flag_map[name] = value
+                description = hdu.header.comments[k]
+                flag_map[name] = (value, description)
         return cls(flag_map=flag_map, bitmask=hdu.data)
 
 # =============================================================================
@@ -578,7 +579,10 @@ class DataContainer(ABC, VerboseMixin):
         # Fill the header with the log information
         primary.header = self.history.dump_to_header(primary.header)
         # Include the original header
+        primary.header["ORIHEAD"] = len(self.header), "Number of cards of original header"
         primary.header.extend(self.header)
+        # Ensure that the name is PRIMARY
+        primary.name = "PRIMARY"
 
         hdu_list = [primary]
         # TODO : once units are implemented, record the units in the header
@@ -609,6 +613,12 @@ class DataContainer(ABC, VerboseMixin):
         dc_params = {}
         dc_params["history"] = DataContainerHistory.from_header(
             hdul["PRIMARY"].header)
+        # Fetch the information of the original header
+        if "ORIHEAD" in hdul["PRIMARY"].header:
+            star_original_header = hdul["PRIMARY"].header.index("ORIHEAD")
+            len_header = hdul["PRIMARY"].header["ORIHEAD"]
+            dc_params["header"] = hdul["PRIMARY"].header[
+                star_original_header + 1:star_original_header + len_header]
         # TODO: recover units once implemented
         dc_params["intensity"] = hdul["INTENSITY"].data
         dc_params["variance"] = hdul["VARIANCE"].data
@@ -867,7 +877,7 @@ class RSS(SpectraContainer):
     # =============================================================================
     # Save an RSS object (corrections applied) as a separate .fits file
     # =============================================================================
-    def to_fits(self, filename, primary_hdr_kw=None, overwrite=False, checksum=False):
+    def to_fits(self, filename=None, overwrite=False, checksum=False):
         """
         Writes a RSS object to .fits
 
@@ -889,20 +899,16 @@ class RSS(SpectraContainer):
         hdul = self._to_hdul()
 
         if filename is None:
-            filename = 'rss_{}.fits.gz'.format(
+            filename = 'rss_{}_{}.fits.gz'.format(
+                self.info.get("name", "frame"),
                 datetime.now().strftime("%d_%m_%Y_%H_%M_%S"))
-        if primary_hdr_kw is None:
-            primary_hdr_kw = {}
-
-        for key, val in primary_hdr_kw.items():
-            hdul["PRIMARY"].header[key] = val
 
         # Fibre information table
-        pykoala_info_table = Table(names=["fib_ra", "fib_dec"],
-                                   data=[self.info["fib_ra", "fib_dec"]],
-                                   meta=dict(fib_ra="Fibre RA position (deg)",
-                                             fib_dec="Fibre DEC position (deg)")
-                                             )
+        pykoala_info_table = Table(
+            names=["fib_ra", "fib_dec"],
+            data=[self.info["fib_ra"], self.info["fib_dec"]],
+            meta=dict(fib_ra="Fibre RA position (deg)",
+                      fib_dec="Fibre DEC position (deg)"))
         info_header = fits.Header()
         info_header["NAME    "] = self.info.get("name", "N/A"), "Object name"
         info_header["EXPTIME "] = self.info["exptime"], "exposure time (s)"
@@ -950,8 +956,13 @@ class RSS(SpectraContainer):
             info["name"] = hdul["INFO"].header.get("name")
             info["exptime"] = hdul["INFO"].header.get("exptime")
             fibre_diameter = hdul["INFO"].header["fibdiam"] * u.arcsec
+            #TODO: once units are implemented keep unit
+            wavelength = dc_parameters["wcs"].spectral.array_index_to_world(
+                np.arange(dc_parameters["intensity"].shape[1])
+            ).to_value("angstrom")
 
-        return cls(info=info, fibre_diameter=fibre_diameter, **dc_parameters)
+        return cls(info=info, fibre_diameter=fibre_diameter, wavelength=wavelength,
+                   **dc_parameters)
 
     def get_integrated_fibres(self, wavelength_range=None):
         """Compute the integrated intensity of the RSS fibres.
