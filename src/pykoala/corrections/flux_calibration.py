@@ -12,7 +12,8 @@ from scipy.ndimage import median_filter
 from scipy.interpolate import interp1d, UnivariateSpline
 import matplotlib.pyplot as plt
 import os
-
+from astropy import units as u
+from astropy.visualization import quantity_support
 # =============================================================================
 # KOALA packages
 # =============================================================================
@@ -22,7 +23,40 @@ from pykoala.data_container import SpectraContainer
 from pykoala.data_container import RSS
 from pykoala.data_container import Cube
 from pykoala.ancillary import (centre_of_mass, cumulative_1d_moffat, mask_lines,
-                               flux_conserving_interpolation)
+                               flux_conserving_interpolation, check_unit)
+
+quantity_support()
+
+def curve_of_growth(radii : u.Quantity, data : u.Quantity, ref_radii : u.Quantity,
+                    mask=None):
+    """Compute a curve of growth.
+    
+    Parameters
+    ----------
+    radii : :class:`np.nddata`
+    data : :class:`np.nddata`
+    ref_radii : :class:`np.ndarray`
+        Array of radial positions where to evaluate the COG.
+    
+    Returns
+    -------
+    cog : :class:`np.ndarray`
+        Curve of growth evaluated at ``ref_radii``.
+    """
+    if mask is None:
+        mask = np.ones(data.size, dtype=bool)
+
+    # 
+    sort_idx = np.argsort(radii)
+    n_good_pixels = np.cumsum(mask[sort_idx])
+    mean = np.nancumsum(data[sort_idx]) / n_good_pixels
+    cog = mean * np.arange(1, data.size + 1)
+    u_radii = np.unique(radii)
+    u_idx = np.searchsorted(radii[sort_idx], u_radii, side="right") - 1
+    return np.interp(ref_radii, u_radii, cog[u_idx], left=0)
+
+# extract stellar spectra
+
 
 
 class FluxCalibration(CorrectionBase):
@@ -50,7 +84,7 @@ class FluxCalibration(CorrectionBase):
     name = "FluxCalibration"
     verbosity = True
 
-    def __init__(self, response=None, response_wavelength=None, response_units=1e16,
+    def __init__(self, response=None, response_wavelength=None,
                  response_file=None, **correction_kwargs):
         """
         Initializes the FluxCalibration object.
@@ -65,8 +99,8 @@ class FluxCalibration(CorrectionBase):
         
         self.vprint("Initialising Flux Calibration (Spectral Throughput)")
 
-        self.response_units = response_units  # erg/s/cm2/AA
-        self.response_wavelength, self.response = response_wavelength, response
+        self.response_wavelength = check_unit(response_wavelength, u.angstrom)
+        self.response = check_unit(response)
         self.response_file = response_file
     
     @classmethod
@@ -74,8 +108,17 @@ class FluxCalibration(CorrectionBase):
         if path is None:
             path = cls.default_extinction
         wavelength, response = np.loadtxt(path, unpack=True)
-        return cls(response=response,
-                   response_wavelength=wavelength,
+        with open(path, "r") as f:
+            _ = f.readline()
+            line = f.readline()
+            wave_header, response_header = line.split(",")
+            wave_idx = wave_header.find("("), wave_header.find(")")
+            response_idx = response_header.find("("), response_header.find(")")
+            wave_unit = u.Quantity(wave_header[wave_idx[0] + 1 : wave_idx[1]])
+            resp_unit = u.Quantity(
+                response_header[response_idx[0] + 1 : response_idx[1]])
+        return cls(response=response << resp_unit,
+                   response_wavelength=wavelength << wave_unit,
                    response_file=path)
 
     @classmethod
@@ -140,7 +183,7 @@ class FluxCalibration(CorrectionBase):
             flux_cal_results[name]['ref_spectra'] = ref_spectra
             # Compute the response curve
             resp_curve, resp_fig = FluxCalibration.get_response_curve(
-                mean_wave, result['optimal'][:, 0], ref_wave, ref_spectra,
+                data[i].wavelength, result['stellar_flux'], ref_wave, ref_spectra,
                 **response_params)
 
             flux_cal_results[name]['wavelength'] = data[i].wavelength.copy()
@@ -149,8 +192,9 @@ class FluxCalibration(CorrectionBase):
             flux_cal_results[name]['response_fig'] = resp_fig
             vprint("-> Saving response as {}".format(name))
             
-            flux_corrections.append(cls(response=resp_curve(data[i].wavelength),
-                                    response_wavelength=data[i].wavelength))
+            flux_corrections.append(
+                cls(response=resp_curve(data[i].wavelength),
+                    response_wavelength=data[i].wavelength))
         if combine:
             master_flux_corr = FluxCalibration.master_flux_auto(flux_corrections)
         else:
@@ -196,7 +240,7 @@ class FluxCalibration(CorrectionBase):
                              wave_range=None, wave_window=None,
                              profile=cumulative_1d_moffat,
                              bounds='auto',
-                             growth_r=np.arange(0, 10, 0.5),
+                             growth_r=np.arange(0.5, 10, 0.5) << u.arcsec,
                              plot=False, **fitter_args):
         """
         Extract the stellar flux from an RSS or Cube.
@@ -228,15 +272,18 @@ class FluxCalibration(CorrectionBase):
         """
 
         wavelength = data_container.wavelength
-        wave_mask = np.ones_like(wavelength, dtype=bool)
+        wave_mask = np.ones(wavelength.size, dtype=bool)
         if wave_range is not None:
-            wave_mask[(wavelength < wave_range[0]) | (wavelength > wave_range[1])] = False
+            wave_mask[
+                (wavelength < check_unit(wave_range[0], wavelength.unit)
+                ) | (wavelength > check_unit(wave_range[1], wavelength.unit))
+                ] = False
         if wave_window is None:
             wave_window = 1
         wavelength = wavelength[wave_mask]
 
         # Curve of growth radial bins
-        r2_dummy = growth_r**2
+        r2_dummy = check_unit(growth_r, u.arcsec)**2
 
         vprint("Extracting star flux.\n"
                 + " -> Wavelength range={}\n".format(wave_range)
@@ -260,17 +307,20 @@ class FluxCalibration(CorrectionBase):
                                          * variance.shape[2]))
             x, y = np.indices((data_container.n_rows, data_container.n_cols))
             x, y = x.flatten(), y.flatten()
-            x, y = data_container.wcs.celestial.pixel_to_world_values(x, y)
-
+            skycoords = data_container.wcs.celestial.array_index_to_world(x, y)
+            x, y = skycoords.ra, skycoords.dec
+        else:
+            raise NameError(
+                f"Unrecongnized datacontainer of type {type(data_container)}")
         data = data[wave_mask, :]
         variance = variance[wave_mask, :]
 
         # Declare variables
-        residuals = []
+        mean_residuals = np.full(wavelength.size, fill_value=np.nan) << data.unit
+        star_flux = np.full_like(mean_residuals, fill_value=np.nan)
         profile_popt = []
         profile_var = []
         running_wavelength = []
-        raw_flux = []
         cog = []
         cog_var = []
         # Fitting tolerance and number of evaluations
@@ -285,53 +335,54 @@ class FluxCalibration(CorrectionBase):
         vprint("...Fitting wavelength chuncks...")
         for lambda_ in range(0, wavelength.size, wave_window):
             wave_slice = slice(lambda_, lambda_ + wave_window, 1)
-            wave_edges = [wavelength[wave_slice][0], wavelength[wave_slice][-1]]
+            wave_edges = [wavelength[wave_slice][0].to_value("AA"),
+                          wavelength[wave_slice][-1].to_value("AA")]
             slice_data = data[wave_slice]
             slice_var = variance[wave_slice]
             # Compute the median value only considering good values (i.e. excluding NaN)
             slice_data = np.nanmedian(slice_data, axis=0)
             slice_var = np.nanmedian(slice_var, axis=0) / np.sqrt(slice_var.shape[0])
-            slice_var[slice_var <= 0] = np.inf
+            slice_var[slice_var <= 0] = np.inf << slice_var.unit
 
-            if not np.isfinite(slice_data).any():
-                vprint("Chunk between {} to {} contains no useful data"
+            mask = np.isfinite(slice_data) & np.isfinite(slice_var)
+            if not mask.any():
+                vprint("Chunk between {} to {} AA contains no useful data"
                         .format(wave_edges[0], wave_edges[1]))
                 continue
-            # Pixels without signal are set to 0.
-            mask = np.isfinite(slice_data) & np.isfinite(slice_var)
+
             ###################################################################
             # Computing the curve of growth
             ###################################################################
-            x0, y0 = centre_of_mass(slice_data * mask, x, y)
+            x0, y0 = centre_of_mass(slice_data[mask], x[mask], y[mask])
             # Make the growth curve
-            r2 = ((x - x0)**2 + (y - y0)**2) * 3600**2  # expressed in arcsec^2
-            growth_c = np.array(
-                [np.nanmean(slice_data[mask & (r2 <= rad)]
-                            ) * np.count_nonzero(r2 <= rad) for rad in r2_dummy])
-            growth_c_var = np.array(
-                [np.nanmean(slice_var[mask & (r2 <= rad)]
-                            ) * np.count_nonzero(r2 <= rad) for rad in r2_dummy])
-            
-            cog_mask = np.isfinite(growth_c)
+            r2 = ((x - x0)**2 + (y - y0)**2)
+            growth_c = curve_of_growth(r2, slice_data, r2_dummy, mask)
+            growth_c_var = curve_of_growth(r2, slice_var, r2_dummy, mask)
+            r2 = r2_dummy
+
+            cog_mask = np.isfinite(growth_c) & (growth_c > 0)
             if not cog_mask.any():
-                vprint("Chunk between {} to {} contains no useful data"
+                vprint("Chunk between {} to {} AA contains no useful data"
                         .format(wave_edges[0], wave_edges[1]))
                 continue
-            r2 = r2_dummy
-            # r2, growth_c = growth_curve_1d(slice_data, x - x0, y - y0)
-            raw_flux.append(growth_c[-1])
-            # Fit a light profile
+            # Profile fit
             try:
                 if bounds == 'auto':
                     vprint("Automatic fit bounds")
-                    p_bounds = ([0, 0, 0], [growth_c[-1] * 2, r2_dummy.max(), 4])
+                    p_bounds = ([0, 0, 0],
+                                [growth_c[cog_mask][-1].value * 2,
+                                 r2_dummy.to_value("arcsec^2").max(), 4])
                 else:
                     p_bounds = bounds
                 # Initial guess
-                p0=[growth_c[-1], r2_dummy.mean(), 1.0]
+                p0=[growth_c[cog_mask][-1].value,
+                    r2_dummy.to_value("arcsec^2").mean(), 1.0]
                 popt, pcov = curve_fit(
-                    profile, r2[cog_mask], growth_c[cog_mask], bounds=p_bounds,
+                    profile, r2_dummy[cog_mask].to_value("arcsec^2"),
+                    growth_c[cog_mask].value, bounds=p_bounds,
                     p0=p0, **fitter_args)
+                model_growth_c = profile(
+                    r2_dummy[cog_mask].to_value("arcsec^2"), *popt) << growth_c.unit
             except Exception as e:
                 vprint("There was a problem during the fit:\n", e)
             else:
@@ -340,22 +391,34 @@ class FluxCalibration(CorrectionBase):
                 profile_popt.append(popt)
                 profile_var.append(pcov.diagonal())
                 running_wavelength.append(wave_edges)
-                residuals.append(np.nanmean(growth_c - profile(r2, *popt)))
+
+                res = growth_c[cog_mask] - model_growth_c
+                mean_residuals[wave_slice] = np.nanmean(res)
+                star_flux[wave_slice] = popt[0] << growth_c.unit
+
+        star_good = np.isfinite(star_flux)
+        star_flux = np.interp(
+            data_container.wavelength, data_container.wavelength[star_good],
+            star_flux[star_good])
 
         if plot:
             fig = FluxCalibration.plot_extraction(
-                x, y, x0, y0, data, r2_dummy**0.5, cog,
-                np.mean(running_wavelength, axis=1), residuals)
+                x.value, y.value, x0.value, y0.value, data.value, r2_dummy.value**0.5, cog,
+                wavelength, star_flux, mean_residuals)
         else:
             fig = None
-        result = dict(wave_edges=np.array(running_wavelength),
+
+        result = dict(wave_edges=np.array(running_wavelength) << u.AA,
                       optimal=np.array(profile_popt),
                       variance=np.array(profile_var),
+                      stellar_flux=star_flux,
+                      residuals=mean_residuals,
                       figure=fig)
         return result
 
     @staticmethod
-    def plot_extraction(x, y, x0, y0, data, rad, cog, wavelength, residuals):
+    def plot_extraction(x, y, x0, y0, data, rad, cog, wavelength, star_flux,
+                        residuals):
         """"""
         vprint("Making stellar flux extraction plot")
         fig, axs = plt.subplots(ncols=2, nrows=2, figsize=(8, 8),
@@ -382,10 +445,14 @@ class FluxCalibration(CorrectionBase):
         ax.grid(visible=True, which='both')
         ax.legend()
         ax = axs[0, 1]
-        ax.plot(wavelength, residuals, '-o', lw=2)
-        ax.set_ylabel('Mean model residuals (counts)')
+        ax.plot(wavelength, star_flux, '-', lw=2, label=f'Extracted stellar flux ')
+        ax.plot(wavelength, residuals, '-', lw=2, label=f'Mean model residuals')
+        ax.legend()
+        ax.set_ylabel(f'Flux ({star_flux.unit})')
         ax.set_xlabel('Wavelength')
-        axs[1, 1].axis('off')
+
+        axs[1, 1].axis("off")
+        
         plt.close(fig)
         return fig
     
@@ -457,7 +524,7 @@ class FluxCalibration(CorrectionBase):
                 raise FileNotFoundError("Calibration star: {} not found".format(name))
         if path is not None:
             calib_wave, calib_spectra = np.loadtxt(path, unpack=True, usecols=(0, 1))
-        return calib_wave, calib_spectra
+        return calib_wave << u.AA, calib_spectra << 1e-16 * u.erg / u.s / u.AA / u.cm**2
 
     @staticmethod
     def get_response_curve(obs_wave, obs_spectra, ref_wave, ref_spectra,
@@ -502,54 +569,51 @@ class FluxCalibration(CorrectionBase):
             int_ref_spectra = flux_conserving_interpolation(obs_wave, ref_wave,
                                                             ref_spectra)
         raw_response = obs_spectra / int_ref_spectra
-        weights = np.ones_like(raw_response)
-
+        weights = np.ones(raw_response.size, dtype=float)
 
         if mask_absorption:
             vprint("Masking lines")
-            lines_mask = mask_lines(obs_wave)
-            weights *= lines_mask
-            # obs_spectra = np.interp(obs_wave, obs_wave[lines_mask],
-            #                         obs_spectra[lines_mask])
-            # int_ref_spectra = np.interp(obs_wave, obs_wave[lines_mask],
-            #                             int_ref_spectra[lines_mask])
+            weights *= mask_lines(obs_wave)
         
         if mask_zeros:
             vprint("Masking zeros")
-            mask = obs_spectra >= 0
-            weights *= mask
-            # obs_spectra = np.interp(obs_wave, obs_wave[mask],
-            #                         obs_spectra[mask])
+            weights *= obs_spectra >= 0
 
         # Median filtering
         if median_filter_n is not None:
             filtered_raw_response = median_filter(
-                raw_response, size=median_filter_n)
-
-            weights *= 1 / (1 + np.abs(raw_response - filtered_raw_response))**2
+                raw_response, size=median_filter_n) << raw_response.unit
+            weights *= 1 / (
+                1 + np.abs(raw_response - filtered_raw_response).value)**2
             raw_response = filtered_raw_response
 
         # Polynomial interpolation
         if pol_deg is not None:
-            p_fit = np.polyfit(obs_wave, raw_response, deg=pol_deg,
-                                w=weights)
+            p_fit = np.polyfit(obs_wave.to_value("AA"),
+                               raw_response.value, deg=pol_deg, w=weights)
             response = np.poly1d(p_fit)
         # Linear interpolation
         elif spline:
-            response = UnivariateSpline(obs_wave, raw_response, w=weights,
+            response = UnivariateSpline(obs_wave.to_value("AA"),
+                                        raw_response.value, w=weights,
                                         **spline_args)
         else:
-            response = interp1d(obs_wave, raw_response, fill_value=0, bounds_error=False)
+            response = interp1d(obs_wave.to_value("AA"), raw_response.value,
+                                fill_value=0, bounds_error=False)
             # Spline fit
             # response = UnivariateSpline(wave, obs_spectra / ref_spectra)
-        final_response = response(obs_wave)
+        
+        def response_wrapper(x):
+            return response(x) << raw_response.unit
 
+        final_response = check_unit(response(obs_wave.to_value("AA")),
+                                    raw_response.unit)
         if plot:
             fig, axs = plt.subplots(nrows=2, constrained_layout=True,
                                     sharex=True)
             ax = axs[0]
-            ax.annotate('{}-deg polynomial fit'.format(pol_deg), xy=(0.05, 0.95), xycoords='axes fraction',
-                        va='top', ha='left')
+            ax.annotate('{}-deg polynomial fit'.format(pol_deg), xy=(0.05, 0.95),
+                        xycoords='axes fraction', va='top', ha='left')
             ax.annotate(r'Median filter size: {}'.format(median_filter_n),
                         xy=(0.05, 0.80), xycoords='axes fraction',
                         va='top', ha='left')
@@ -557,8 +621,7 @@ class FluxCalibration(CorrectionBase):
             ax.plot(obs_wave, raw_response, '-', lw=2, label='Filtered')
             ax.plot(obs_wave, final_response, label='Final response')
             ax.set_xlabel('Wavelength')
-            ax.set_title(r'$R(\lambda) [\rm counts\,s^{-1} / (erg\, s^{-1}\, cm^{-2}\, AA^{-1})]$', fontsize=16)
-            ax.set_ylabel(r'$R(\lambda)$', fontsize=16)
+            ax.set_ylabel(r'$R(\lambda)$' + f" ({raw_response.unit})", fontsize=16)
             ax.legend()
             ax.set_ylim(final_response.min()*0.8, final_response.max()*1.2)
 
@@ -576,9 +639,9 @@ class FluxCalibration(CorrectionBase):
                       alpha=0.7, lw=0.7)
             twax.legend()
             plt.close(fig)
-            return response, fig
+            return response_wrapper, fig
         else:
-            return response, None
+            return response_wrapper, None
 
     def interpolate_response(self, wavelength, update=True):
         """
@@ -625,9 +688,10 @@ class FluxCalibration(CorrectionBase):
         None
         """
         self.vprint(f"Saving response function at: {fname}")
+        # TODO: Use a QTable and dump to FITS instead.
         np.savetxt(fname, np.array([self.response_wavelength, self.response]).T,
-                   header='Spectral Response curve \n wavelength (AA), R ({} counts / [erg/s/cm2/AA])'
-                   .format(self.response_units))
+                   header=f'Spectral Response curve \n wavelength (AA), R ({self.response.unit})'
+                   )
         
     def apply(self, spectra_container):
         """
@@ -671,10 +735,8 @@ class FluxCalibration(CorrectionBase):
         if not spectra_container_out.wavelength.size == self.response_wavelength.size or not np.allclose(
             spectra_container_out.wavelength, self.response_wavelength, equal_nan=True):
             response = self.interpolate_response(spectra_container_out.wavelength)
-            response_units = self.response_units
         else:
             response = self.response
-            response_units = self.response_units
 
         # Apply the correction
         spectra_container_out.rss_intensity = (spectra_container_out.rss_intensity
@@ -682,7 +744,7 @@ class FluxCalibration(CorrectionBase):
         spectra_container_out.rss_variance = (spectra_container_out.rss_variance
                                            / response[np.newaxis, :]**2)
         self.record_correction(spectra_container_out, status='applied',
-                            units=str(response_units) + ' counts / (erg/s/AA/cm2)')
+                            units=str(self.response.unit))
         return spectra_container_out
 
 
