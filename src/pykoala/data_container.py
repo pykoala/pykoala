@@ -568,9 +568,9 @@ class DataContainer(ABC, VerboseMixin):
         self._wcs = value
 
     def __init__(self, **kwargs):
-        self._intensity = kwargs["intensity"]
-        self._variance = kwargs.get("variance",
-            np.full_like(self._intensity, np.nan, dtype=type(np.nan)))
+        self._intensity = ancillary.check_unit(kwargs["intensity"])
+        self._variance = ancillary.check_unit(kwargs.get("variance",
+            np.full_like(self._intensity, np.nan, dtype=type(np.nan))))
         self._mask = kwargs.get("mask", DataMask(shape=self.intensity.shape))
         self.info = kwargs.get("info", dict())
         self.fill_info()
@@ -724,7 +724,8 @@ class SpectraContainer(DataContainer):
         super().__init__(**kwargs)
 
         if "wavelength" in kwargs.keys():
-            self._wavelength = ancillary.check_unit(kwargs["wavelength"], u.angstrom)
+            self._wavelength = ancillary.check_unit(kwargs["wavelength"],
+                                                    u.angstrom)
         else:
             # TODO: re-implement with units refactoring
             # self.vprint(
@@ -837,8 +838,8 @@ class RSS(SpectraContainer):
         """
         ra = self.info["fib_ra"]
         dec = self.info["fib_dec"]
-        ra_com = np.empty(self.wavelength.size)
-        dec_com = np.empty(self.wavelength.size)
+        ra_com = np.empty(self.wavelength.size) << ra.unit
+        dec_com = np.empty(self.wavelength.size) << dec.unit
         for wave_range in range(0, self.wavelength.size, wavelength_step):
             # Mean across all fibres
             ra_com[wave_range: wave_range + wavelength_step] = np.nansum(
@@ -849,6 +850,7 @@ class RSS(SpectraContainer):
             # Statistic (e.g., median, mean) per wavelength bin
             ra_com[wave_range: wave_range + wavelength_step] = stat(
                 ra_com[wave_range: wave_range + wavelength_step])
+            
             dec_com[wave_range: wave_range + wavelength_step] = np.nansum(
                 self.intensity[:, wave_range: wave_range +
                                wavelength_step]**power * dec[:, np.newaxis],
@@ -1284,6 +1286,32 @@ class Cube(SpectraContainer):
         return np.reshape(rss_shape_data.T, (rss_shape_data.shape[1],
                                              self.intensity.shape[1],
                                              self.intensity.shape[2]))
+
+    def parse_info_from_header(self):
+        """Look into the primary header for pykoala information."""
+        self.vprint("[Cube] Looking for information in the primary header")
+        # TODO
+        #self.info = {}
+        #self.fill_info()
+        self.history.load_from_header(self.hdul[0].header)
+
+    def load_hdul(self, path_to_file):
+        self.hdul = fits.open(path_to_file)
+        pass
+
+    def close_hdul(self):
+        if self.hdul is not None:
+            self.vprint(f"[Cube] Closing HDUL")
+            self.hdul.close()
+
+    def get_wcs_from_header(self):
+        """Create a WCS from HDUL header."""
+        self.wcs = WCS(self.hdul[self.hdul_extensions_map['INTENSITY']].header)
+
+    def get_wavelength(self):
+        self.vprint("[Cube] Constructing wavelength array")
+        self.wavelength = self.wcs.spectral.array_index_to_world(
+            np.arange(self.n_wavelength)).to('angstrom')
 
     def get_centre_of_mass(self, wavelength_step=1, stat=np.median, power=1.0):
         """Compute the center of mass of the data cube."""
