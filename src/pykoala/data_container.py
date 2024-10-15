@@ -25,6 +25,7 @@ from astropy.io import fits
 from astropy.table import Table
 from astropy.wcs import WCS
 from astropy import units as u
+from astropy import constants
 
 from pykoala import VerboseMixin, __version__
 from pykoala import ancillary
@@ -614,13 +615,14 @@ class DataContainer(ABC, VerboseMixin):
         primary.name = "PRIMARY"
 
         hdu_list = [primary]
-        # TODO : once units are implemented, record the units in the header
         header = self.wcs.to_header()
+        header["bunit"] = self.intensity.unit.to_string()
         hdu_list.append(fits.ImageHDU(
             data=self.intensity, name='INTENSITY',
             header=header
         )
         )
+        header["bunit"] = self.variance.unit.to_string()
         hdu_list.append(fits.ImageHDU(
             data=self.variance, name='VARIANCE', header=hdu_list[-1].header))
         # Store the mask information
@@ -646,9 +648,10 @@ class DataContainer(ABC, VerboseMixin):
             len_header = hdul["PRIMARY"].header["ORIHEAD"]
             dc_params["header"] = hdul["PRIMARY"].header[
                 star_original_header + 1:star_original_header + len_header]
-        # TODO: recover units once implemented
-        dc_params["intensity"] = hdul["INTENSITY"].data
-        dc_params["variance"] = hdul["VARIANCE"].data
+        dc_params["intensity"] = hdul["INTENSITY"].data << u.Unit(
+            hdul["INTENSITY"].header.get("BUNIT", 1))
+        dc_params["variance"] = hdul["VARIANCE"].data << u.Unit(
+            hdul["VARIANCE"].header.get("BUNIT", 1))
         dc_params["wcs"] = WCS(hdul["INTENSITY"].header)
         dc_params["mask"] = DataMask.from_hdu(hdul["MASK"])
         return dc_params
@@ -727,12 +730,10 @@ class SpectraContainer(DataContainer):
             self._wavelength = ancillary.check_unit(kwargs["wavelength"],
                                                     u.angstrom)
         else:
-            # TODO: re-implement with units refactoring
-            # self.vprint(
-            #     "WARNING: No `wavelength` vector supplied; creating empty `SpectraContainer`"
-            # )
-            #self._wavelength = u.Quantity([], u.AA)
-            self._wavelength = None
+            self.vprint(
+                "WARNING: No `wavelength` vector supplied; creating empty `SpectraContainer`"
+            )
+            self._wavelength = u.Quantity([], u.AA)
 
         
     def get_spectra_sorted(self, wave_range=None):
@@ -991,15 +992,13 @@ class RSS(SpectraContainer):
             dc_parameters = cls._dc_params_from_hdul(hdul)
             # Extract RSS-specific information
             info = {}
-            info["fib_ra"] = hdul["INFO"].data["fib_ra"]
-            info["fib_dec"] = hdul["INFO"].data["fib_dec"]
+            info["fib_ra"] = hdul["INFO"].data["fib_ra"] << u.deg
+            info["fib_dec"] = hdul["INFO"].data["fib_dec"] << u.deg
             info["name"] = hdul["INFO"].header.get("name")
-            info["exptime"] = hdul["INFO"].header.get("exptime")
-            fibre_diameter = hdul["INFO"].header["fibdiam"] * u.arcsec
-            #TODO: once units are implemented keep unit
+            info["exptime"] = hdul["INFO"].header.get("exptime") << u.second
+            fibre_diameter = hdul["INFO"].header["fibdiam"] << u.arcsec
             wavelength = dc_parameters["wcs"].spectral.array_index_to_world(
-                np.arange(dc_parameters["intensity"].shape[1])
-            ).to_value("angstrom")
+                np.arange(dc_parameters["intensity"].shape[1]))
 
         return cls(info=info, fibre_diameter=fibre_diameter, wavelength=wavelength,
                    **dc_parameters)
@@ -1318,7 +1317,10 @@ class Cube(SpectraContainer):
     def get_white_image(self, wave_range=None, s_clip=3.0, frequency_density=False):
         """Create a white image."""
         if wave_range is not None and self.wavelength is not None:
-            wave_mask = (self.wavelength >= wave_range[0]) & (self.wavelength <= wave_range[1])
+            wave_mask = (
+                self.wavelength >= ancillary.check_unit(wave_range[0], u.AA)
+                ) & (
+                self.wavelength <= ancillary.check_unit(wave_range[1], u.AA))
         else:
             wave_mask = np.ones(self.wavelength.size, dtype=bool)
         
@@ -1330,16 +1332,17 @@ class Cube(SpectraContainer):
                 (self.intensity[wave_mask] <= median[np.newaxis] + s_clip * std_dev[np.newaxis])
                 & (self.intensity[wave_mask] >= median[np.newaxis] - s_clip * std_dev[np.newaxis]))
         else:
-            weights = np.ones_like(self.intensity[wave_mask])
+            weights = np.ones(self.intensity[wave_mask].shape)
 
         if frequency_density:
-            freq_trans = self.wavelength**2 / 3e18
+            freq_trans = self.wavelength**2 / constants.c
         else:
-            freq_trans = np.ones_like(self.wavelength)
+            freq_trans = np.ones(self.wavelength.size)
 
         white_image = np.nansum(
-            self.intensity[wave_mask] * freq_trans[wave_mask, np.newaxis, np.newaxis] * weights, axis=0
-            ) / np.nansum(weights, axis=0)
+            self.intensity[wave_mask]
+            * freq_trans[wave_mask, np.newaxis, np.newaxis]
+            * weights, axis=0) / np.nansum(weights, axis=0)
         return white_image
 
     def get_footprint(self):
@@ -1357,7 +1360,7 @@ class Cube(SpectraContainer):
         self.wcs.wcs.crval[:-1] = updated_wcs.wcs.crval
         self.history('update_coords', "Offset-coords updated")
 
-    def to_fits(self, filename=None, primary_hdr_kw={},overwrite=False,
+    def to_fits(self, filename=None, overwrite=False,
                 checksum=False):
         """Save the Cube into a FITS file."""
         if filename is None:
