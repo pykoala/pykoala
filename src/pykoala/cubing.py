@@ -11,6 +11,7 @@ from datetime import datetime
 from astropy.io import fits
 from astropy.wcs import WCS
 from astropy.coordinates import SkyCoord
+from astropy import units as u
 # =============================================================================
 # KOALA packages
 # =============================================================================
@@ -263,8 +264,8 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
         Original datacube weights with the fibre data interpolated.
     """
     if adr_rows is None and adr_cols is None:
-        adr_rows = np.zeros_like(fib_spectra)
-        adr_cols = np.zeros_like(fib_spectra)
+        adr_rows = np.zeros(fib_spectra.size)
+        adr_cols = np.zeros(fib_spectra.size)
         spectral_window = fib_spectra.size
     else:
         # Estimate spectral window
@@ -275,9 +276,9 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
 
     # Set NaNs to 0 and discard pixels
     nan_pixels = ~np.isfinite(fib_spectra) | fibre_mask
-    fib_spectra[nan_pixels] = 0.
+    fib_spectra[nan_pixels] = 0. << fib_spectra.unit
 
-    pixel_weights = np.ones_like(fib_spectra)
+    pixel_weights = np.ones(fib_spectra.size)
     pixel_weights[nan_pixels] = 0.
 
     # Loop over wavelength pixels
@@ -351,27 +352,26 @@ def interpolate_rss(rss, wcs, kernel,
     """
     # Initialise cube data containers (intensity, variance, fibre weights)
     if datacube is None:
-        datacube = np.zeros(wcs.array_shape)
+        datacube = np.zeros(wcs.array_shape) << rss.intensity.unit
         vprint(f"[Cubing] Creating new datacube with dimensions: {wcs.array_shape}")
     if datacube_var is None:
-        datacube_var = np.zeros_like(datacube)
+        datacube_var = np.zeros_like(datacube) << rss.variance.unit
     if datacube_weight is None:
         datacube_weight = np.zeros_like(datacube)
     
     if adr_dec_arcsec is not None:
-        adr_dec_pixel = adr_dec_arcsec / kernel.pixel_scale_arcsec
+        adr_dec_pixel = (adr_dec_arcsec / kernel.pixel_scale_arcsec).decompose()
     else:
         adr_dec_pixel = None
     if adr_ra_arcsec is not None:
-        adr_ra_pixel = adr_ra_arcsec / kernel.pixel_scale_arcsec
+        adr_ra_pixel = (adr_ra_arcsec / kernel.pixel_scale_arcsec).decompose()
     else:
         adr_ra_pixel = None
     # Interpolate all RSS fibres
     mask = rss.mask.get_flag_map(mask_flags)
     # Obtain fibre position in the detector (center of pixel)
     fibre_pixel_pos_cols, fibre_pixel_pos_rows = wcs.celestial.world_to_pixel(
-        SkyCoord(rss.info['fib_ra'], rss.info['fib_dec'], unit='deg')
-        )
+        SkyCoord(rss.info['fib_ra'], rss.info['fib_dec']))
     if qc_plots:
         qc_fig = qc_fibres_on_fov(
             datacube.shape[1:], fibre_pixel_pos_cols, fibre_pixel_pos_rows,
@@ -395,11 +395,9 @@ def interpolate_rss(rss, wcs, kernel,
     return datacube, datacube_var, datacube_weight, qc_fig
 
 
-def build_cube(rss_set, wcs=None, wcs_params=None,
-                        kernel=GaussianKernel,
-                        kernel_size_arcsec=2.0,
-                        kernel_truncation_radius=2.0,
-                        adr_set=None, mask_flags=None, qc_plots=False, **kwargs):
+def build_cube(rss_set, wcs=None, wcs_params=None, kernel=GaussianKernel,
+               kernel_size_arcsec=2.0, kernel_truncation_radius=2.0,
+               adr_set=None, mask_flags=None, qc_plots=False, **kwargs):
                
     """Create a Cube from a set of Raw Stacked Spectra (RSS).
 
@@ -433,9 +431,11 @@ def build_cube(rss_set, wcs=None, wcs_params=None,
         wcs = WCS(wcs_params)
     plots = {}
     # Initialise kernel
-    pixel_size = wcs.celestial.pixel_scale_matrix.diagonal().mean()
-    pixel_size *= 3600
-    kernel_scale = kernel_size_arcsec / pixel_size
+    kernel_size_arcsec = ancillary.check_unit(kernel_size_arcsec, u.arcsec)
+    pixel_size = ancillary.check_unit(
+        wcs.celestial.pixel_scale_matrix.diagonal().mean(), u.deg)
+    kernel_scale = (kernel_size_arcsec / pixel_size).decompose()
+
     vprint(
         f"[Cubing] Initialising {kernel.__name__}"
         + f"\n Scale: {kernel_scale:.1f} (pixels)"
@@ -445,13 +445,20 @@ def build_cube(rss_set, wcs=None, wcs_params=None,
     
     # Create empty cubes for data, variance and weights - these will be filled and returned
     vprint(f"[Cubing] Initialising new datacube with dimensions: {wcs.array_shape}")
-    all_datacubes = np.zeros((len(rss_set), *wcs.array_shape))
-    all_var = np.zeros_like(all_datacubes)
-    all_w = np.zeros_like(all_datacubes)
-    all_exp = np.zeros_like(all_datacubes)
+    # Create the output data units
+    if u.second in rss_set[0].intensity.unit.bases:
+        output_unit = rss_set[0].intensity.unit
+    else:
+        output_unit = rss_set[0].intensity.unit / u.second
+
+    all_datacubes = np.zeros((len(rss_set), *wcs.array_shape)
+                             ) << output_unit
+    all_var = np.zeros(all_datacubes.shape) << output_unit**2
+    all_w = np.zeros(all_datacubes.shape)
+    all_exp = np.zeros(all_datacubes.shape) << u.second
 
     # "Empty" array that will be used to store exposure times
-    exposure_times = np.zeros((len(rss_set)))
+    exposure_times = np.zeros((len(rss_set))) << u.second
 
     # For each RSS two arrays containing the ADR over each axis might be provided
     # otherwise they will be set to None
@@ -467,15 +474,20 @@ def build_cube(rss_set, wcs=None, wcs_params=None,
             copy_rss,
             wcs=wcs,
             kernel=kernel,
-            datacube=np.zeros(wcs.array_shape),
-            datacube_var=np.zeros(wcs.array_shape),
+            datacube=np.zeros(wcs.array_shape) << rss.intensity.unit,
+            datacube_var=np.zeros(wcs.array_shape) << rss.variance.unit,
             datacube_weight=np.zeros(wcs.array_shape),
             adr_ra_arcsec=adr_set[i][0], adr_dec_arcsec=adr_set[i][1],
             mask_flags=mask_flags,
             qc_plots=qc_plots)
         plots[f'rss_{i+1}'] = rss_plots
-        all_datacubes[i] = datacube_i / exposure_times[i]
-        all_var[i] = datacube_var_i / exposure_times[i]**2
+        if u.second in rss.intensity.unit.bases:
+            all_datacubes[i] = datacube_i
+            all_var[i] = datacube_var_i
+        else:
+            all_datacubes[i] = datacube_i / exposure_times[i]
+            all_var[i] = datacube_var_i / exposure_times[i]**2
+
         all_w[i] = datacube_weight_i
         all_exp[i] = datacube_weight_i * exposure_times[i]
 
@@ -498,8 +510,8 @@ def build_cube(rss_set, wcs=None, wcs_params=None,
     return cube
 
 
-def build_wcs(datacube_shape, reference_position, spatial_pix_size,
-              spectra_pix_size, radesys='ICRS    ', equinox=2000.0):
+def build_wcs(datacube_shape, reference_position, spatial_pix_size : u.Quantity,
+              spectra_pix_size : u.Quantity, radesys='ICRS    ', equinox=2000.0):
     """Create a WCS using cubing information.
     
     Integer pixel values fall at the center of pixels. 
@@ -517,13 +529,19 @@ def build_wcs(datacube_shape, reference_position, spatial_pix_size,
         
     """
     wcs_dict = {
+    # Spatial dimensions
     'RADECSYS': radesys, 'EQUINOX': equinox,
-    'CTYPE1': 'RA---TAN', 'CUNIT1': 'deg', 'CDELT1': spatial_pix_size, 'CRPIX1': datacube_shape[1] / 2,
-    'CRVAL1': reference_position[1], 'NAXIS1': datacube_shape[1],
-    'CTYPE2': 'DEC--TAN', 'CUNIT2': 'deg', 'CDELT2': spatial_pix_size, 'CRPIX2': datacube_shape[2] / 2,
-    'CRVAL2': reference_position[2], 'NAXIS2': datacube_shape[2],
-    'CTYPE3': 'WAVE    ', 'CUNIT3': 'angstrom', 'CDELT3': spectra_pix_size, 'CRPIX3': 0,
-    'CRVAL3': reference_position[0], 'NAXIS3': datacube_shape[0]}
+    'CTYPE1': 'RA---TAN', 'CUNIT1': 'deg',
+    'CDELT1': spatial_pix_size.to_value("deg"), 'CRPIX1': datacube_shape[1] / 2,
+    'CRVAL1': reference_position[1].to_value("deg"), 'NAXIS1': datacube_shape[1],
+    'CTYPE2': 'DEC--TAN', 'CUNIT2': 'deg',
+    'CDELT2': spatial_pix_size.to_value("deg"), 'CRPIX2': datacube_shape[2] / 2,
+    'CRVAL2': reference_position[2].to_value("deg"), 'NAXIS2': datacube_shape[2],
+    # Spectral dimension
+    'CTYPE3': 'WAVE    ', 'CUNIT3': 'angstrom',
+    'CDELT3': spectra_pix_size.to_value("angstrom"), 'CRPIX3': 0,
+    'CRVAL3': reference_position[0].to_value("angstrom"),
+    'NAXIS3': datacube_shape[0]}
     wcs = WCS(wcs_dict)
     return wcs
 
@@ -555,19 +573,20 @@ def make_white_image_from_array(data_array, wavelength=None, **args):
 
 def make_dummy_cube_from_rss(rss, spa_pix_arcsec=0.5, kernel_pix_arcsec=1.0):
     """Create an empty datacube array from an input RSS."""
+    spa_pix_arcsec = ancillary.check_unit(spa_pix_arcsec, u.arcsec)
+    kernel_pix_arcsec = ancillary.check_unit(kernel_pix_arcsec, u.arcsec)
+
     min_ra, max_ra = np.nanmin(rss.info['fib_ra']), np.nanmax(rss.info['fib_ra'])
     min_dec, max_dec = np.nanmin(rss.info['fib_dec']), np.nanmax(rss.info['fib_dec'])
-    datacube_shape = (rss.wavelength.size,
-                   int((max_ra - min_ra) * 3600 / spa_pix_arcsec),
-                   int((max_dec - min_dec) * 3600 / spa_pix_arcsec))
+    ra_pixels = int(((max_ra - min_ra) / spa_pix_arcsec).decompose())
+    dec_pixels = int(((max_dec - min_dec) / spa_pix_arcsec).decompose())
+    datacube_shape = (rss.wavelength.size, ra_pixels, dec_pixels)
     ref_position = (rss.wavelength[0], (min_ra + max_ra) / 2, (min_dec + max_dec) / 2)
-    spatial_pixel_size = spa_pix_arcsec / 3600
-    spectral_pixel_size = rss.wavelength[1] - rss.wavelength[0]
 
     wcs = build_wcs(datacube_shape=datacube_shape,
                     reference_position=ref_position,
-                    spatial_pix_size=spatial_pixel_size,
-                    spectra_pix_size=spectral_pixel_size,
+                    spatial_pix_size=spa_pix_arcsec,
+                    spectra_pix_size=rss.wavelength[1] - rss.wavelength[0],
                 )
     cube = build_cube([rss], pixel_size_arcsec=spa_pix_arcsec, wcs=wcs,
                       kernel_size_arcsec=kernel_pix_arcsec)
