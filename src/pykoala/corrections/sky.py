@@ -434,8 +434,8 @@ def uves_sky_lines():
             fwhm = f[1].data['FWHM']
             flux = f[1].data['FLUX']
 
-            line_wavelength = np.hstack((line_wavelength, wave))
-            line_fwhm = np.hstack((line_fwhm, fwhm))
+            line_wavelength = np.hstack((line_wavelength, wave)) << u.angstrom
+            line_fwhm = np.hstack((line_fwhm, fwhm)) << u.angstrom
             line_flux = np.hstack((line_flux, flux))
 
     # Sort lines by wavelength
@@ -503,10 +503,10 @@ class SkyModel(object):
             - verbose : bool
                 If True, print messages during execution. Default is True.
         """
-        self.wavelength = kwargs.get('wavelength', None)
-        self.intensity = kwargs.get('intensity', None)
-        self.variance = kwargs.get('variance', None)
-        self.continuum = kwargs.get('continuum', None)
+        self.wavelength = check_unit(kwargs.get('wavelength', None), u.angstrom)
+        self.intensity = check_unit(kwargs.get('intensity', None))
+        self.variance = check_unit(kwargs.get('variance', None))
+        self.continuum = check_unit(kwargs.get('continuum', None))
 
     def substract(self, data, variance, axis=-1, verbose=False):
         """
@@ -530,10 +530,10 @@ class SkyModel(object):
         """
         if data.ndim == 3 and self.intensity.ndim == 1:
             skymodel_intensity = self.intensity[:, np.newaxis, np.newaxis]
-            skymodel_var = self.intensity[:, np.newaxis, np.newaxis]
+            skymodel_var = self.variance[:, np.newaxis, np.newaxis]
         elif data.ndim == 2 and self.intensity.ndim == 1:
             skymodel_intensity = self.intensity[np.newaxis, :]
-            skymodel_var = self.intensity[np.newaxis, :]
+            skymodel_var = self.variance[np.newaxis, :]
         elif data.ndim == 2 and self.intensity.ndim == 2:
             skymodel_intensity = self.intensity
             skymodel_var = self.variance
@@ -738,7 +738,7 @@ class SkyModel(object):
                             alpha=0.5, label='STD')
             ax.plot(self.wavelength, self.intensity,
                     color='r', label='intensity')
-            ax.set_ylim(np.nanpercentile(self.intensity, [1, 99]))
+            ax.set_ylim(np.nanpercentile(self.intensity, [1, 99]).value)
             ax.set_ylabel("Intensity")
             ax.set_xlabel("Wavelength (AA)")
             ax.legend()
