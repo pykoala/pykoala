@@ -18,6 +18,7 @@ from scipy import optimize
 # =============================================================================
 from astropy.io import fits
 from astropy import units as u
+from astropy.modeling.models import custom_model
 # =============================================================================
 
 # =============================================================================
@@ -181,53 +182,33 @@ def running_mean(x, n_window):
     return (cumsum[n_window:] - cumsum[:-n_window]) / n_window
 
 
-def flux_conserving_interpolation(new_wavelength, wavelength, spectra, **interp_args):
-    """Flux-conserving linear interpolation.
-
-    Linear interpolation of a spectrum :math:`I_\lambda(\labmda)`
-    as a function of wavelength :math:`\lambda`,
-    ensuring that the integrated flux
-    math::
-    F(\lambda_a, \lambda_b)
-    = \int_{\lambda_a}^{\lambda_b} I_\lambda(\labmda) d\lambda$
-        
-    is conserved for any :math:`(\lambda_a, \lambda_b)`.
+def flux_conserving_interpolation(new_wave, wave, spectra):
+    """Interpolate a spectra to a new grid of wavelengths preserving the flux density.
     
-    `np.nan` values become zero.
-
     Parameters
     ----------
-    new_wavelength : ndarray
-        New values of the x coordinate (wavelength) :math:`\lambda_{new}`.
-    wavelength : ndarray
-        Old values of the x coordinate (wavelength) :math:`\lambda`.
-    spectra : ndarray
-        Old values of the y coordinate (spectrum) :math:`I_\lambda(\labmda)`.
-    **interp_args : dict, optional
-        Additional parameters to be passed to `np.interp`
-
+    new_wave : np.ndarray
+        New grid of wavelengths
+    wave : np.ndarray
+        Original grid of wavelengths
+    spectra : np.ndarray
+        Spectra associated to `wave`.
+    
     Returns
     -------
-    ndarray
-        Interpolated spectra :math:`I_\lambda(\labmda_{new})`.
-    
-    Notes
-    -----
-    The function computes the cumulative flux with `np.nancumsum`,
-    calls `np.interp`, and differentiates back.
+    interp_spectra : np.ndarray
+        Interpolated spectra to `new_wave`
     """
-    dwave = wavelength[1:] - wavelength[:-1]
-    wavelength_edges = np.hstack((wavelength[0] - dwave[0] / 2, wavelength[:-1] + dwave / 2,
-                                  wavelength[-1] + dwave[-1] / 2))
-    new_dwave = new_wavelength[1:] - new_wavelength[:-1]
-    new_wavelength_edges = np.hstack((new_wavelength[0] - new_dwave[0] / 2, new_wavelength[:-1] + new_dwave / 2,
-                                      new_wavelength[-1] + new_dwave[-1] / 2))
-    cum_spectra = np.nancumsum(np.diff(wavelength_edges) * spectra)
-    cum_spectra = np.hstack((0, cum_spectra))
-    new_cum_spectra = np.interp(
-        new_wavelength_edges, wavelength_edges, cum_spectra, **interp_args)
-    new_spectra = np.diff(new_cum_spectra) / np.diff(new_wavelength_edges)
-    return new_spectra
+    wave_limits = 1.5 * wave[[0, -1]] - 0.5 * wave[[1, -2]]
+    wave_edges = np.hstack([wave_limits[0], (wave[1:] + wave[:-1])/2, wave_limits[1]])
+
+    new_wave_limits = 1.5 * new_wave[[0, -1]] - 0.5 * new_wave[[1, -2]]
+    new_wave_edges = np.hstack([new_wave_limits[0], (new_wave[1:] + new_wave[:-1])/2, new_wave_limits[1]])
+    cumulative_spectra = np.cumsum(spectra * np.diff(wave_edges))
+    cumulative_spectra = np.insert(cumulative_spectra, 0, 0)
+    new_cumulative_spectra = np.interp(new_wave_edges, wave_edges, cumulative_spectra)
+    interp_spectra = np.diff(new_cumulative_spectra) / np.diff(new_wave_edges)
+    return interp_spectra
 
 
 def centre_of_mass(w, x, y):
@@ -625,8 +606,8 @@ def cumulative_1d_sky(r2, sky_brightness):
     """
     return np.pi * r2 * sky_brightness
 
-
-def cumulative_1d_moffat(r2, l_star, alpha2, beta):
+#@custom_model
+def cumulative_1d_moffat(r2, l_star=1.0, alpha2=1.0, beta=1.0):
     """
     Cumulative Moffat ligth profile.
 
@@ -724,8 +705,11 @@ lines = {
 
 
 def mask_lines(wave_array, width=30, lines=lines.values()):
-    mask = np.ones_like(wave_array, dtype=bool)
+    wave_array = check_unit(wave_array, u.AA)
+    width = check_unit(width, u.AA)
+    mask = np.ones(wave_array.size, dtype=bool)
     for line in lines:
+        line = check_unit(line, u.AA)
         mask[(wave_array < line + width) & (wave_array > line - width)] = False
     return mask
 
