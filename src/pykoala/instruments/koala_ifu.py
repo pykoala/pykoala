@@ -190,7 +190,7 @@ def koala_rss(path_to_file):
     # Create the dictionary containing relevant information
     info = {}
     info['name'] = header['OBJECT']
-    info['exptime'] = header['EXPOSED'] << u.seconds
+    info['exptime'] = header['EXPOSED'] << u.second
     info['fib_ra'] = (np.rad2deg(header['RACEN'])
                       + koala_fibre_table.data['Delta_RA'] / 3600) << u.deg
     info['fib_dec'] = (np.rad2deg(header['DECCEN'])
