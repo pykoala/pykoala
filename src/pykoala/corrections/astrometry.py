@@ -312,12 +312,12 @@ class AstrometryCorrection(CorrectionBase):
         if data_container.__class__ is RSS:
             self.vprint("Applying correction to RSS")
 
-            data_container.info['fib_ra'] += offset[0].to('deg').value
-            data_container.info['fib_dec'] += offset[1].to('deg').value
+            data_container.info['fib_ra'] += offset[0]
+            data_container.info['fib_dec'] += offset[1]
 
             self.record_correction(
                 data_container, status='applied',
-                offset=f"{offset[0].to('arcsec')}{offset[1].to('arcsec')} arcsec")
+                offset=f"{offset[0].to('arcsec')}, {offset[1].to('arcsec')} arcsec")
         elif data_container.__class__ is Cube:
             pass
 
@@ -387,7 +387,7 @@ def find_centroid_in_dc(data_container, wave_range=None,
     # image = interpolate_image_nonfinite(image)
     centroider_mask = ~ np.isfinite(image)
     # Find centroid
-    centroid_pixel  = np.array(centroider(image**com_power, centroider_mask))
+    centroid_pixel  = np.array(centroider(image.value**com_power, centroider_mask))
     centroid_world = cube.wcs.celestial.pixel_to_world(*centroid_pixel)
     if not full_output:
         return centroid_world
