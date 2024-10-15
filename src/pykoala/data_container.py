@@ -1280,7 +1280,7 @@ class Cube(SpectraContainer):
 
         if self.wavelength is None:
             self.wavelength = self.wcs.spectral.array_index_to_world(
-            np.arange(self.intensity.shape[0])).to('angstrom').value
+            np.arange(self.intensity.shape[0])).to('angstrom')
 
     def rss_to_original(self, rss_shape_data):
         return np.reshape(rss_shape_data.T, (rss_shape_data.shape[1],
