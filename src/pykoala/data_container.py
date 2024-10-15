@@ -1287,32 +1287,6 @@ class Cube(SpectraContainer):
                                              self.intensity.shape[1],
                                              self.intensity.shape[2]))
 
-    def parse_info_from_header(self):
-        """Look into the primary header for pykoala information."""
-        self.vprint("[Cube] Looking for information in the primary header")
-        # TODO
-        #self.info = {}
-        #self.fill_info()
-        self.history.load_from_header(self.hdul[0].header)
-
-    def load_hdul(self, path_to_file):
-        self.hdul = fits.open(path_to_file)
-        pass
-
-    def close_hdul(self):
-        if self.hdul is not None:
-            self.vprint(f"[Cube] Closing HDUL")
-            self.hdul.close()
-
-    def get_wcs_from_header(self):
-        """Create a WCS from HDUL header."""
-        self.wcs = WCS(self.hdul[self.hdul_extensions_map['INTENSITY']].header)
-
-    def get_wavelength(self):
-        self.vprint("[Cube] Constructing wavelength array")
-        self.wavelength = self.wcs.spectral.array_index_to_world(
-            np.arange(self.n_wavelength)).to('angstrom')
-
     def get_centre_of_mass(self, wavelength_step=1, stat=np.median, power=1.0):
         """Compute the center of mass of the data cube."""
         x = np.arange(0, self.n_cols, 1)
