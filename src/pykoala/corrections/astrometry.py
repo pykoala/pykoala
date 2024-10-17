@@ -117,9 +117,9 @@ class AstrometryOffsetCorrection(CorrectionBase):
             external_image, results)
         results['offset_fig'] = fig
 
-        offset = np.array(results['offset_min'])
-        return cls(offset=CorrectionOffset(offset_data=offset,
-                   offset_error=np.full_like(offset, fill_value=np.nan))), results
+        return cls(offset=CorrectionOffset(offset_data=results['offset_min'],
+                   offset_error=np.full_like(results['offset_min'],
+                                             fill_value=np.nan))), results
 
     def apply(self, data_container):
         """Apply an astrometric offset correction to a DataContainer.
@@ -137,7 +137,7 @@ class AstrometryOffsetCorrection(CorrectionBase):
         self.vprint(
             f"Applying astrometry offset correction to DC (RA, DEC): {self.offset.offset_data}")
         dc_out = data_container.copy()
-        dc_out.update_coordinates(offset=self.offset.offset_data / 3600)
+        dc_out.update_coordinates(offset=self.offset.offset_data)
         self.record_correction(dc_out, status='applied')
         return dc_out
 
@@ -211,7 +211,8 @@ class AstrometryCorrection(CorrectionBase):
         offsets = []
         for data in data_set:
             if qc_plot:
-                cube, image, _, centroid_world = find_centroid_in_dc(data, **centroid_args)
+                cube, image, _, centroid_world = find_centroid_in_dc(
+                    data, **centroid_args)
                 images_list.append(image)
                 wcs_list.append(cube.wcs.celestial)
                 centroid_list.append(centroid_world)                
@@ -274,7 +275,6 @@ class AstrometryCorrection(CorrectionBase):
                 cube = data_container
                 image = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
                 image /= np.nansum(image)
-
             image = interpolate_image_nonfinite(image)
             images.append(image)
             wcs.append(cube.wcs.celestial)
@@ -369,17 +369,17 @@ def find_centroid_in_dc(data_container, wave_range=None,
 
     if subbox is None:
         subbox = [[None, None], [None, None]]
-
-    if data_container.__class__ is RSS:
+    if isinstance(data_container, RSS):
         vprint(
             "[Registration]  Data provided in RSS format --> creating a dummy datacube")
         cube = make_dummy_cube_from_rss(data_container, quick_cube_pix_size)
         image = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
-    elif data_container.__class__ is Cube:
+    elif isinstance(data_container, Cube):
         cube = data_container
         image = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
         image /= np.nansum(image)
-
+    else:
+        raise TypeError("Input DC must be an instance of Cube or RSS")
     # Select a subbox
     image = image[subbox[0][0]:subbox[0][1],
                   subbox[1][0]: subbox[1][1]]
