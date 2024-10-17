@@ -25,6 +25,7 @@ from astropy.io import fits
 from astropy.table import Table
 from astropy.wcs import WCS
 from astropy import units as u
+from astropy import constants
 
 from pykoala import VerboseMixin, __version__
 from pykoala import ancillary
@@ -474,7 +475,7 @@ class DataContainer(ABC, VerboseMixin):
         return self._intensity
 
     @intensity.setter
-    def intensity(self, value):
+    def intensity(self, value : u.Quantity):
         self._intensity = value
 
     @intensity.deleter
@@ -490,7 +491,7 @@ class DataContainer(ABC, VerboseMixin):
         return self._variance
 
     @variance.setter
-    def variance(self, value):
+    def variance(self, value : u.Quantity):
         self._variance = value
 
     @variance.deleter
@@ -568,10 +569,9 @@ class DataContainer(ABC, VerboseMixin):
         self._wcs = value
 
     def __init__(self, **kwargs):
-        self._intensity = kwargs["intensity"]
-        self._variance = kwargs.get(
-            "variance", np.full_like(self._intensity, np.nan, dtype=type(np.nan))
-        )
+        self._intensity = ancillary.check_unit(kwargs["intensity"])
+        self._variance = ancillary.check_unit(kwargs.get("variance",
+            np.full_like(self._intensity, np.nan, dtype=type(np.nan))))
         self._mask = kwargs.get("mask", DataMask(shape=self.intensity.shape))
         self.info = kwargs.get("info", dict())
         self.fill_info()
@@ -615,15 +615,16 @@ class DataContainer(ABC, VerboseMixin):
         primary.name = "PRIMARY"
 
         hdu_list = [primary]
-        # TODO : once units are implemented, record the units in the header
         header = self.wcs.to_header()
+        header["bunit"] = self.intensity.unit.to_string()
         hdu_list.append(fits.ImageHDU(
             data=self.intensity, name='INTENSITY',
             header=header
         )
         )
+        header["bunit"] = self.variance.unit.to_string()
         hdu_list.append(fits.ImageHDU(
-            data=self.variance, name='VARIANCE', header=hdu_list[-1].header))
+            data=self.variance, name='VARIANCE', header=header))
         # Store the mask information
         hdu_list.append(self.mask.dump_to_hdu())
         hdul = fits.HDUList(hdu_list)
@@ -647,9 +648,10 @@ class DataContainer(ABC, VerboseMixin):
             len_header = hdul["PRIMARY"].header["ORIHEAD"]
             dc_params["header"] = hdul["PRIMARY"].header[
                 star_original_header + 1:star_original_header + len_header]
-        # TODO: recover units once implemented
-        dc_params["intensity"] = hdul["INTENSITY"].data
-        dc_params["variance"] = hdul["VARIANCE"].data
+        dc_params["intensity"] = hdul["INTENSITY"].data << u.Unit(
+            hdul["INTENSITY"].header.get("BUNIT", 1))
+        dc_params["variance"] = hdul["VARIANCE"].data << u.Unit(
+            hdul["VARIANCE"].header.get("BUNIT", 1))
         dc_params["wcs"] = WCS(hdul["INTENSITY"].header)
         dc_params["mask"] = DataMask.from_hdu(hdul["MASK"])
         return dc_params
@@ -725,16 +727,14 @@ class SpectraContainer(DataContainer):
         super().__init__(**kwargs)
 
         if "wavelength" in kwargs:
-            self._wavelength = kwargs["wavelength"]
+            self._wavelength = ancillary.check_unit(kwargs["wavelength"],
+                                                    u.angstrom)
+        elif "wcs" in kwargs:
+            self._wavelength = kwargs["wcs"].spectral.array_index_to_world(
+            np.arange(kwargs["wcs"].spectral.array_shape[0])).to('angstrom')
         else:
-            # TODO: re-implement with units refactoring
-            # self.vprint(
-            #     "WARNING: No `wavelength` vector supplied; creating empty `SpectraContainer`"
-            # )
-            #self._wavelength = u.Quantity([], u.AA)
-            self._wavelength = None
+            raise AttributeError("Either a wavelength or wcs must be provided")
 
-        
     def get_spectra_sorted(self, wave_range=None):
         """Get the RSS-wise sorted order of the intensity.
         
@@ -768,7 +768,7 @@ class RSS(SpectraContainer):
         return self._intensity
 
     @rss_intensity.setter
-    def rss_intensity(self, value):
+    def rss_intensity(self, value : u.Quantity):
         self.intensity = value
 
     @property
@@ -776,7 +776,7 @@ class RSS(SpectraContainer):
         return self._variance
 
     @rss_variance.setter
-    def rss_variance(self, value):
+    def rss_variance(self, value : u.Quantity):
         self.variance = value
 
     def rss_to_original(self, rss_shape_data):
@@ -788,10 +788,10 @@ class RSS(SpectraContainer):
         return self._fibre_diameter
     
     @fibre_diameter.setter
-    def fibre_diameter(self, value):
+    def fibre_diameter(self, value : u.Quantity):
         assert isinstance(value, u.Quantity) or value is None, (
             "Fibre diameter must be a astropy.units.Quantity")
-        self._fibre_diameter = value
+        self._fibre_diameter = ancillary.check_unit(value, u.arcsec)
 
     @property
     def sky_fibres(self):
@@ -838,8 +838,8 @@ class RSS(SpectraContainer):
         """
         ra = self.info["fib_ra"]
         dec = self.info["fib_dec"]
-        ra_com = np.empty(self.wavelength.size)
-        dec_com = np.empty(self.wavelength.size)
+        ra_com = np.empty(self.wavelength.size) << ra.unit
+        dec_com = np.empty(self.wavelength.size) << dec.unit
         for wave_range in range(0, self.wavelength.size, wavelength_step):
             # Mean across all fibres
             ra_com[wave_range: wave_range + wavelength_step] = np.nansum(
@@ -850,6 +850,7 @@ class RSS(SpectraContainer):
             # Statistic (e.g., median, mean) per wavelength bin
             ra_com[wave_range: wave_range + wavelength_step] = stat(
                 ra_com[wave_range: wave_range + wavelength_step])
+            
             dec_com[wave_range: wave_range + wavelength_step] = np.nansum(
                 self.intensity[:, wave_range: wave_range +
                                wavelength_step]**power * dec[:, np.newaxis],
@@ -990,15 +991,13 @@ class RSS(SpectraContainer):
             dc_parameters = cls._dc_params_from_hdul(hdul)
             # Extract RSS-specific information
             info = {}
-            info["fib_ra"] = hdul["INFO"].data["fib_ra"]
-            info["fib_dec"] = hdul["INFO"].data["fib_dec"]
+            info["fib_ra"] = hdul["INFO"].data["fib_ra"] << u.deg
+            info["fib_dec"] = hdul["INFO"].data["fib_dec"] << u.deg
             info["name"] = hdul["INFO"].header.get("name")
-            info["exptime"] = hdul["INFO"].header.get("exptime")
-            fibre_diameter = hdul["INFO"].header["fibdiam"] * u.arcsec
-            #TODO: once units are implemented keep unit
+            info["exptime"] = hdul["INFO"].header.get("exptime") << u.second
+            fibre_diameter = hdul["INFO"].header["fibdiam"] << u.arcsec
             wavelength = dc_parameters["wcs"].spectral.array_index_to_world(
-                np.arange(dc_parameters["intensity"].shape[1])
-            ).to_value("angstrom")
+                np.arange(dc_parameters["intensity"].shape[1]))
 
         return cls(info=info, fibre_diameter=fibre_diameter, wavelength=wavelength,
                    **dc_parameters)
@@ -1195,35 +1194,35 @@ class RSS(SpectraContainer):
 class Cube(SpectraContainer):
     """:class:`SpectraContainer` associated to a 3D data cube."""
 
-    default_hdul_extensions_map = {"INTENSITY": "INTENSITY",
-                                   "VARIANCE": "VARIANCE"}
+    # default_hdul_extensions_map = {"INTENSITY": "INTENSITY",
+    #                                "VARIANCE": "VARIANCE"}
 
-    @property
-    def hdul(self):
-        return self._hdul
+    # @property
+    # def hdul(self):
+    #     return self._hdul
 
-    @hdul.setter
-    def hdul(self, hdul):
-        assert isinstance(hdul, fits.HDUList)
-        self._hdul = hdul
+    # @hdul.setter
+    # def hdul(self, hdul):
+    #     assert isinstance(hdul, fits.HDUList)
+    #     self._hdul = hdul
 
-    @property
-    def intensity(self):
-        return self.hdul[self.hdul_extensions_map['INTENSITY']].data
+    # @property
+    # def intensity(self):
+    #     return self.hdul[self.hdul_extensions_map['INTENSITY']].data
     
-    @intensity.setter
-    def intensity(self, intensity_corr):
-        self.vprint("[Cube] Updating HDUL INTENSITY")
-        self.hdul[self.hdul_extensions_map['INTENSITY']].data = intensity_corr
+    # @intensity.setter
+    # def intensity(self, intensity_corr):
+    #     self.vprint("[Cube] Updating HDUL INTENSITY")
+    #     self.hdul[self.hdul_extensions_map['INTENSITY']].data = intensity_corr
 
-    @property
-    def variance(self):
-        return self.hdul[self.hdul_extensions_map['VARIANCE']].data
+    # @property
+    # def variance(self):
+    #     return self.hdul[self.hdul_extensions_map['VARIANCE']].data
 
-    @variance.setter
-    def variance(self, variance_corr):
-        self.vprint("[Cube] Updating HDUL variance")
-        self.hdul[self.hdul_extensions_map['VARIANCE']].data = variance_corr
+    # @variance.setter
+    # def variance(self, variance_corr):
+    #     self.vprint("[Cube] Updating HDUL variance")
+    #     self.hdul[self.hdul_extensions_map['VARIANCE']].data = variance_corr
 
     @property
     def n_cols(self):
@@ -1255,31 +1254,20 @@ class Cube(SpectraContainer):
     def rss_variance(self, value):
         self.variance = value.T.reshape(self.variance.shape)
 
-    def __init__(self, hdul=None, hdul_extensions_map=None, **kwargs):
-
-        self.hdul = hdul
-        if hdul_extensions_map is not None:
-            self.hdul_extensions_map = hdul_extensions_map
-        else:
-            self.hdul_extensions_map = self.default_hdul_extensions_map
+    def __init__(self, **kwargs):
 
         if "logger" not in kwargs:
             kwargs['logger'] = "pykoala.cube"
-
-        if "intensity" not in kwargs:
-            kwargs["intensity"] = self.intensity
-        if "variance" not in kwargs:
-            kwargs["variance"] = self.variance
+        # if "intensity" not in kwargs:
+        #     kwargs["intensity"] = self.intensity
+        # if "variance" not in kwargs:
+        #     kwargs["variance"] = self.variance
+        # if "wcs" not in kwargs:
+        #     kwargs["wcs"] = WCS(
+        #         self.hdul[self.hdul_extensions_map['INTENSITY']].header)
 
         super().__init__(**kwargs)
 
-        if self.wcs is None:
-            self.wcs = WCS(
-                self.hdul[self.hdul_extensions_map['INTENSITY']].header)
-
-        if self.wavelength is None:
-            self.wavelength = self.wcs.spectral.array_index_to_world(
-            np.arange(self.intensity.shape[0])).to('angstrom').value
 
     def rss_to_original(self, rss_shape_data):
         return np.reshape(rss_shape_data.T, (rss_shape_data.shape[1],
@@ -1316,29 +1304,33 @@ class Cube(SpectraContainer):
 
     def get_white_image(self, wave_range=None, s_clip=3.0, frequency_density=False):
         """Create a white image."""
-        if wave_range is not None and self.wavelength is not None:
-            wave_mask = (self.wavelength >= wave_range[0]) & (self.wavelength <= wave_range[1])
+        if wave_range is not None:
+            print("Wavelength : ", wave_range, self.wavelength)
+            wave_mask = (
+                self.wavelength >= ancillary.check_unit(wave_range[0], u.AA)
+                ) & (
+                self.wavelength <= ancillary.check_unit(wave_range[1], u.AA))
         else:
             wave_mask = np.ones(self.wavelength.size, dtype=bool)
         
         if s_clip is not None:
             std_dev = ancillary.std_from_mad(self.intensity[wave_mask], axis=0)
             median = np.nanmedian(self.intensity[wave_mask], axis=0)
-
             weights = (
                 (self.intensity[wave_mask] <= median[np.newaxis] + s_clip * std_dev[np.newaxis])
                 & (self.intensity[wave_mask] >= median[np.newaxis] - s_clip * std_dev[np.newaxis]))
         else:
-            weights = np.ones_like(self.intensity[wave_mask])
+            weights = np.ones(self.intensity[wave_mask].shape)
 
         if frequency_density:
-            freq_trans = self.wavelength**2 / 3e18
+            freq_trans = self.wavelength**2 / constants.c
         else:
-            freq_trans = np.ones_like(self.wavelength)
+            freq_trans = np.ones(self.wavelength.size)
 
         white_image = np.nansum(
-            self.intensity[wave_mask] * freq_trans[wave_mask, np.newaxis, np.newaxis] * weights, axis=0
-            ) / np.nansum(weights, axis=0)
+            self.intensity[wave_mask]
+            * freq_trans[wave_mask, np.newaxis, np.newaxis]
+            * weights, axis=0) / np.nansum(weights, axis=0)
         return white_image
 
     def get_footprint(self):
@@ -1356,7 +1348,7 @@ class Cube(SpectraContainer):
         self.wcs.wcs.crval[:-1] = updated_wcs.wcs.crval
         self.history('update_coords', "Offset-coords updated")
 
-    def to_fits(self, filename=None, primary_hdr_kw={},overwrite=False,
+    def to_fits(self, filename=None, overwrite=False,
                 checksum=False):
         """Save the Cube into a FITS file."""
         if filename is None:
@@ -1382,6 +1374,15 @@ class Cube(SpectraContainer):
         if self.hdul is not None:
             self.vprint(f"[Cube] Closing HDUL")
             self.hdul.close()
+
+    @classmethod
+    def from_hdul(cls, hdul):
+        info = {}
+        info["name"] = hdul["INFO"].header.get("name")
+        info["exptime"] = hdul["INFO"].header.get("exptime")
+        dc_parameters = cls._dc_params_from_hdul(hdul)
+        dc_parameters["info"] = info
+        return cls(**dc_parameters)
 
     @classmethod
     def from_fits(cls, filename):
@@ -1420,12 +1421,8 @@ class Cube(SpectraContainer):
 
         """
         hdul = fits.open(filename)
-        info = {}
-        info["name"] = hdul["INFO"].header.get("name")
-        info["exptime"] = hdul["INFO"].header.get("exptime")
-        dc_parameters = cls._dc_params_from_hdul(hdul)
-        dc_parameters["info"] = info
-        return cls(hdul, **dc_parameters)
+        return cls.from_hdul(hdul)
+
 
 # =============================================================================
 # Mr Krtxo \(ﾟ▽ﾟ)/

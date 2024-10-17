@@ -8,14 +8,14 @@ Atmospheric extinction and refraction effects corrections.
 from matplotlib import pyplot as plt
 import numpy as np
 import os
-
+from astropy import units as u
 # =============================================================================
 # KOALA packages
 # =============================================================================
 from pykoala import vprint
 from pykoala.data_container import SpectraContainer
 from pykoala.corrections.correction import CorrectionBase
-
+from pykoala.ancillary import check_unit
 
 # =============================================================================
 class AtmosphericExtCorrection(CorrectionBase):
@@ -58,7 +58,8 @@ class AtmosphericExtCorrection(CorrectionBase):
 
         # Initialise variables
         self.extinction_correction = extinction_correction
-        self.extinction_correction_wave = extinction_correction_wave
+        self.extinction_correction_wave = check_unit(
+            extinction_correction_wave, u.angstrom)
         self.extinction_correction_file = extinction_correction_file
 
     @classmethod
@@ -81,10 +82,10 @@ class AtmosphericExtCorrection(CorrectionBase):
             path = cls.default_extinction
         wavelength, extinct = np.loadtxt(path, unpack=True)
         return cls(extinction_correction=extinct,
-                   extinction_correction_wave=wavelength,
+                   extinction_correction_wave=wavelength << u.angstrom,
                    extinction_correction_file=path)
 
-    def extinction(self, wavelength, airmass):
+    def extinction(self, wavelength : u.Quantity, airmass):
         """Compute the atmospheric extinction for a given airmass and wavelength.
         
         Parameters
@@ -180,29 +181,35 @@ def get_adr(spectra_container : SpectraContainer, max_adr=0.5, pol_deg=2,
         Callable that returns the DEC offset in arcseconds as function of wavelength.
     """
     # Centre of mass using multiple power of the intensity
+    max_adr = check_unit(max_adr, u.arcsec)
     com = []
     for i in range(1, 5):
         com.append(spectra_container.get_centre_of_mass(power=i))
-    com = np.array(com) * 3600
+    com = np.array(com) << com[0][0].unit
     com -= np.nanmedian(com, axis=2)[:, :, np.newaxis]
     median_com = np.nanmedian(
         com, axis=0) - np.nanmedian(com, axis=(0, 2))[:, np.newaxis]
     median_com[np.abs(median_com) > max_adr] = np.nan
 
     finite_mask = np.isfinite(median_com[0])
+
     if finite_mask.any():
-        p_x = np.polyfit(spectra_container.wavelength[finite_mask],
-                         median_com[0][finite_mask], deg=pol_deg)
-        polfit_x = np.poly1d(p_x)(spectra_container.wavelength)
+        p_x = np.polyfit(
+            spectra_container.wavelength[finite_mask].to_value("angstrom"),
+            median_com[0][finite_mask].to_value("arcsec"), deg=pol_deg)
+        polfit_x = np.poly1d(p_x)(
+            spectra_container.wavelength.to_value("angstrom")) << u.arcsec
     else:
         vprint("[ADR] ERROR: Could not compute ADR-x, all NaN")
-        polfit_x = np.zeros_like(spectra_container.wavelength)
+        polfit_x = np.zeros(spectra_container.wavelength.size) << u.arcsec
 
     finite_mask = np.isfinite(median_com[1])
     if finite_mask.any():
-        p_y = np.polyfit(spectra_container.wavelength[finite_mask],
-                         median_com[1][finite_mask], deg=pol_deg)
-        polfit_y = np.poly1d(p_y)(spectra_container.wavelength)
+        p_y = np.polyfit(
+            spectra_container.wavelength[finite_mask].to_value("angstrom"),
+            median_com[1][finite_mask].to_value("arcsec"), deg=pol_deg)
+        polfit_y = np.poly1d(p_y)(
+            spectra_container.wavelength.to_value("angstrom")) << u.arcsec
     else:
         vprint("[ADR] ERROR: Could not compute ADR-y, all NaN")
         polfit_y = np.zeros_like(spectra_container.wavelength)
@@ -211,24 +218,30 @@ def get_adr(spectra_container : SpectraContainer, max_adr=0.5, pol_deg=2,
     if plot:
         fig = plt.figure(figsize=(10, 5))
         ax = fig.add_subplot(121)
-        ax.plot(spectra_container.wavelength, com[0, 0], label='COM', lw=0.7)
+        ax.plot(spectra_container.wavelength, com[0, 0].to("arcsec"),
+                label='COM', lw=0.7)
         ax.plot(spectra_container.wavelength, com[1, 0], label='COM2', lw=0.7)
         ax.plot(spectra_container.wavelength, com[2, 0], label='COM3', lw=0.7)
         ax.plot(spectra_container.wavelength, com[3, 0], label='COM4', lw=0.7)
-        ax.plot(spectra_container.wavelength, median_com[0], c='k', label='Median', lw=0.7)
-        ax.plot(spectra_container.wavelength, polfit_x, c='fuchsia', label=f'pol. fit (deg={pol_deg})', lw=0.7)
+        ax.plot(spectra_container.wavelength, median_com[0], c='k',
+                label='Median', lw=0.7)
+        ax.plot(spectra_container.wavelength, polfit_x, c='fuchsia',
+                label=f'pol. fit (deg={pol_deg})', lw=0.7)
         ax.set_ylim(-max_adr, max_adr)
         ax.legend(ncol=2, bbox_to_anchor=(0.5, 1), loc='lower center')
         ax.set_ylabel(r'$\Delta RA$ (arcsec)')
         ax.set_xlabel(r'$\lambda$')
 
         ax = fig.add_subplot(122)
-        ax.plot(spectra_container.wavelength, com[0, 1], label='COM', lw=0.7)
+        ax.plot(spectra_container.wavelength, com[0, 1].to("arcsec"),
+                label='COM', lw=0.7)
         ax.plot(spectra_container.wavelength, com[1, 1], label='COM2', lw=0.7)
         ax.plot(spectra_container.wavelength, com[2, 1], label='COM3', lw=0.7)
         ax.plot(spectra_container.wavelength, com[3, 1], label='COM4', lw=0.7)
-        ax.plot(spectra_container.wavelength, median_com[1], c='k', label='Median', lw=0.7)
-        ax.plot(spectra_container.wavelength, polfit_y, c='fuchsia', label=f'pol. fit (deg={pol_deg})', lw=0.7)
+        ax.plot(spectra_container.wavelength, median_com[1], c='k',
+                label='Median', lw=0.7)
+        ax.plot(spectra_container.wavelength, polfit_y, c='fuchsia',
+                label=f'pol. fit (deg={pol_deg})', lw=0.7)
         ax.set_ylim(-max_adr, max_adr)
         ax.legend(ncol=2, bbox_to_anchor=(0.5, 1), loc='lower center')
         ax.set_ylabel(r'$\Delta DEC$ (arcsec)')
