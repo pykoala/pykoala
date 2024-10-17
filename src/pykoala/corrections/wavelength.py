@@ -39,10 +39,10 @@ class WavelengthOffset(object):
 
     def __init__(self, path=None, offset_data=None, offset_error=None):
         self.path = path
-        self.offset_data = check_unit(offset_data, u.AA)
-        self.offset_error = check_unit(offset_error, u.AA)
+        self.offset_data = check_unit(offset_data)
+        self.offset_error = check_unit(offset_error)
 
-    def tofits(self, output_path=None):
+    def to_fits(self, output_path=None):
         """Save the offset in a FITS file.
         
         Parameters
@@ -64,8 +64,8 @@ class WavelengthOffset(object):
         primary = fits.PrimaryHDU()
         header = fits.Header()
         header["bunit"] = self.offset_data.unit.to_string()
-        data = fits.ImageHDU(data=self.offset_data, name='OFFSET', header=header)
-        error = fits.ImageHDU(data=self.offset_error, name='OFFSET_ERR',
+        data = fits.ImageHDU(data=self.offset_data.value, name='OFFSET', header=header)
+        error = fits.ImageHDU(data=self.offset_error.value, name='OFFSET_ERR',
                               header=header)
         hdul = fits.HDUList([primary, data, error])
         hdul.writeto(output_path, overwrite=True)
@@ -158,12 +158,15 @@ class WavelengthCorrection(CorrectionBase):
 
         rss_out = rss.copy()
         self.vprint("Applying correction to input RSS")
-        x = np.arange(rss.wavelength.size)
+        if self.offset.offset_data.unit is u.pixel:
+            x = np.arange(rss.wavelength.size) << u.pixel
+        elif self.offset.offset_data.unit.is_equivalent(u.AA):
+            x = rss.wavelength.to(self.offset.offset_data.unit)
 
         for i in range(rss.intensity.shape[0]):
-            rss_out.intensity[i] = flux_conserving_interpolation(
-                x, x - self.offset.offset_data[i], rss.intensity[i])
-
+                rss_out.intensity[i] = flux_conserving_interpolation(
+                    x, x - self.offset.offset_data[i], rss.intensity[i])
+                
         self.record_correction(rss_out, status='applied')
         return rss_out
 
@@ -328,25 +331,30 @@ class SolarCrossCorrOffset(WavelengthCorrection):
         """
         self.vprint("Computing grid of solar spectra models")
         models_grid = np.zeros((pix_shift_array.size, pix_std_array.size,
-                           sun_intensity.size)) << sun_intensity.unit
+                                sun_intensity.size)) << sun_intensity.unit
         weights_grid = np.zeros((pix_shift_array.size, pix_std_array.size,
-                           sun_intensity.size))
-        for i, velshift in enumerate(pix_shift_array):
-                for j, gauss_std in enumerate(pix_std_array):
-                    new_pixel_array = pix_array + velshift
-                    
-                    interp_sun_intensity = flux_conserving_interpolation(
-                        new_pixel_array, pix_array, sun_intensity)
-                    interp_sun_intensity = gaussian_filter(
-                        interp_sun_intensity, gauss_std)
-                    models_grid[i, j] = interp_sun_intensity << sun_intensity.unit
+                                 sun_intensity.size))
+        shift_idx, std_idx = np.indices(models_grid.shape[:-1])
 
-                    interp_sun_weight = flux_conserving_interpolation(
-                        new_pixel_array, pix_array, weights)
-                    interp_sun_weight = gaussian_filter(
-                        interp_sun_weight, gauss_std, truncate=2.0)
-                    interp_sun_weight /= np.nansum(interp_sun_weight)
-                    weights_grid[i, j] = interp_sun_weight
+        for z, (velshift, gauss_std) in enumerate(
+            zip(pix_shift_array[shift_idx.flatten()],
+                pix_std_array[std_idx.flatten()])):
+                i, j = np.unravel_index(z, models_grid.shape[:-1])
+                new_pixel_array = pix_array + velshift
+                interp_sun_intensity = flux_conserving_interpolation(
+                    new_pixel_array, pix_array, sun_intensity)
+                interp_sun_intensity = gaussian_filter(
+                    interp_sun_intensity, gauss_std.value)
+                # Restore the intensity units removed by gaussian_filter
+                models_grid[i, j] = interp_sun_intensity << sun_intensity.unit
+                # Repeat the process for the weights
+                interp_sun_weight = flux_conserving_interpolation(
+                    new_pixel_array, pix_array, weights)
+                # Truncate the gaussian filter to 2-sigma
+                interp_sun_weight = gaussian_filter(
+                    interp_sun_weight, gauss_std.value, truncate=2.0)
+                interp_sun_weight /= np.nansum(interp_sun_weight)
+                weights_grid[i, j] = interp_sun_weight
         return models_grid, weights_grid
 
     def compute_shift_from_twilight(self, spectra_container,
@@ -404,6 +412,9 @@ class SolarCrossCorrOffset(WavelengthCorrection):
         if pix_std_array is None:
             pix_std_array = np.arange(0.1, 3, 0.1)
 
+        pix_shift_array = check_unit(pix_shift_array, u.pixel)
+        pix_std_array = check_unit(pix_std_array, u.pixel)
+
         if logspace:
             new_wavelength = np.geomspace(spectra_container.wavelength[0],
                                           spectra_container.wavelength[-1],
@@ -458,7 +469,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
 
         normalized_rss_intensity = rss_intensity / smoothed_r_spectrograph
         # Generate and fit the model
-        pix_array = np.arange(new_wavelength.size)
+        pix_array = np.arange(new_wavelength.size) << u.pixel
 
         models_grid, weights_grid = self.compute_grid_of_models(
             pix_shift_array, pix_std_array, pix_array, sun_intensity, weights)
