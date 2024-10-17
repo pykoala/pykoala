@@ -114,8 +114,8 @@ class FluxCalibration(CorrectionBase):
             wave_header, response_header = line.split(",")
             wave_idx = wave_header.find("("), wave_header.find(")")
             response_idx = response_header.find("("), response_header.find(")")
-            wave_unit = u.Quantity(wave_header[wave_idx[0] + 1 : wave_idx[1]])
-            resp_unit = u.Quantity(
+            wave_unit = u.Unit(wave_header[wave_idx[0] + 1 : wave_idx[1]])
+            resp_unit = u.Unit(
                 response_header[response_idx[0] + 1 : response_idx[1]])
         return cls(response=response << resp_unit,
                    response_wavelength=wavelength << wave_unit,
@@ -690,7 +690,9 @@ class FluxCalibration(CorrectionBase):
         self.vprint(f"Saving response function at: {fname}")
         # TODO: Use a QTable and dump to FITS instead.
         np.savetxt(fname, np.array([self.response_wavelength, self.response]).T,
-                   header=f'Spectral Response curve \n wavelength (AA), R ({self.response.unit})'
+                   header="Spectral Response curve\n"
+                    + f" wavelength ({self.response_wavelength.unit}),"
+                    + f" R ({self.response.unit})"
                    )
         
     def apply(self, spectra_container):
@@ -744,7 +746,7 @@ class FluxCalibration(CorrectionBase):
         spectra_container_out.rss_variance = (spectra_container_out.rss_variance
                                            / response[np.newaxis, :]**2)
         self.record_correction(spectra_container_out, status='applied',
-                            units=str(self.response.unit))
+                               units=str(self.response.unit))
         return spectra_container_out
 
 
