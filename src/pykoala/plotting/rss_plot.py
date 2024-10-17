@@ -52,7 +52,7 @@ def plot_wavelength(rss, wavelength, r = False, **kwargs):
     -------
     >>> plot_wavelength(rss, 7000, r =True)
     """
-    w = rss.wavelength
+    w = rss.wavelength.value
     # Check if wavelength is a index or a wavelength
     n_wave = len(rss.wavelength)
     if wavelength < n_wave and type(wavelength) is int:  # wavelength is an index
@@ -61,7 +61,7 @@ def plot_wavelength(rss, wavelength, r = False, **kwargs):
         wave_index= np.searchsorted(w,wavelength)
            
     wave = w[wave_index]       
-    corte_wave = rss.intensity[:, wave_index]
+    corte_wave = rss.intensity[:, wave_index].value
     
     if kwargs.get("plot") is None: plot = True
     
@@ -121,8 +121,8 @@ def get_spectrum(data_container,
     ptitle = kwargs.get('ptitle', None)
     
     info = data_container.info
-    wavelength = data_container.wavelength
-    intensity =  data_container.intensity
+    wavelength = data_container.wavelength.value
+    intensity =  data_container.intensity.value
     
     if str(type(data_container))[-5:-2] == "RSS":     # It is a RSS
 
