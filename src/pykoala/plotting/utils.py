@@ -14,6 +14,7 @@ from astropy.visualization import (MinMaxInterval, PercentileInterval,
 from astropy.visualization import quantity_support
 
 from pykoala import vprint
+from pykoala import ancillary
 
 quantity_support()
 # plt.style.use('dark_background')
@@ -95,6 +96,7 @@ def new_figure(fig_name,
 
     return fig, axes
 
+@ancillary.remove_units_dec
 def plot_image(fig, ax, cblabel, data,
                cmap=DEFAULT_CMAP,
                xlabel=None, x=None,
@@ -317,7 +319,7 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
     wl_col = ['b', 'g', 'r']
     for wl_idx, i in zip(wl_spaxel_idx, range(3)):
         ax = fig.add_subplot(gs[0, i:i+1])
-        ax.set_title(r"$\lambda@{:.1f}$".format(cube.wavelength[wl_idx]),
+        ax.set_title(r"$\lambda@${:.1f}".format(cube.wavelength[wl_idx]),
                      fontdict=dict(color=wl_col[i]))
         ax.imshow(cube.intensity[wl_idx].value, aspect='auto', origin='lower',
                   interpolation='none', cmap='cividis')
@@ -366,8 +368,8 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
     np.clip(ylim, a_min=0, a_max=None, out=ylim)
     ax.set_ylim(ylim)
     ax.set_yscale('symlog', linthresh=0.1)
-    ax.set_xlabel("Wavelength")
-    ax.set_ylabel("Flux")
+    ax.set_xlabel(f"Wavelength ({cube.wavelength.unit})")
+    ax.set_ylabel(f"Flux ({cube.intensity.unit})")
 
     # SNR ------------
     ax = fig.add_subplot(gs[3:5, :], sharex=ax)
@@ -382,6 +384,7 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
     plt.close(fig)
     return fig
 
+@ancillary.remove_units_dec
 def qc_cubing(rss_weight_maps, exposure_times):
     """..."""
     if exposure_times.ndim == 1:
@@ -394,7 +397,7 @@ def qc_cubing(rss_weight_maps, exposure_times):
                      interpolation='none', origin='lower')
 
     tp5, tp95 = np.nanpercentile(exposure_times, [5 , 95])
-    print("Mean exposure time: ", np.nanmean(exposure_times))
+    print("Mean exposure time (s): ", np.nanmean(exposure_times))
     t_im_args = dict(vmin=tp5 * 1.1, vmax=tp95 * 1.1, cmap='gnuplot',
                      interpolation='none', origin='lower')
     fig, axs = plt.subplots(ncols=n_rss + 1, nrows=2, sharex=True,
@@ -412,10 +415,11 @@ def qc_cubing(rss_weight_maps, exposure_times):
     plt.colorbar(mappable, ax=axs[0, -1], label='Median weight')
     mappable = axs[1, -1].imshow(np.nanmedian(np.nanmean(exposure_times, axis=0), axis=0),
                       **t_im_args)
-    plt.colorbar(mappable, ax=axs[1, -1], label='Median exp. time / pixel')
+    plt.colorbar(mappable, ax=axs[1, -1], label='Median exp. time (s) / pixel')
     plt.close()
     return fig
 
+@ancillary.remove_units_dec
 def qc_fibres_on_fov(fov_size, pixel_colum_pos, pixel_row_pos,
                      fibre_diam=1.25):
     fig = plt.figure(constrained_layout=True)
