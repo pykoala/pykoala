@@ -198,6 +198,7 @@ class TopHatKernel(InterpolationKernel):
         return weights
 
 class DrizzlingKernel(TopHatKernel):
+    @ancillary.remove_units_dec
     def __init__(self, scale, *args, **kwargs):
         super().__init__(scale=scale, **kwargs)
         self.truncation_radius =1
@@ -305,9 +306,8 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
         row_edges = np.arange(rows_min - 0.5, rows_max + 1.5, 1.0)
         pos_col_edges = (column_edges - kernel_centre_cols)
         pos_row_edges = (row_edges - kernel_centre_rows)
-        w = kernel.kernel_2D(pos_row_edges, pos_col_edges)
+        w = kernel.kernel_2D(pos_row_edges, pos_col_edges)        
         w = w[np.newaxis]
-        #print(w.sum())
         # Add spectra to cube
         cube[wl_slice, rows_slice, columns_slice] += (
             fib_spectra[wl_slice, np.newaxis, np.newaxis] * w)
@@ -432,15 +432,15 @@ def build_cube(rss_set, wcs=None, wcs_params=None, kernel=GaussianKernel,
     plots = {}
     # Initialise kernel
     kernel_size_arcsec = ancillary.check_unit(kernel_size_arcsec, u.arcsec)
-    pixel_size = ancillary.check_unit(
-        wcs.celestial.pixel_scale_matrix.diagonal().mean(), u.deg)
+    pixel_size = wcs.celestial.pixel_scale_matrix.diagonal().mean() << u.deg
     kernel_scale = (kernel_size_arcsec / pixel_size).decompose()
 
     vprint(
         f"[Cubing] Initialising {kernel.__name__}"
         + f"\n Scale: {kernel_scale:.1f} (pixels)"
         + f"\n Truncation radius: {kernel_truncation_radius:.1f}")
-    kernel = kernel(pixel_scale_arcsec=pixel_size, scale=kernel_scale,
+    kernel = kernel(pixel_scale_arcsec=pixel_size,
+                    scale=kernel_scale,
                     truncation_radius=kernel_truncation_radius)
     
     # Create empty cubes for data, variance and weights - these will be filled and returned
@@ -480,6 +480,7 @@ def build_cube(rss_set, wcs=None, wcs_params=None, kernel=GaussianKernel,
             adr_ra_arcsec=adr_set[i][0], adr_dec_arcsec=adr_set[i][1],
             mask_flags=mask_flags,
             qc_plots=qc_plots)
+
         plots[f'rss_{i+1}'] = rss_plots
         if u.second in rss.intensity.unit.bases:
             all_datacubes[i] = datacube_i
@@ -501,8 +502,7 @@ def build_cube(rss_set, wcs=None, wcs_params=None, kernel=GaussianKernel,
     info = dict(kernel_size_arcsec=kernel_size_arcsec,
                 **kwargs.get('cube_info', {}))
     # Create WCS information
-    hdul = build_hdul(intensity=datacube, variance=datacube_var, wcs=wcs)
-    cube = Cube(hdul=hdul, info=info)
+    cube = Cube(intensity=datacube, variance=datacube_var, wcs=wcs, info=info)
     if qc_plots:
         # Compute the fibre coverage and exposure time maps
         plots[f'weights'] = qc_cubing(all_w, all_exp)
