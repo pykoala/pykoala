@@ -624,7 +624,7 @@ class DataContainer(ABC, VerboseMixin):
         )
         header["bunit"] = self.variance.unit.to_string()
         hdu_list.append(fits.ImageHDU(
-            data=self.variance, name='VARIANCE', header=hdu_list[-1].header))
+            data=self.variance, name='VARIANCE', header=header))
         # Store the mask information
         hdu_list.append(self.mask.dump_to_hdu())
         hdul = fits.HDUList(hdu_list)
@@ -726,16 +726,15 @@ class SpectraContainer(DataContainer):
 
         super().__init__(**kwargs)
 
-        if "wavelength" in kwargs.keys():
+        if "wavelength" in kwargs:
             self._wavelength = ancillary.check_unit(kwargs["wavelength"],
                                                     u.angstrom)
+        elif "wcs" in kwargs:
+            self._wavelength = kwargs["wcs"].spectral.array_index_to_world(
+            np.arange(kwargs["wcs"].spectral.array_shape[0])).to('angstrom')
         else:
-            self.vprint(
-                "WARNING: No `wavelength` vector supplied; creating empty `SpectraContainer`"
-            )
-            self._wavelength = u.Quantity([], u.AA)
+            raise AttributeError("Either a wavelength or wcs must be provided")
 
-        
     def get_spectra_sorted(self, wave_range=None):
         """Get the RSS-wise sorted order of the intensity.
         
@@ -1195,35 +1194,35 @@ class RSS(SpectraContainer):
 class Cube(SpectraContainer):
     """:class:`SpectraContainer` associated to a 3D data cube."""
 
-    default_hdul_extensions_map = {"INTENSITY": "INTENSITY",
-                                   "VARIANCE": "VARIANCE"}
+    # default_hdul_extensions_map = {"INTENSITY": "INTENSITY",
+    #                                "VARIANCE": "VARIANCE"}
 
-    @property
-    def hdul(self):
-        return self._hdul
+    # @property
+    # def hdul(self):
+    #     return self._hdul
 
-    @hdul.setter
-    def hdul(self, hdul):
-        assert isinstance(hdul, fits.HDUList)
-        self._hdul = hdul
+    # @hdul.setter
+    # def hdul(self, hdul):
+    #     assert isinstance(hdul, fits.HDUList)
+    #     self._hdul = hdul
 
-    @property
-    def intensity(self):
-        return self.hdul[self.hdul_extensions_map['INTENSITY']].data
+    # @property
+    # def intensity(self):
+    #     return self.hdul[self.hdul_extensions_map['INTENSITY']].data
     
-    @intensity.setter
-    def intensity(self, intensity_corr):
-        self.vprint("[Cube] Updating HDUL INTENSITY")
-        self.hdul[self.hdul_extensions_map['INTENSITY']].data = intensity_corr
+    # @intensity.setter
+    # def intensity(self, intensity_corr):
+    #     self.vprint("[Cube] Updating HDUL INTENSITY")
+    #     self.hdul[self.hdul_extensions_map['INTENSITY']].data = intensity_corr
 
-    @property
-    def variance(self):
-        return self.hdul[self.hdul_extensions_map['VARIANCE']].data
+    # @property
+    # def variance(self):
+    #     return self.hdul[self.hdul_extensions_map['VARIANCE']].data
 
-    @variance.setter
-    def variance(self, variance_corr):
-        self.vprint("[Cube] Updating HDUL variance")
-        self.hdul[self.hdul_extensions_map['VARIANCE']].data = variance_corr
+    # @variance.setter
+    # def variance(self, variance_corr):
+    #     self.vprint("[Cube] Updating HDUL variance")
+    #     self.hdul[self.hdul_extensions_map['VARIANCE']].data = variance_corr
 
     @property
     def n_cols(self):
@@ -1255,31 +1254,20 @@ class Cube(SpectraContainer):
     def rss_variance(self, value):
         self.variance = value.T.reshape(self.variance.shape)
 
-    def __init__(self, hdul=None, hdul_extensions_map=None, **kwargs):
-
-        self.hdul = hdul
-        if hdul_extensions_map is not None:
-            self.hdul_extensions_map = hdul_extensions_map
-        else:
-            self.hdul_extensions_map = self.default_hdul_extensions_map
+    def __init__(self, **kwargs):
 
         if "logger" not in kwargs:
             kwargs['logger'] = "pykoala.cube"
-
-        if "intensity" not in kwargs:
-            kwargs["intensity"] = self.intensity
-        if "variance" not in kwargs:
-            kwargs["variance"] = self.variance
+        # if "intensity" not in kwargs:
+        #     kwargs["intensity"] = self.intensity
+        # if "variance" not in kwargs:
+        #     kwargs["variance"] = self.variance
+        # if "wcs" not in kwargs:
+        #     kwargs["wcs"] = WCS(
+        #         self.hdul[self.hdul_extensions_map['INTENSITY']].header)
 
         super().__init__(**kwargs)
 
-        if self.wcs is None:
-            self.wcs = WCS(
-                self.hdul[self.hdul_extensions_map['INTENSITY']].header)
-
-        if self.wavelength is None:
-            self.wavelength = self.wcs.spectral.array_index_to_world(
-            np.arange(self.intensity.shape[0])).to('angstrom')
 
     def rss_to_original(self, rss_shape_data):
         return np.reshape(rss_shape_data.T, (rss_shape_data.shape[1],
@@ -1316,7 +1304,8 @@ class Cube(SpectraContainer):
 
     def get_white_image(self, wave_range=None, s_clip=3.0, frequency_density=False):
         """Create a white image."""
-        if wave_range is not None and self.wavelength is not None:
+        if wave_range is not None:
+            print("Wavelength : ", wave_range, self.wavelength)
             wave_mask = (
                 self.wavelength >= ancillary.check_unit(wave_range[0], u.AA)
                 ) & (
@@ -1327,7 +1316,6 @@ class Cube(SpectraContainer):
         if s_clip is not None:
             std_dev = ancillary.std_from_mad(self.intensity[wave_mask], axis=0)
             median = np.nanmedian(self.intensity[wave_mask], axis=0)
-
             weights = (
                 (self.intensity[wave_mask] <= median[np.newaxis] + s_clip * std_dev[np.newaxis])
                 & (self.intensity[wave_mask] >= median[np.newaxis] - s_clip * std_dev[np.newaxis]))
@@ -1388,6 +1376,15 @@ class Cube(SpectraContainer):
             self.hdul.close()
 
     @classmethod
+    def from_hdul(cls, hdul):
+        info = {}
+        info["name"] = hdul["INFO"].header.get("name")
+        info["exptime"] = hdul["INFO"].header.get("exptime")
+        dc_parameters = cls._dc_params_from_hdul(hdul)
+        dc_parameters["info"] = info
+        return cls(**dc_parameters)
+
+    @classmethod
     def from_fits(cls, filename):
         """Initialise an Cube from a FITS file.
         
@@ -1424,12 +1421,8 @@ class Cube(SpectraContainer):
 
         """
         hdul = fits.open(filename)
-        info = {}
-        info["name"] = hdul["INFO"].header.get("name")
-        info["exptime"] = hdul["INFO"].header.get("exptime")
-        dc_parameters = cls._dc_params_from_hdul(hdul)
-        dc_parameters["info"] = info
-        return cls(hdul, **dc_parameters)
+        return cls.from_hdul(hdul)
+
 
 # =============================================================================
 # Mr Krtxo \(ﾟ▽ﾟ)/
