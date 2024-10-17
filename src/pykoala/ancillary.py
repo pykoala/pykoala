@@ -48,13 +48,50 @@ def check_unit(quantity, default_unit=None):
             raise u.UnitTypeError(
                 "Input quantity does not have the appropriate units")
         else:
-            return quantity
+            return quantity.to(default_unit)
     elif not isq and default_unit is not None:
         return quantity * default_unit
     elif not isq and default_unit is None:
         raise ValueError("Input value must be a astropy.units.Quantity")
     else:
         return quantity
+
+def remove_unit(quantity, default_unit=None):
+    isq = isinstance(quantity, u.Quantity)
+    if isq and default_unit is not None:
+        if not quantity.unit.is_equivalent(default_unit):
+            raise u.UnitTypeError(
+                "Input quantity does not have the appropriate units")
+        else:
+            return quantity.to_value(default_unit)
+    elif not isq:
+        return quantity
+    else:
+        return quantity.value
+    
+def preserve_units_dec(func):
+    """Decorator method to preserve `astropy.Units` on input arguments."""
+    def wrapper(data, *args, **kwargs):
+        if isinstance(data, u.Quantity):
+            unit = data.unit
+        else:
+            unit = 1
+        val = func(data, *args, **kwargs)
+        
+        if not isinstance(val, u.Quantity):
+            return val << unit
+        else:
+            return val
+    return wrapper
+
+def remove_units_dec(func):
+    """Decorator method to remove `astropy.Units` from input arguments."""
+    def wrapper(*args, **kwargs):
+        unitless_args = [remove_unit(a) for a in args]
+        unitless_kwargs = {k : remove_unit(v) for k, v in kwargs.items()}
+        return func(*unitless_args, **unitless_kwargs)
+    return wrapper
+
 
 def detect_edge(rss):
     """
@@ -118,11 +155,15 @@ def update_wcs_coords(wcs, ra_dec_val=None, ra_dec_offset=None):
     correc_wcs = wcs.deepcopy()
     if ra_dec_val is not None:
         if "RA" in correc_wcs.wcs.ctype[0]:
-            correc_wcs.wcs.crval[0] = ra_dec_val[0]
-            correc_wcs.wcs.crval[1] = ra_dec_val[1]
+            correc_wcs.wcs.crval[0] = ra_dec_val[0].to_value(
+                correc_wcs.wcs.cunit[0])
+            correc_wcs.wcs.crval[1] = ra_dec_val[1].to_value(
+                correc_wcs.wcs.cunit[1])
         elif "RA" in correc_wcs.wcs.ctype[1]:
-            correc_wcs.wcs.crval[0] = ra_dec_val[1]
-            correc_wcs.wcs.crval[1] = ra_dec_val[0]
+            correc_wcs.wcs.crval[0] = ra_dec_val[1].to_value(
+                correc_wcs.wcs.cunit[0])
+            correc_wcs.wcs.crval[1] = ra_dec_val[0].to_value(
+                correc_wcs.wcs.cunit[1])
         else:
             raise NameError(
                 "RA coordinate could not be found in the WCS coordinate types:"
@@ -130,14 +171,14 @@ def update_wcs_coords(wcs, ra_dec_val=None, ra_dec_offset=None):
     elif ra_dec_offset is not None:
         if "RA" in correc_wcs.wcs.ctype[0]:
             correc_wcs.wcs.crval[0] = correc_wcs.wcs.crval[0] + \
-                ra_dec_offset[0]
+                ra_dec_offset[0].to_value(correc_wcs.wcs.cunit[0])
             correc_wcs.wcs.crval[1] = correc_wcs.wcs.crval[1] + \
-                ra_dec_offset[1]
+                ra_dec_offset[1].to_value(correc_wcs.wcs.cunit[1])
         elif "RA" in correc_wcs.wcs.ctype[1]:
             correc_wcs.wcs.crval[0] = correc_wcs.wcs.crval[0] + \
-                ra_dec_offset[1]
+                ra_dec_offset[1].to_value(correc_wcs.wcs.cunit[0])
             correc_wcs.wcs.crval[1] = correc_wcs.wcs.crval[1] + \
-                ra_dec_offset[0]
+                ra_dec_offset[0].to_value(correc_wcs.wcs.cunit[1])
         else:
             raise NameError(
                 "RA coordinate could not be found in the WCS coordinate types:"
@@ -199,14 +240,25 @@ def flux_conserving_interpolation(new_wave, wave, spectra):
     interp_spectra : np.ndarray
         Interpolated spectra to `new_wave`
     """
-    wave_limits = 1.5 * wave[[0, -1]] - 0.5 * wave[[1, -2]]
-    wave_edges = np.hstack([wave_limits[0], (wave[1:] + wave[:-1])/2, wave_limits[1]])
+    mask = np.isfinite(spectra)
+    masked_wave = wave[mask]
+
+    wave_limits = 1.5 * masked_wave[[0, -1]] - 0.5 * masked_wave[[1, -2]]
+    wave_edges = np.hstack(
+        [wave_limits[0],
+         (masked_wave[1:] + masked_wave[:-1])/2,
+         wave_limits[1]])
 
     new_wave_limits = 1.5 * new_wave[[0, -1]] - 0.5 * new_wave[[1, -2]]
-    new_wave_edges = np.hstack([new_wave_limits[0], (new_wave[1:] + new_wave[:-1])/2, new_wave_limits[1]])
-    cumulative_spectra = np.cumsum(spectra * np.diff(wave_edges))
-    cumulative_spectra = np.insert(cumulative_spectra, 0, 0)
-    new_cumulative_spectra = np.interp(new_wave_edges, wave_edges, cumulative_spectra)
+    new_wave_edges = np.hstack(
+        [new_wave_limits[0],
+         (new_wave[1:] + new_wave[:-1])/2,
+         new_wave_limits[1]])
+    cumulative_spectra = np.cumsum(spectra[mask] * np.diff(wave_edges))
+    cumulative_spectra = np.insert(cumulative_spectra, 0,
+                                   0 << cumulative_spectra.unit)
+    new_cumulative_spectra = np.interp(new_wave_edges, wave_edges,
+                                       cumulative_spectra)
     interp_spectra = np.diff(new_cumulative_spectra) / np.diff(new_wave_edges)
     return interp_spectra
 
@@ -271,6 +323,7 @@ def growth_curve_2d(image, x0=None, y0=None):
     return r2[idx_sorted], growth_c
 
 
+@preserve_units_dec
 def interpolate_image_nonfinite(image):
     """Use scipy.interpolate.NearestNDInterpolator to replace NaN values.
 
@@ -289,12 +342,14 @@ def interpolate_image_nonfinite(image):
         np.arange(0, image.shape[1], 1),
         np.arange(0, image.shape[0], 1))
     mask = np.isfinite(image)
+    if not mask.any():
+        raise ArithmeticError("All values of input image are non-finite")
     interp = interpolate.NearestNDInterpolator(
-        list(zip(x[mask], y[mask])), image[mask])
+        list(zip(x[mask], y[mask])), image[mask].value)
     interp_image = interp(x, y)
     return interp_image
 
-def vac_to_air(vac_wl):
+def vac_to_air(vac_wl: u.Quantity):
     """Convert wavelength in vacuum to air using Morton (1991, ApJS, 77, 119).
     
     Parameters
@@ -307,9 +362,11 @@ def vac_to_air(vac_wl):
     - air_wl: np.ndarray
         Vector of air wavelengths in Angstrom
     """
-    air_wl = vac_wl / (
-        1.0 + 2.735182e-4 + 131.4182 / vac_wl**2 + 2.76249e8 / vac_wl**4)
-    return air_wl
+    sigma = 1 / vac_wl.to_value("micron")
+    vac_over_air = (1 + 8.0605e-5 + 2.48099e-2 / (132.274 - sigma**2)
+                    + 1.74557e-4 / (39.32957 - sigma**2)
+                    ) << u.dimensionless_unscaled
+    return vac_wl / vac_over_air
 
 # TODO: refactor
 def smooth_spectrum(wlm, s, wave_min=0, wave_max=0, step=50, exclude_wlm=[[0, 0]], order=7,
@@ -413,7 +470,6 @@ def smooth_spectrum(wlm, s, wave_min=0, wave_max=0, step=50, exclude_wlm=[[0, 0]
             for i in range(len(exclude_wlm)):
                 plt.axvspan(exclude_wlm[i][0],
                             exclude_wlm[i][1], color='r', alpha=0.1)
-        plt.show()
         plt.close()
         vprint(f"Weights for getting smooth spectrum:\n fit_median ={weight_fit_median}"
                + f"\n Fit_median_interpolated = {(1-weight_fit_median)}")
