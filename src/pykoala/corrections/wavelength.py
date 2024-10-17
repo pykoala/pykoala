@@ -9,12 +9,13 @@ from matplotlib.colors import LogNorm
 from matplotlib.gridspec import GridSpec
 
 from astropy.io import fits
+from astropy import units as u
 from scipy.ndimage import median_filter, gaussian_filter, percentile_filter
 
 from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.data_container import RSS
-from pykoala.ancillary import flux_conserving_interpolation, vac_to_air
+from pykoala.ancillary import flux_conserving_interpolation, vac_to_air, check_unit
 # from pykoala.corrections.sky import ContinuumEstimator
 
 
@@ -38,8 +39,8 @@ class WavelengthOffset(object):
 
     def __init__(self, path=None, offset_data=None, offset_error=None):
         self.path = path
-        self.offset_data = offset_data
-        self.offset_error = offset_error
+        self.offset_data = check_unit(offset_data, u.AA)
+        self.offset_error = check_unit(offset_error, u.AA)
 
     def tofits(self, output_path=None):
         """Save the offset in a FITS file.
@@ -61,8 +62,11 @@ class WavelengthOffset(object):
             else:
                 output_path = self.path
         primary = fits.PrimaryHDU()
-        data = fits.ImageHDU(data=self.offset_data, name='OFFSET')
-        error = fits.ImageHDU(data=self.offset_error, name='OFFSET_ERR')
+        header = fits.Header()
+        header["bunit"] = self.offset_data.unit.to_string()
+        data = fits.ImageHDU(data=self.offset_data, name='OFFSET', header=header)
+        error = fits.ImageHDU(data=self.offset_error, name='OFFSET_ERR',
+                              header=header)
         hdul = fits.HDUList([primary, data, error])
         hdul.writeto(output_path, overwrite=True)
         hdul.close(verbose=True)
@@ -89,8 +93,8 @@ class WavelengthOffset(object):
             raise NameError(f"offset file {path} does not exist.")
         vprint(f"Loading wavelength offset from {path}")
         with fits.open(path) as hdul:
-            offset_data = hdul[1].data
-            offset_error = hdul[2].data
+            offset_data = hdul[1].data << u.Unit(hdul[1].header.get("BUNIT", 1))
+            offset_error = hdul[2].data << u.Unit(hdul[1].header.get("BUNIT", 1))
         return cls(offset_data=offset_data, offset_error=offset_error,
                    path=path)
 
@@ -153,7 +157,9 @@ class WavelengthCorrection(CorrectionBase):
         assert isinstance(rss, RSS)
 
         rss_out = rss.copy()
+        self.vprint("Applying correction to input RSS")
         x = np.arange(rss.wavelength.size)
+
         for i in range(rss.intensity.shape[0]):
             rss_out.intensity[i] = flux_conserving_interpolation(
                 x, x - self.offset.offset_data[i], rss.intensity[i])
@@ -180,8 +186,9 @@ class SolarCrossCorrOffset(WavelengthCorrection):
 
     def __init__(self, sun_wavelength, sun_intensity, **kwargs):
         super().__init__(offset=WavelengthOffset(), **kwargs)
-        self.sun_wavelength = sun_wavelength
-        self.sun_intensity = sun_intensity
+        self.sun_wavelength = check_unit(sun_wavelength, u.AA)
+        self.sun_intensity = check_unit(sun_intensity,
+                                        u.erg / u.s / u.AA / u.cm**2)
 
     @classmethod
     def from_fits(cls, path=None, extension=1):
@@ -207,9 +214,9 @@ class SolarCrossCorrOffset(WavelengthCorrection):
                      'input_data', 'spectrophotometric_stars',
                      'sun_mod_001.fits')
         with fits.open(path) as hdul:
-            sun_wavelength = hdul[extension].data['WAVELENGTH']
+            sun_wavelength = hdul[extension].data['WAVELENGTH'] << u.AA
             sun_wavelength = vac_to_air(sun_wavelength)
-            sun_intensity = hdul[extension].data['FLUX']
+            sun_intensity = hdul[extension].data['FLUX'] << u.erg / u.s / u.AA / u.cm**2
         return cls(sun_wavelength=sun_wavelength,
                    sun_intensity=sun_intensity)
 
@@ -234,6 +241,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
         sun_wavelength, sun_intensity = np.loadtxt(path, unpack=True,
                                                    usecols=(0, 1),
                                                    **loadtxt_args)
+        #TODO: Handle units
         sun_wavelength = vac_to_air(sun_wavelength)
         return cls(sun_wavelength=sun_wavelength,
                    sun_intensity=sun_intensity)
@@ -273,12 +281,14 @@ class SolarCrossCorrOffset(WavelengthCorrection):
 
         """
         self.vprint("Estimating regions of solar spectra dominated by absorption lines.")
-        delta_pixel = int(window_size_aa
-                          / (solar_wavelength[-1] - solar_wavelength[0])
-                          * solar_wavelength.size)
+        delta_pixel = int(
+            (check_unit(window_size_aa, u.AA) / (solar_wavelength[-1] - solar_wavelength[0])
+                          * solar_wavelength.size).decompose()
+                          )
         if delta_pixel % 2 == 0:
             delta_pixel += 1
-        solar_continuum = median_filter(solar_spectra, delta_pixel)
+        solar_continuum = median_filter(solar_spectra, delta_pixel
+                                        ) << solar_spectra.unit
         # Detect absorption features
         median_continuum_ratio = np.nanmedian(solar_spectra / solar_continuum)
         weights = np.abs(solar_spectra / solar_continuum -  median_continuum_ratio)
@@ -318,7 +328,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
         """
         self.vprint("Computing grid of solar spectra models")
         models_grid = np.zeros((pix_shift_array.size, pix_std_array.size,
-                           sun_intensity.size))
+                           sun_intensity.size)) << sun_intensity.unit
         weights_grid = np.zeros((pix_shift_array.size, pix_std_array.size,
                            sun_intensity.size))
         for i, velshift in enumerate(pix_shift_array):
@@ -329,7 +339,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
                         new_pixel_array, pix_array, sun_intensity)
                     interp_sun_intensity = gaussian_filter(
                         interp_sun_intensity, gauss_std)
-                    models_grid[i, j] = interp_sun_intensity
+                    models_grid[i, j] = interp_sun_intensity << sun_intensity.unit
 
                     interp_sun_weight = flux_conserving_interpolation(
                         new_pixel_array, pix_array, weights)
@@ -400,7 +410,8 @@ class SolarCrossCorrOffset(WavelengthCorrection):
                                           spectra_container.wavelength.size)
             rss_intensity = np.array([flux_conserving_interpolation(
                 new_wavelength, spectra_container.wavelength, fibre
-                ) for fibre in spectra_container.rss_intensity])
+                ) for fibre in spectra_container.rss_intensity]
+                ) << spectra_container.intensitu.unit
         else:
             new_wavelength = spectra_container.wavelength
             rss_intensity = spectra_container.rss_intensity
@@ -417,26 +428,27 @@ class SolarCrossCorrOffset(WavelengthCorrection):
             weights[:100] = 0
             weights[-100:] = 0
         else:
-            weights = np.array(
-                (new_wavelength >= wave_range[0]) & (new_wavelength <= wave_range[-1]),
-                dtype=float)
-        
+            weights = np.zeros(new_wavelength)
+            weights[slice(*np.searchsorted(new_wavelength, wave_range))] = 1.0
+
         valid_pixels = weights > 0
         self.vprint("Number of pixels with non-zero weights: "
                     + f"{np.count_nonzero(valid_pixels)} out of {valid_pixels.size}")
 
         # Estimate the response curve for each individual fibre
-        delta_pixel = int(response_window_size_aa
+        delta_pixel = int(
+            (check_unit(response_window_size_aa, u.AA)
                         / (new_wavelength[-1] - new_wavelength[0])
-                        * new_wavelength.size)
+                        * new_wavelength.size).decompose()
+                        )
         if delta_pixel % 2 == 0:
             delta_pixel += 1
 
         response_spectrograph = rss_intensity / sun_intensity[np.newaxis]
         smoothed_r_spectrograph = median_filter(
-            response_spectrograph, delta_pixel, axes=1)
+            response_spectrograph, delta_pixel, axes=1) << response_spectrograph.unit
         spectrograph_upper_env = percentile_filter(
-            smoothed_r_spectrograph, 95, delta_pixel, axes=1)
+            smoothed_r_spectrograph, 95, delta_pixel, axes=1) << response_spectrograph.unit
         # Avoid regions dominated by telluric absorption
         self.vprint("Including the masking of pixels dominated by telluric absorption")
         fibre_weights =  1 / (1  + (
@@ -460,7 +472,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
         for i in range(pix_shift_array.size):
             all_chi2[i] = np.nansum(
                 (models_grid[i, :, np.newaxis]
-                 - normalized_rss_intensity[np.newaxis, :, :])**2
+                 - normalized_rss_intensity[np.newaxis, :, :]).value**2
                 * weights_grid[i, :, np.newaxis]
                 * fibre_weights[np.newaxis, :, :],
                 axis=-1) / np.nansum(
@@ -609,7 +621,6 @@ class SolarCrossCorrOffset(WavelengthCorrection):
             ax.set_ylabel("Intensity")
             ax.set_xlabel("Wavelength")
             twax.set_ylabel("Relative weight")
-            plt.show()
             fibre_figures.append(fig)
         plt.close()
         return fibre_figures
