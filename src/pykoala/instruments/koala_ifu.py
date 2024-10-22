@@ -151,14 +151,16 @@ def read_rss(file_path,
     # Create wavelength from wcs
     nrow, ncol = wcs.array_shape
     wavelength_index = np.arange(ncol)
-    wavelength = wcs.dropaxis(1).wcs_pix2world(wavelength_index, 0)[0]
+    #TODO : remove to_value once units are homogeneized
+    wavelength = wcs.spectral.array_index_to_world(wavelength_index).to_value("angstrom")
     # First Header value added by the PyKoala routine
     rss = RSS(intensity=intensity,
                variance=variance,
                wavelength=wavelength,
                info=info,
                header=header,
-               fibre_diameter=1.25 * u.arcsec)
+               fibre_diameter=1.25 * u.arcsec,
+               wcs=wcs)
     rss.history('read', ' '.join(['- RSS read from ', file_name]))
     return rss
 
@@ -175,6 +177,8 @@ def koala_rss(path_to_file):
         header["RADECSYSa"] = header["RADECSYS"]
         del header["RADECSYS"]
     koala_wcs = WCS(header)
+    # Fix the WCS information such that koala_wcs.spectra exists
+    koala_wcs.wcs.ctype[0] = 'WAVE    '
     # Constructing Pykoala Spaxels table from 2dfdr spaxels table (data[2])
     fibre_table = fits.getdata(path_to_file, 2)
     koala_fibre_table = py_koala_fibre_table(fibre_table)

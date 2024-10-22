@@ -55,11 +55,13 @@ def weave_rss(filename):
            variance=variance,
            log=log,
            #header=header,
-           info=info
+           info=info,
+           wcs=wcs
            )
 
 
 # %%
 # -----------------------------------------------------------------------------
 #                                                    ... Paranoy@ Rulz! ;^D
+# Mr Krtxo \(ﾟ▽ﾟ)/
 # -----------------------------------------------------------------------------
