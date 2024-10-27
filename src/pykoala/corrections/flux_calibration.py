@@ -398,13 +398,18 @@ class FluxCalibration(CorrectionBase):
 
         star_good = np.isfinite(star_flux)
         star_flux = np.interp(
-            data_container.wavelength, data_container.wavelength[star_good],
+            data_container.wavelength, wavelength[star_good],
             star_flux[star_good])
+        print(mean_residuals.unit)
+        final_residuals = np.full(data_container.wavelength.size,
+                                  fill_value=np.nan) << data.unit
+        final_residuals[wave_mask] = mean_residuals
 
         if plot:
             fig = FluxCalibration.plot_extraction(
-                x.value, y.value, x0.value, y0.value, data.value, r2_dummy.value**0.5, cog,
-                wavelength, star_flux, mean_residuals)
+                x.value, y.value, x0.value, y0.value,
+                data.value, r2_dummy.value**0.5, cog,
+                data_container.wavelength, star_flux, final_residuals)
         else:
             fig = None
 
@@ -412,7 +417,7 @@ class FluxCalibration(CorrectionBase):
                       optimal=np.array(profile_popt),
                       variance=np.array(profile_var),
                       stellar_flux=star_flux,
-                      residuals=mean_residuals,
+                      residuals=final_residuals,
                       figure=fig)
         return result
 
