@@ -506,7 +506,6 @@ class SolarCrossCorrOffset(WavelengthCorrection):
                                     pix_shift_array[best_vel_idx])
 
         if inspect_fibres is not None:
-            self.vprint("Inspecting input fibres")
             fibre_figures = self.inspect_fibres(
                 inspect_fibres, pix_shift_array, pix_std_array,
                 best_vel_idx, best_std_idx, mean_pix_shift, mean_std,
@@ -573,6 +572,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
         best_sigma, best_shift = (pix_std_array[best_std_idx],
                                   pix_shift_array[best_vel_idx])
         for fibre in fibres:
+            self.vprint(f"Inspecting input fibre: {fibre}")
             fig = plt.figure(constrained_layout=True, figsize=(10, 8))
             gs = GridSpec(2, 4, figure=fig, wspace=0.25, hspace=0.25)
 
@@ -633,7 +633,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
             ax.set_xlabel("Wavelength")
             twax.set_ylabel("Relative weight")
             fibre_figures.append(fig)
-        plt.close()
+            plt.close(fig)
         return fibre_figures
 
 
