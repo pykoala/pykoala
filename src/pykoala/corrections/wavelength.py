@@ -11,6 +11,8 @@ from matplotlib.gridspec import GridSpec
 from astropy.io import fits
 from astropy import units as u
 from scipy.ndimage import median_filter, gaussian_filter, percentile_filter
+from scipy.interpolate import interp1d
+from scipy.signal import correlate, correlation_lags, convolve
 
 from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
@@ -170,6 +172,76 @@ class WavelengthCorrection(CorrectionBase):
                 
         self.record_correction(rss_out, status='applied')
         return rss_out
+
+
+class TelluricWavelengthCorrection(WavelengthCorrection):
+    """WavelengthCorrection based on the cross-correlation of telluric lines.
+    
+    This class constructs a WavelengthOffset using a cross-correlation of
+    telluric absorption lines.
+
+    """
+    name = "TelluricWavelengthCorrection"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    
+    @classmethod
+    def from_data_container(cls, data_container, telluric_flat="telluric",
+                            oversampling=5, smooth_solution=True):
+        """Estimate the wavelength offset from an input data container.
+        
+        Parameters
+        ----------
+        data_container : :class:`DataContainer`
+        telluric_flag : str
+            Flag associated to the data mask containing the pixels contaminated
+            by telluric absorption lines.
+        oversampling : float
+            Oversampling factor to increase the accuracy of the cross-correlation.
+        smooth_solution : bool
+            Apply a median filter to the resulting solution to remove outliers.
+        
+        Returns
+        -------
+        WavelengthCorrection : WavelengthCorrection
+        """
+
+        mask = data_container.mask.get_flag_map(telluric_flat)
+        intensity = data_container.rss_intensity[:, mask[0]].value.copy()
+        # Oversampling
+        new_wavelength = np.interp(
+            np.arange(0, intensity.shape[1], 1 / oversampling),
+            np.arange(0, intensity.shape[1], 1),
+            data_container.wavelength[mask[0]])
+        intensity = interp1d(data_container.wavelength[mask[0]],
+                 intensity, axis=1)(new_wavelength)
+        median_intensity = np.nanmedian(intensity, axis=0)
+        # print(median_intensity)
+        fibre_offset = np.zeros(intensity.shape[0])
+
+        for ith, fibre in enumerate(intensity):
+            fibre_mask = np.isfinite(fibre)
+            if not fibre_mask.any():
+                print("BAD FIBRE")
+                continue
+            corr = correlate(fibre[fibre_mask],
+                             median_intensity[fibre_mask],
+                             mode="full", method="fft")
+            lags = correlation_lags(fibre[fibre_mask].size,
+                                    median_intensity[fibre_mask].size)
+            max_corr = np.argmax(corr)
+            max_lag = lags[max_corr]
+            fibre_offset[ith] = max_lag / oversampling
+
+        if smooth_solution:
+             fibre_offset = median_filter(fibre_offset, 5)
+
+        fibre_offset = fibre_offset << u.pixel
+        offset = WavelengthOffset(
+            offset_data=fibre_offset,
+            offset_error=np.full_like(fibre_offset, fill_value=np.nan))
+        return cls(offset=offset)
 
 
 class SolarCrossCorrOffset(WavelengthCorrection):
