@@ -1257,7 +1257,7 @@ class TelluricCorrection(CorrectionBase):
             model_file = TelluricCorrection.default_model_file
 
         width = check_unit(width, u.angstrom)
-        w_l_1, w_l_2, _, _ = np.loadtxt(model_file, unpack=True)
+        w_l_1, w_l_2 = np.loadtxt(model_file, unpack=True, usecols=(0, 1))
         w_l_1 = w_l_1 << u.angstrom
         w_l_2 = w_l_2 << u.angstrom
         # Mask telluric regions
@@ -1285,6 +1285,62 @@ class TelluricCorrection(CorrectionBase):
         return cls(telluric_correction=telluric_correction,
                 wavelength=spectra_container.wavelength), fig
 
+
+    @classmethod
+    def flag_data_container(cls, data_container, telluric_correction=None,
+                            wavelength=None, path_to_model=None,
+                            min_line_width=5 << u.AA,
+                            flag_name="telluric"):
+        """Flag the pixels of a data container affected by telluric absorption.
+        
+        Parameters
+        ----------
+        data_container : :class:`DataContainer`
+            Input DataContainer
+        telluric_correction : np.array, optional
+            Input telluric correction values. Regions affected by telluric
+            absortion should present values larget than 1, and 1 otherwise.
+        wavelength : np.ndarray, optional
+            Wavelength associated to the telluric correction.
+        path_to_model : str
+            Path to a text file containing the left and right edges of each
+            telluric line.
+        """
+
+        telluric_flag = np.zeros(data_container.rss_intensity.shape,
+                                 dtype=bool)
+        if telluric_correction is not None:
+            if wavelength is None:
+                raise ValueError(
+                    "Must provide a wavelength associated to the correction")
+            else:
+                interp_tell_corr = np.interp(
+                    data_container.wavelength, wavelength, telluric_correction)
+                telluric_flag[:, interp_tell_corr >= 1.001] = True
+        else:
+            if path_to_model is None:
+                path_to_model = cls.default_model_file
+        
+            telluric_wl1, telluric_wl2 = np.loadtxt(
+                path_to_model, unpack=True, usecols=(0, 1))
+            telluric_wl1 = telluric_wl1 << u.AA
+            telluric_wl2 = telluric_wl2 << u.AA
+            for b, r in zip(telluric_wl1, telluric_wl2):
+                # If the line is narrower than the minimum required
+                if r - b < min_line_width:
+                    d = min_line_width - (r - b)
+                    r += d / 2
+                    b -= d / 2
+                b_idx = data_container.wcs.spectral.world_to_array_index(
+                    b)
+                r_idx = data_container.wcs.spectral.world_to_array_index(
+                    r)
+                if r_idx == b_idx:
+                    r_idx += 1
+                telluric_flag[:, slice(b_idx, r_idx)] = True
+        telluric_flag = data_container.rss_to_original(telluric_flag)
+        data_container.mask.flag_pixels(telluric_flag, flag_name,
+                                        desc="telluric absoption contaminated")
 
     @staticmethod
     def plot_correction(spectra_container, telluric_correction,
