@@ -13,7 +13,7 @@ from astropy.visualization import (MinMaxInterval, PercentileInterval,
                                    ImageNormalize)
 
 # plt.style.use('dark_background')
-SYMMETRIC_CMAP = plt.cm.get_cmap('seismic').copy()
+SYMMETRIC_CMAP = plt.get_cmap('seismic').copy()
 SYMMETRIC_CMAP.set_extremes(bad='gray', under='cyan', over='fuchsia')
 
 DEFAULT_CMAP = plt.get_cmap("gist_earth").copy()
