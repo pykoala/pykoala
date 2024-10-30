@@ -111,7 +111,7 @@ class WavelengthCorrection(CorrectionBase):
     ----------
     name : str
         Correction name, to be recorded in the log.
-    offset : WavelengthOffset
+    offset : :class:`WavelengthOffset`
         2D wavelength offset (n_fibres x n_wavelengths)
     verbose: bool
         False by default.
@@ -120,7 +120,8 @@ class WavelengthCorrection(CorrectionBase):
     offset = None
     verbose = False
 
-    def __init__(self, offset_path=None, offset=None, **correction_kwargs):
+    def __init__(self, offset_path: str=None, offset: WavelengthOffset=None,
+                 **correction_kwargs):
         super().__init__(**correction_kwargs)
 
         self.path = offset_path
