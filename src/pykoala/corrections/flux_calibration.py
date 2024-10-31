@@ -27,20 +27,22 @@ from pykoala.ancillary import (centre_of_mass, cumulative_1d_moffat, mask_lines,
 
 quantity_support()
 
-def curve_of_growth(radii : u.Quantity, data : u.Quantity, ref_radii : u.Quantity,
-                    mask=None):
-    """Compute a curve of growth.
-    
+def curve_of_growth(radii : u.Quantity, data : u.Quantity,
+                    ref_radii : u.Quantity, mask=None) -> u.Quantity:
+    """Compute a Curve Of Growth (COG).
+
     Parameters
     ----------
-    radii : :class:`np.nddata`
-    data : :class:`np.nddata`
-    ref_radii : :class:`np.ndarray`
-        Array of radial positions where to evaluate the COG.
+    radii : :class:`astropy.units.Quantity`
+        Distance to the center associated to each value of data.
+    data : :class:`astropy.units.Quantity`
+        Intensity values at each point given by ``radii``
+    ref_radii : :class:`astropy.units.Quantity`
+        Referece points where the COG will be estimated.
     
     Returns
     -------
-    cog : :class:`np.ndarray`
+    cog : :class:`astropy.units.Quantity`
         Curve of growth evaluated at ``ref_radii``.
     """
     if mask is None:
@@ -55,8 +57,8 @@ def curve_of_growth(radii : u.Quantity, data : u.Quantity, ref_radii : u.Quantit
     u_idx = np.searchsorted(radii[sort_idx], u_radii, side="right") - 1
     return np.interp(ref_radii, u_radii, cog[u_idx], left=0)
 
+#TODO: create a method for extracting stellar spectra outside FluxCalibration
 # extract stellar spectra
-
 
 
 class FluxCalibration(CorrectionBase):
@@ -105,6 +107,21 @@ class FluxCalibration(CorrectionBase):
     
     @classmethod
     def from_text_file(cls, path=None):
+        """Load the resonse function from a text file.
+        
+        Parameters
+        ----------
+        path : str
+            Path to the text file containing the response as function of
+            wavelength. The text file is assumed to contain only two columns:
+            the first one corresponding the the wavelength array, and the second
+            the array of values associate to the response function.
+        
+        Returns
+        -------
+        flux_calibration : :class:`FluxCalibration`
+            An instance of ``FluxCalibration``.
+        """
         if path is None:
             path = cls.default_extinction
         wavelength, response = np.loadtxt(path, unpack=True)
@@ -239,8 +256,8 @@ class FluxCalibration(CorrectionBase):
     def extract_stellar_flux(data_container,
                              wave_range=None, wave_window=None,
                              profile=cumulative_1d_moffat,
-                             bounds='auto',
-                             growth_r=np.arange(0.5, 10, 0.5) << u.arcsec,
+                             bounds: tuple=None,
+                             growth_r : u.Quantity=None,
                              plot=False, **fitter_args):
         """
         Extract the stellar flux from an RSS or Cube.
@@ -254,12 +271,17 @@ class FluxCalibration(CorrectionBase):
         wave_window : int, optional
             Wavelength window size for averaging the input flux.
         profile : function, optional
-            Profile function to model the cumulative light profile. Any function that accepts as first argument
-            the square distance (r^2) and returns the cumulative profile can be used. Default is cumulative_1d_moffat.
-        bounds : str or tuple, optional
-            Bounds for the curve fit. Default is 'auto'.
-        growth_r : np.ndarray, optional
-            Radial bins relative to the center of the star in arcseconds that will be used to compute the curve of growth. Default is np.arange(0, 10, 0.5).
+            Profile function to model the cumulative light profile. Any function
+            that accepts as first argument
+            the square distance (r^2) and returns the cumulative profile can be
+            used. Default is cumulative_1d_moffat.
+        bounds : tuple, optional
+            Bounds for the curve fit. If ``None``, the bounds will be estimated
+            automatically.
+        growth_r : :class:`astropy.units.Quantity`, optional
+            Reference radial bins relative to the center of the star that will
+            be used to compute the curve of growth. Default ranges from 0.5 to 
+            10 arcsec in steps of 0.5 arcsec.
         plot : bool, optional
             If True, shows a plot of the fit for each wavelength step.
         fitter_args : dict, optional
@@ -280,6 +302,11 @@ class FluxCalibration(CorrectionBase):
                 ] = False
         if wave_window is None:
             wave_window = 1
+        if growth_r is None:
+            growth_r = np.arange(0.5, 10, 0.5) << u.arcsec
+        if bounds is None:
+            bounds = "auto"
+
         wavelength = wavelength[wave_mask]
 
         # Curve of growth radial bins
