@@ -1146,8 +1146,8 @@ class TelluricCorrection(CorrectionBase):
         """
         super().__init__(**correction_kwargs)
 
-        self._telluric_correction = telluric_correction
-        self._wavelength = wavelength
+        self.telluric_correction = telluric_correction
+        self.wavelength = wavelength
         self.telluric_correction_file = telluric_correction_file
 
     @classmethod
