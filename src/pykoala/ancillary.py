@@ -276,6 +276,28 @@ def running_mean(x, n_window):
     cumsum = np.cumsum(np.insert(x, 0, 0))
     return (cumsum[n_window:] - cumsum[:-n_window]) / n_window
 
+def parabolic_maximum(x, f):
+    """Find the maximum by fitting a parabolic function to three points.
+    
+    Parameters
+    ----------
+    x : np.array
+        Values where the parabola is evaluated
+    y : np.array
+        Input function values
+    
+    Returns
+    -------
+    x_max
+    """
+    if x.size != 3:
+        raise ValueError("Sice of x and f must be 3")
+    f23 = f[1] - f[2]
+    f21 = f[1] - f[0]
+    x21 = x[1] - x[0]
+    x23 = x[1] - x[2]
+    x_max = x[1] - 0.5 * (x21**2 * f23 - x23**2 * f21) / (x21 * f23 - x23 * f21)
+    return x_max
 
 def flux_conserving_interpolation(new_wave : u.Quantity, wave : u.Quantity,
                                   spectra : u.Quantity) -> u.Quantity:
