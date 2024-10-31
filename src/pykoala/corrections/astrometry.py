@@ -20,9 +20,8 @@ from astropy import units as u
 # =============================================================================
 from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase, CorrectionOffset
-from pykoala.data_container import RSS
+from pykoala.data_container import RSS, Cube
 from pykoala.cubing import make_dummy_cube_from_rss
-from pykoala.data_container import Cube
 from pykoala.ancillary import interpolate_image_nonfinite
 from pykoala.plotting.utils import qc_registration_centroids
 from pykoala import photometry
@@ -142,6 +141,7 @@ class AstrometryOffsetCorrection(CorrectionBase):
         return dc_out
 
 
+# TODO: Turn into a child of AstrometryOffsetCorrection
 class AstrometryCorrection(CorrectionBase):
     """Perform astrometry-related corrections on DataContainers
     
@@ -275,9 +275,12 @@ class AstrometryCorrection(CorrectionBase):
                 cube = data_container
                 image = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
                 image /= np.nansum(image)
+            # Remove NaN values using N-Neighbours interpolation
             image = interpolate_image_nonfinite(image)
-            images.append(image)
+            # Convert the quantity into an array
+            images.append(image.value)
             wcs.append(cube.wcs.celestial)
+        # Perform the cross-correlation
         results = cross_correlate_images(images, oversample=oversample)
         for i in range(len(results)):
             pixels_shift = results[i][0]
@@ -287,10 +290,9 @@ class AstrometryCorrection(CorrectionBase):
             offsets.append([moving_origin.ra - reference_origin.ra,
                             moving_origin.dec - reference_origin.dec])
         if qc_plot:
-            fig = qc_registration_centroids(images, wcs,
-                                            offsets,
-                                            ref_pos=wcs[i + 1].pixel_to_world(images[0].shape[1] / 2,
-                                                                                    images[0].shape[0] / 2))
+            fig = qc_registration_centroids(images, wcs, offsets,
+                                            ref_pos=wcs[i + 1].pixel_to_world(
+                                                images[0].shape[1] / 2, images[0].shape[0] / 2))
             return offsets, fig
         else:
             return offsets, None
@@ -319,6 +321,7 @@ class AstrometryCorrection(CorrectionBase):
                 data_container, status='applied',
                 offset=f"{offset[0].to('arcsec')}, {offset[1].to('arcsec')} arcsec")
         elif data_container.__class__ is Cube:
+            # TODO: modify the WCS
             pass
 
 
