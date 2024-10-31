@@ -7,10 +7,7 @@ from matplotlib.cm import ScalarMappable
 import numpy as np
 
 from astropy import units as u
-from astropy.visualization import (MinMaxInterval, PercentileInterval,
-                                   AsymmetricPercentileInterval,
-                                   LinearStretch, SqrtStretch, PowerStretch,
-                                   ImageNormalize)
+from astropy import visualization
 from astropy.visualization import quantity_support
 
 from pykoala import vprint
@@ -31,6 +28,16 @@ def local_quantity_support(func):
             return func(*args, **kwargs)
     return wrapper
         
+
+def default_ax_setting(ax):
+    ax.xaxis.set_minor_locator(AutoMinorLocator())
+    ax.yaxis.set_minor_locator(AutoMinorLocator())
+    ax.tick_params(which='both', bottom=True,
+                   top=True, left=True, right=True)
+    ax.tick_params(which='major', direction='inout',
+                   length=8, grid_alpha=.3)
+    ax.tick_params(which='minor', direction='in', length=2, grid_alpha=.1)
+    ax.grid(True, which='both')
 
 def new_figure(fig_name,
                tweak_axes=True,
@@ -80,32 +87,22 @@ def new_figure(fig_name,
 
     fig, axes = plt.subplots(num=fig_name, figsize=figsize,
                              **kwargs)
-
     if tweak_axes:
         for ax in axes.flat:
-            ax.xaxis.set_minor_locator(AutoMinorLocator())
-            ax.yaxis.set_minor_locator(AutoMinorLocator())
-            ax.tick_params(which='both', bottom=True,
-                        top=True, left=True, right=True)
-            ax.tick_params(which='major', direction='inout',
-                        length=8, grid_alpha=.3)
-            ax.tick_params(which='minor', direction='in', length=2, grid_alpha=.1)
-            ax.grid(True, which='both')
-
+            default_ax_setting(ax)
     fig.suptitle(fig_name)
 
     return fig, axes
 
-@ancillary.remove_units_dec
 def plot_image(fig, ax, cblabel, data,
                cmap=DEFAULT_CMAP,
                xlabel=None, x=None,
                ylabel=None, y=None,
                cbax=None, norm=None,
-               norm_interval=AsymmetricPercentileInterval,
+               norm_interval=visualization.AsymmetricPercentileInterval,
                interval_args={"lower_percentile": 1.0,
                               "upper_percentile": 99.0},
-               stretch=PowerStretch, stretch_args={"a": 0.7}):
+               stretch=visualization.PowerStretch, stretch_args={"a": 0.7}):
     """
     Plot a colour map (imshow) with axes and colour scales.
 
@@ -137,20 +134,28 @@ def plot_image(fig, ax, cblabel, data,
     im : mpl.AxesImage
     cb : mpl.Colorbar
     """
-    if norm is None:
-        interval = norm_interval(**interval_args)
-        norm = ImageNormalize(data, interval=interval,
-                              stretch=stretch(**stretch_args),
-                              clip=False)
-    elif isinstance(norm, str):
-        norm = getattr(colors, norm)()
 
     if y is None:
         y = np.arange(data.shape[0])
     if x is None:
         x = np.arange(data.shape[1])
 
-    im = ax.imshow(data,
+    if isinstance(data, u.Quantity):
+        unit = data.unit
+        value = data.value
+    else:
+        value = data
+        unit = None
+
+    if norm is None:
+        interval = norm_interval(**interval_args)
+        norm = visualization.ImageNormalize(value, interval=interval,
+                              stretch=stretch(**stretch_args),
+                              clip=False)
+    elif isinstance(norm, str):
+        norm = getattr(colors, norm)()
+
+    im = ax.imshow(value,
                    extent=(x[0]-(x[1]-x[0])/2, x[-1]+(x[-1]-x[-2])/2,
                            y[0]-(y[1]-y[0])/2, y[-1]+(y[-1]-y[-2])/2),
                    interpolation='none', origin='lower',
@@ -173,17 +178,18 @@ def plot_image(fig, ax, cblabel, data,
         cb = None
     if cbax:
         cb.ax.yaxis.set_label_position("left")
+        if unit is not None:
+            cblabel = f"{cblabel} {unit}"
         cb.set_label(cblabel)
         cb.ax.tick_params(labelsize='small')
-
     return im, cb
 
 def plot_fibres(fig, ax, rss=None, x=None, y=None,
                 fibre_diam=None, data=None, 
                 patch_args={}, use_wcs=False, fix_limits=True,
                 cmap=DEFAULT_CMAP, norm=None, cbax=None, cblabel=None, 
-                norm_interval=MinMaxInterval, interval_args={},
-                stretch=LinearStretch, stretch_args={}):
+                norm_interval=visualization.MinMaxInterval, interval_args={},
+                stretch=visualization.LinearStretch, stretch_args={}):
     """
     Plot a colour map of a physical magnitude defined on each fibre.
 
@@ -240,6 +246,7 @@ def plot_fibres(fig, ax, rss=None, x=None, y=None,
             raise ValueError("Must provide a fibre diameter value")
 
     if not isinstance(x, u.Quantity):
+        # Assume that the values of x and y are sky positions
         x = x << u.degree
         y = y << u.degree
 
@@ -251,7 +258,7 @@ def plot_fibres(fig, ax, rss=None, x=None, y=None,
 
     if norm is None:
         interval = norm_interval(**interval_args)
-        norm = ImageNormalize(data, interval=interval,
+        norm = visualization.ImageNormalize(data, interval=interval,
                               stretch=stretch(**stretch_args),
                               clip=False)
     elif isinstance(norm, str):
@@ -312,34 +319,46 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
     fig = plt.figure(figsize=(12, 12))
     vprint(f"[QCPLOT] Cube QC plot for: {cube.info['name']}")
     plt.suptitle(cube.info['name'])
-    gs = fig.add_gridspec(5, 4, wspace=0.15, hspace=0.25)
+    gs = fig.add_gridspec(5, 4, wspace=0.35, hspace=0.25)
+
     # Maps -----
     wl_spaxel_idx = np.sort(np.random.randint(
         low=0, high=cube.intensity.shape[0], size=3))
     wl_col = ['b', 'g', 'r']
     for wl_idx, i in zip(wl_spaxel_idx, range(3)):
         ax = fig.add_subplot(gs[0, i:i+1])
+        default_ax_setting(ax)
         ax.set_title(r"$\lambda@${:.1f}".format(cube.wavelength[wl_idx]),
                      fontdict=dict(color=wl_col[i]))
-        ax.imshow(cube.intensity[wl_idx].value, aspect='auto', origin='lower',
-                  interpolation='none', cmap='cividis')
+        ax, cb = plot_image(fig, ax, data=cube.intensity[wl_idx],
+                            cblabel="Intensity", cmap="cividis")
+        cb.ax.yaxis.set_label_position("right")
         ax = fig.add_subplot(gs[1, i:i+1])
-        mappable = ax.imshow(cube.intensity[wl_idx] / cube.variance[wl_idx]**0.5,
-        interpolation='none', aspect='auto', origin='lower', cmap='jet')
-        plt.colorbar(mappable, ax=ax, label="SNR")
+        default_ax_setting(ax)
+        ax, cb = plot_image(fig, ax, 
+                   data=cube.intensity[wl_idx] / cube.variance[wl_idx]**0.5,
+                   cblabel="SNR",
+                   cmap="jet")
+        cb.ax.yaxis.set_label_position("right")
     
+    # Plot the mean intensity
     mean_intensity = np.nanmedian(cube.intensity, axis=0)
     mean_variance = np.nanmedian(cube.variance, axis=0)
     mean_intensity[~np.isfinite(mean_intensity)] = 0
     mean_instensity_pos = np.argsort(mean_intensity.flatten())
     mapax = fig.add_subplot(gs[1, -1])
-    mappable = mapax.imshow(mean_intensity / mean_variance**0.5, aspect='auto',
-                 interpolation='none', origin='lower', cmap='jet')
-    plt.colorbar(mappable, ax=mapax, label='SNR')
+    default_ax_setting(mapax)
+    _, cb = plot_image(fig, mapax, 
+                   data=mean_intensity / mean_variance**0.5,
+                   cblabel="SNR",
+                   cmap="jet")
+    cb.ax.yaxis.set_label_position("right")
+
     mapax = fig.add_subplot(gs[0, -1])
     mapax.set_title("Median")
-    mapax.imshow(mean_intensity.value, aspect='auto', interpolation='none',
-                 origin='lower', cmap='cividis')
+    _, cb = plot_image(fig, mapax,  data=mean_intensity, cblabel="Intensity",
+                       cmap="cividis")
+    cb.ax.yaxis.set_label_position("right")
     # ------ Spectra -------
     pos_col = ['purple', 'orange', 'cyan']
     x_spaxel_idx = np.random.randint(low=0,
@@ -354,6 +373,7 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
     x_spaxel_idx, y_spaxel_idx = np.unravel_index(spaxel_entries,
                                                   shape=mean_intensity.shape)
     ax = fig.add_subplot(gs[2:3, :])
+    default_ax_setting(ax)
     for x_idx, y_idx, i in zip(x_spaxel_idx, y_spaxel_idx, range(3)):
         ax.plot(cube.wavelength, cube.intensity[:, x_idx, y_idx], lw=0.8,
                 color=pos_col[i])
@@ -368,11 +388,11 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
     np.clip(ylim, a_min=0, a_max=None, out=ylim)
     ax.set_ylim(ylim)
     ax.set_yscale('symlog', linthresh=0.1)
-    ax.set_xlabel(f"Wavelength ({cube.wavelength.unit})")
     ax.set_ylabel(f"Flux ({cube.intensity.unit})")
 
     # SNR ------------
     ax = fig.add_subplot(gs[3:5, :], sharex=ax)
+    default_ax_setting(ax)
     for x_idx, y_idx, i in zip(x_spaxel_idx, y_spaxel_idx, range(3)):
         ax.plot(cube.wavelength,
                 cube.intensity[:, x_idx, y_idx] / cube.variance[:, x_idx, y_idx]**0.5, lw=0.8,
@@ -380,7 +400,7 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
                 label=f"Spaxel rank={spax_pct[i]}")
     ax.legend()
     ax.set_ylabel("SNR/pix")
-    ax.set_xlabel("Wavelength")
+    ax.set_xlabel(f"Wavelength ({cube.wavelength.unit})")
     plt.close(fig)
     return fig
 
