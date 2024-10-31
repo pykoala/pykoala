@@ -26,9 +26,9 @@ class WavelengthOffset(object):
 
     Attributes
     ----------
-    offset_data : np.ndarray
-        Wavelength offset, in pixels.
-    offset_error : np.ndarray
+    offset_data : :class:`astropy.units.Quantity`
+        Wavelength offset expressed in pixels or wavelengths.
+    offset_error : :class:`astropy.units.Quantity`
         Standard deviation of ``offset_data``.
     path: str
         Filename path.
@@ -39,6 +39,7 @@ class WavelengthOffset(object):
 
     def __init__(self, path=None, offset_data=None, offset_error=None):
         self.path = path
+        # The input units can be either pixel or wavelength
         self.offset_data = check_unit(offset_data)
         self.offset_error = check_unit(offset_error)
 
