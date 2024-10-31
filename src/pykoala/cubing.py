@@ -276,6 +276,8 @@ def interpolate_fibre(fib_spectra, fib_variance, cube, cube_var, cube_weight,
         ) * fib_spectra.size)
 
     # Set NaNs to 0 and discard pixels
+    if fibre_mask is None:
+        fibre_mask = np.zeros(fib_spectra.shape, dtype=bool)
     nan_pixels = ~np.isfinite(fib_spectra) | fibre_mask
     fib_spectra[nan_pixels] = 0. << fib_spectra.unit
 
@@ -368,7 +370,10 @@ def interpolate_rss(rss, wcs, kernel,
     else:
         adr_ra_pixel = None
     # Interpolate all RSS fibres
-    mask = rss.mask.get_flag_map(mask_flags)
+    if mask_flags is not None:
+        mask = rss.mask.get_flag_map(mask_flags)
+    else:
+        mask = np.zeros(rss.intensity.shape, dtype=bool)
     # Obtain fibre position in the detector (center of pixel)
     fibre_pixel_pos_cols, fibre_pixel_pos_rows = wcs.celestial.world_to_pixel(
         SkyCoord(rss.info['fib_ra'], rss.info['fib_dec']))
