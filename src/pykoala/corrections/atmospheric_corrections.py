@@ -18,6 +18,8 @@ from pykoala.corrections.correction import CorrectionBase
 from pykoala.ancillary import check_unit
 
 # =============================================================================
+# TODO: the names are very confusing. extinction_correction should be called
+# extinction law
 class AtmosphericExtCorrection(CorrectionBase):
     """Atmospheric Extinction Correction.
 
@@ -28,11 +30,11 @@ class AtmosphericExtCorrection(CorrectionBase):
     :math:`E` takes the form:
 
     .. math::
-        F_{obs}(\lambda) = E(\lambda) * F_{int}(\lambda)
+        F_{int}(\lambda) = E(\lambda) * F_{obs}(\lambda)
         
         E(\lambda) = 10^{0.4 \cdot airmass \cdot \eta(\lambda)}
 
-    where :math:`\eta` corresponds to the wavelength-dependent extinction curve.
+    where :math:`\eta(\lambda)` corresponds to the wavelength-dependent extinction curve.
 
     Attributes
     ----------
@@ -97,11 +99,8 @@ class AtmosphericExtCorrection(CorrectionBase):
         
         Returns
         -------
-        extinction: 1D np.ndarray
-            Extinction function :math:`E(\lambda)` shuch that
-
-            .. math::
-                F_{obs}(\lambda) = E(\lambda) \cdot F_{int}(\lambda)
+        extinction: np.ndarray
+            Extinction at a given wavelength and airmass.
         """
         extinction_correction = np.interp(wavelength,
                                           self.extinction_correction_wave,
@@ -149,15 +148,13 @@ class AtmosphericExtCorrection(CorrectionBase):
 
 
 # =============================================================================
-# Atmospheric Differential Refraction
+# Differential Atmospheric Refraction
 # =============================================================================
-
+# TODO: refactor ADR by DAR. Create a class that performs this correction.
 def get_adr(spectra_container : SpectraContainer, max_adr=0.5, pol_deg=2,
             plot=False):
     """Computes the ADR for a given DataContainer.
     
-    Description
-    -----------
     This method computes the spatial shift as function of wavelength that a
     chromatic source light experiments due to the Atmospheric Differential
     Refraction (ADR).
