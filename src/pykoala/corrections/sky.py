@@ -22,23 +22,20 @@ from astropy import stats
 from astropy import units as u
 import scipy.ndimage
 import scipy.signal
+
 # =============================================================================
-# KOALA packages
+# PyKOALA
 # =============================================================================
-# Modular
 from pykoala import vprint
 from pykoala.plotting.utils import new_figure, plot_image
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.corrections.throughput import Throughput
 from pykoala.corrections.wavelength import WavelengthOffset
-from pykoala.data_container import DataContainer
-from pykoala.data_container import RSS
+from pykoala.data_container import DataContainer, RSS
 from pykoala.ancillary import check_unit
-# =============================================================================
-# Background estimators
-# =============================================================================
 
 
+#TODO: Move to a math module
 class BackgroundEstimator:
     """
     Class for estimating background and its dispersion using different statistical methods.
@@ -204,6 +201,7 @@ class BackgroundEstimator:
         raise NotImplementedError("Sorry, not implemented :(")
 
 
+#TODO : Move to a math module
 # =============================================================================
 # Continuum estimators
 # =============================================================================
@@ -317,7 +315,7 @@ class ContinuumEstimator:
 
         return continuum+offset, offset
 
-
+#TODO: Documentation
 class ContinuumModel:
 
     def __init__(self, dc: DataContainer, min_separation=None):
@@ -358,7 +356,7 @@ class ContinuumModel:
 # =============================================================================
 # Line Spread Function
 # =============================================================================
-
+#TODO: Documenation and move to spectra module
 class LSF_estimator:
 
     def __init__(self, wavelength_range, resolution):
@@ -396,7 +394,7 @@ class LSF_estimator:
 # =============================================================================
 # Sky lines library
 # =============================================================================
-
+# TODO : this should be an instance of EMission lines in the spectra module
 def uves_sky_lines():
     """
     Library of sky emission lines measured with UVES@VLT.
@@ -577,6 +575,7 @@ class SkyModel(object):
         else:
             raise AttributeError("Sky model intensity has not been computed")
 
+    # TODO: This should make use of the methods in the "spectra" module
     def fit_emission_lines(self, window_size=100,
                            resampling_wave=0.1, **fit_kwargs):
         """
@@ -652,6 +651,7 @@ class SkyModel(object):
                 emission_model += g
         return emission_model, emission_spectra
 
+    # TODO: This should create an instance of EmissionLines
     def load_sky_lines(self, path_to_table=None, lines_pct=84., **kwargs):
         """
         Load sky lines from a file.
@@ -795,6 +795,8 @@ class SkyOffset(SkyModel):
         This method calculates the intensity and variance of the sky model using
         percentiles, then normalizes them by the exposure time.
         """
+        #TODO: This should create a 2D model that uses the median sky
+        # but shifts it to the posiotoin given on each individual fibre
         self.intensity, self.variance = BackgroundEstimator.percentile(
             self.dc.intensity, percentiles=[16, 50, 84])
         self.intensity, self.variance = (
@@ -1454,6 +1456,8 @@ def combine_telluric_corrections(list_of_telcorr, ref_wavelength):
 # Self-calibration based on strong sky lines
 # =============================================================================
 
+# TODO: rename SkyWaveletFilter?
+
 class WaveletFilter(object):
     '''
     Estimate overall fibre throughput and wavelength calibration based on sky emission lines (from wavelet transform).
@@ -1694,6 +1698,7 @@ class SkySelfCalibration(CorrectionBase):
         return line_wavelength*u.Angstrom, line_intensity
 
     def apply(self, rss):
+        #TODO : finish this module
         pass
 
 
