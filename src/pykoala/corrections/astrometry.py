@@ -278,7 +278,7 @@ class AstrometryCorrection(CorrectionBase):
             # Remove NaN values using N-Neighbours interpolation
             image = interpolate_image_nonfinite(image)
             # Convert the quantity into an array
-            images.append(image.value)
+            images.append(image)
             wcs.append(cube.wcs.celestial)
         # Perform the cross-correlation
         results = cross_correlate_images(images, oversample=oversample)
