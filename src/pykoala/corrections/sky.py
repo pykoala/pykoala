@@ -1094,10 +1094,28 @@ class TelluricCorrection(CorrectionBase):
         Saves the telluric correction to a text file.
     """
     name = "TelluricCorretion"
-    telluric_correction = None
+    _telluric_correction = None
+    _wavelength = None
     default_model_file = os.path.join(os.path.dirname(__file__), '..',
                                       'input_data', 'sky_lines',
                                       'telluric_lines.txt')
+    
+    @property
+    def telluric_correction(self):
+        return self._telluric_correction
+
+    @telluric_correction.setter
+    def telluric_correction(self, value):
+        self._telluric_correction = value
+
+    @property
+    def wavelength(self):
+        return self._wavelength
+
+    @wavelength.setter
+    def wavelength(self, value):
+        self._wavelength = check_unit(value, u.angstrom)
+
     def __init__(self,
                 #  data_container=None,
                  telluric_correction,
@@ -1128,8 +1146,8 @@ class TelluricCorrection(CorrectionBase):
         """
         super().__init__(**correction_kwargs)
 
-        self.telluric_correction = telluric_correction
-        self.wavelength = check_unit(wavelength, u.angstrom)
+        self._telluric_correction = telluric_correction
+        self._wavelength = wavelength
         self.telluric_correction_file = telluric_correction_file
 
     @classmethod
@@ -1284,7 +1302,6 @@ class TelluricCorrection(CorrectionBase):
             fig = None
         return cls(telluric_correction=telluric_correction,
                 wavelength=spectra_container.wavelength), fig
-
 
     @classmethod
     def flag_data_container(cls, data_container, telluric_correction=None,
