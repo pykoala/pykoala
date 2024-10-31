@@ -821,7 +821,7 @@ def crosscorrelate_im_apertures(ref_aperture_flux, ref_coord, image,
     vprint(f"Status : {result.status}")
     vprint(f"Result : {result.x}")
     vprint(f"Number of evaluations : {result.nfev}")
-    results = {"offset_min": result.x, "opt_results": result}
+    results = {"offset_min": result.x << u.arcsec, "opt_results": result}
 
     return results
 
@@ -855,7 +855,10 @@ def make_plot_astrometry_offset(data_container, dc_synth_photo, image, results):
         dc_contour_params = dict(levels=[17, 18, 19, 20, 21, 22], colors='r')
         contour_params = dict(levels=[17, 18, 19, 20, 21, 22], colors='k')
 
-        fig, axs = utils.new_figure("Astrometry Offset", figsize=(10, 4),
+        offset_str = (f"{results['offset_min'][0]:.1f}"
+                      + f", {results['offset_min'][1]:.1f}")
+        
+        fig, axs = utils.new_figure(f"Astrometry Offset ({offset_str})", figsize=(10, 4),
                                     ncols=2, sharex=True, sharey=True,
                                     subplot_kw=dict(projection=image['ccd'].wcs),
                                     gridspec_kw=dict(wspace=0.1),
@@ -877,8 +880,8 @@ def make_plot_astrometry_offset(data_container, dc_synth_photo, image, results):
             # Compute the correctec WCS
             correct_wcs = update_wcs_coords(wcs=data_container.wcs.celestial,
                                             ra_dec_offset=(
-                                            results['offset_min'][0] / 3600,
-                                            results['offset_min'][1] / 3600))
+                                                results['offset_min'][0],
+                                                results['offset_min'][1]))
             cs = axs[1].contour(synt_sb, transform=axs[1].get_transform(correct_wcs),
                            **dc_contour_params)
         elif isinstance(data_container, RSS):
@@ -889,8 +892,8 @@ def make_plot_astrometry_offset(data_container, dc_synth_photo, image, results):
                                       transform=axs[0].get_transform("world"))
             #plt.colorbar(mappable, ax=axs[0])
             mappable = axs[1].scatter(
-                data_container.info['fib_ra'] + results['offset_min'][0] / 3600,
-                data_container.info['fib_dec'] + results['offset_min'][1] / 3600,
+                data_container.info['fib_ra'] + results['offset_min'][0],
+                data_container.info['fib_dec'] + results['offset_min'][1],
                 c=synt_sb,
                 transform=axs[1].get_transform("world"))
             plt.colorbar(mappable, ax=axs[1], label='Aperture magnitude')
