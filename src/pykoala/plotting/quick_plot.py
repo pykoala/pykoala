@@ -4,7 +4,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+from pykoala.ancillary import remove_units_dec
 
+@remove_units_dec
 def quick_plot(x, y,  xmin=None,xmax=None,ymin=None,ymax=None,percentile_min=2, percentile_max=98, extra_y = 0.1,
               ptitle = None, xlabel = None, ylabel = None, label="",
               #ptitle="Pretty plot", xlabel="Wavelength [$\mathrm{\AA}$]", ylabel="", 

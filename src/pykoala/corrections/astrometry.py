@@ -20,9 +20,8 @@ from astropy import units as u
 # =============================================================================
 from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase, CorrectionOffset
-from pykoala.data_container import RSS
+from pykoala.data_container import RSS, Cube
 from pykoala.cubing import make_dummy_cube_from_rss
-from pykoala.data_container import Cube
 from pykoala.ancillary import interpolate_image_nonfinite
 from pykoala.plotting.utils import qc_registration_centroids
 from pykoala import photometry
@@ -117,9 +116,9 @@ class AstrometryOffsetCorrection(CorrectionBase):
             external_image, results)
         results['offset_fig'] = fig
 
-        offset = np.array(results['offset_min'])
-        return cls(offset=CorrectionOffset(offset_data=offset,
-                   offset_error=np.full_like(offset, fill_value=np.nan))), results
+        return cls(offset=CorrectionOffset(offset_data=results['offset_min'],
+                   offset_error=np.full_like(results['offset_min'],
+                                             fill_value=np.nan))), results
 
     def apply(self, data_container):
         """Apply an astrometric offset correction to a DataContainer.
@@ -137,11 +136,12 @@ class AstrometryOffsetCorrection(CorrectionBase):
         self.vprint(
             f"Applying astrometry offset correction to DC (RA, DEC): {self.offset.offset_data}")
         dc_out = data_container.copy()
-        dc_out.update_coordinates(offset=self.offset.offset_data / 3600)
+        dc_out.update_coordinates(offset=self.offset.offset_data)
         self.record_correction(dc_out, status='applied')
         return dc_out
 
 
+# TODO: Turn into a child of AstrometryOffsetCorrection
 class AstrometryCorrection(CorrectionBase):
     """Perform astrometry-related corrections on DataContainers
     
@@ -211,7 +211,8 @@ class AstrometryCorrection(CorrectionBase):
         offsets = []
         for data in data_set:
             if qc_plot:
-                cube, image, _, centroid_world = find_centroid_in_dc(data, **centroid_args)
+                cube, image, _, centroid_world = find_centroid_in_dc(
+                    data, **centroid_args)
                 images_list.append(image)
                 wcs_list.append(cube.wcs.celestial)
                 centroid_list.append(centroid_world)                
@@ -274,10 +275,12 @@ class AstrometryCorrection(CorrectionBase):
                 cube = data_container
                 image = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
                 image /= np.nansum(image)
-
+            # Remove NaN values using N-Neighbours interpolation
             image = interpolate_image_nonfinite(image)
+            # Convert the quantity into an array
             images.append(image)
             wcs.append(cube.wcs.celestial)
+        # Perform the cross-correlation
         results = cross_correlate_images(images, oversample=oversample)
         for i in range(len(results)):
             pixels_shift = results[i][0]
@@ -287,10 +290,9 @@ class AstrometryCorrection(CorrectionBase):
             offsets.append([moving_origin.ra - reference_origin.ra,
                             moving_origin.dec - reference_origin.dec])
         if qc_plot:
-            fig = qc_registration_centroids(images, wcs,
-                                            offsets,
-                                            ref_pos=wcs[i + 1].pixel_to_world(images[0].shape[1] / 2,
-                                                                                    images[0].shape[0] / 2))
+            fig = qc_registration_centroids(images, wcs, offsets,
+                                            ref_pos=wcs[i + 1].pixel_to_world(
+                                                images[0].shape[1] / 2, images[0].shape[0] / 2))
             return offsets, fig
         else:
             return offsets, None
@@ -312,13 +314,14 @@ class AstrometryCorrection(CorrectionBase):
         if data_container.__class__ is RSS:
             self.vprint("Applying correction to RSS")
 
-            data_container.info['fib_ra'] += offset[0].to('deg').value
-            data_container.info['fib_dec'] += offset[1].to('deg').value
+            data_container.info['fib_ra'] += offset[0]
+            data_container.info['fib_dec'] += offset[1]
 
             self.record_correction(
                 data_container, status='applied',
-                offset=f"{offset[0].to('arcsec')}{offset[1].to('arcsec')} arcsec")
+                offset=f"{offset[0].to('arcsec')}, {offset[1].to('arcsec')} arcsec")
         elif data_container.__class__ is Cube:
+            # TODO: modify the WCS
             pass
 
 
@@ -369,17 +372,17 @@ def find_centroid_in_dc(data_container, wave_range=None,
 
     if subbox is None:
         subbox = [[None, None], [None, None]]
-
-    if data_container.__class__ is RSS:
+    if isinstance(data_container, RSS):
         vprint(
             "[Registration]  Data provided in RSS format --> creating a dummy datacube")
         cube = make_dummy_cube_from_rss(data_container, quick_cube_pix_size)
         image = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
-    elif data_container.__class__ is Cube:
+    elif isinstance(data_container, Cube):
         cube = data_container
         image = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
         image /= np.nansum(image)
-
+    else:
+        raise TypeError("Input DC must be an instance of Cube or RSS")
     # Select a subbox
     image = image[subbox[0][0]:subbox[0][1],
                   subbox[1][0]: subbox[1][1]]
@@ -387,7 +390,7 @@ def find_centroid_in_dc(data_container, wave_range=None,
     # image = interpolate_image_nonfinite(image)
     centroider_mask = ~ np.isfinite(image)
     # Find centroid
-    centroid_pixel  = np.array(centroider(image**com_power, centroider_mask))
+    centroid_pixel  = np.array(centroider(image.value**com_power, centroider_mask))
     centroid_world = cube.wcs.celestial.pixel_to_world(*centroid_pixel)
     if not full_output:
         return centroid_world
