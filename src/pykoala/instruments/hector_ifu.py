@@ -17,7 +17,7 @@ from astropy.wcs import WCS
 # KOALA packages
 # =============================================================================
 from pykoala import vprint  # Template to create the info variable 
-from pykoala.rss import read_rss
+from pykoala.instruments.koala_ifu import read_rss
 
 
 def airmass_from_header(header):
@@ -112,7 +112,6 @@ def hector_rss(path_to_file, bundle=''):
                    header=header,
                    fibre_table=koala_fibre_table,
                    info=info,
-                   wcs=wcs
                    )
     return rss
 

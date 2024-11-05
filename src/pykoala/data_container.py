@@ -1078,6 +1078,7 @@ class RSS(SpectraContainer):
         - If `fibre_range` or `wavelength_range` is specified, the data is sliced accordingly.
         - The plot is saved to `output_filename` if provided, otherwise the figure is returned for display or further manipulation.
 
+        
         """
         x = self.wavelength
         y = np.arange(0, self.intensity.shape[0])
