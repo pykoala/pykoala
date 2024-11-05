@@ -87,7 +87,7 @@ def hector_rss(path_to_file, bundle=''):
     header = fits.getheader(path_to_file, 0) + fits.getheader(path_to_file, 2)
     header = hector_header(header)
     # WCS
-    wcs = WCS(header)
+    wcs_value = WCS(header)
     # Constructing Pykoala Spaxels table from 2dfdr spaxels table (data[2])
     fibre_table = fits.getdata(path_to_file, 2)
     koala_fibre_table, bad_fibres = set_fibre_table(fibre_table, bundle=bundle)
@@ -112,7 +112,7 @@ def hector_rss(path_to_file, bundle=''):
                    header=header,
                    fibre_table=koala_fibre_table,
                    info=info,
-                   wcs=wcs
+                   wcs=wcs_value
                    )
     return rss
 
