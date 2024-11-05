@@ -1,4 +1,4 @@
 mock==4.0.3
 sphinx_rtd_theme>=3.0.0
-sphinx==5.0.0
+sphinx>=5.0.0
 nbsphinx==0.9.3
