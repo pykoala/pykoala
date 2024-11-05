@@ -17,7 +17,7 @@ from astropy.wcs import WCS
 # KOALA packages
 # =============================================================================
 from pykoala import vprint  # Template to create the info variable 
-from pykoala.rss import read_rss
+from pykoala.instruments.koala_ifu import read_rss
 
 
 def airmass_from_header(header):
@@ -87,7 +87,7 @@ def hector_rss(path_to_file, bundle=''):
     header = fits.getheader(path_to_file, 0) + fits.getheader(path_to_file, 2)
     header = hector_header(header)
     # WCS
-    wcs_value = WCS(header)
+    wcs = WCS(header)
     # Constructing Pykoala Spaxels table from 2dfdr spaxels table (data[2])
     fibre_table = fits.getdata(path_to_file, 2)
     koala_fibre_table, bad_fibres = set_fibre_table(fibre_table, bundle=bundle)
@@ -112,7 +112,6 @@ def hector_rss(path_to_file, bundle=''):
                    header=header,
                    fibre_table=koala_fibre_table,
                    info=info,
-                   wcs=wcs_value
                    )
     return rss
 
