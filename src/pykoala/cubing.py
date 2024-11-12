@@ -436,18 +436,24 @@ def build_cube(rss_set, wcs=None, wcs_params=None, kernel=GaussianKernel,
         wcs = WCS(wcs_params)
     plots = {}
     # Initialise kernel
-    kernel_size_arcsec = ancillary.check_unit(kernel_size_arcsec, u.arcsec)
-    pixel_size = wcs.celestial.pixel_scale_matrix.diagonal().mean() << u.deg
-    kernel_scale = (kernel_size_arcsec / pixel_size).decompose()
+    if isinstance(kernel, type):
+        kernel_size_arcsec = ancillary.check_unit(kernel_size_arcsec, u.arcsec)
+        pixel_size = wcs.celestial.pixel_scale_matrix.diagonal().mean() << u.deg
+        kernel_scale = (kernel_size_arcsec / pixel_size).decompose()
 
-    vprint(
-        f"[Cubing] Initialising {kernel.__name__}"
-        + f"\n Scale: {kernel_scale:.1f} (pixels)"
-        + f"\n Truncation radius: {kernel_truncation_radius:.1f}")
-    kernel = kernel(pixel_scale_arcsec=pixel_size,
-                    scale=kernel_scale,
-                    truncation_radius=kernel_truncation_radius)
-    
+        vprint(
+            f"[Cubing] Initialising {kernel.__name__}"
+            + f"\n Scale: {kernel_scale:.1f} (pixels)"
+            + f"\n Truncation radius: {kernel_truncation_radius:.1f}")
+        kernel = kernel(pixel_scale_arcsec=pixel_size,
+                        scale=kernel_scale,
+                        truncation_radius=kernel_truncation_radius)
+    else:
+        kernel_size_arcsec = kernel.
+        vprint(
+            f"[Cubing] Uer-provided interpolation kernel"
+            + f"\n Scale: {kernel.scale:.1f} (pixels)"
+            + f"\n Truncation radius: {kernel.truncation_radius:.1f}")
     # Create empty cubes for data, variance and weights - these will be filled and returned
     vprint(f"[Cubing] Initialising new datacube with dimensions: {wcs.array_shape}")
     # Create the output data units
