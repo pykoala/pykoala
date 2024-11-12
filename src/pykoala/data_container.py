@@ -1095,7 +1095,7 @@ class RSS(SpectraContainer):
             x = x[wavelength_range]
 
         fig, axs = new_figure(self.info['name'], **fig_args)
-        im, cb = plot_image(fig, axs[0, 0], data_label, data,
+        im, cb = plot_image(fig, axs[0, 0], cblabel=data_label, data=data,
                             x=x, y=y,
                             xlabel="Wavelength [AA]", ylabel="Fibre",
                             **cmap_args)
