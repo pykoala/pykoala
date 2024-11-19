@@ -159,7 +159,7 @@ class WavelengthCorrection(CorrectionBase):
 
         rss_out = rss.copy()
         self.vprint("Applying correction to input RSS")
-        if self.offset.offset_data.unit is u.pixel:
+        if self.offset.offset_data.unit.is_equivalent(u.pixel):
             x = np.arange(rss.wavelength.size) << u.pixel
         elif self.offset.offset_data.unit.is_equivalent(u.AA):
             x = rss.wavelength.to(self.offset.offset_data.unit)

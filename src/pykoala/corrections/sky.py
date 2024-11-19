@@ -139,7 +139,7 @@ class BackgroundEstimator:
         m = (I_hi - I_low) / (flux_hi - flux_low)
         b = I_low - m * flux_low
 
-        sky_flux_candidate = np.arange(0, flux_cut_hi, .01*np.min(flux))
+        sky_flux_candidate = np.linspace(0, flux_cut_hi, int(100*flux_cut_hi/flux_cut_low))
         sky_filtered = m[np.newaxis, :] * \
             sky_flux_candidate[:, np.newaxis] + b[np.newaxis, :]
         x = np.nancumsum(sky_filtered, axis=1)
@@ -1571,8 +1571,8 @@ class WaveletFilter(object):
             self.filtered, x[np.newaxis, ::-1], mode='same', axes=1)[:, mid-s:mid+s+1]
         idx = np.arange(x.shape[1])
         weight = np.where(x > 0, x, 0)
-        self.fibre_offset = np.nansum(
-            (idx - s)[np.newaxis, :] * weight, axis=1) / np.nansum(weight, axis=1)
+        self.fibre_offset = np.nansum((idx - s)[np.newaxis, :] * weight, axis=1
+                                     ) / np.nansum(weight, axis=1) << u.pixel
 
     def qc_plots(self, show=False, save_as=None):
         '''

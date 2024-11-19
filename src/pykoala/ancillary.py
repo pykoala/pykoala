@@ -295,7 +295,7 @@ def flux_conserving_interpolation(new_wave : u.Quantity, wave : u.Quantity,
     interp_spectra : np.ndarray
         Interpolated spectra to `new_wave`
     """
-    wave = check_unit(wave, u.AA)
+    #wave = check_unit(wave, u.AA) # TODO: u.AA or u.pixel
     new_wave = check_unit(new_wave, wave.unit)
     # Strict check
     # Spectra can have different, non-compatible units, such as ADU or flam
