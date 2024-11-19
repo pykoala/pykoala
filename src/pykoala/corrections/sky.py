@@ -1482,17 +1482,18 @@ class WaveletFilter(object):
         Relative wavelenght calibration. Offset, in pixels, with respect to the sky (from weighted cross-correlation).
     '''
 
-    def __init__(self, rss: RSS):
+    def __init__(self, rss: RSS, h=None):
 
         # 1. Estimate the FWHM of emission lines from the autocorrelation of the median (~ sky) spectrum.
+        
+        if h is None:
+            x = np.nanmedian(rss.intensity, axis=0)  # median ~ sky spectrum
+            x -= np.nanmean(x)
+            x = scipy.signal.correlate(x, x, mode='same')
+            h = (np.count_nonzero(x > 0.5*np.nanmax(x)) + 1) // 2
 
-        x = np.nanmedian(rss.intensity, axis=0)  # median ~ sky spectrum
-        x -= np.nanmean(x)
-        x = scipy.signal.correlate(x, x, mode='same')
-        h = (np.count_nonzero(x > 0.5*np.nanmax(x)) + 1) // 2
-        # h = 0
         self.scale = 2*h + 1
-        vprint(f'> Wavelet filter scale: {self.scale} pixels')
+        vprint(f'> Wavelet --filter scale: {self.scale} pixels')
 
         # 2. Apply a (mexican top hat) wavelet filter to detect features on that scale (i.e. filter out the continuum).
 
@@ -1591,7 +1592,10 @@ class WaveletFilter(object):
             fig.savefig(save_as)
 
     def get_throughput_object(self):
-        return Throughput(throughput_data=np.repeat(self.fibre_throughput[:, np.newaxis], self.wavelength.size + 3*self.scale, axis=1))
+        return Throughput(
+            throughput_data=np.repeat(self.fibre_throughput[:, np.newaxis], self.wavelength.size + 3*self.scale, axis=1),
+            throughput_error=np.full(self.fibre_throughput.shape+(self.wavelength.size + 3*self.scale,), np.nan),
+        )
 
     def get_wavelength_offset(self):
         return WavelengthOffset(offset_data=np.repeat(self.fibre_offset[:, np.newaxis], self.wavelength.size + 3*self.scale, axis=1))
