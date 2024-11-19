@@ -206,6 +206,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
             path = os.path.join(os.path.dirname(__file__), '..',
                      'input_data', 'spectrophotometric_stars',
                      'sun_mod_001.fits')
+        vprint(f'Solar spectrum from {path}')
         with fits.open(path) as hdul:
             sun_wavelength = hdul[extension].data['WAVELENGTH']
             sun_wavelength = vac_to_air(sun_wavelength)
