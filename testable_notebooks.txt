@@ -4,3 +4,4 @@ tutorials/reduction_sequence_science.ipynb
 tutorials/cubing.ipynb
 tutorials/data_container_mask.ipynb
 tutorials/koala_tutorial_1_intro.ipynb
+tutorials/corrections/sky-based_calibration.ipynb
