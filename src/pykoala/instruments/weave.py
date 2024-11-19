@@ -60,13 +60,9 @@ def weave_rss(filename):
            wavelength=wavelength,
            variance=variance,
            log=log,
-<<<<<<< HEAD
-           info=info
-=======
            #header=header,
            info=info,
            wcs=wcs
->>>>>>> main
            )
 
 
