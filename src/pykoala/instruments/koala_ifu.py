@@ -10,6 +10,7 @@ import os
 # =============================================================================
 # Astropy and associated packages
 # =============================================================================
+from astropy import units as u
 from astropy.io import fits
 from astropy.wcs import WCS
 # =============================================================================
@@ -150,13 +151,17 @@ def read_rss(file_path,
     # Create wavelength from wcs
     nrow, ncol = wcs.array_shape
     wavelength_index = np.arange(ncol)
-    wavelength = wcs.dropaxis(1).wcs_pix2world(wavelength_index, 0)[0]
+    #TODO : remove to_value once units are homogeneized
+    wavelength = wcs.spectral.array_index_to_world(wavelength_index).to_value("angstrom")
     # First Header value added by the PyKoala routine
-    rss = RSS(intensity=intensity,
-               variance=variance,
-               wavelength=wavelength,
-               info=info,
-               header=header)
+    rss = RSS(intensity=intensity << u.adu,
+              variance=variance << u.adu**2,
+              wavelength=wavelength << u.angstrom,
+              info=info,
+              header=header,
+              fibre_diameter=1.25 << u.arcsec,
+              wcs=wcs)
+
     rss.history('read', ' '.join(['- RSS read from ', file_name]))
     return rss
 
@@ -173,6 +178,8 @@ def koala_rss(path_to_file):
         header["RADECSYSa"] = header["RADECSYS"]
         del header["RADECSYS"]
     koala_wcs = WCS(header)
+    # Fix the WCS information such that koala_wcs.spectra exists
+    koala_wcs.wcs.ctype[0] = 'WAVE    '
     # Constructing Pykoala Spaxels table from 2dfdr spaxels table (data[2])
     fibre_table = fits.getdata(path_to_file, 2)
     koala_fibre_table = py_koala_fibre_table(fibre_table)
@@ -183,9 +190,11 @@ def koala_rss(path_to_file):
     # Create the dictionary containing relevant information
     info = {}
     info['name'] = header['OBJECT']
-    info['exptime'] = header['EXPOSED']
-    info['fib_ra'] = np.rad2deg(header['RACEN']) + koala_fibre_table.data['Delta_RA'] / 3600
-    info['fib_dec'] = np.rad2deg(header['DECCEN']) + koala_fibre_table.data['Delta_DEC'] / 3600
+    info['exptime'] = header['EXPOSED'] << u.second
+    info['fib_ra'] = (np.rad2deg(header['RACEN'])
+                      + koala_fibre_table.data['Delta_RA'] / 3600) << u.deg
+    info['fib_dec'] = (np.rad2deg(header['DECCEN'])
+                       + koala_fibre_table.data['Delta_DEC'] / 3600) << u.deg
     info['airmass'] = airmass_from_header(header)
     # Read RSS file into a PyKoala RSS object
     rss = read_rss(path_to_file, wcs=koala_wcs,

@@ -10,19 +10,138 @@ import numpy as np
 # Astropy and associated packages
 # =============================================================================
 from astropy import units as u
+from astropy import constants
 from astropy.coordinates import SkyCoord
 from photutils.centroids import centroid_2dg, centroid_com
+from astropy import units as u
+
 # =============================================================================
 # KOALA packages
 # =============================================================================
 from pykoala import vprint
-from pykoala.corrections.correction import CorrectionBase
-from pykoala.data_container import RSS
+from pykoala.corrections.correction import CorrectionBase, CorrectionOffset
+from pykoala.data_container import RSS, Cube
 from pykoala.cubing import make_dummy_cube_from_rss
-from pykoala.data_container import Cube
 from pykoala.ancillary import interpolate_image_nonfinite
-from pykoala.plotting.qc_plot import qc_registration_centroids
+from pykoala.plotting.utils import qc_registration_centroids
+from pykoala import photometry
 
+
+class AstrometryOffsetCorrection(CorrectionBase):
+    """Astrometry Offset correction class.
+
+    This class accounts for relative astrometric offsets.
+
+    Attributes
+    ----------
+    offset : AstrometryOffset
+        Fibre astrometric offset.
+    verbose: bool
+        False by default.
+    
+    See also
+    --------
+    :class:`CorrectionBase`
+
+    """
+    name = "AstrometryOffsetCorrection"
+    offset = None
+    verbose = False
+
+    def __init__(self, offset_path=None, offset=None, **correction_kwargs):
+        super().__init__(**correction_kwargs)
+
+        self.path = offset_path
+        self.offset = offset
+
+    @classmethod
+    def from_fits(cls, path):
+        """Initialise a AstrometryOffsetCorrection from an input FITS file.
+        
+        Parameters
+        ----------
+        path : str
+            Path to the FITS file containing the offset data.
+
+        Returns
+        -------
+        offset_correction : :class:`WavelengthCorrection`
+            A :class:`WavelengthCorrection` initialised with the input data.
+        """
+        return cls(offset=CorrectionOffset.from_fits(path=path),
+                   offset_path=path)
+
+    @classmethod
+    def from_external_image(cls, data_container, external_image, filter_name,
+                            **crosscorr_kwargs):
+        """Use a reference external image to compute the offset.
+        
+        Description
+        -----------
+        Estimate an astrometric offsets by cross-correlating a reference image with
+        the DataContainer using mulitple aperture photometry.
+
+        Parameters
+        ----------
+        data_container : :class:`pykoala.data_container.DataContainer`
+            Target DataContainer.
+        external_image : dict
+            A dictionary containing the ``ccd`` of a reference image,
+            corresponding to an instance of astropy.nddata.CCDData, and the
+            pixels size ("pix_size") expressed in arcseconds.
+        filter_name : str
+            Name of the filter passband associated to the external image.
+        crosscorr_kwargs : 
+            Additional arguments to be passed to :func:`crosscorrelate_im_apertures`.
+
+        Returns
+        -------
+        astrometry_offset_correction : class:`AstrometryOffsetCorrection`
+            The resulting correction.
+        results : dict
+            Dictionary containing the results of the cross-correlation.
+        """
+        # Compute the synthetic photometry associated to the DataContainer
+        dc_photometry = photometry.get_dc_aperture_flux(
+            data_container, filter_name)
+        # Only include valid (finite-valued) apertures
+        vprint("Computing astrometric offsets")
+        results = photometry.crosscorrelate_im_apertures(
+            dc_photometry['aperture_flux'][dc_photometry['aperture_mask']],
+            dc_photometry['coordinates'][dc_photometry['aperture_mask']],
+            external_image, **crosscorr_kwargs)
+        # Make a QC plot with the resulting solution
+        fig = photometry.make_plot_astrometry_offset(
+            data_container, dc_photometry['synth_photo'],
+            external_image, results)
+        results['offset_fig'] = fig
+
+        return cls(offset=CorrectionOffset(offset_data=results['offset_min'],
+                   offset_error=np.full_like(results['offset_min'],
+                                             fill_value=np.nan))), results
+
+    def apply(self, data_container):
+        """Apply an astrometric offset correction to a DataContainer.
+
+        Parameters
+        ----------
+        data_container : :class:`pykoala.data_container.DataContainer`
+            DataContainer to be corrected.
+
+        Returns
+        -------
+        dc_corrected : :class:`pykoala.data_container.DataContainer`
+            Corrected copy of the input DC.
+        """
+        self.vprint(
+            f"Applying astrometry offset correction to DC (RA, DEC): {self.offset.offset_data}")
+        dc_out = data_container.copy()
+        dc_out.update_coordinates(offset=self.offset.offset_data)
+        self.record_correction(dc_out, status='applied')
+        return dc_out
+
+
+# TODO: Turn into a child of AstrometryOffsetCorrection
 class AstrometryCorrection(CorrectionBase):
     """Perform astrometry-related corrections on DataContainers
     
@@ -58,7 +177,7 @@ class AstrometryCorrection(CorrectionBase):
             Database querable name for absolute astrometry calibration.
         qc_plot: bool, default=False
             If true, a QC plot will be generated by calling
-            ``pykoala.plotting.qc_plot.qc_registration_centroids``.
+            ``pykoala.plotting.utils.qc_registration_centroids``.
         **centroid_args:
             Extra arguments passed to the `pykoala.corrections.astrometry.find_centroid_in_dc` function.
         
@@ -92,7 +211,8 @@ class AstrometryCorrection(CorrectionBase):
         offsets = []
         for data in data_set:
             if qc_plot:
-                cube, image, _, centroid_world = find_centroid_in_dc(data, **centroid_args)
+                cube, image, _, centroid_world = find_centroid_in_dc(
+                    data, **centroid_args)
                 images_list.append(image)
                 wcs_list.append(cube.wcs.celestial)
                 centroid_list.append(centroid_world)                
@@ -155,10 +275,12 @@ class AstrometryCorrection(CorrectionBase):
                 cube = data_container
                 image = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
                 image /= np.nansum(image)
-
+            # Remove NaN values using N-Neighbours interpolation
             image = interpolate_image_nonfinite(image)
+            # Convert the quantity into an array
             images.append(image)
             wcs.append(cube.wcs.celestial)
+        # Perform the cross-correlation
         results = cross_correlate_images(images, oversample=oversample)
         for i in range(len(results)):
             pixels_shift = results[i][0]
@@ -168,10 +290,9 @@ class AstrometryCorrection(CorrectionBase):
             offsets.append([moving_origin.ra - reference_origin.ra,
                             moving_origin.dec - reference_origin.dec])
         if qc_plot:
-            fig = qc_registration_centroids(images, wcs,
-                                            offsets,
-                                            ref_pos=wcs[i + 1].pixel_to_world(images[0].shape[1] / 2,
-                                                                                    images[0].shape[0] / 2))
+            fig = qc_registration_centroids(images, wcs, offsets,
+                                            ref_pos=wcs[i + 1].pixel_to_world(
+                                                images[0].shape[1] / 2, images[0].shape[0] / 2))
             return offsets, fig
         else:
             return offsets, None
@@ -193,13 +314,14 @@ class AstrometryCorrection(CorrectionBase):
         if data_container.__class__ is RSS:
             self.vprint("Applying correction to RSS")
 
-            data_container.info['fib_ra'] += offset[0].to('deg').value
-            data_container.info['fib_dec'] += offset[1].to('deg').value
+            data_container.info['fib_ra'] += offset[0]
+            data_container.info['fib_dec'] += offset[1]
 
             self.record_correction(
                 data_container, status='applied',
-                offset=f"{offset[0].to('arcsec')}{offset[1].to('arcsec')} arcsec")
+                offset=f"{offset[0].to('arcsec')}, {offset[1].to('arcsec')} arcsec")
         elif data_container.__class__ is Cube:
+            # TODO: modify the WCS
             pass
 
 
@@ -250,17 +372,17 @@ def find_centroid_in_dc(data_container, wave_range=None,
 
     if subbox is None:
         subbox = [[None, None], [None, None]]
-
-    if data_container.__class__ is RSS:
+    if isinstance(data_container, RSS):
         vprint(
             "[Registration]  Data provided in RSS format --> creating a dummy datacube")
         cube = make_dummy_cube_from_rss(data_container, quick_cube_pix_size)
         image = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
-    elif data_container.__class__ is Cube:
+    elif isinstance(data_container, Cube):
         cube = data_container
         image = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
         image /= np.nansum(image)
-
+    else:
+        raise TypeError("Input DC must be an instance of Cube or RSS")
     # Select a subbox
     image = image[subbox[0][0]:subbox[0][1],
                   subbox[1][0]: subbox[1][1]]
@@ -268,7 +390,7 @@ def find_centroid_in_dc(data_container, wave_range=None,
     # image = interpolate_image_nonfinite(image)
     centroider_mask = ~ np.isfinite(image)
     # Find centroid
-    centroid_pixel  = np.array(centroider(image**com_power, centroider_mask))
+    centroid_pixel  = np.array(centroider(image.value**com_power, centroider_mask))
     centroid_world = cube.wcs.celestial.pixel_to_world(*centroid_pixel)
     if not full_output:
         return centroid_world

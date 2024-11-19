@@ -30,8 +30,8 @@ def weave_rss(filename):
         pixels = np.arange(hdu[1].data.shape[1])
         wavelength = wcs.spectral.array_index_to_world(pixels)
         
-        intensity = hdu[3].data
-        variance = np.where(hdu[4].data > 0, 1/hdu[4].data, np.nan)
+        intensity = hdu[3].data << u.adu
+        variance = np.where(hdu[4].data > 0, 1/hdu[4].data, np.nan) << u.adu**2
         # -- Temporary hack for twilights:
         #intensity = hdu[1].data
         #variance = 1 / np.where(hdu[2].data > 0, hdu[2].data, np.nan)
@@ -51,20 +51,27 @@ def weave_rss(filename):
         if count > main_count:
             main_target = name
     info['name'] = main_target  # Name of the object
-    info['exptime'] = header['EXPTIME']  # Total rss exposure time (seconds)
+    info['exptime'] = header['EXPTIME'] << u.second # Total rss exposure time (seconds)
     info['airmass'] = header['AIRMASS']  # Airmass
-    info['fib_ra'] = fibtable['FIBRERA']
-    info['fib_dec'] = fibtable['FIBREDEC']
+    info['fib_ra'] = fibtable['FIBRERA'] << u.deg
+    info['fib_dec'] = fibtable['FIBREDEC'] << u.deg
     
     return RSS(intensity=intensity,
            wavelength=wavelength,
            variance=variance,
            log=log,
+<<<<<<< HEAD
            info=info
+=======
+           #header=header,
+           info=info,
+           wcs=wcs
+>>>>>>> main
            )
 
 
 # %%
 # -----------------------------------------------------------------------------
 #                                                    ... Paranoy@ Rulz! ;^D
+# Mr Krtxo \(ﾟ▽ﾟ)/
 # -----------------------------------------------------------------------------

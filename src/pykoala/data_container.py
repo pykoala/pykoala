@@ -21,14 +21,15 @@ from abc import ABC, abstractmethod
 import numpy as np
 import copy
 from datetime import datetime
-from astropy.io.fits import Header, ImageHDU
 from astropy.io import fits
+from astropy.table import Table
 from astropy.wcs import WCS
 from astropy import units as u
+from astropy import constants
 
 from pykoala import VerboseMixin, __version__
 from pykoala import ancillary
-from pykoala.plotting.utils import colour_map, new_figure, fibre_map
+from pykoala.plotting.utils import plot_image, new_figure, plot_fibres
 # =============================================================================
 
 
@@ -128,6 +129,7 @@ class DataContainerHistory(VerboseMixin):
         for record in list_of_entries:
             if isinstance(record, HistoryRecord):
                 self.record_entries.append(record)
+                continue
             elif isinstance(record, tuple) or isinstance(record, list):
                 if len(record) == 2:
                     title, comments = record
@@ -221,7 +223,7 @@ class DataContainerHistory(VerboseMixin):
 
         """
         if header is None:
-            header = Header()
+            header = fits.Header()
             index = 0
         else:
             index = len(self.get_entries_from_header(header))
@@ -247,17 +249,33 @@ class DataContainerHistory(VerboseMixin):
             for record in self.record_entries:
                 f.write(record.to_str() + "\n")
 
-    def get_entries_from_header(self, header):
+    @classmethod
+    def get_entries_from_header(cls, header):
         """Get entries created by PyKOALA from an input FITS Header."""
         list_of_entries = []
+
         for title, key in zip(header.comments["PYKOALA*"], header["PYKOALA*"]):
-            list_of_entries.append(HistoryRecord(title=title, comments=header[key]))
+            list_of_entries.append(
+                HistoryRecord(title=title, comments=header[key]))
         return list_of_entries
 
-    def load_from_header(self, header):
-        """Load the Log from a FITS Header."""
-        list_of_entries = self.get_entries_from_header(header)
-        self.record_entries = list(list_of_entries)
+    @classmethod
+    def from_header(cls, header, **kwargs):
+        """Initialise the DataContainerHistory from a FITS Header.
+
+        Parameters
+        ----------
+        header : astropy.fits.Header
+            A Header that contains the history records.
+        **kwargs :
+            Additional arguments passed to DataContainerHistory constructor.
+        
+        Returns
+        -------
+        dc_history : :class:`DataContainerHistory`
+        """
+        list_of_entries = cls.get_entries_from_header(header)
+        return cls(list_of_entries=list_of_entries, **kwargs)
 
     def show(self):
         for record in self.record_entries:
@@ -303,16 +321,25 @@ class DataMask(object):
     - get_flag_map
     """
 
-    def __init__(self, shape, flag_map=None):
+    def __init__(self, shape=None, flag_map=None, bitmask=None):
         if flag_map is None:
+            if bitmask is not None:
+                raise AttributeError(
+                    "Must provide a flag map to initialise DataMask")
             self.flag_map = {"BAD": (2, "Generic bad pixel flag")}
         else:
             self.flag_map = flag_map
         # Initialise the mask with all pixels being valid
-        self.bitmask = np.zeros(shape, dtype=int)
-        self.masks = {}
-        for key in self.flag_map.keys():
-            self.masks[key] = np.zeros(shape, dtype=bool)
+        if bitmask is None:
+            self.bitmask = np.zeros(shape, dtype=int)
+            self.masks = {}
+            for key in self.flag_map.keys():
+                self.masks[key] = np.zeros(shape, dtype=bool)
+        else:
+            self.bitmask = bitmask
+            self.masks = {}
+            for key in self.flag_map.keys():
+                self.masks[key] = self.get_flag_map_from_bitmask(key)
 
     def __decode_bitmask(self, value):
         return np.bitwise_and(self.bitmask, value) > 0
@@ -374,7 +401,6 @@ class DataMask(object):
         self.flag_map[name] = (value, desc)
         self.masks[name] = np.zeros(self.bitmask.shape, dtype=bool)
 
-
     def dump_to_hdu(self):
         """Return a ImageHDU containig the mask information.
 
@@ -383,15 +409,40 @@ class DataMask(object):
         - hdu: ImageHDU
             An ImageHDU containing the bitmask information.
         """
-        header = Header()
+        header = fits.Header()
         header["COMMENT"] = "Each flag KEY is stored using the convention FLAG_KEY"
         for flag_name, value in self.flag_map.items():
             # Store the value and the description
             header[f"FLAG_{flag_name}"] = value
         header["COMMENT"] = "A value of 0 means unmasked"
-        hdu = ImageHDU(name="BITMASK", data=self.bitmask, header=header)
+        hdu = fits.ImageHDU(name="MASK", data=self.bitmask, header=header)
         return hdu
 
+    @classmethod
+    def from_hdu(cls, hdu):
+        """Create a DataMask from an input Header Data Unit.
+        
+        The input header must contain the data corresponding to the bit mask as
+        well as the corresponding flag information in the header.
+
+        Parameters
+        ----------
+        hdu : astropy.fits.HDU
+            Header Data Unit that stores the DataMask information.
+        
+        Returns
+        -------
+        datamask : :class:`DataMask`
+            An instance of ``DataMask``.
+        """
+        flag_map = {}
+        for k in hdu.header.keys():
+            if "FLAG" in k:
+                name = k.replace("FLAG_", "")
+                value = hdu.header[k]
+                description = hdu.header.comments[k]
+                flag_map[name] = (value, description)
+        return cls(flag_map=flag_map, bitmask=hdu.data)
 
 # =============================================================================
 
@@ -400,39 +451,31 @@ class DataContainer(ABC, VerboseMixin):
     """
     Abstract class for data containers.
 
-    This class might represent any kind of astronomical data: raw fits files,
-    Row Stacked Spectra obtained after tramline extraction or datacubes.
+    This class aims to represent any kind of astronomical data: detector (raw)
+    data, row stacked spectra (RSS) data containing fibre spectra or 3D data
+    cubes.
 
-    Attributes
-    ----------
-    intensity : :class:`astropy.Quantity`
-        Array with the counts/surface brightness/... at each pixel.
-    variance : :class:`astropy.Quantity`
-        Uncertainties associated to the ``intensity`` values.
-    inverse_variance : :class:`astropy.Quantity`
-        Inverse variance associated to the ``intensity`` values.
-    snr : :class:`astropy.Quantity`
-        Signal-to-noise ratio defined as ``intensity / variance**0.5``.
-    mask : DataMask
-        :class:`DataMask` pixel mask.
-    info : dict
-        Parameters describing the data.
-    log : :class:`DataContainerHistory`
-        History log reporting the data reduction steps undertaken so far.
-    header : :class:`astropy.fits.Header`
-        FITS Header associated to the RSS.
+    A DataContainer is an ensemble of data and metadata whose information is
+    stored across multiple attributes. The essential information is recorded in
+    the following attributes:
 
-    Methods
-    -------
-    # TODO
+    - ``intensity`` and ``variance`` are the fundamental attirbutes that contain the data.
+    - ``mask`` stores the data quality information associated to each resolution element (i.e. pixel, fibre, spaxel)
+    - ``info`` contains important metadata and data used during the reduction sequence.
+    - ``history`` keeps track of the data reduction process.
+
     """
 
     @property
     def intensity(self):
+        """
+        :class:`astropy.units.Quantity` containing the intensity of each resolution
+        element (pixel, fibre, spaxel).
+        """
         return self._intensity
 
     @intensity.setter
-    def intensity(self, value):
+    def intensity(self, value : u.Quantity):
         self._intensity = value
 
     @intensity.deleter
@@ -441,10 +484,14 @@ class DataContainer(ABC, VerboseMixin):
 
     @property
     def variance(self):
+        """
+        :class:`astropy.units.Quantity` uncertainties associated to the
+        ``intensity`` values.
+        """
         return self._variance
 
     @variance.setter
-    def variance(self, value):
+    def variance(self, value : u.Quantity):
         self._variance = value
 
     @variance.deleter
@@ -453,14 +500,23 @@ class DataContainer(ABC, VerboseMixin):
 
     @property
     def inverse_variance(self):
+        """
+        :class:`astropy.units.Quantity` inverse variance associated to the
+        ``intensity`` values.
+        """
         return 1 / self.variance
 
     @property
     def snr(self):
+        """
+        :class:`astropy.units.Quantity` Signal-to-noise ratio defined as
+        ``intensity / variance**0.5``.
+        """
         return self.intensity / self.variance**0.5
 
     @property
     def mask(self):
+        """:class:`DataMask` associated to ``intensity``."""
         return self._mask
 
     @mask.setter
@@ -472,20 +528,50 @@ class DataContainer(ABC, VerboseMixin):
         del self._mask
 
     @property
+    def info(self):
+        """:class:`dict` storing auxiliary data (name, exposure time, fibre position, etc.)."""
+        return self._info
+
+    @info.setter
+    def info(self, value):
+        self._info = value
+
+    @property
+    def history(self):
+        """:class:`DataContainerHistory` a log recording the data processing steps."""
+        return self._history
+    
+    @history.setter
+    def history(self, value):
+        self._history = value
+
+    @property
     def header(self):
-        """FITS Header associated to the file."""
+        """:class:`astropy.fits.Header` associated to the original file."""
         return self._header
     
     @header.setter
     def header(self, value):
-        assert isinstance(value, Header)
+        assert isinstance(value, fits.Header), "Header must be an instance of astropy.fits.Header"
         self._header = value
 
+    @property
+    def wcs(self):
+        """
+        :class:`astropy.wcs.WCS` world coordinate system associated to
+        ``intensity``.
+        """
+        return self._wcs
+    
+    @wcs.setter
+    def wcs(self, value):
+        assert isinstance(value, WCS) or (value is None), "wcs must be an instance of astropy.wcs.WCS"
+        self._wcs = value
+
     def __init__(self, **kwargs):
-        self._intensity = kwargs["intensity"]
-        self._variance = kwargs.get(
-            "variance", np.full_like(self._intensity, np.nan, dtype=type(np.nan))
-        )
+        self._intensity = ancillary.check_unit(kwargs["intensity"])
+        self._variance = ancillary.check_unit(kwargs.get("variance",
+            np.full_like(self._intensity, np.nan, dtype=type(np.nan))))
         self._mask = kwargs.get("mask", DataMask(shape=self.intensity.shape))
         self.info = kwargs.get("info", dict())
         self.fill_info()
@@ -495,7 +581,8 @@ class DataContainer(ABC, VerboseMixin):
         self.history = kwargs.get("history",
                                   DataContainerHistory(logger=self.logger,
                                                        verbose=self.verbose))
-        self.header = kwargs.get("header", Header())
+        self.header = kwargs.get("header", fits.Header())
+        self.wcs = kwargs.get("wcs", None)
 
     def fill_info(self):
         """Check the keywords of info and fills them with placeholders."""
@@ -503,40 +590,88 @@ class DataContainer(ABC, VerboseMixin):
             self.info["name"] = "N/A"
 
     def copy(self):
+        """Return a copy of the DataContainer."""
         return copy.deepcopy(self)
 
     def is_corrected(self, correction):
-        """Check if a Correction has been applied by checking the DataContainerHistory"""
+        """Check if a ``Correction`` has been applied to the DataContainer."""
         if self.history.is_record(title=correction):
             return True
         else:
             return False
 
+    def _to_hdul(self):
+        """Store the DataContainer in a FITS file."""
+        primary = fits.PrimaryHDU()
+        primary.header['pykoala0'] = __version__, "PyKOALA version"
+        primary.header['pykoala1'] = datetime.now().strftime(
+            "%d_%m_%Y_%H_%M_%S"), "creation date / last change"
+        # Fill the header with the log information
+        primary.header = self.history.dump_to_header(primary.header)
+        # Include the original header
+        primary.header["ORIHEAD"] = len(self.header), "Number of cards of original header"
+        primary.header.extend(self.header)
+        # Ensure that the name is PRIMARY
+        primary.name = "PRIMARY"
+
+        hdu_list = [primary]
+        header = self.wcs.to_header()
+        header["bunit"] = self.intensity.unit.to_string()
+        hdu_list.append(fits.ImageHDU(
+            data=self.intensity, name='INTENSITY',
+            header=header
+        )
+        )
+        header["bunit"] = self.variance.unit.to_string()
+        hdu_list.append(fits.ImageHDU(
+            data=self.variance, name='VARIANCE', header=header))
+        # Store the mask information
+        hdu_list.append(self.mask.dump_to_hdu())
+        hdul = fits.HDUList(hdu_list)
+        return hdul
+
+    @classmethod
+    def _dc_params_from_hdul(cls, hdul):
+        """Extract the basic parameters used to instanciate a DataContainer from an HDUL.
+
+        Parameters
+        ----------
+        hdul : astropy.fits.HDUList
+            Input HDUL used to initialise the basic parameters of the DC.
+        """
+        dc_params = {}
+        dc_params["history"] = DataContainerHistory.from_header(
+            hdul["PRIMARY"].header)
+        # Fetch the information of the original header
+        if "ORIHEAD" in hdul["PRIMARY"].header:
+            star_original_header = hdul["PRIMARY"].header.index("ORIHEAD")
+            len_header = hdul["PRIMARY"].header["ORIHEAD"]
+            dc_params["header"] = hdul["PRIMARY"].header[
+                star_original_header + 1:star_original_header + len_header]
+        dc_params["intensity"] = hdul["INTENSITY"].data << u.Unit(
+            hdul["INTENSITY"].header.get("BUNIT", 1))
+        dc_params["variance"] = hdul["VARIANCE"].data << u.Unit(
+            hdul["VARIANCE"].header.get("BUNIT", 1))
+        dc_params["wcs"] = WCS(hdul["INTENSITY"].header)
+        dc_params["mask"] = DataMask.from_hdu(hdul["MASK"])
+        return dc_params
+    
+    @abstractmethod
+    def from_fits():
+        """Abstract factory method to instanciate a DataContainer from a FITS."""
+        pass
 
 # =============================================================================
 
 
 class SpectraContainer(DataContainer):
     """
-    Abstract class for a `DataContainer` containing spectra (`RSS` or `Cube`).
-
-    Attributes
-    ----------
-    wavelength : :class:`astropy.Quantity`
-        Wavelength array, common to all spectra.
-    n_wavelength : int
-        Number of wavekengths in the `wavelength` array.
-    n_spectra : int
-        Number of spectra in the `intensity` array.
-    intensity_rss : :class:`astropy.Quantity`
-        `intensity` array, sorted as [`n_spectra`, `n_wavelength`].
-    variance_rss : :class:`astropy.Quantity`
-        Uncertainties associated to `intensity_rss`.
+    A `DataContainer` containing spectra (`RSS` or `Cube`).
     """
 
     @property
     def wavelength(self):
-        """Pixel flags."""
+        """:class:`astropy.units.Quantity` wavelength array, common to all spectra."""
         return self._wavelength
 
     @wavelength.setter
@@ -549,20 +684,20 @@ class SpectraContainer(DataContainer):
 
     @property
     def n_wavelength(self):
-        """Pixel flags."""
+        """Number of wavekengths in the `wavelength` array"""
         return self._wavelength.size
 
     @property
     def n_spectra(self):
-        """Pixel flags."""
+        """Number of spectra in the `intensity` array."""
         return self._intensity.size / self._wavelength.size
 
     @property
     @abstractmethod
     def rss_intensity(self):
         """
-        Return an array of spectra,
-        sorted as [`n_spectra`, `n_wavelength`].
+        :class:`astropy.units.Quantity` ``intensity`` array sorted as
+        ``[n_spectra, n_wavelength]``.
         """
         pass
 
@@ -574,7 +709,7 @@ class SpectraContainer(DataContainer):
     @property
     @abstractmethod
     def rss_variance(self):
-        """Uncertainties associated to `intensity_rss`."""
+        """:class:`astropy.units.Quantity` uncertainties associated to ``intensity_rss``"""
         pass
 
     @rss_variance.setter
@@ -582,18 +717,24 @@ class SpectraContainer(DataContainer):
     def rss_variance(self):
         pass
 
+    @abstractmethod
+    def rss_to_original(self, rss_shape_data):
+        """Reshape an RSS-like array into the original ``intensity`` shape."""
+        pass
+
     def __init__(self, **kwargs):
 
         super().__init__(**kwargs)
 
-        if "wavelength" in kwargs.keys():
-            self._wavelength = kwargs["wavelength"]
+        if "wavelength" in kwargs:
+            self._wavelength = ancillary.check_unit(kwargs["wavelength"],
+                                                    u.angstrom)
+        elif "wcs" in kwargs:
+            self._wavelength = kwargs["wcs"].spectral.array_index_to_world(
+            np.arange(kwargs["wcs"].spectral.array_shape[0])).to('angstrom')
         else:
-            self.vprint(
-                "WARNING: No `wavelength` vector supplied; creating empty `SpectraContainer`"
-            )
-            self._wavelength = u.Quantity([], u.AA)
-        
+            raise AttributeError("Either a wavelength or wcs must be provided")
+
     def get_spectra_sorted(self, wave_range=None):
         """Get the RSS-wise sorted order of the intensity.
         
@@ -627,7 +768,7 @@ class RSS(SpectraContainer):
         return self._intensity
 
     @rss_intensity.setter
-    def rss_intensity(self, value):
+    def rss_intensity(self, value : u.Quantity):
         self.intensity = value
 
     @property
@@ -635,14 +776,45 @@ class RSS(SpectraContainer):
         return self._variance
 
     @rss_variance.setter
-    def rss_variance(self, value):
+    def rss_variance(self, value : u.Quantity):
         self.variance = value
+
+    def rss_to_original(self, rss_shape_data):
+        return rss_shape_data
+
+    @property
+    def fibre_diameter(self):
+        """:class:`astropy.units.Quantity` angular diameter of the RSS fibres."""
+        return self._fibre_diameter
+    
+    @fibre_diameter.setter
+    def fibre_diameter(self, value : u.Quantity):
+        assert isinstance(value, u.Quantity) or value is None, (
+            "Fibre diameter must be a astropy.units.Quantity")
+        self._fibre_diameter = ancillary.check_unit(value, u.arcsec)
+
+    @property
+    def sky_fibres(self):
+        """Indices of the RSS sky fibres."""
+        return self._sky_fibres
+    
+    @sky_fibres.setter
+    def sky_fibres(self, value):
+        self._sky_fibres = value
+
+    @property
+    def science_fibres(self):
+        """Indices of fibres with a science target."""
+        return np.delete(np.arange(self.intensity.shape[0]), self.sky_fibres)
 
     def __init__(self, **kwargs):
         assert ('wavelength' in kwargs)
         assert ('intensity' in kwargs)
         if "logger" not in kwargs:
             kwargs['logger'] = "pykoala.rss"
+
+        self.fibre_diameter = kwargs.get("fibre_diameter", None)
+        self.sky_fibres = kwargs.get("sky_fibres", [])
         super().__init__(**kwargs)
 
     def get_centre_of_mass(self, wavelength_step=1, stat=np.nanmedian, power=1.0):
@@ -666,8 +838,8 @@ class RSS(SpectraContainer):
         """
         ra = self.info["fib_ra"]
         dec = self.info["fib_dec"]
-        ra_com = np.empty(self.wavelength.size)
-        dec_com = np.empty(self.wavelength.size)
+        ra_com = np.empty(self.wavelength.size) << ra.unit
+        dec_com = np.empty(self.wavelength.size) << dec.unit
         for wave_range in range(0, self.wavelength.size, wavelength_step):
             # Mean across all fibres
             ra_com[wave_range: wave_range + wavelength_step] = np.nansum(
@@ -678,6 +850,7 @@ class RSS(SpectraContainer):
             # Statistic (e.g., median, mean) per wavelength bin
             ra_com[wave_range: wave_range + wavelength_step] = stat(
                 ra_com[wave_range: wave_range + wavelength_step])
+            
             dec_com[wave_range: wave_range + wavelength_step] = np.nansum(
                 self.intensity[:, wave_range: wave_range +
                                wavelength_step]**power * dec[:, np.newaxis],
@@ -720,67 +893,114 @@ class RSS(SpectraContainer):
         self.history('update_coords', "Offset-coords updated")
         self.vprint("[RSS] Offset-coords updated")
 
-    # =============================================================================
-    # Save an RSS object (corrections applied) as a separate .fits file
-    # =============================================================================
-    def to_fits(self, filename, primary_hdr_kw=None, overwrite=False, checksum=False):
-        """
-        Writes a RSS object to .fits
+    def to_fits(self, filename=None, overwrite=False, checksum=False):
+        """Write the RSS into a FITS file.
 
-        Ideally this would be used for RSS objects containing corrected data that need to be saved
-        during an intermediate step
+        This method allows to store all the information contained in the RSS
+        into a FITS file composed of several extensions.
+        
+        The information is stored in the following HDU extensions
+
+        - ``PRIMARY``: contains the metadata associated to the :class:`DataContainerHistory` as well as the original ``header`` of the RSS.
+        - ``INTENSITY``: contains the data associated to the ``intensity`` and the WCS information.
+        - ``VARIANCE``: contains the data associated to the ``variance`` and the WCS information.
+        - ``MASK``: contains the data associated to the ``mask`` attribute.
+        - ``INFO``: contains the data associated to the ``info`` attribute.
 
         Parameters
         ----------
-        name: path-like object
-            File to write to. This can be a path to file written in string format with a meaningful name.
+        filename: str
+            Output filename of the FITS file.
         overwrite: bool, optional
-            If True, overwrite the output file if it exists. Raises an OSError if False and the output file exists. Default is False.
+            If True, overwrite the output file if it exists.
         checksum: bool, optional
-            If True, adds both DATASUM and CHECKSUM cards to the headers of all HDU’s written to the file.
-        Returns
-        -------
+            If True, adds both DATASUM and CHECKSUM cards to the headers of all
+            HDU's written to the file.
+
         """
+
+        hdul = self._to_hdul()
+
         if filename is None:
-            filename = 'cube_{}.fits.gz'.format(
+            filename = 'rss_{}_{}.fits.gz'.format(
+                self.info.get("name", "frame"),
                 datetime.now().strftime("%d_%m_%Y_%H_%M_%S"))
-        if primary_hdr_kw is None:
-            primary_hdr_kw = {}
 
-        # Create the PrimaryHDU with WCS information
-        primary = fits.PrimaryHDU()
-        for key, val in primary_hdr_kw.items():
-            primary.header[key] = val
+        # Fibre information table
+        pykoala_info_table = Table(
+            names=["fib_ra", "fib_dec"],
+            data=[self.info["fib_ra"], self.info["fib_dec"]],
+            meta=dict(fib_ra="Fibre RA position (deg)",
+                      fib_dec="Fibre DEC position (deg)"))
+        info_header = fits.Header()
+        info_header["NAME    "] = self.info.get("name", "N/A"), "Object name"
+        info_header["EXPTIME "] = self.info["exptime"], "exposure time (s)"
+        info_header["FIBDIAM "] = self.fibre_diameter.to_value("arcsec"), "fibre diameter size (arcsec)"
 
-        # Include general information
-        primary.header['pykoala0'] = __version__, "PyKOALA version"
-        primary.header['pykoala1'] = datetime.now().strftime(
-            "%d_%m_%Y_%H_%M_%S"), "creation date / last change"
-
-        # Fill the header with the log information
-        primary.header = self.history.dump_to_header(primary.header)
-
-        # primary_hdu.header = self.header
-        # Create a list of HDU
-        hdu_list = [primary]
-        # Change headers for variance and INTENSITY
-        hdu_list.append(fits.ImageHDU(
-            data=self.intensity, name='INTENSITY',
-            # TODO: rescue the original header?
-            # header=self.wcs.to_header()
-        )
-        )
-        hdu_list.append(fits.ImageHDU(
-            data=self.variance, name='VARIANCE', header=hdu_list[-1].header))
-        # Store the mask information
-        hdu_list.append(self.mask.dump_to_hdu())
-        # Save fits
-        hdul = fits.HDUList(hdu_list)
+        hdul.append(fits.BinTableHDU(name="INFO", data=pykoala_info_table,
+                                     header=info_header))
+        # Save the HDUL into a FITS file.
         hdul.verify('fix')
         hdul.writeto(filename, overwrite=overwrite, checksum=checksum)
         hdul.close()
-        self.vprint(f"[RSS] File saved as {filename}")
+        self.vprint(f"File saved as {filename}")
 
+    @classmethod
+    def from_fits(cls, filename):
+        """Initialise an RSS from a FITS file.
+        
+        Create an instance of an :class:`RSS` from a FITS file compliant with
+        PyKOALA format.
+
+        Parameters
+        ----------
+        filename : str
+            Path to the FITS file that contains the RSS information. The FITS
+            file must contain the information required to create an instance of
+            an RSS:
+
+            - A primary HDU.
+                Used to initialise the :class:`DataContainerHistory`, and to
+                recover the ``header`` attribute containing the information of
+                the original header.
+            - An ``INTENSITY`` ImageHDU extension.
+                This extension must contain the data corresponding to the
+                ``intensity`` attribute. The header of this extension must also
+                contain the WCS information used to reconstruct the ``wavelength``
+                attribute.
+            - A ``VARIANCE`` ImageHDU extension
+                Same as ``INTENSITY`` for the ``variance`` attribute.
+            - A ``MASK`` ImageHDU extension
+                This extension must contain the data used to initialise the
+                :class:`DataMask` attribute. The header must contain the flag
+                information of every bit used.
+            - A ``INFO`` BinaryTable HDU extension
+                A table containin the data to create the ``info`` attribute.
+                It must contain two columns with the fibre position
+                (``fib_ra``, ``fib_dec``). The header must include the ``exptime``
+                and optionally the ``name`` associated to the RSS.
+        
+        Returns
+        -------
+        rss : :class:`RSS`
+            An instance of an RSS.
+
+        """
+        with fits.open(filename) as hdul:
+            # Extract the basic parameters to initialise a DC
+            dc_parameters = cls._dc_params_from_hdul(hdul)
+            # Extract RSS-specific information
+            info = {}
+            info["fib_ra"] = hdul["INFO"].data["fib_ra"] << u.deg
+            info["fib_dec"] = hdul["INFO"].data["fib_dec"] << u.deg
+            info["name"] = hdul["INFO"].header.get("name")
+            info["exptime"] = hdul["INFO"].header.get("exptime") << u.second
+            fibre_diameter = hdul["INFO"].header["fibdiam"] << u.arcsec
+            wavelength = dc_parameters["wcs"].spectral.array_index_to_world(
+                np.arange(dc_parameters["intensity"].shape[1]))
+
+        return cls(info=info, fibre_diameter=fibre_diameter, wavelength=wavelength,
+                   **dc_parameters)
 
     def get_integrated_fibres(self, wavelength_range=None):
         """Compute the integrated intensity of the RSS fibres.
@@ -810,6 +1030,14 @@ class RSS(SpectraContainer):
                                        ) * np.count_nonzero(wave_mask)
         return integrated_fibres, integrated_variances
 
+    def get_footprint(self):
+        """Compute the spatial fibre coverage of the RSS."""
+        min_ra, max_ra = self.info['fib_ra'].min(), self.info['fib_ra'].max()
+        min_dec, max_dec = self.info['fib_dec'].min(), self.info['fib_dec'].max()
+        footprint = np.array([[max_ra, max_dec], [max_ra, min_dec],
+                              [min_ra, max_dec], [min_ra, min_dec]])
+        return footprint
+
     def plot_rss_image(self, data=None, data_label="", fig_args={}, cmap_args={},
                        fibre_range=None,
                        wavelength_range=None,
@@ -826,7 +1054,7 @@ class RSS(SpectraContainer):
             Additional keyword arguments passed to `pykoala.plotting.utils.new_figure` for customizing the figure. 
             Default is an empty dictionary.
         cmap_args : dict, optional
-            Additional keyword arguments passed to the `pykoala.plotting.utils.colour_map` function for the colormap
+            Additional keyword arguments passed to the `pykoala.plotting.utils.plot_image` function for the colormap
             and normalization.  Default is an empty dictionary.
         fibre_range : tuple of int, optional
             A tuple specifying the range of fibres to include in the plot (start, end).
@@ -846,10 +1074,11 @@ class RSS(SpectraContainer):
         -----
         - The function uses the internal attributes `self.wavelength` and `self.intensity` to obtain default x-values 
         (wavelengths) and y-values (fibre indices) if `data` is not provided.
-        - The `new_figure` function is used to create a new figure, and `colour_map` is used to plot the data.
+        - The `new_figure` function is used to create a new figure, and `plot_image` is used to plot the data.
         - If `fibre_range` or `wavelength_range` is specified, the data is sliced accordingly.
         - The plot is saved to `output_filename` if provided, otherwise the figure is returned for display or further manipulation.
 
+        
         """
         x = self.wavelength
         y = np.arange(0, self.intensity.shape[0])
@@ -866,7 +1095,7 @@ class RSS(SpectraContainer):
             x = x[wavelength_range]
 
         fig, axs = new_figure(self.info['name'], **fig_args)
-        im, cb = colour_map(fig, axs[0, 0], data_label, data,
+        im, cb = plot_image(fig, axs[0, 0], data_label, data,
                             x=x, y=y,
                             xlabel="Wavelength [AA]", ylabel="Fibre",
                             **cmap_args)
@@ -887,7 +1116,7 @@ class RSS(SpectraContainer):
             Additional keyword arguments passed to the `new_figure` function for customizing the figure.
             Default is an empty dictionary.
         cmap_args : dict, optional
-            Additional keyword arguments passed to the `colour_map` function for customizing the colormap.
+            Additional keyword arguments passed to the `plot_image` function for customizing the colormap.
             If not specified, the colormap is set to "Accent" and normalization to "Normalize". Default is an empty dictionary.
         output_filename : str, optional
             If provided, the plot is saved to the specified file path. Default is `None`.
@@ -910,15 +1139,9 @@ class RSS(SpectraContainer):
                             fig_args=fig_args, cmap_args=cmap_args,
                             output_filename=output_filename)
         return fig
-    
-    
 
-    def plot_fibre(self):
-        # TODO: THIS SHOULD BE A METHOD OF THE PARENT CLASS
-        pass
-
-    def plot_fibre_map(self, data=None, cblabel="", fig_args={},
-                       cmap_args={}, output_filename=None):
+    def plot_fibres(self, data=None, cblabel="", fig_args={},
+                    cmap_args={}, output_filename=None):
         """
         Plots a fibre map image, showing the spatial distribution of data across fibres.
 
@@ -940,7 +1163,7 @@ class RSS(SpectraContainer):
             customizing the figure. Default is an empty dictionary.
         
         cmap_args : dict, optional
-            Additional keyword arguments passed to the `fibre_map` function for
+            Additional keyword arguments passed to the `plot_fibres` function for
             customizing the colormap. Default is an empty dictionary.
         
         output_filename : str, optional
@@ -954,86 +1177,69 @@ class RSS(SpectraContainer):
         if data is None:
             data, _ = self.get_integrated_fibres()
             cblabel = "Integrated intensity"
+        if "figsize" not in fig_args:
+            fig_args["figsize"] = (5, 5)
         fig, axs = new_figure(self.info['name'], **fig_args)
         axs[0, 0].set_aspect('auto')
-        im, cb = fibre_map(fig, axs[0, 0], cblabel, data, fib_ra=self.info['fib_ra'],
-                         fib_dec=self.info['fib_dec'], **cmap_args)
+
+        ax, *_ = plot_fibres(
+            fig=fig, ax=axs[0, 0], cblabel=cblabel,
+            data=data, rss=self, **cmap_args)
+        ax.set_xlabel("RA (deg)")
+        ax.set_ylabel("DEC (deg)")
         if output_filename is not None:
             fig.savefig(output_filename, bbox_inches="tight")
         return fig
 
 
 class Cube(SpectraContainer):
-    """This class represent a 3D data cube.
+    """:class:`SpectraContainer` associated to a 3D data cube."""
+
+    # default_hdul_extensions_map = {"INTENSITY": "INTENSITY",
+    #                                "VARIANCE": "VARIANCE"}
+
+    # @property
+    # def hdul(self):
+    #     return self._hdul
+
+    # @hdul.setter
+    # def hdul(self, hdul):
+    #     assert isinstance(hdul, fits.HDUList)
+    #     self._hdul = hdul
+
+    # @property
+    # def intensity(self):
+    #     return self.hdul[self.hdul_extensions_map['INTENSITY']].data
     
-    parent_rss
-    rss_mask
-    intensity
-    variance
-    intensity
-    variance
-    wavelength
-    info
+    # @intensity.setter
+    # def intensity(self, intensity_corr):
+    #     self.vprint("[Cube] Updating HDUL INTENSITY")
+    #     self.hdul[self.hdul_extensions_map['INTENSITY']].data = intensity_corr
 
-    """
-    n_wavelength = None
-    n_cols = None
-    n_rows = None
-    x_size_arcsec = None
-    y_size_arcsec = None
-    default_hdul_extensions_map = {"INTENSITY": "INTENSITY",
-                                   "VARIANCE": "VARIANCE"}
-    
-    def __init__(self, hdul=None, hdul_extensions_map=None, **kwargs):
+    # @property
+    # def variance(self):
+    #     return self.hdul[self.hdul_extensions_map['VARIANCE']].data
 
-        self.hdul = hdul
-
-        if hdul_extensions_map is not None:
-            self.hdul_extensions_map = hdul_extensions_map
-        else:
-            self.hdul_extensions_map = self.default_hdul_extensions_map
-
-        if "logger" not in kwargs:
-            kwargs['logger'] = "pykoala.cube"
-        super().__init__(intensity=self.intensity,
-                         variance=self.variance,
-                         **kwargs)
-        self.get_wcs_from_header()
-        self.parse_info_from_header()
-        self.n_wavelength, self.n_rows, self.n_cols = self.intensity.shape
-        self.get_wavelength()
+    # @variance.setter
+    # def variance(self, variance_corr):
+    #     self.vprint("[Cube] Updating HDUL variance")
+    #     self.hdul[self.hdul_extensions_map['VARIANCE']].data = variance_corr
 
     @property
-    def hdul(self):
-        return self._hdul
-
-    @hdul.setter
-    def hdul(self, hdul):
-        print(hdul)
-        assert isinstance(hdul, fits.HDUList)
-        self._hdul = hdul
+    def n_cols(self):
+        """Number of spaxel colums"""
+        return self.intensity.shape[2]
 
     @property
-    def intensity(self):
-        return self.hdul[self.hdul_extensions_map['INTENSITY']].data
-    
-    @intensity.setter
-    def intensity(self, intensity_corr):
-        self.vprint("[Cube] Updating HDUL INTENSITY")
-        self.hdul[self.hdul_extensions_map['INTENSITY']].data = intensity_corr
-
-    @property
-    def variance(self):
-        return self.hdul[self.hdul_extensions_map['VARIANCE']].data
-
-    @variance.setter
-    def variance(self, variance_corr):
-        self.vprint("[Cube] Updating HDUL variance")
-        self.hdul[self.hdul_extensions_map['VARIANCE']].data = variance_corr
+    def n_rows(self):
+        """Number of spaxel rows"""
+        return self.intensity.shape[1]
 
     @property
     def rss_intensity(self):
-        return np.reshape(self.intensity, (self.intensity.shape[0], self.intensity.shape[1]*self.intensity.shape[2])).T
+        return np.reshape(self.intensity, (
+            self.intensity.shape[0],
+            self.intensity.shape[1] * self.intensity.shape[2])).T
 
     @rss_intensity.setter   
     def rss_intensity(self, value):
@@ -1041,62 +1247,34 @@ class Cube(SpectraContainer):
 
     @property
     def rss_variance(self):
-        return np.reshape(self.variance, (self.variance.shape[0], self.variance.shape[1]*self.variance.shape[2])).T
+        return np.reshape(self.variance, (
+            self.variance.shape[0],
+            self.variance.shape[1] * self.variance.shape[2])).T
 
     @rss_variance.setter   
     def rss_variance(self, value):
         self.variance = value.T.reshape(self.variance.shape)
 
-    @classmethod
-    def from_fits(cls, path, hdul_extension_map=None, **kwargs):
-        """Make an instance of a Cube using an input path to a FITS file.
-        
-        Parameters
-        ----------
-        - path: str
-            Path to the FITS file. This file must be compliant with the pykoala
-            standards.
-        - hdul_extension_map: dict
-            Dictionary containing the mapping to access the extensions that
-            contain the intensity, and variance data
-            (e.g. {'INTENSITY': 1, 'VARIANCE': 'var'}).
-        - kwargs:
-            Arguments passed to the Cube class (see Cube documentation)
-        
-        Returns
-        -------
-        - cube: Cube
-            An instance of a `pykoala.cubing.Cube`.
-        """
-        with fits.open(path) as hdul:
-            return cls(hdul, hdul_extension_map=hdul_extension_map, **kwargs)
+    def __init__(self, **kwargs):
 
-    def parse_info_from_header(self):
-        """Look into the primary header for pykoala information."""
-        self.vprint("[Cube] Looking for information in the primary header")
-        # TODO
-        #self.info = {}
-        #self.fill_info()
-        self.history.load_from_header(self.hdul[0].header)
+        if "logger" not in kwargs:
+            kwargs['logger'] = "pykoala.cube"
+        # if "intensity" not in kwargs:
+        #     kwargs["intensity"] = self.intensity
+        # if "variance" not in kwargs:
+        #     kwargs["variance"] = self.variance
+        # if "wcs" not in kwargs:
+        #     kwargs["wcs"] = WCS(
+        #         self.hdul[self.hdul_extensions_map['INTENSITY']].header)
 
-    def load_hdul(self, path_to_file):
-        self.hdul = fits.open(path_to_file)
-        pass
+        super().__init__(**kwargs)
 
-    def close_hdul(self):
-        if self.hdul is not None:
-            self.vprint(f"[Cube] Closing HDUL")
-            self.hdul.close()
 
-    def get_wcs_from_header(self):
-        """Create a WCS from HDUL header."""
-        self.wcs = WCS(self.hdul[self.hdul_extensions_map['INTENSITY']].header)
+    def rss_to_original(self, rss_shape_data):
+        return np.reshape(rss_shape_data.T, (rss_shape_data.shape[1],
+                                             self.intensity.shape[1],
+                                             self.intensity.shape[2]))
 
-    def get_wavelength(self):
-        self.vprint("[Cube] Constructing wavelength array")
-        self.wavelength = self.wcs.spectral.array_index_to_world(
-            np.arange(self.n_wavelength)).to('angstrom').value
-        
     def get_centre_of_mass(self, wavelength_step=1, stat=np.median, power=1.0):
         """Compute the center of mass of the data cube."""
         x = np.arange(0, self.n_cols, 1)
@@ -1127,67 +1305,38 @@ class Cube(SpectraContainer):
 
     def get_white_image(self, wave_range=None, s_clip=3.0, frequency_density=False):
         """Create a white image."""
-        if wave_range is not None and self.wavelength is not None:
-            wave_mask = (self.wavelength >= wave_range[0]) & (self.wavelength <= wave_range[1])
+        if wave_range is not None:
+            print("Wavelength : ", wave_range, self.wavelength)
+            wave_mask = (
+                self.wavelength >= ancillary.check_unit(wave_range[0], u.AA)
+                ) & (
+                self.wavelength <= ancillary.check_unit(wave_range[1], u.AA))
         else:
             wave_mask = np.ones(self.wavelength.size, dtype=bool)
         
         if s_clip is not None:
             std_dev = ancillary.std_from_mad(self.intensity[wave_mask], axis=0)
             median = np.nanmedian(self.intensity[wave_mask], axis=0)
-
             weights = (
                 (self.intensity[wave_mask] <= median[np.newaxis] + s_clip * std_dev[np.newaxis])
                 & (self.intensity[wave_mask] >= median[np.newaxis] - s_clip * std_dev[np.newaxis]))
         else:
-            weights = np.ones_like(self.intensity[wave_mask])
+            weights = np.ones(self.intensity[wave_mask].shape)
 
         if frequency_density:
-            freq_trans = self.wavelength**2 / 3e18
+            freq_trans = self.wavelength**2 / constants.c
         else:
-            freq_trans = np.ones_like(self.wavelength)
+            freq_trans = np.ones(self.wavelength.size)
 
         white_image = np.nansum(
-            self.intensity[wave_mask] * freq_trans[wave_mask, np.newaxis, np.newaxis] * weights, axis=0
-            ) / np.nansum(weights, axis=0)
+            self.intensity[wave_mask]
+            * freq_trans[wave_mask, np.newaxis, np.newaxis]
+            * weights, axis=0) / np.nansum(weights, axis=0)
         return white_image
 
-    def to_fits(self, fname=None, primary_hdr_kw=None):
-        """Save the Cube into a FITS file."""
-        if fname is None:
-            fname = 'cube_{}.fits.gz'.format(
-                datetime.now().strftime("%d_%m_%Y_%H_%M_%S"))
-        if primary_hdr_kw is None:
-            primary_hdr_kw = {}
-
-        # Create the PrimaryHDU with WCS information 
-        primary = fits.PrimaryHDU()
-        for key, val in primary_hdr_kw.items():
-            primary.header[key] = val
-        
-        
-        # Include cubing information
-        primary.header['pykoala0'] = __version__, "PyKOALA version"
-        primary.header['pykoala1'] = datetime.now().strftime(
-            "%d_%m_%Y_%H_%M_%S"), "creation date / last change"
-
-        # Fill the header with the log information
-        primary.header = self.history.dump_to_header(primary.header)
-
-        # Create a list of HDU
-        hdu_list = [primary]
-        # Change headers for variance and INTENSITY
-        hdu_list.append(fits.ImageHDU(
-            data=self.intensity, name='INTENSITY', header=self.wcs.to_header()))
-        hdu_list.append(fits.ImageHDU(
-            data=self.variance, name='VARIANCE', header=hdu_list[-1].header))
-        # Store the mask information
-        hdu_list.append(self.mask.dump_to_hdu())
-        # Save fits
-        hdul = fits.HDUList(hdu_list)
-        hdul.writeto(fname, overwrite=True)
-        hdul.close()
-        self.vprint("[Cube] Cube saved at:\n {}".format(fname))
+    def get_footprint(self):
+        """Compute the spatial footprint of the datacube."""
+        return self.wcs.celestial.calc_footprint()
 
     def update_coordinates(self, new_coords=None, offset=None):
         """Update the celestial coordinates of the Cube"""
@@ -1199,6 +1348,82 @@ class Cube(SpectraContainer):
                     + f"\nNew CRVAL: {updated_wcs.wcs.crval}")
         self.wcs.wcs.crval[:-1] = updated_wcs.wcs.crval
         self.history('update_coords', "Offset-coords updated")
+
+    def to_fits(self, filename=None, overwrite=False,
+                checksum=False):
+        """Save the Cube into a FITS file."""
+        if filename is None:
+            filename = 'cube_{}_{}.fits.gz'.format(
+                self.info.get("name", "frame"),
+                datetime.now().strftime("%d_%m_%Y_%H_%M_%S"))
+
+        hdul = self._to_hdul()
+        # Fill the INFO extension
+        info_header = fits.Header()
+        info_header["NAME    "] = self.info.get("name", "N/A"), "Object name"
+        info_header["EXPTIME "] = self.info.get("exptime"), "exposure time (s)"
+        hdul.append(fits.BinTableHDU(name="INFO", data=None, header=info_header))
+
+        # Save the HDUL into a FITS file.
+        hdul.verify('fix')
+        hdul.writeto(filename, overwrite=overwrite, checksum=checksum)
+        hdul.close()
+        self.vprint(f"File saved as {filename}")
+
+    def close_hdul(self):
+        """Close the HDUL."""
+        if self.hdul is not None:
+            self.vprint(f"[Cube] Closing HDUL")
+            self.hdul.close()
+
+    @classmethod
+    def from_hdul(cls, hdul):
+        info = {}
+        info["name"] = hdul["INFO"].header.get("name")
+        info["exptime"] = hdul["INFO"].header.get("exptime")
+        dc_parameters = cls._dc_params_from_hdul(hdul)
+        dc_parameters["info"] = info
+        return cls(**dc_parameters)
+
+    @classmethod
+    def from_fits(cls, filename):
+        """Initialise an Cube from a FITS file.
+        
+        Create an instance of an :class:`Cube` from a FITS file compliant with
+        PyKOALA format.
+
+        Parameters
+        ----------
+        filename : str
+            Path to the FITS file that contains the RSS information. The FITS
+            file must contain the information required to create an instance of
+            an RSS:
+
+            - A primary HDU.
+                Used to initialise the :class:`DataContainerHistory`, and to
+                recover the ``header`` attribute containing the information of
+                the original header.
+            - An ``INTENSITY`` ImageHDU extension.
+                This extension must contain the data corresponding to the
+                ``intensity`` attribute. The header of this extension must also
+                contain the WCS information used to reconstruct the ``wavelength``
+                attribute.
+            - A ``VARIANCE`` ImageHDU extension
+                Same as ``INTENSITY`` for the ``variance`` attribute.
+            - A ``MASK`` ImageHDU extension
+                This extension must contain the data used to initialise the
+                :class:`DataMask` attribute. The header must contain the flag
+                information of every bit used.
+
+        Returns
+        -------
+        rss : :class:`RSS`
+            An instance of an RSS.
+
+        """
+        hdul = fits.open(filename)
+        return cls.from_hdul(hdul)
+
 
 # =============================================================================
 # Mr Krtxo \(ﾟ▽ﾟ)/
