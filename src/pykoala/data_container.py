@@ -163,7 +163,7 @@ class DataContainerHistory(VerboseMixin):
         self.record_entries.append(record)
 
     def is_record(self, title, comment=None):
-        """Find an record that contains the input information.
+        """Find if a record is contained in the history.
 
         Parameters
         -----------
@@ -459,7 +459,7 @@ class DataContainer(ABC, VerboseMixin):
     stored across multiple attributes. The essential information is recorded in
     the following attributes:
 
-    - ``intensity`` and ``variance`` are the fundamental attirbutes that contain the data.
+    - ``intensity`` and ``variance`` are the fundamental attributes that contain the data.
     - ``mask`` stores the data quality information associated to each resolution element (i.e. pixel, fibre, spaxel)
     - ``info`` contains important metadata and data used during the reduction sequence.
     - ``history`` keeps track of the data reduction process.
