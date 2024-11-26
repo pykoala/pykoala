@@ -810,10 +810,11 @@ class RSS(SpectraContainer):
     def __init__(self, **kwargs):
         assert ('wavelength' in kwargs)
         assert ('intensity' in kwargs)
+        assert ('fibre_diameter' in kwargs)
         if "logger" not in kwargs:
             kwargs['logger'] = "pykoala.rss"
 
-        self.fibre_diameter = kwargs.get("fibre_diameter", None)
+        self.fibre_diameter = kwargs["fibre_diameter"]
         self.sky_fibres = kwargs.get("sky_fibres", [])
         super().__init__(**kwargs)
 
