@@ -34,7 +34,8 @@ fibre_map(fig, axs[1], r'$\sigma$ (pix)', rss, sigma, norm=plt.Normalize(),
           cmap='gnuplot')
 rss_corrected = solar_correction.apply(rss)
 
-science_rss = koala_rss("/home/pcorchoc/Develop/pykoala-tutorials/tutorials/data/koala/580V/27feb10035red.fits")
+#science_rss = koala_rss("/home/pcorchoc/Develop/pykoala-tutorials/tutorials/data/koala/580V/27feb10035red.fits")
+science_rss = koala_rss("../tutorials/data/27feb20035red.fits.fits") # random example
 corrected_science = solar_correction.apply(science_rss)
 
 
