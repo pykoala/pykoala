@@ -934,7 +934,7 @@ class RSS(SpectraContainer):
                       fib_dec="Fibre DEC position (deg)"))
         info_header = fits.Header()
         info_header["NAME    "] = self.info.get("name", "N/A"), "Object name"
-        info_header["EXPTIME "] = self.info["exptime"], "exposure time (s)"
+        info_header["EXPTIME "] = self.info["exptime"].to_value("s"), "exposure time (s)"
         info_header["FIBDIAM "] = self.fibre_diameter.to_value("arcsec"), "fibre diameter size (arcsec)"
 
         hdul.append(fits.BinTableHDU(name="INFO", data=pykoala_info_table,
