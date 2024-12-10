@@ -618,13 +618,13 @@ class DataContainer(ABC, VerboseMixin):
         header = self.wcs.to_header()
         header["bunit"] = self.intensity.unit.to_string()
         hdu_list.append(fits.ImageHDU(
-            data=self.intensity, name='INTENSITY',
+            data=self.intensity.value, name='INTENSITY',
             header=header
         )
         )
         header["bunit"] = self.variance.unit.to_string()
         hdu_list.append(fits.ImageHDU(
-            data=self.variance, name='VARIANCE', header=header))
+            data=self.variance.value, name='VARIANCE', header=header))
         # Store the mask information
         hdu_list.append(self.mask.dump_to_hdu())
         hdul = fits.HDUList(hdu_list)
