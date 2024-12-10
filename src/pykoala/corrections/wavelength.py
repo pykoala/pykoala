@@ -251,17 +251,19 @@ class TelluricWavelengthCorrection(WavelengthCorrection):
                 corr[[max_corr - 1, max_corr, max_corr + 1]])
             fibre_offset[ith] = parabolic_max_lag / oversampling
 
+        if median_smooth is not None:
+                fibre_offset = median_filter(fibre_offset, median_smooth)
+
+        if pol_fit_deg is not None:
+                pol = np.polyfit(np.arange(fibre_offset.size), fibre_offset,
+                        deg=pol_fit_deg)
+                fibre_offset = np.poly1d(pol)(np.arange(fibre_offset.size))            
         if plot:
             fig = plt.figure()
             ax = fig.add_subplot(111)
             ax.plot(fibre_offset)
-            if median_smooth is not None:
-                fibre_offset = median_filter(fibre_offset, median_smooth)
-            ax.plot(fibre_offset)
-            if pol_fit_deg is not None:
-                pol = np.polyfit(np.arange(fibre_offset.size), fibre_offset,
-                        deg=pol_fit_deg)
-                fibre_offset = np.poly1d(pol)(np.arange(fibre_offset.size))
+
+
             ax.plot(fibre_offset)
             ax.set_ylim(fibre_offset.min(), fibre_offset.max())
             ax.set_xlabel("Fibre number")
