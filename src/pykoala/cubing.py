@@ -699,7 +699,7 @@ def build_wcs(datacube_shape, reference_position, spatial_pix_size : u.Quantity,
     wcs = WCS(wcs_dict)
     return wcs
 
-def build_wcs_from_rss(rss_list : list | RSS, spatial_pix_size : u.Quantity,
+def build_wcs_from_rss(rss_list : list, spatial_pix_size : u.Quantity,
                        spectra_pix_size : u.Quantity, join_type="outer",
                        **kwargs):
     """Compute the effective WCS resulting from combining an input list of RSS.
