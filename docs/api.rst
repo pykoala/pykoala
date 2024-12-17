@@ -38,6 +38,12 @@ This section contains the different correction modules included in `pykoala`.
    :caption: Available modules
 
 
+Cubing
+------
+
+.. toctree:: pykoala.cubing
+   :maxdepth: 1
+
 Manipulating Spectra
 --------------------
 
