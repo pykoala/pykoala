@@ -1018,8 +1018,8 @@ class RSS(SpectraContainer):
             Array containing the integrated variance associated to each fibre.
         """
         if wavelength_range is not None:
-            wave_mask = (self.wavelength >= wavelength_range[0]) & (
-                self.wavelength <= wavelength_range[1]
+            wave_mask = (self.wavelength.value >= wavelength_range[0]) & (
+                self.wavelength.value <= wavelength_range[1]
             )
         else:
             wave_mask = np.ones(self.wavelength.size, dtype=bool)
