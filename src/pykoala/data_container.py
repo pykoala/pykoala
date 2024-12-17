@@ -618,13 +618,13 @@ class DataContainer(ABC, VerboseMixin):
         header = self.wcs.to_header()
         header["bunit"] = self.intensity.unit.to_string()
         hdu_list.append(fits.ImageHDU(
-            data=self.intensity, name='INTENSITY',
+            data=self.intensity.value, name='INTENSITY',
             header=header
         )
         )
         header["bunit"] = self.variance.unit.to_string()
         hdu_list.append(fits.ImageHDU(
-            data=self.variance, name='VARIANCE', header=header))
+            data=self.variance.value, name='VARIANCE', header=header))
         # Store the mask information
         hdu_list.append(self.mask.dump_to_hdu())
         hdul = fits.HDUList(hdu_list)
@@ -934,7 +934,7 @@ class RSS(SpectraContainer):
                       fib_dec="Fibre DEC position (deg)"))
         info_header = fits.Header()
         info_header["NAME    "] = self.info.get("name", "N/A"), "Object name"
-        info_header["EXPTIME "] = self.info["exptime"], "exposure time (s)"
+        info_header["EXPTIME "] = self.info["exptime"].to_value("s"), "exposure time (s)"
         info_header["FIBDIAM "] = self.fibre_diameter.to_value("arcsec"), "fibre diameter size (arcsec)"
 
         hdul.append(fits.BinTableHDU(name="INFO", data=pykoala_info_table,
@@ -1018,8 +1018,8 @@ class RSS(SpectraContainer):
             Array containing the integrated variance associated to each fibre.
         """
         if wavelength_range is not None:
-            wave_mask = (self.wavelength >= wavelength_range[0]) & (
-                self.wavelength <= wavelength_range[1]
+            wave_mask = (self.wavelength.value >= wavelength_range[0]) & (
+                self.wavelength.value <= wavelength_range[1]
             )
         else:
             wave_mask = np.ones(self.wavelength.size, dtype=bool)
@@ -1078,6 +1078,7 @@ class RSS(SpectraContainer):
         - If `fibre_range` or `wavelength_range` is specified, the data is sliced accordingly.
         - The plot is saved to `output_filename` if provided, otherwise the figure is returned for display or further manipulation.
 
+        
         """
         x = self.wavelength
         y = np.arange(0, self.intensity.shape[0])
@@ -1089,7 +1090,7 @@ class RSS(SpectraContainer):
             data = data[fibre_range]
             y = y[fibre_range]
         if wavelength_range is not None:
-            wavelength_range = range(*np.searchsorted(self.wavelength, wavelength_range))
+            wavelength_range = range(*np.searchsorted(self.wavelength.value, wavelength_range))
             data = data[:, wavelength_range]
             x = x[wavelength_range]
 

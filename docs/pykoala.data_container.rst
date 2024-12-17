@@ -11,7 +11,7 @@ DataContainer
    :show-inheritance:
 
 SpectraContainer
--------------
+----------------
 .. autoclass:: pykoala.data_container.SpectraContainer
    :members:
    :undoc-members:

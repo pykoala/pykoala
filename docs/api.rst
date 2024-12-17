@@ -16,7 +16,7 @@ Data Structures
 ---------------
 
 .. toctree:: pykoala.data_container
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Available modules
 
 
@@ -34,7 +34,7 @@ Data Corrections
 This section contains the different correction modules included in `pykoala`.
 
 .. toctree:: pykoala.corrections
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Available modules
 
 
@@ -50,4 +50,4 @@ Plotting tools
 Useful methods for plotting and performing quality control tests.
 
 .. toctree:: pykoala.plotting
-   :maxdepth: 2
+   :maxdepth: 1
