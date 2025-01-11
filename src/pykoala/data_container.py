@@ -1037,8 +1037,11 @@ class RSS(SpectraContainer):
         """Compute the spatial fibre coverage of the RSS."""
         min_ra, max_ra = self.info['fib_ra'].min(), self.info['fib_ra'].max()
         min_dec, max_dec = self.info['fib_dec'].min(), self.info['fib_dec'].max()
-        footprint = np.array([[max_ra, max_dec], [max_ra, min_dec],
-                              [min_ra, max_dec], [min_ra, min_dec]])
+        footprint = np.zeros((4, 2)) << min_ra.unit
+        footprint[0] = max_ra, max_dec
+        footprint[1] = max_ra, min_dec
+        footprint[2] = min_ra, max_dec
+        footprint[3] = min_ra, min_dec
         return footprint
 
     def plot_rss_image(self, data=None, data_label="", fig_args={}, cmap_args={},
@@ -1098,7 +1101,7 @@ class RSS(SpectraContainer):
             x = x[wavelength_range]
 
         fig, axs = new_figure(self.info['name'], **fig_args)
-        im, cb = plot_image(fig, axs[0, 0], data_label, data,
+        im, cb = plot_image(fig, axs[0, 0], cblabel=data_label, data=data,
                             x=x, y=y,
                             xlabel="Wavelength [AA]", ylabel="Fibre",
                             **cmap_args)

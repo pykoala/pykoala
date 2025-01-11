@@ -10,13 +10,16 @@ from matplotlib.gridspec import GridSpec
 
 from astropy.io import fits
 from astropy import units as u
-from scipy.ndimage import median_filter, gaussian_filter, percentile_filter
+from scipy.ndimage import (median_filter, gaussian_filter, percentile_filter,
+                           label, labeled_comprehension)
+from scipy.interpolate import interp1d
+from scipy.signal import correlate, correlation_lags, convolve
 
 from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.data_container import RSS
 from pykoala.ancillary import flux_conserving_interpolation, vac_to_air, check_unit
-# from pykoala.corrections.sky import ContinuumEstimator
+from pykoala import ancillary
 
 
 class WavelengthOffset(object):
@@ -109,7 +112,7 @@ class WavelengthCorrection(CorrectionBase):
     ----------
     name : str
         Correction name, to be recorded in the log.
-    offset : WavelengthOffset
+    offset : :class:`WavelengthOffset`
         2D wavelength offset (n_fibres x n_wavelengths)
     verbose: bool
         False by default.
@@ -118,7 +121,8 @@ class WavelengthCorrection(CorrectionBase):
     offset = None
     verbose = False
 
-    def __init__(self, offset_path=None, offset=None, **correction_kwargs):
+    def __init__(self, offset_path: str=None, offset: WavelengthOffset=None,
+                 **correction_kwargs):
         super().__init__(**correction_kwargs)
 
         self.path = offset_path
@@ -170,6 +174,110 @@ class WavelengthCorrection(CorrectionBase):
                 
         self.record_correction(rss_out, status='applied')
         return rss_out
+
+
+class TelluricWavelengthCorrection(WavelengthCorrection):
+    """WavelengthCorrection based on the cross-correlation of telluric lines.
+    
+    This class constructs a WavelengthOffset using a cross-correlation of
+    telluric absorption lines.
+
+    """
+    name = "TelluricWavelengthCorrection"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    
+    @classmethod
+    def from_rss(cls, rss,
+                 median_smooth=None, pol_fit_deg=None, oversampling=5,
+                 wave_range=None, plot=False):
+        """Estimate the wavelength offset from an input data container.
+        
+        Parameters
+        ----------
+        rss : :class:`RSS`
+        median_smooth : int, optional
+            Median filter size.
+        pol_fit_deg : int, optional
+            Polynomial degree to fit the resulting offset.
+        oversampling : float, optional
+            Oversampling factor to increase the accuracy of the cross-correlation.
+        wave_range : list or tupla
+            Wavelength range to fit the offset.
+        plot : bool, optional
+            If True, returns quality control plots.
+        Returns
+        -------
+        WavelengthCorrection : :class:`WavelengthCorrection`
+        figs : :class:`plt.Figure`
+        """
+        assert isinstance(rss, RSS), "Input data must be an instance of RSS"
+
+        # mask = rss.mask.get_flag_map(telluric_flat)[0]
+        # if not mask.any():
+        #     raise ValueError("No telluric lines present in the data")
+        # if wave_range is not None:
+        #     mask &= rss.wavelength >= check_unit(
+        #         wave_range[0], rss.wavelength.unit)
+        #     mask &= rss.wavelength <= check_unit(
+        #         wave_range[1], rss.wavelength.unit)
+
+        intensity = rss.intensity.value.copy()
+        intensity /= np.nanmedian(intensity, axis=1)[:, np.newaxis]
+        # Emphasize the regions dominated by telluric absorption
+        new_wavelength = np.interp(
+            np.arange(0, rss.wavelength.size, 1 / oversampling),
+            np.arange(rss.wavelength.size),
+            rss.wavelength)
+        interpolator = interp1d(rss.wavelength, intensity, axis=1)
+        intensity = interpolator(new_wavelength)
+
+        median_intensity = np.nanmedian(intensity, axis=0)
+        fibre_offset = np.zeros(intensity.shape[0])
+        for ith, fibre in enumerate(intensity):
+            fibre_mask = np.isfinite(fibre)
+            if not fibre_mask.any():
+                continue
+
+            corr = correlate(fibre[fibre_mask],
+                             median_intensity[fibre_mask],
+                             mode="full", method="fft")
+            lags = correlation_lags(fibre[fibre_mask].size,
+                                    median_intensity[fibre_mask].size)
+            max_corr = np.argmax(corr)
+            parabolic_max_lag = ancillary.parabolic_maximum(
+                lags[[max_corr - 1, max_corr, max_corr + 1]],
+                corr[[max_corr - 1, max_corr, max_corr + 1]])
+            fibre_offset[ith] = parabolic_max_lag / oversampling
+
+        if median_smooth is not None:
+                fibre_offset = median_filter(fibre_offset, median_smooth)
+
+        if pol_fit_deg is not None:
+                pol = np.polyfit(np.arange(fibre_offset.size), fibre_offset,
+                        deg=pol_fit_deg)
+                fibre_offset = np.poly1d(pol)(np.arange(fibre_offset.size))            
+        if plot:
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+            ax.plot(fibre_offset)
+
+
+            ax.plot(fibre_offset)
+            ax.set_ylim(fibre_offset.min(), fibre_offset.max())
+            ax.set_xlabel("Fibre number")
+            ax.set_ylabel(f"Average wavelength offset (pixel)")
+            fibre_map_fig = rss.plot_fibres(data=fibre_offset)
+            fig = (fig, fibre_map_fig)
+        else:
+            fig = None
+
+        fibre_offset = fibre_offset << u.pixel
+        offset = WavelengthOffset(
+            offset_data=fibre_offset,
+            offset_error=np.full_like(fibre_offset, fill_value=np.nan))
+        return cls(offset=offset), fig
 
 
 class SolarCrossCorrOffset(WavelengthCorrection):
