@@ -854,9 +854,12 @@ def build_wcs_from_rss(
     )
 
     datacube_shape = (
-        np.round((wl_range / spectra_pix_size).decompose().value, decimals=0),
-        np.round((ra_width / spatial_pix_size).decompose().value, decimals=0),
-        np.round((dec_width / spatial_pix_size).decompose().value, decimals=0),
+        int(np.round((wl_range / spectra_pix_size).decompose().value,
+                     decimals=0)),
+        int(np.round((ra_width / spatial_pix_size).decompose().value,
+                     decimals=0)),
+        int(np.round((dec_width / spatial_pix_size).decompose().value,
+                     decimals=0)),
     )
     reference_position = (min_wl, ra_cen, dec_cen)
     vprint(f"WCS array shape: {datacube_shape} [wave, ra, dec]")
