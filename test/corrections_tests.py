@@ -17,13 +17,13 @@ class TestAstrometry(unittest.TestCase):
         print("Setting up RSS objects for testing")
         self.rss_1 = mock_rss(ra_cen=180 << u.deg,
                               dec_cen=45 << u.deg)
-        self.rss_2 = mock_rss(ra_cen=180 << u.deg + 3 << u.arcsec,
+        self.rss_2 = mock_rss(ra_cen=180 * u.deg + 3 * u.arcsec,
                               dec_cen=45 << u.deg)
-        self.rss_3 = mock_rss(ra_cen=180 << u.deg + 3 << u.arcsec,
-                              dec_cen=45 << u.deg + 3 << u.arcsec)
+        self.rss_3 = mock_rss(ra_cen=180 * u.deg + 3 * u.arcsec,
+                              dec_cen=45 * u.deg + 3 * u.arcsec)
         self.rss_list = [self.rss_1, self.rss_2, self.rss_3]
         self.correction = AstrometryCorrection()
-    
+
     def test_correction(self):
         offsets, fig = self.correction.register_centroids(
             self.rss_list, qc_plot=True, centroider='gauss')
@@ -40,7 +40,7 @@ class TestThroughput(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         print("Setting up RSS objects for testing")
-        self.rss = mock_rss()
+        self.rss_1 = mock_rss()
         self.rss_2 = mock_rss()
         self.rss_3 = mock_rss()
         self.rss_list = [self.rss_1, self.rss_2, self.rss_3]
