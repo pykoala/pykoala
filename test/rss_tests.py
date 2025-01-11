@@ -79,8 +79,8 @@ class TestRSS(unittest.TestCase):
         rss = RSS.from_fits("test.fits")
         self.assertTrue((rss.intensity == self.rss.intensity).all())
         self.assertTrue((rss.variance == self.rss.variance).all())
-        del rss
         # Remove the file
+        os.unlink("test.fits")
 
     def test_rss_methods(self):
         print("Testing RSS manipulation methods")
