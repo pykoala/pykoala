@@ -22,15 +22,14 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
-dependencies = [
-    "astropy>=5.3.4",
-        "matplotlib>=3.7.2",
-        "numpy>=1.24.0",
-        "scipy>=1.2.3",
-        "synphot",
-        'future',
-]
+
 requires-python = ">=3.7"
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [project.urls]
 Homepage = "https://github.com/pykoala/koala"
