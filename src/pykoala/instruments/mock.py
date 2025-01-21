@@ -18,6 +18,28 @@ from pykoala import vprint
 from pykoala.data_container import RSS
 from pykoala.ancillary import check_unit
 
+
+class NoiseModel:
+    """Noise model for mock data."""
+    def __init__(self, bias_bckgr, gaussian_sigma, poisson_flux_thresh, poisson_sigma):
+        self.bias_bckgr = np.asarray(bias_bckgr)
+        self.gaussian_sigma = gaussian_sigma
+        self.poisson_flux_thresh = poisson_flux_thresh
+        self.poisson_sigma = poisson_sigma
+
+    def gaussian_noise(self, intensity):
+        return np.random.normal(0, self.gaussian_sigma, size=intensity.shape)
+
+    def poisson_noise(self, intensity):
+        return self.poisson_sigma * np.sqrt(intensity / self.poisson_flux_thresh)
+
+    def __call__(self, intensity):
+        if (self.bias_bckgr.ndim > 0) and (self.bias_bckgr.shape != intensity.shape):
+            raise ArithmeticError(f"Bias background dimensions ({self.bias_bckgr}) do not"
+                                  f"match intensity shape {intensity.shape}")
+        return (self.bias_bckgr + self.gaussian_noise(intensity)
+                + self.poisson_noise(intensity))
+
 def gaussian_source(fibre_ra, fibre_dec, source_ra, source_dec,
                     source_ra_sigma, source_dec_sigma, source_intensity=1):
     x = (fibre_ra - source_ra) / source_ra_sigma
@@ -27,9 +49,6 @@ def gaussian_source(fibre_ra, fibre_dec, source_ra, source_dec,
         y = y[:, np.newaxis]
     intensity =  np.exp(- 0.5 * x**2 - 0.5 * y**2) * source_intensity
     return intensity
-
-def gaussian_noise(intensity_shape, noise_intensity=1, sigma=1):
-    return noise_intensity * np.random.normal(0, sigma, size=intensity_shape)
 
 def mock_rss(ra_n_fibres=20, dec_n_fibres=20, fibre_diameter=1.5 << u.arcsec,
              fibre_separation=0 << u.arcsec,
@@ -63,7 +82,10 @@ def mock_rss(ra_n_fibres=20, dec_n_fibres=20, fibre_diameter=1.5 << u.arcsec,
         source_ra=ra_cen, source_dec=dec_cen,
         source_ra_sigma=fov[0] / 2, source_dec_sigma=fov[1] / 2,
         source_intensity=np.ones_like(intensity))
-    intensity += gaussian_noise(intensity.shape, sigma=1, noise_intensity=0.1)
+    
+    noise_model = NoiseModel(bias_bckgr=0.05, gaussian_sigma=0.25,
+                             poisson_flux_thresh=0.75, poisson_sigma=0.1)
+    intensity += noise_model(intensity)
     variance += 0.1**2
     # Create the RSS object
     info = {}
