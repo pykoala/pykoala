@@ -21,7 +21,7 @@ class TestAstrometry(unittest.TestCase):
         self.rss_list = [self.rss_1, self.rss_2, self.rss_3]
         self.correction = AstrometryCorrection()
 
-    def test_correction(self):
+    def test_centroids(self):
         offsets, fig = self.correction.register_centroids(
             self.rss_list, qc_plot=True, centroider='gauss')
 
@@ -29,8 +29,26 @@ class TestAstrometry(unittest.TestCase):
             print("Offset (ra, dec) in arcsec: ",
             offset[0].to('arcsec'), offset[1].to('arcsec'))
 
+        assert np.isclose(
+            offsets[0][0].to_value("arcsec"), 0.0, atol=0.1) & np.isclose(
+            offsets[0][1].to_value("arcsec"), 0.0, atol=0.1), "First RSS not registered properly"
+        assert np.isclose(
+            offsets[1][0].to_value("arcsec"), -3.0, atol=0.1) & np.isclose(
+            offsets[1][1].to_value("arcsec"), 0.0, atol=0.1), "Second RSS not registered properly"
+        assert np.isclose(
+            offsets[2][0].to_value("arcsec"), -3.0, atol=0.1) & np.isclose(
+            offsets[2][1].to_value("arcsec"), -3.0, atol=0.1), "Third RSS not registered properly"
+
         for rss, offset in zip(self.rss_list, offsets):
             self.correction.apply(rss, offset=offset)
+
+    def test_crosscorr(self):
+        #TODO: test cross-correlation method
+        pass
+
+    def test_external_crosscorr(self):
+        #TODO: test crosscorrelation using external imaging data
+        pass
 
 if __name__ == "__main__":
     unittest.main()
