@@ -14,3 +14,4 @@ scikit-image>=0.20
 scipy>=1.12.0
 setuptools>=70.0.0
 ipykernel>=6.29.4
+population-synthesis-toolkit>=1.0.1
