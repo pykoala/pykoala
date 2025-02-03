@@ -15,7 +15,7 @@ class TestRSS(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         print("Setting up RSS for testing")
-        self.rss = mock_rss()
+        self.rss = mock_rss(nan_frac=0.0)
 
     def test_attributes(self):
         """Test the existence of the main attributes of RSS objects."""
