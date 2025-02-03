@@ -30,7 +30,6 @@ class CubeStacking:
     Each method takes as input arguments a collection of cubes and variances,
     either in the form of a list or as an array with the first dimension corresponding
     to each cube, and additional keyword arguments.
-
     """
 
     def sigma_clipping(cubes: np.ndarray, variances: np.ndarray, **kwargs):
@@ -38,21 +37,21 @@ class CubeStacking:
 
         Parameters
         ----------
-        - cubes: np.ndarray
+        cubes: np.ndarray
             An array consisting of the collection of data to combine. The first
             dimension must correspond to the individual elements (e.g. datacubes)
             that will be combined. If the size of the first dimension is 1, it
             will return `cubes[0]` withouth applying any combination.
-        - variances: np.ndarray
+        variances: np.ndarray
             Array of variances associated to cubes.
-        - inv_var_weight: np.ndarray, optional
+        inv_var_weight: np.ndarray, optional
             An array of weights to apply during the stacking.
 
         Returns
         -------
-        - stacked_cube: np.ndarray
+        stacked_cube: np.ndarray
             The result of stacking the data in cubes along axis 0.
-        - stacked_variance: np.ndarray
+        stacked_variance: np.ndarray
             The result of stacking the variances along axis 0.
         """
         if cubes.shape[0] == 1:
@@ -84,21 +83,21 @@ class CubeStacking:
 
         Parameters
         ----------
-        - cubes: np.ndarray
+        cubes: np.ndarray
             An array consisting of the collection of data to combine. The first
             dimension must correspond to the individual elements (e.g. datacubes)
             that will be combined. If the size of the first dimension is 1, it
             will return `cubes[0]` withouth applying any combination.
-        - variances: np.ndarray
+        variances: np.ndarray
             Array of variances associated to cubes.
-        - inv_var_weight: np.ndarray, optional
+        inv_var_weight: np.ndarray, optional
             An array of weights to apply during the stacking.
 
         Returns
         -------
-        - stacked_cube: np.ndarray
+        stacked_cube: np.ndarray
             The result of stacking the data in cubes along axis 0.
-        - stacked_variance: np.ndarray
+        stacked_variance: np.ndarray
             The result of stacking the variances along axis 0.
         """
         if cubes.shape[0] == 1:
@@ -113,6 +112,7 @@ class CubeStacking:
         if kwargs.get("inv_var_weight", True):
             w = np.where((variances > 0) & np.isfinite(variances) & good_pixel,
                          1 / variances, np.nan)
+        # Renormalize the weights using only pixels with data
         norm = np.nansum(w, axis=0)
         illuminated_spx = norm > 0
         w = np.where(illuminated_spx, w / norm, np.nan)
@@ -225,7 +225,7 @@ class ParabolicKernel(InterpolationKernel):
             The values of the cumulative distribution evaluated at the input
             values of u.
         """
-        u_clip = u.clip(-1, 1)
+        u_clip = np.atleast_1d(u).clip(-1, 1)
         return (3.0 * u_clip - u_clip**3 + 2.0) / 4
 
     def kernel_1D(self, x_edges):
@@ -266,20 +266,24 @@ class ParabolicKernel(InterpolationKernel):
             Array of kernel weights within each bin. The size is
             `(len(y_edges) - 1, len(x_edges) - 1)`.
         """
-        z_yy, z_xx = np.meshgrid(y_edges / self.scale, x_edges / self.scale)
-        z_yy = z_yy.clip(-1.0, 1.0)
-        z_xx = z_xx.clip(-1.0, 1.0)
-        cum_k = (3.0 * z_xx - z_xx**3 + 2.0) / 4 * (3.0 * z_yy - z_yy**3 + 2.0) / 4
+        if x_edges.ndim == 1:
+            z_yy, z_xx = np.meshgrid(y_edges / self.scale, x_edges / self.scale)
+        else:
+            z_xx = x_edges / self.scale
+            z_yy = y_edges / self.scale
+
+        cum_k = self.cmf(z_xx) * self.cmf(z_yy)
         weights = np.diff(cum_k, axis=0)
         weights = np.diff(weights, axis=1)
         return weights
-
+        
 
 class GaussianKernel(InterpolationKernel):
     """Gaussian InterpolationKernel."""
 
     def __init__(self, scale, truncation_radius, *args, **kwargs):
         super().__init__(scale, truncation_radius=truncation_radius, *args, **kwargs)
+        # Minimum and maximum percentiles used
         self.left_norm = 0.5 * (1 + erf(-self.truncation_radius / np.sqrt(2)))
         self.right_norm = 0.5 * (1 + erf(self.truncation_radius / np.sqrt(2)))
 
@@ -289,9 +293,9 @@ class GaussianKernel(InterpolationKernel):
         )
         return c.clip(0, 1)
 
-    def kernel_1D(self, x_edges):
+    def kernel_1D(self, x_edges, axis=0):
         cumulative = self.cmf(x_edges / self.scale)
-        weights = np.diff(cumulative)
+        weights = np.diff(cumulative, axis=axis)
         return weights
 
     def kernel_2D(self, x_edges, y_edges):
@@ -440,13 +444,13 @@ def interpolate_fibre(
         # Kernel along columns direction (x, ra)
         kernel_centre_cols = pix_pos_cols - np.nanmedian(adr_cols[wl_slice])
         kernel_offset = kernel.scale * kernel.truncation_radius
-        cols_min = max(int(kernel_centre_cols - kernel_offset), 0)
-        cols_max = min(int(kernel_centre_cols + kernel_offset), cube.shape[2] - 1)
+        cols_min = max(int(kernel_centre_cols - kernel_offset) - 2, 0)
+        cols_max = min(int(kernel_centre_cols + kernel_offset) + 2, cube.shape[2] - 1)
         columns_slice = slice(cols_min, cols_max + 1)
         # Kernel along rows direction (y, dec)
         kernel_centre_rows = pix_pos_rows - np.nanmedian(adr_rows[wl_slice])
-        rows_min = max(int(kernel_centre_rows - kernel_offset), 0)
-        rows_max = min(int(kernel_centre_rows + kernel_offset), cube.shape[1] - 1)
+        rows_min = max(int(kernel_centre_rows - kernel_offset) - 2, 0)
+        rows_max = min(int(kernel_centre_rows + kernel_offset) + 2, cube.shape[1] - 1)
         rows_slice = slice(rows_min, rows_max + 1)
 
         if (cols_max < cols_min) | (rows_max < rows_min):
@@ -458,23 +462,24 @@ def interpolate_fibre(
         pos_col_edges = column_edges - kernel_centre_cols
         pos_row_edges = row_edges - kernel_centre_rows
         # Compute the kernel weight associated to each location
-        w = kernel.kernel_2D(pos_row_edges, pos_col_edges)
-        w = w[np.newaxis]
+        weights = kernel.kernel_2D(pos_row_edges, pos_col_edges)
+        weights = weights[np.newaxis]
         # Add spectra to cube
+        finite = np.isfinite(cube[wl_slice, rows_slice, columns_slice])
         cube[wl_slice, rows_slice, columns_slice] = np.add(
             cube[wl_slice, rows_slice, columns_slice],
-            fib_spectra[wl_slice, np.newaxis, np.newaxis] * w,
-            where=np.isfinite(cube[wl_slice, rows_slice, columns_slice]))
+            fib_spectra[wl_slice, np.newaxis, np.newaxis] * weights,
+            where=finite)
 
         cube_var[wl_slice, rows_slice, columns_slice] = np.add(
             cube_var[wl_slice, rows_slice, columns_slice],
-            fib_variance[wl_slice, np.newaxis, np.newaxis] * w**2,
-            where=np.isfinite(cube_var[wl_slice, rows_slice, columns_slice]))
+            fib_variance[wl_slice, np.newaxis, np.newaxis] * weights**2,
+            where=finite)
 
         cube_weight[wl_slice, rows_slice, columns_slice] = np.add(
             cube_weight[wl_slice, rows_slice, columns_slice],
-            pixel_weights[wl_slice, np.newaxis, np.newaxis] * w,
-            where=np.isfinite(cube_weight[wl_slice, rows_slice, columns_slice]))
+            pixel_weights[wl_slice, np.newaxis, np.newaxis] * weights,
+            where=finite)
 
     return cube, cube_var, cube_weight
 
