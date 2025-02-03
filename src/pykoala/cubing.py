@@ -748,7 +748,11 @@ def build_cube(
             ind_cube = Cube(intensity=intensity, variance=variance,
                             wcs=wcs, info=info)
             interm_prod[f"cube_{ith + 1}"] = (ind_cube, qc_cube(ind_cube))
-    return cube, interm_prod
+
+    if qc_plots or kwargs.get("keep_individual_cubes", False):
+        return cube, interm_prod
+    else:
+        return cube
 
 
 def build_wcs(
