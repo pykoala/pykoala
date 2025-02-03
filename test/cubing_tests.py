@@ -1,6 +1,6 @@
 import unittest
 import os
-
+import numpy as np
 from astropy import units as u
 from astropy.wcs import WCS
 
@@ -9,7 +9,21 @@ from pykoala import cubing
 from pykoala.plotting.utils import qc_cube
 
 class TestKernel(unittest.TestCase):
-    pass
+    """Unit tests for cheking the available interpolation kernels."""
+    @classmethod
+    def setUpClass(self):
+        # Define a regular grid
+        self.xx, self.yy = np.meshgrid(np.arange(0, 10), np.arange(0, 20))
+        self.pix_size = 1
+
+    def test_parabolic_kernel(self):
+        kernel = cubing.ParabolicKernel(scale=1)
+
+        # Check that the cumulative mass function is correct
+        self.assertTrue(kernel.cmf(-1.0) == 0)
+        self.assertTrue(kernel.cmf(0) == 0.5)
+        self.assertTrue(kernel.cmf(1.0) == 1.0)
+
 
 class TestInterpolation(unittest.TestCase):
     pass
