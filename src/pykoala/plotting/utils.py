@@ -414,14 +414,14 @@ def qc_cubing(rss_weight_maps, exposure_times):
 
     p5, p95 = np.nanpercentile(rss_weight_maps, [.1 , 99.9])
     w_im_args = dict(vmin=p5 * 0.9, vmax=p95 * 1.1, cmap='nipy_spectral',
-                     interpolation='none', origin='lower')
+                     interpolation='none', origin='lower', aspect="auto")
 
     tp5, tp95 = np.nanpercentile(exposure_times, [5 , 95])
     print("Mean exposure time (s): ", np.nanmean(exposure_times))
     t_im_args = dict(vmin=tp5 * 1.1, vmax=tp95 * 1.1, cmap='gnuplot',
-                     interpolation='none', origin='lower')
+                     interpolation='none', origin='lower', aspect="auto")
     fig, axs = plt.subplots(ncols=n_rss + 1, nrows=2, sharex=True,
-     sharey=True, constrained_layout=True)
+     sharey=True, constrained_layout=True, gridspec_kw={"hspace": 0.05})
     for i in range(n_rss):
         ax = axs[0, i]
         ax.set_title(f"RSS - {i + 1}")
@@ -462,7 +462,7 @@ def qc_fibres_on_fov(fov_size, pixel_colum_pos, pixel_row_pos,
                           fc='none', ec='k', lw=2, label='Cube FoV')
     ax.add_patch(patch)
     ax.legend(handles=[patch])
-
+    return fig
 # =============================================================================
 # Star profile
 # =============================================================================
