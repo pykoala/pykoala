@@ -32,24 +32,11 @@ from pykoala.corrections.correction import CorrectionBase
 from pykoala.corrections.throughput import Throughput
 from pykoala.corrections.wavelength import WavelengthOffset
 from pykoala.data_container import DataContainer, RSS
-from pykoala.ancillary import check_unit
+from pykoala.ancillary import check_unit, preserve_units_dec
 
 # =============================================================================
 # Background estimators
 # =============================================================================
-def preserve_units(func):
-    """Decorator that prevents the loss of units"""
-    def wrapper(data, *args, **kwargs):
-        result =  func(data, *args, **kwargs)
-        if isinstance(data, u.Quantity):
-            if not isinstance(result, u.Quantity):
-                return result * data.unit
-            else:
-                return result
-        else:
-            return result
-        
-    return wrapper
 
 #TODO: Move to a math module
 class BackgroundEstimator:
@@ -235,7 +222,7 @@ class ContinuumEstimator:
     """
 
     @staticmethod
-    @preserve_units
+    @preserve_units_dec
     def medfilt_continuum(data, window_size=5):
         """
         Estimate the continuum using a median filter.
@@ -256,7 +243,7 @@ class ContinuumEstimator:
         return continuum
 
     @staticmethod
-    @preserve_units
+    @preserve_units_dec
     def percentile_continuum(data, percentile, window_size=5):
         """
         Estimate the continuum using a percentile filter.
@@ -280,7 +267,7 @@ class ContinuumEstimator:
         return continuum
 
     @staticmethod
-    @preserve_units
+    @preserve_units_dec
     def pol_continuum(data, wavelength, pol_order=3, **polfit_kwargs):
         """
         Estimate the continuum using polynomial fitting.
