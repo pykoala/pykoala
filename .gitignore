@@ -6,6 +6,9 @@ tutorials/*.fits*
 tutorials/products/*.fits*
 tutorials/data/weave
 
+# Unit tests intermediate products
+test/*.png
+test/*.fits
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
