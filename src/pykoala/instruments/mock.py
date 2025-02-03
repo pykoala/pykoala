@@ -52,9 +52,12 @@ def gaussian_source(fibre_ra, fibre_dec, source_ra, source_dec,
 
 def mock_rss(ra_n_fibres=20, dec_n_fibres=20, fibre_diameter=1.5 << u.arcsec,
              fibre_separation=0 << u.arcsec,
-             n_wave=5000, wave_range=(3000 << u.AA, 8000 << u.AA),
+             n_wave=1000, wave_range=(3000 << u.AA, 8000 << u.AA),
              ra_cen=180 << u.deg, dec_cen=45 << u.deg, exptime=600 << u.second,
-             airmass=1.0):
+             airmass=1.0,
+             source_kwargs={},
+             noise_kwargs={},
+             nan_frac=0.01):
     """Create a mock RSS object."""
     vprint("Creating mock RSS data")
     n_fibres = ra_n_fibres * dec_n_fibres
@@ -77,16 +80,38 @@ def mock_rss(ra_n_fibres=20, dec_n_fibres=20, fibre_diameter=1.5 << u.arcsec,
     variance = np.zeros_like(intensity)
    
     # Add sources and noise
-    intensity += gaussian_source(
-        ra.flatten(), dec.flatten(),
-        source_ra=ra_cen, source_dec=dec_cen,
-        source_ra_sigma=fov[0] / 2, source_dec_sigma=fov[1] / 2,
-        source_intensity=np.ones_like(intensity))
+    if "source_ra" not in source_kwargs:
+        source_kwargs["source_ra"] = ra_cen
+    if "source_dec" not in source_kwargs:
+        source_kwargs["source_dec"] = dec_cen
+    if "source_ra_sigma" not in source_kwargs:
+        source_kwargs["source_ra_sigma"] = fov[0] / 2
+    if "source_dec_sigma" not in source_kwargs:
+        source_kwargs["source_dec_sigma"] = fov[1] / 2
+    if "source_intensity" not in source_kwargs:
+        source_kwargs["source_intensity"] = 3 * np.ones_like(intensity)
+
+    intensity += gaussian_source(ra.flatten(), dec.flatten(), **source_kwargs)
     
-    noise_model = NoiseModel(bias_bckgr=0.05, gaussian_sigma=0.25,
-                             poisson_flux_thresh=0.75, poisson_sigma=0.1)
+    # Add noise
+    if "bias_bckgr" not in noise_kwargs:
+        noise_kwargs["bias_bckgr"] = 0.05
+    if "gaussian_sigma" not in noise_kwargs:
+        noise_kwargs["gaussian_sigma"] = 0.1
+    if "poisson_flux_thresh" not in noise_kwargs:
+        noise_kwargs["poisson_flux_thresh"] = 0.75
+    if "poisson_sigma" not in noise_kwargs:
+        noise_kwargs["poisson_sigma"] = 0.1
+
+    noise_model = NoiseModel(**noise_kwargs)
     intensity += noise_model(intensity)
-    variance += 0.1**2
+    variance += noise_kwargs["gaussian_sigma"]**2
+
+    # Add nans (e.g. masked cosmic rays)
+    nan_idx = np.random.randint(0, intensity.size, size=int(intensity.size * nan_frac))
+    intensity[np.unravel_index(nan_idx, intensity.shape)] = np.nan
+    variance[np.unravel_index(nan_idx, intensity.shape)] = np.nan
+
     # Create the RSS object
     info = {}
     info['name'] = "MockRSS"
