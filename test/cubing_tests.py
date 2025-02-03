@@ -45,20 +45,21 @@ class TestCubing(unittest.TestCase):
                                               kernel_size_arcsec=1.0,
                                               qc_plots=True,
                                               keep_individual_cubes=True)
-        fig = qc_cube(cube=cube)
         # Save the cube to a FITS file
         cube.to_fits(filename="test_cube.fits",
                      overwrite=True)
         # Load the cube from the FITS
         cube = cubing.Cube.from_fits("test_cube.fits")
         if save:
-            fig.savefig(f"./cube_qcplot_cubing_test.png",
-                            bbox_inches="tight", dpi=200)
+            interm_prod["stack_cube"].savefig(
+                f"./cube_qcplot_cubing_test.png",
+                bbox_inches="tight", dpi=200)
             for name, prod in interm_prod.items():
                 if "rss" in name:
                     prod.savefig(f"./{name}_cubing_test.png",
                                 bbox_inches="tight", dpi=200)
-                elif "cube" in name:
+                elif "cube_" in name:
+                    print(prod)
                     single_exp_cube, fig = prod
                     fig.savefig(f"./single_{name}_cube_qc.png",
                                 bbox_inches="tight", dpi=200)
