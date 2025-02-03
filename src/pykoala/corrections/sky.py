@@ -32,8 +32,11 @@ from pykoala.corrections.correction import CorrectionBase
 from pykoala.corrections.throughput import Throughput
 from pykoala.corrections.wavelength import WavelengthOffset
 from pykoala.data_container import DataContainer, RSS
-from pykoala.ancillary import check_unit
+from pykoala.ancillary import check_unit, preserve_units_dec
 
+# =============================================================================
+# Background estimators
+# =============================================================================
 
 #TODO: Move to a math module
 class BackgroundEstimator:
@@ -219,6 +222,7 @@ class ContinuumEstimator:
     """
 
     @staticmethod
+    @preserve_units_dec
     def medfilt_continuum(data, window_size=5):
         """
         Estimate the continuum using a median filter.
@@ -239,6 +243,7 @@ class ContinuumEstimator:
         return continuum
 
     @staticmethod
+    @preserve_units_dec
     def percentile_continuum(data, percentile, window_size=5):
         """
         Estimate the continuum using a percentile filter.
@@ -262,6 +267,7 @@ class ContinuumEstimator:
         return continuum
 
     @staticmethod
+    @preserve_units_dec
     def pol_continuum(data, wavelength, pol_order=3, **polfit_kwargs):
         """
         Estimate the continuum using polynomial fitting.

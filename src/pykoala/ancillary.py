@@ -91,19 +91,29 @@ def remove_unit(quantity, default_unit=None):
     else:
         return quantity.value
 
+# def preserve_units_dec(func):
+#     """Decorator method to preserve `astropy.Units` on input arguments."""
+#     def wrapper(data, *args, **kwargs):
+#         if isinstance(data, u.Quantity):
+#             unit = data.unit
+#         else:
+#             unit = 1
+#         val = func(data, *args, **kwargs)
+        
+#         if not isinstance(val, u.Quantity):
+#             return val << unit
+#         else:
+#             return val
+#     return wrapper
+
 def preserve_units_dec(func):
     """Decorator method to preserve `astropy.Units` on input arguments."""
     def wrapper(data, *args, **kwargs):
+        result =  func(data, *args, **kwargs)
         if isinstance(data, u.Quantity):
-            unit = data.unit
+            return check_unit(result, data.unit)
         else:
-            unit = 1
-        val = func(data, *args, **kwargs)
-        
-        if not isinstance(val, u.Quantity):
-            return val << unit
-        else:
-            return val
+            return result
     return wrapper
 
 def remove_units_dec(func):
