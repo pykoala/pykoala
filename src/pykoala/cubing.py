@@ -20,7 +20,7 @@ from astropy import units as u
 # =============================================================================
 from pykoala import ancillary
 from pykoala.data_container import Cube, RSS
-from pykoala.plotting.utils import qc_cubing, qc_fibres_on_fov
+from pykoala.plotting.utils import qc_cubing, qc_fibres_on_fov, qc_cube
 from pykoala import vprint
 
 
@@ -61,16 +61,22 @@ class CubeStacking:
         nsigma = kwargs.get("nsigma", 3.0)
         sigma = np.nanstd(cubes, axis=0)
         mean = np.nanmean(cubes, axis=0)
-        good_pixel = np.abs((cubes - mean[np.newaxis]) / sigma[np.newaxis]) < nsigma
-        if kwargs.get("inv_var_weight", False):
-            w = 1 / variances
-        else:
-            w = np.ones_like(cubes)
 
-        stacked_cube = np.nansum(cubes * w * good_pixel, axis=0) / np.nansum(
-            w * good_pixel, axis=0
-        )
-        stacked_variance = np.nansum(variances, axis=0) / cubes.shape[0] ** 2
+        good_pixel = np.abs((cubes - mean[np.newaxis]) / sigma[np.newaxis]) < nsigma
+        w = np.where(good_pixel, 1.0, 0.0)
+        if kwargs.get("inv_var_weight", True):
+            w = np.where((variances > 0) & np.isfinite(variances) & good_pixel,
+                         1 / variances, np.nan)
+        norm = np.nansum(w, axis=0)
+        illuminated_spx = norm > 0
+        w = np.where(illuminated_spx, w / norm, np.nan)
+        n_pix = np.sum(good_pixel, axis=0)
+        stacked_cube = np.nansum(cubes * w, axis=0)
+        # Do not include the pixels that are flagged as bad
+        stacked_variance = np.full_like(stacked_cube, fill_value=np.nan)
+        stacked_variance = np.where(n_pix > 0,
+                                    np.nansum(variances * good_pixel, axis=0) / n_pix**2,
+                                    np.nan)
         return stacked_cube, stacked_variance
 
     def mad_clipping(cubes: np.ndarray, variances: np.ndarray, **kwargs):
@@ -101,17 +107,22 @@ class CubeStacking:
         nsigma = kwargs.get("nsigma", 3.0)
         sigma = ancillary.std_from_mad(cubes, axis=0)
         median = np.nanmedian(cubes, axis=0)
+        # Spaxel weights
         good_pixel = np.abs((cubes - median[np.newaxis]) / sigma[np.newaxis]) < nsigma
-
+        w = np.where(good_pixel, 1.0, 0.0)
         if kwargs.get("inv_var_weight", True):
-            w = 1 / variances
-        else:
-            w = np.ones_like(cubes)
-
-        stacked_cube = np.nansum(cubes * w * good_pixel, axis=0) / np.nansum(
-            w * good_pixel, axis=0
-        )
-        stacked_variance = np.nansum(variances, axis=0) / cubes.shape[0] ** 2
+            w = np.where((variances > 0) & np.isfinite(variances) & good_pixel,
+                         1 / variances, np.nan)
+        norm = np.nansum(w, axis=0)
+        illuminated_spx = norm > 0
+        w = np.where(illuminated_spx, w / norm, np.nan)
+        n_pix = np.sum(good_pixel, axis=0)
+        stacked_cube = np.nansum(cubes * w, axis=0)
+        # Do not include the pixels that are flagged as bad
+        stacked_variance = np.full_like(stacked_cube, fill_value=np.nan)
+        stacked_variance = np.where(n_pix > 0,
+                                    np.nansum(variances * good_pixel, axis=0) / n_pix**2,
+                                    np.nan)
         return stacked_cube, stacked_variance
 
 
@@ -447,15 +458,20 @@ def interpolate_fibre(
         w = kernel.kernel_2D(pos_row_edges, pos_col_edges)
         w = w[np.newaxis]
         # Add spectra to cube
-        cube[wl_slice, rows_slice, columns_slice] += (
-            fib_spectra[wl_slice, np.newaxis, np.newaxis] * w
-        )
-        cube_var[wl_slice, rows_slice, columns_slice] += (
-            fib_variance[wl_slice, np.newaxis, np.newaxis] * w**2
-        )
-        cube_weight[wl_slice, rows_slice, columns_slice] += (
-            pixel_weights[wl_slice, np.newaxis, np.newaxis] * w
-        )
+        cube[wl_slice, rows_slice, columns_slice] = np.add(
+            cube[wl_slice, rows_slice, columns_slice],
+            fib_spectra[wl_slice, np.newaxis, np.newaxis] * w,
+            where=np.isfinite(cube[wl_slice, rows_slice, columns_slice]))
+
+        cube_var[wl_slice, rows_slice, columns_slice] = np.add(
+            cube_var[wl_slice, rows_slice, columns_slice],
+            fib_variance[wl_slice, np.newaxis, np.newaxis] * w**2,
+            where=np.isfinite(cube_var[wl_slice, rows_slice, columns_slice]))
+
+        cube_weight[wl_slice, rows_slice, columns_slice] = np.add(
+            cube_weight[wl_slice, rows_slice, columns_slice],
+            pixel_weights[wl_slice, np.newaxis, np.newaxis] * w,
+            where=np.isfinite(cube_weight[wl_slice, rows_slice, columns_slice]))
 
     return cube, cube_var, cube_weight
 
@@ -635,7 +651,7 @@ def build_cube(
         raise ValueError("User must provide either wcs or wcs_params values.")
     if wcs is None and wcs_params is not None:
         wcs = WCS(wcs_params)
-    plots = {}
+    interm_prod = {}
     # Initialise kernel
     if isinstance(kernel, type):
         kernel_size_arcsec = ancillary.check_unit(kernel_size_arcsec, u.arcsec)
@@ -668,14 +684,14 @@ def build_cube(
     vprint(f"[Cubing] Initialising new Cube with dimensions: {wcs.array_shape}")
     vprint(f"Output Cube units: {output_unit.to_string()}")
 
-    all_datacubes = np.zeros((len(rss_set), *wcs.array_shape)) << output_unit
-    all_var = np.zeros(all_datacubes.shape) << output_unit**2
+    all_datacubes = np.full((len(rss_set), *wcs.array_shape), fill_value=np.nan) << output_unit
+    all_var = np.full(all_datacubes.shape, fill_value=np.nan) << output_unit**2
     # Total weight per spaxel
-    all_w = np.zeros(all_datacubes.shape)
+    all_w = np.full(all_datacubes.shape, fill_value=np.nan)
     # Exposure time per spaxel
-    all_exp = np.zeros(all_datacubes.shape) << u.second
+    all_exp = np.full(all_datacubes.shape, fill_value=np.nan) << u.second
     # "Empty" array that will be used to store exposure times
-    exposure_times = np.zeros((len(rss_set))) << u.second
+    exposure_times = np.full((len(rss_set)), fill_value=np.nan) << u.second
 
     # For each RSS two arrays containing the ADR over each axis might be provided
     # otherwise they will be set to None
@@ -699,7 +715,7 @@ def build_cube(
             qc_plots=qc_plots,
         )
 
-        plots[f"rss_{ith + 1}"] = rss_plots
+        interm_prod[f"rss_{ith + 1}"] = rss_plots
         if u.second in rss.intensity.unit.bases:
             all_datacubes[ith] = datacube_i
             all_var[ith] = datacube_var_i
@@ -721,9 +737,15 @@ def build_cube(
     cube = Cube(intensity=datacube, variance=datacube_var, wcs=wcs, info=info)
     if qc_plots:
         # Compute the fibre coverage and exposure time maps
-        plots[f"weights"] = qc_cubing(all_w, all_exp)
-        return cube, plots
-    return cube
+        interm_prod[f"weights"] = qc_cubing(all_w, all_exp)
+        interm_prod[f"stack_cube"] = qc_cube(cube)
+
+    if kwargs.get("keep_individual_cubes", False):
+        for ith, (intensity, variance) in enumerate(zip(all_datacubes, all_var)):
+            ind_cube = Cube(intensity=intensity, variance=variance,
+                            wcs=wcs, info=info)
+            interm_prod[f"cube_{ith + 1}"] = (ind_cube, qc_cube(ind_cube))
+    return cube, interm_prod
 
 
 def build_wcs(
