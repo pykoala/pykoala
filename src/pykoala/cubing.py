@@ -440,21 +440,24 @@ def interpolate_fibre(
         # Kernel along columns direction (x, ra)
         kernel_centre_cols = pix_pos_cols - np.nanmedian(adr_cols[wl_slice])
         kernel_offset = kernel.scale * kernel.truncation_radius
-        cols_min = max(int(kernel_centre_cols - kernel_offset) - 2, 0)
-        cols_max = min(int(kernel_centre_cols + kernel_offset) + 2, cube.shape[2] - 1)
+        cols_min = max(int(kernel_centre_cols - kernel_offset), 0)
+        cols_max = min(int(kernel_centre_cols + kernel_offset), cube.shape[2] - 1)
         columns_slice = slice(cols_min, cols_max + 1)
         # Kernel along rows direction (y, dec)
         kernel_centre_rows = pix_pos_rows - np.nanmedian(adr_rows[wl_slice])
-        rows_min = max(int(kernel_centre_rows - kernel_offset) - 2, 0)
-        rows_max = min(int(kernel_centre_rows + kernel_offset) + 2, cube.shape[1] - 1)
+        rows_min = max(int(kernel_centre_rows - kernel_offset), 0)
+        rows_max = min(int(kernel_centre_rows + kernel_offset), cube.shape[1] - 1)
         rows_slice = slice(rows_min, rows_max + 1)
 
-        if (cols_max <= cols_min) | (rows_max <= rows_min):
+        if (cols_max < cols_min) | (rows_max < rows_min):
+            print("Col ", cols_max, cols_min)
+            print("Row ", rows_max, rows_min)
             continue
         column_edges = np.arange(cols_min - 0.5, cols_max + 1.5, 1.0)
         row_edges = np.arange(rows_min - 0.5, rows_max + 1.5, 1.0)
         pos_col_edges = column_edges - kernel_centre_cols
         pos_row_edges = row_edges - kernel_centre_rows
+        # Compute the kernel weight associated to each location
         w = kernel.kernel_2D(pos_row_edges, pos_col_edges)
         w = w[np.newaxis]
         # Add spectra to cube
