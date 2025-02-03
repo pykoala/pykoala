@@ -108,9 +108,10 @@ def mock_rss(ra_n_fibres=20, dec_n_fibres=20, fibre_diameter=1.5 << u.arcsec,
     variance += noise_kwargs["gaussian_sigma"]**2
 
     # Add nans (e.g. masked cosmic rays)
-    nan_idx = np.random.randint(0, intensity.size, size=int(intensity.size * nan_frac))
-    intensity[np.unravel_index(nan_idx, intensity.shape)] = np.nan
-    variance[np.unravel_index(nan_idx, intensity.shape)] = np.nan
+    if nan_frac > 0:
+        nan_idx = np.random.randint(0, intensity.size, size=int(intensity.size * nan_frac))
+        intensity[np.unravel_index(nan_idx, intensity.shape)] = np.nan
+        variance[np.unravel_index(nan_idx, intensity.shape)] = np.nan
 
     # Create the RSS object
     info = {}
