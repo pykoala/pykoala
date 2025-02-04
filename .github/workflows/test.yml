@@ -32,7 +32,9 @@ jobs:
         pip install -r requirements.txt
     - name: Test with pytest
       run: |
-        pytest --nbval-lax $(cat testable_notebooks.txt)        
+        make test-units
+        make test-notebooks
+        
         
   build-macos:
     runs-on: macos-latest
@@ -64,4 +66,5 @@ jobs:
         pip install -r requirements.txt
     - name: Test with pytest
       run: |
-        pytest --nbval-lax $(cat testable_notebooks.txt)
+        make test-units
+        make test-notebooks

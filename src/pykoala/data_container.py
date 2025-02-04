@@ -1019,8 +1019,11 @@ class RSS(SpectraContainer):
             Array containing the integrated variance associated to each fibre.
         """
         if wavelength_range is not None:
-            wave_mask = (self.wavelength.value >= wavelength_range[0]) & (
-                self.wavelength.value <= wavelength_range[1]
+
+            wavelength_range = [ancillary.check_unit(wl_r, self.wavelength.unit) for wl_r in wavelength_range]
+            wave_mask = (self.wavelength >= wavelength_range[0]) & (
+                self.wavelength <= wavelength_range[1]
+
             )
         else:
             wave_mask = np.ones(self.wavelength.size, dtype=bool)
@@ -1035,8 +1038,11 @@ class RSS(SpectraContainer):
         """Compute the spatial fibre coverage of the RSS."""
         min_ra, max_ra = self.info['fib_ra'].min(), self.info['fib_ra'].max()
         min_dec, max_dec = self.info['fib_dec'].min(), self.info['fib_dec'].max()
-        footprint = np.array([[max_ra, max_dec], [max_ra, min_dec],
-                              [min_ra, max_dec], [min_ra, min_dec]])
+        footprint = np.array([[max_ra.to_value("deg"), max_dec.to_value("deg")],
+                              [max_ra.to_value("deg"), min_dec.to_value("deg")],
+                              [min_ra.to_value("deg"), max_dec.to_value("deg")],
+                              [min_ra.to_value("deg"), min_dec.to_value("deg")]],
+                              dtype=float) << u.deg
         return footprint
 
     def plot_rss_image(self, data=None, data_label="", fig_args={}, cmap_args={},
@@ -1096,7 +1102,7 @@ class RSS(SpectraContainer):
             x = x[wavelength_range]
 
         fig, axs = new_figure(self.info['name'], **fig_args)
-        im, cb = plot_image(fig, axs[0, 0], data_label, data,
+        im, cb = plot_image(fig, axs[0, 0], cblabel=data_label, data=data,
                             x=x, y=y,
                             xlabel="Wavelength [AA]", ylabel="Fibre",
                             **cmap_args)
