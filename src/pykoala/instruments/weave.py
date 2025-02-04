@@ -29,8 +29,14 @@ def weave_rss(filename):
         wcs = WCS(header)
         pixels = np.arange(hdu[1].data.shape[1])
         wavelength = wcs.spectral.array_index_to_world(pixels)
+        
         intensity = hdu[3].data << u.adu
         variance = np.where(hdu[4].data > 0, 1/hdu[4].data, np.nan) << u.adu**2
+        # -- Temporary hack for twilights:
+        #intensity = hdu[1].data
+        #variance = 1 / np.where(hdu[2].data > 0, hdu[2].data, np.nan)
+        #wavelength = wavelength.to_value('Angstrom')
+        
         fibtable = Table.read(hdu['FIBTABLE'])
 
     log = DataContainerHistory()
@@ -51,13 +57,14 @@ def weave_rss(filename):
     info['fib_dec'] = fibtable['FIBREDEC'] << u.deg
     
     return RSS(intensity=intensity,
-           wavelength=wavelength,
-           variance=variance,
-           log=log,
-           #header=header,
-           info=info,
-           wcs=wcs
-           )
+               wavelength=wavelength,
+               variance=variance,
+               log=log,
+               header=header,
+               info=info,
+               wcs=wcs,
+               fibre_diameter=2.61 << u.arcsec,
+              )
 
 
 # %%

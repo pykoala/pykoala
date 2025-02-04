@@ -1,10 +1,13 @@
 # Other
 /deprecated
 venv_koala/
+
 # Tutorials stuff
 tutorials/*.fits*
 tutorials/products/*.fits*
 tutorials/data/weave
+tutorials/corrections/*.png
+tutorials/corrections/*.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

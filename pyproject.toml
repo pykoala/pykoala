@@ -34,3 +34,10 @@ where = ["src"]
 [project.urls]
 Homepage = "https://github.com/pykoala/koala"
 Issues = "https://github.com/pykoala/koala/issues"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = [
+    "test/unit_tests.py",
+]
