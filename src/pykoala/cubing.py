@@ -65,8 +65,11 @@ class CubeStacking:
         good_pixel = np.abs((cubes - mean[np.newaxis]) / sigma[np.newaxis]) < nsigma
         w = np.where(good_pixel, 1.0, 0.0)
         if kwargs.get("inv_var_weight", False):
-            w = np.where((variances > 0) & np.isfinite(variances) & good_pixel,
-                         1 / variances, np.nan)
+            w = np.where(
+                (variances > 0) & np.isfinite(variances) & good_pixel,
+                1 / variances,
+                np.nan,
+            )
         norm = np.nansum(w, axis=0)
         illuminated_spx = norm > 0
         w = np.where(illuminated_spx, w / norm, np.nan)
@@ -74,9 +77,9 @@ class CubeStacking:
         stacked_cube = np.nansum(cubes * w, axis=0)
         # Do not include the pixels that are flagged as bad
         stacked_variance = np.full_like(stacked_cube, fill_value=np.nan)
-        stacked_variance = np.where(n_pix > 0,
-                                    np.nansum(variances * good_pixel, axis=0) / n_pix**2,
-                                    np.nan)
+        stacked_variance = np.where(
+            n_pix > 0, np.nansum(variances * good_pixel, axis=0) / n_pix**2, np.nan
+        )
         return stacked_cube, stacked_variance
 
     def mad_clipping(cubes: np.ndarray, variances: np.ndarray, **kwargs):
@@ -112,8 +115,11 @@ class CubeStacking:
         good_pixel = np.abs((cubes - median[np.newaxis]) / sigma[np.newaxis]) < nsigma
         w = np.where(good_pixel, 1.0, 0.0)
         if kwargs.get("inv_var_weight", False):
-            w = np.where((variances > 0) & np.isfinite(variances) & good_pixel,
-                         1 / variances, np.nan)
+            w = np.where(
+                (variances > 0) & np.isfinite(variances) & good_pixel,
+                1 / variances,
+                np.nan,
+            )
         # Renormalize the weights using only pixels with data
         norm = np.nansum(w, axis=0)
         w = np.where(norm > 0, w / norm, np.nan)
@@ -121,10 +127,11 @@ class CubeStacking:
         # Do not include the pixels that are flagged as bad
         stacked_variance = np.full_like(stacked_cube, fill_value=np.nan)
         n_pix = np.sum(good_pixel, axis=0)
-        stacked_variance = np.where(n_pix > 0,
-                                    np.nansum(variances * good_pixel, axis=0) / n_pix**2,
-                                    np.nan)
+        stacked_variance = np.where(
+            n_pix > 0, np.nansum(variances * good_pixel, axis=0) / n_pix**2, np.nan
+        )
         return stacked_cube, stacked_variance
+
 
 # -------------------------------------------
 # Fibre Interpolation and cube reconstruction
@@ -280,7 +287,7 @@ class ParabolicKernel(InterpolationKernel):
         weights = np.diff(cum_k, axis=0)
         weights = np.diff(weights, axis=1)
         return weights
-        
+
 
 class GaussianKernel(InterpolationKernel):
     """Gaussian InterpolationKernel."""
@@ -350,12 +357,13 @@ class DrizzlingKernel(TopHatKernel):
         weights = np.zeros((x_edges.size - 1, y_edges.size - 1))
         # x == rows, y == columns
         # Only the lower-left corner of every pixel is required.
-        pix_edge_x, pix_edge_y = np.meshgrid(x_edges[:-1], y_edges[:-1],
-                                             indexing="ij")
+        pix_edge_x, pix_edge_y = np.meshgrid(x_edges[:-1], y_edges[:-1], indexing="ij")
         for i, pos in enumerate(zip(pix_edge_x.flatten(), pix_edge_y.flatten())):
             _, area_fraction = ancillary.pixel_in_circle(
-                pos, pixel_size=1, circle_pos=(0.0, 0.0),
-                circle_radius=self.scale.value / 2
+                pos,
+                pixel_size=1,
+                circle_pos=(0.0, 0.0),
+                circle_radius=self.scale.value / 2,
             )
             weights[np.unravel_index(i, weights.shape)] = area_fraction
         return weights
@@ -365,9 +373,10 @@ class DrizzlingKernel(TopHatKernel):
 # Fibre interpolation
 # ------------------------------------------------------------------------------
 
+
 class CubeInterpolator(VerboseMixin):
     """A class for combining multiple RSS into a 3D datacube.
-    
+
     Description
     -----------
     This class performs the combination of a set of RSS data into a 3D regular
@@ -384,7 +393,7 @@ class CubeInterpolator(VerboseMixin):
     accounts for wavelength-dependent fibre spatial variations.
     - A set of flags of the RSS masks that will be used to mask out pixels during
     the interpolation.
-    
+
     To assess the quality of the interpolation, users may want to keep intermediate
     products or create plots that allow to evaluate the performance of the cubing.
     First, the variables ``all_datacubes`` and ``all_var`` store the interpolated
@@ -394,9 +403,9 @@ class CubeInterpolator(VerboseMixin):
     Furthermore, if "keep_individual_cubes=True" the variable ``rss_inter_products``
     will store each individual :class:`Cube` for each RSS and a QC plot.
 
-    Users may set the argument ``qc_plots=True``, that will create 
+    Users may set the argument ``qc_plots=True``, that will create
 
-    
+
     Example
     -------
     >>> from pykoala.instruments.mock import mock_rss
@@ -404,14 +413,18 @@ class CubeInterpolator(VerboseMixin):
     >>> cube = interpolator.build_cube()
     """
 
-    def __init__(self, rss_set, wcs=None,
-                kernel=GaussianKernel,
-                kernel_size_arcsec=2.0,
-                kernel_truncation_radius=2.0,
-                adr_set=None,
-                mask_flags=None,
-                qc_plots=False,
-                **kwargs):
+    def __init__(
+        self,
+        rss_set,
+        wcs=None,
+        kernel=GaussianKernel,
+        kernel_size_arcsec=2.0,
+        kernel_truncation_radius=2.0,
+        adr_set=None,
+        mask_flags=None,
+        qc_plots=False,
+        **kwargs,
+    ):
         # Verbosity parameters
         self.logger = kwargs.get("logger", "CubeInterp")
         self.verbose = kwargs.get("verbose", True)
@@ -430,25 +443,27 @@ class CubeInterpolator(VerboseMixin):
             self.target_wcs = build_wcs_from_rss(
                 self.rss_set,
                 kwargs.get("spatial_pix_size", 1 << u.arcsec),
-                kwargs.get("spectra_pix_size", 1 << u.AA),)
+                kwargs.get("spectra_pix_size", 1 << u.AA),
+            )
         else:
             self.vprint("Using input WCS")
             self.target_wcs = wcs
         # RSS Interpolation kernel
         if isinstance(kernel, type):
-            kernel_size_arcsec = ancillary.check_unit(kernel_size_arcsec,
-                                                      u.arcsec)
+            kernel_size_arcsec = ancillary.check_unit(kernel_size_arcsec, u.arcsec)
             # Square pixel
-            pixel_size = np.abs(
-                self.target_wcs.celestial.pixel_scale_matrix.diagonal()
-                                ).mean() << u.deg
+            pixel_size = (
+                np.abs(self.target_wcs.celestial.pixel_scale_matrix.diagonal()).mean()
+                << u.deg
+            )
             kernel_scale = (kernel_size_arcsec / pixel_size).decompose()
 
             self.vprint(
                 f"Initialising {kernel.__name__}"
                 + f"\n Scale: {kernel_scale:.1f} (pixels)"
                 + f"\n Truncation radius: {kernel_truncation_radius:.1f}"
-                + f" ({kernel_scale * kernel_truncation_radius:.1f} px)")
+                + f" ({kernel_scale * kernel_truncation_radius:.1f} px)"
+            )
             self.kernel = kernel(
                 pixel_scale_arcsec=pixel_size,
                 scale=kernel_scale,
@@ -468,24 +483,30 @@ class CubeInterpolator(VerboseMixin):
         else:
             output_unit = rss_set[0].intensity.unit / u.second
         self.vprint(
-            f"Initialising new Cube with dimensions: {self.target_wcs.array_shape}")
-        self.vprint(
-            f"Output Cube units: {output_unit.to_string()}")
+            f"Initialising new Cube with dimensions: {self.target_wcs.array_shape}"
+        )
+        self.vprint(f"Output Cube units: {output_unit.to_string()}")
 
-        self.all_datacubes = np.full((len(self.rss_set),
-                                      *self.target_wcs.array_shape),
-                                      fill_value=np.nan) << output_unit
-        self.all_var = np.full(self.all_datacubes.shape,
-                               fill_value=np.nan) << output_unit**2
+        self.all_datacubes = (
+            np.full(
+                (len(self.rss_set), *self.target_wcs.array_shape), fill_value=np.nan
+            )
+            << output_unit
+        )
+        self.all_var = (
+            np.full(self.all_datacubes.shape, fill_value=np.nan) << output_unit**2
+        )
         # Total weight per spaxel
         self.all_weights = np.full(self.all_datacubes.shape, fill_value=np.nan)
         # Exposure time per spaxel
-        self.all_exp_time = np.full(self.all_datacubes.shape,
-                                    fill_value=np.nan) << u.second
+        self.all_exp_time = (
+            np.full(self.all_datacubes.shape, fill_value=np.nan) << u.second
+        )
         # "Empty" array that will be used to store exposure times
-        self.exposure_times = np.array(
-            [rss.info["exptime"].to_value("second") for rss in self.rss_set]
-            ) << u.second
+        self.exposure_times = (
+            np.array([rss.info["exptime"].to_value("second") for rss in self.rss_set])
+            << u.second
+        )
 
         # Create variables to store plots and intermediate products
         self.make_qc_plots = qc_plots
@@ -504,7 +525,12 @@ class CubeInterpolator(VerboseMixin):
         # Save intermediate products
         for ith, rss in enumerate(self.rss_set):
             # Interpolate RSS to data cube
-            datacube_i, datacube_var_i, datacube_weight_i, interp_info = self.interpolate_rss(
+            (
+                datacube_i,
+                datacube_var_i,
+                datacube_weight_i,
+                interp_info,
+            ) = self.interpolate_rss(
                 rss,
                 # Initialise the empty variables
                 datacube=np.zeros(self.target_wcs.array_shape) << rss.intensity.unit,
@@ -512,7 +538,8 @@ class CubeInterpolator(VerboseMixin):
                 datacube_weight=np.zeros(self.target_wcs.array_shape),
                 # Differential Atmospheric Refraction
                 adr_ra_arcsec=self.adr_set[ith][0],
-                adr_dec_arcsec=self.adr_set[ith][1])
+                adr_dec_arcsec=self.adr_set[ith][1],
+            )
 
             zero_weight = datacube_weight_i == 0
             datacube_i[zero_weight] = np.nan
@@ -524,50 +551,59 @@ class CubeInterpolator(VerboseMixin):
 
             if u.second in rss.intensity.unit.bases:
                 self.all_datacubes[ith] = datacube_i / self.all_weights[ith]
-                self.all_var[ith] = datacube_var_i / self.all_weights[ith]**2
+                self.all_var[ith] = datacube_var_i / self.all_weights[ith] ** 2
             else:
                 self.all_datacubes[ith] = datacube_i / self.all_exp_time[ith]
-                self.all_var[ith] = datacube_var_i / self.all_exp_time[ith]**2
+                self.all_var[ith] = datacube_var_i / self.all_exp_time[ith] ** 2
 
             # Create a single-RSS cube
             if self.keep_individual_cubes:
-                ind_cube = Cube(intensity=self.all_datacubes[ith],
-                                variance=self.all_var[ith],
-                                wcs=self.target_wcs,
-                                info=dict(
-                                    kernel_size_arcsec=self.kernel.scale_arcsec,
-                                    **kwargs.get("cube_info",
-                                                 {"name": f"rss_{ith}"}))
-                                )
+                ind_cube = Cube(
+                    intensity=self.all_datacubes[ith],
+                    variance=self.all_var[ith],
+                    wcs=self.target_wcs,
+                    info=dict(
+                        kernel_size_arcsec=self.kernel.scale_arcsec,
+                        **kwargs.get("cube_info", {"name": f"rss_{ith}"}),
+                    ),
+                )
                 interp_info["cube"] = (ind_cube, qc_cube(ind_cube))
 
             self.rss_inter_products[f"rss_{ith}"] = interp_info
 
         # Combine all cubes
-        stacking_method = kwargs.get("stack_method",
-                                     CubeStacking.mad_clipping)
+        stacking_method = kwargs.get("stack_method", CubeStacking.mad_clipping)
         stacking_args = kwargs.get("stack_method_args", {})
         self.vprint(f"Stacking individual cubes using {stacking_method.__name__}")
         if stacking_args:
             self.vprint(f"Additonal arguments for stacking: {stacking_args}")
         datacube, datacube_var = stacking_method(
-            self.all_datacubes, self.all_var, **stacking_args)
-        info = dict(kernel_size_arcsec=self.kernel.scale_arcsec,
-                    **kwargs.get("cube_info", {}))
+            self.all_datacubes, self.all_var, **stacking_args
+        )
+        info = dict(
+            kernel_size_arcsec=self.kernel.scale_arcsec, **kwargs.get("cube_info", {})
+        )
         # Create the Cube
-        cube = Cube(intensity=datacube, variance=datacube_var,
-                    wcs=self.target_wcs, info=info)
+        cube = Cube(
+            intensity=datacube, variance=datacube_var, wcs=self.target_wcs, info=info
+        )
         if self.make_qc_plots:
             self.vprint("Producing quality assessment plots")
             # Fibre coverage and exposure time maps
-            self.cube_plots["weights"] = qc_cubing(self.all_weights,
-                                                   self.all_exp_time)
+            self.cube_plots["weights"] = qc_cubing(self.all_weights, self.all_exp_time)
             # QC cube maps
             self.cube_plots["stack_cube"] = qc_cube(cube)
         return cube
 
-    def interpolate_rss(self, rss, datacube, datacube_var, datacube_weight,
-                        adr_ra_arcsec=None, adr_dec_arcsec=None):
+    def interpolate_rss(
+        self,
+        rss,
+        datacube,
+        datacube_var,
+        datacube_weight,
+        adr_ra_arcsec=None,
+        adr_dec_arcsec=None,
+    ):
         """Perform fibre interpolation using a RSS into to a 3D datacube.
 
         Parameters
@@ -603,32 +639,42 @@ class CubeInterpolator(VerboseMixin):
         qc_fig : plt.Figure or None
         """
         self.vprint("Interpolating RSS to cube")
-        
+
         # Obtain fibre position in the detector (center of pixel)
-        fibre_pixel_pos_cols, fibre_pixel_pos_rows = self.target_wcs.celestial.world_to_pixel(
+        (
+            fibre_pixel_pos_cols,
+            fibre_pixel_pos_rows,
+        ) = self.target_wcs.celestial.world_to_pixel(
             SkyCoord(rss.info["fib_ra"], rss.info["fib_dec"])
         )
 
         # Dictionary that stores additional information
-        interm_products = {"fib_pix_col": fibre_pixel_pos_cols,
-                           "fib_pix_row": fibre_pixel_pos_rows}
+        interm_products = {
+            "fib_pix_col": fibre_pixel_pos_cols,
+            "fib_pix_row": fibre_pixel_pos_rows,
+        }
 
         # Wavelength array of target datacube
         cube_wavelength = self.target_wcs.spectral.array_index_to_world(
-            np.arange(self.target_wcs.array_shape[0])).to(rss.wavelength.unit)
+            np.arange(self.target_wcs.array_shape[0])
+        ).to(rss.wavelength.unit)
 
         if adr_dec_arcsec is not None:
-            adr_dec_pixel = (adr_dec_arcsec /self.kernel.pixel_scale_arcsec
-                             ).decompose().value
+            adr_dec_pixel = (
+                (adr_dec_arcsec / self.kernel.pixel_scale_arcsec).decompose().value
+            )
             if cube_wavelength.size != rss.wavelength.size or np.allclose(
                 cube_wavelength, rss.wavelength
             ):
-                adr_dec_pixel = np.interp(cube_wavelength, rss.wavelength, adr_dec_pixel)
+                adr_dec_pixel = np.interp(
+                    cube_wavelength, rss.wavelength, adr_dec_pixel
+                )
         else:
             adr_dec_pixel = None
         if adr_ra_arcsec is not None:
-            adr_ra_pixel = (adr_ra_arcsec / self.kernel.pixel_scale_arcsec
-                            ).decompose().value
+            adr_ra_pixel = (
+                (adr_ra_arcsec / self.kernel.pixel_scale_arcsec).decompose().value
+            )
             if cube_wavelength.size != rss.wavelength.size or np.allclose(
                 cube_wavelength, rss.wavelength
             ):
@@ -648,13 +694,15 @@ class CubeInterpolator(VerboseMixin):
                 datacube.shape[1:],
                 fibre_pixel_pos_cols,
                 fibre_pixel_pos_rows,
-                fibre_diam=getattr(rss, "fibre_diameter",
-                                   1.25 / self.kernel.pixel_scale_arcsec),
+                fibre_diam=getattr(
+                    rss, "fibre_diameter", 1.25 / self.kernel.pixel_scale_arcsec
+                ),
             )
             interm_products["qc_fibres_on_fov"] = qc_fig
 
         if cube_wavelength.size != rss.wavelength.size or np.allclose(
-                cube_wavelength, rss.wavelength):
+            cube_wavelength, rss.wavelength
+        ):
             self.vprint("Fibres will be interpolated to new wavelength grid")
             interp_wave = True
         else:
@@ -689,11 +737,12 @@ class CubeInterpolator(VerboseMixin):
                 adr_cols=adr_ra_pixel,
                 adr_rows=adr_dec_pixel,
                 fibre_mask=f_mask,
-                interm_products=interm_products
+                interm_products=interm_products,
             )
         return datacube, datacube_var, datacube_weight, interm_products
 
-    def interpolate_fibre(self,
+    def interpolate_fibre(
+        self,
         fib_spectra,
         fib_variance,
         cube,
@@ -705,7 +754,7 @@ class CubeInterpolator(VerboseMixin):
         adr_rows=None,
         adr_pixel_frac=0.05,
         fibre_mask=None,
-        interm_products=None
+        interm_products=None,
     ):
         """Interpolates fibre spectra and variance to a 3D data cube.
 
@@ -777,14 +826,16 @@ class CubeInterpolator(VerboseMixin):
             kernel_centre_cols = pix_pos_cols - np.nanmedian(adr_cols[wl_slice])
             kernel_offset = self.kernel.scale.value * self.kernel.truncation_radius
             cols_min = max(int(kernel_centre_cols - kernel_offset) - 1, 0)
-            cols_max = min(int(kernel_centre_cols + kernel_offset) + 1,
-                           cube.shape[2] - 1)
+            cols_max = min(
+                int(kernel_centre_cols + kernel_offset) + 1, cube.shape[2] - 1
+            )
             columns_slice = slice(cols_min, cols_max + 1, 1)
             # Kernel along rows direction (y, dec)
             kernel_centre_rows = pix_pos_rows - np.nanmedian(adr_rows[wl_slice])
             rows_min = max(int(kernel_centre_rows - kernel_offset) - 1, 0)
-            rows_max = min(int(kernel_centre_rows + kernel_offset) + 1,
-                        cube.shape[1] - 1)
+            rows_max = min(
+                int(kernel_centre_rows + kernel_offset) + 1, cube.shape[1] - 1
+            )
             rows_slice = slice(rows_min, rows_max + 1, 1)
 
             if (cols_max < cols_min) | (rows_max < rows_min):
@@ -801,13 +852,16 @@ class CubeInterpolator(VerboseMixin):
             # Add spectra to cube
             cube[wl_slice, rows_slice, columns_slice] = np.add(
                 cube[wl_slice, rows_slice, columns_slice],
-                fib_spectra[wl_slice, np.newaxis, np.newaxis] * weights)
+                fib_spectra[wl_slice, np.newaxis, np.newaxis] * weights,
+            )
             cube_var[wl_slice, rows_slice, columns_slice] = np.add(
                 cube_var[wl_slice, rows_slice, columns_slice],
-                fib_variance[wl_slice, np.newaxis, np.newaxis] * weights**2)
+                fib_variance[wl_slice, np.newaxis, np.newaxis] * weights**2,
+            )
             cube_weight[wl_slice, rows_slice, columns_slice] = np.add(
                 cube_weight[wl_slice, rows_slice, columns_slice],
-                pixel_weights[wl_slice, np.newaxis, np.newaxis] * weights)
+                pixel_weights[wl_slice, np.newaxis, np.newaxis] * weights,
+            )
 
         interm_products["fibre_weights"].append(fibre_weights)
         return cube, cube_var, cube_weight
@@ -941,12 +995,9 @@ def build_wcs_from_rss(
     )
 
     datacube_shape = (
-        int(np.round((wl_range / spectra_pix_size).decompose().value,
-                     decimals=0)),
-        int(np.round((ra_width / spatial_pix_size).decompose().value,
-                     decimals=0)),
-        int(np.round((dec_width / spatial_pix_size).decompose().value,
-                     decimals=0)),
+        int(np.round((wl_range / spectra_pix_size).decompose().value, decimals=0)),
+        int(np.round((ra_width / spatial_pix_size).decompose().value, decimals=0)),
+        int(np.round((dec_width / spatial_pix_size).decompose().value, decimals=0)),
     )
     reference_position = (min_wl, ra_cen, dec_cen)
     vprint(f"WCS array shape: {datacube_shape} [wave, ra, dec]")
