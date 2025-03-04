@@ -373,7 +373,6 @@ class DrizzlingKernel(TopHatKernel):
 # Fibre interpolation
 # ------------------------------------------------------------------------------
 
-
 class CubeInterpolator(VerboseMixin):
     """A class for combining multiple RSS into a 3D datacube.
 
@@ -518,8 +517,13 @@ class CubeInterpolator(VerboseMixin):
         self.rss_inter_products = {}
         self.cube_plots = {}
 
-    def build_cube(self, **kwargs):
-        """TODO"""
+    def build_cube(self, stacking_method=CubeStacking.mad_clipping,
+                   stacking_args=None, cube_info={}):
+        """Perform the interpolation of the RSS into a  :class:`Cube`.
+        
+        Parameters
+        ----------
+        """
         self.vprint("Cubing input RSS set")
 
         # Save intermediate products
@@ -564,7 +568,7 @@ class CubeInterpolator(VerboseMixin):
                     wcs=self.target_wcs,
                     info=dict(
                         kernel_size_arcsec=self.kernel.scale_arcsec,
-                        **kwargs.get("cube_info", {"name": f"rss_{ith}"}),
+                        **cube_info.update({"name": f"rss_{ith}"}),
                     ),
                 )
                 interp_info["cube"] = (ind_cube, qc_cube(ind_cube))
@@ -572,17 +576,14 @@ class CubeInterpolator(VerboseMixin):
             self.rss_inter_products[f"rss_{ith}"] = interp_info
 
         # Combine all cubes
-        stacking_method = kwargs.get("stack_method", CubeStacking.mad_clipping)
-        stacking_args = kwargs.get("stack_method_args", {})
         self.vprint(f"Stacking individual cubes using {stacking_method.__name__}")
         if stacking_args:
             self.vprint(f"Additonal arguments for stacking: {stacking_args}")
-        datacube, datacube_var = stacking_method(
-            self.all_datacubes, self.all_var, **stacking_args
-        )
-        info = dict(
-            kernel_size_arcsec=self.kernel.scale_arcsec, **kwargs.get("cube_info", {})
-        )
+        else:
+            stacking_args = {}
+        datacube, datacube_var = stacking_method(self.all_datacubes,
+                                                 self.all_var, **stacking_args)
+        info = dict(kernel_size_arcsec=self.kernel.scale_arcsec, **cube_info)
         # Create the Cube
         cube = Cube(
             intensity=datacube, variance=datacube_var, wcs=self.target_wcs, info=info
