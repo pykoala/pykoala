@@ -588,8 +588,7 @@ class CubeInterpolator(VerboseMixin):
                     wcs=self.target_wcs,
                     info=dict(
                         kernel_size_arcsec=self.kernel.scale_arcsec,
-                        **cube_info.update({"name": f"rss_{ith}"}),
-                    ),
+                        name =  f"rss_{ith}"),
                 )
                 interp_info["cube"] = (ind_cube, qc_cube(ind_cube))
 
