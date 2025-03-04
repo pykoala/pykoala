@@ -1,4 +1,5 @@
-"""This module contains the main tools for building 3D datacubes by interpolating
+"""
+This module contains the main tools for building 3D datacubes by interpolating
 RSS data.
 """
 # =============================================================================
@@ -32,6 +33,7 @@ class CubeStacking:
     to each cube, and additional keyword arguments.
     """
 
+    @staticmethod
     def sigma_clipping(cubes: np.ndarray, variances: np.ndarray, **kwargs):
         """Perform cube stacking using STD clipping.
 
@@ -82,6 +84,7 @@ class CubeStacking:
         )
         return stacked_cube, stacked_variance
 
+    @staticmethod
     def mad_clipping(cubes: np.ndarray, variances: np.ndarray, **kwargs):
         """Perform cube stacking using MAD clipping.
 
@@ -299,10 +302,10 @@ class GaussianKernel(InterpolationKernel):
         self.right_norm = 0.5 * (1 + erf(self.truncation_radius / np.sqrt(2)))
 
     def cmf(self, z):
-        c = (0.5 * (1 + erf(z / np.sqrt(2))) - self.left_norm) / (
+        cmf = (0.5 * (1 + erf(z / np.sqrt(2))) - self.left_norm) / (
             self.right_norm - self.left_norm
         )
-        return c.clip(0, 1)
+        return cmf.clip(0, 1)
 
     def kernel_1D(self, x_edges, axis=0):
         cumulative = self.cmf(x_edges / self.scale)
@@ -629,11 +632,6 @@ class CubeInterpolator(VerboseMixin):
         ----------
         rss : :class:`RSS`
             Target RSS to be interpolated.
-        wcs : :class:`astropy.wcs.WCS`
-            World Coordinate Transformation used to interpolate the RSS that defines
-            the target 3D datacube.
-        kernel : :class:`InterpolationKernel`
-            Kernel to interpolate each fibre to the cube defined by the WCS
         datacube : u.Quantity, optional
             Array that stores the intensity associated to a datacube.
         datacube_var : u.Quantity, optional
@@ -644,18 +642,20 @@ class CubeInterpolator(VerboseMixin):
             Differential atmospheric refraction offset along the RA direction.
         adr_dec_arcsec : u.Quantity, optional
             Differential atmospheric refraction offset along the DEC direction.
-        mask_flags : str or iterable, optional
-            Flag names to be used for masking pixels
-        qc_plots : bool, optional
-            If `True`, produced a quality control plot showing the disposition of
-            fibres across the defined FoV.
 
         Returns
         -------
         datacube : u.Quantity
+            Array contanining the interpolated intensity of the RSS into the
+            target WCS.
         datacube_var : u.Quantity
+            Array contanining the interpolated variance of the RSS into the
+            target WCS.
         datacube_weight : u.Quantity
-        qc_fig : plt.Figure or None
+            Array contanining the sum of all kernels weights of all fibres.
+        interm_products : dict
+            Dictionary containing intermediate products such as individual
+            fibre weights.
         """
         self.vprint("Interpolating RSS to cube")
 
@@ -794,14 +794,19 @@ class CubeInterpolator(VerboseMixin):
         pix_pos_rows: int
             Fibre row pixel position (n).
         adr_cols: (k,) np.array(float), optional, default=None
-            Atmospheric Differential Refraction (ADR) of each wavelength point along x (ra)-axis (m) expressed in pixels.
+            Atmospheric Differential Refraction (ADR) of each wavelength point
+            along x (ra)-axis (m) expressed in pixels.
         adr_rows: (k,) np.array(float), optional, default=None
-            Atmospheric Differential Refraction of each wavelength point along y (dec) -axis (n) expressed in pixels.
+            Atmospheric Differential Refraction of each wavelength point along
+            y (dec) -axis (n) expressed in pixels.
         adr_pixel_frac: float, optional, default=0.05
-            ADR Pixel fraction used to bin the spectral pixels. For each bin, the median ADR correction will be used to
+            ADR Pixel fraction used to bin the spectral pixels. For each bin,
+            the median ADR correction will be used to
             correct the range of wavelength.
-        kernel: pykoala.cubing.InterpolationKernel
-            Kernel object to interpolate the data. Default is drizzling.
+        fibre_mask: np.ndarray
+            Boolean array containing the fibre mask.
+        interm_products : dict
+            Dictionary that stores intermediate products and metadata.
 
         Returns
         -------
@@ -811,6 +816,8 @@ class CubeInterpolator(VerboseMixin):
             Original variance with the fibre data interpolated.
         cube_weight:
             Original datacube weights with the fibre data interpolated.
+        interm_products : dict
+            Dictionary that stores intermediate products and metadata.
         """
         if adr_rows is None and adr_cols is None:
             adr_rows = np.zeros(fib_spectra.size)
@@ -1046,7 +1053,7 @@ def make_white_image_from_array(data_array, wavelength=None, **kwargs):
     white_image : np.ndarray
         White image array.
     """
-    vprint(f"Creating a Cube from input array")
+    vprint("Creating a Cube from input array")
     cube = Cube(intensity=data_array, wavelength=wavelength)
     return cube.get_white_image(**kwargs)
 
@@ -1074,12 +1081,13 @@ def make_dummy_cube_from_rss(rss, spa_pix_arcsec=0.5, kernel_pix_arcsec=1.0):
         spatial_pix_size=spa_pix_arcsec,
         spectra_pix_size=rss.wavelength[1] - rss.wavelength[0],
     )
-    cube = build_cube(
+    interpolator = CubeInterpolator(
         [rss],
         pixel_size_arcsec=spa_pix_arcsec,
         wcs=wcs,
         kernel_size_arcsec=kernel_pix_arcsec,
     )
+    cube = interpolator.build_cube()
     return cube
 
 
