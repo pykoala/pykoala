@@ -373,6 +373,7 @@ class DrizzlingKernel(TopHatKernel):
 # Fibre interpolation
 # ------------------------------------------------------------------------------
 
+
 class CubeInterpolator(VerboseMixin):
     """A class for combining multiple RSS into a 3D datacube.
 
@@ -517,10 +518,14 @@ class CubeInterpolator(VerboseMixin):
         self.rss_inter_products = {}
         self.cube_plots = {}
 
-    def build_cube(self, stacking_method=CubeStacking.mad_clipping,
-                   stacking_args=None, cube_info={}):
+    def build_cube(
+        self,
+        stacking_method=CubeStacking.mad_clipping,
+        stacking_args=None,
+        cube_info={},
+    ):
         """Perform the interpolation of the RSS into a  :class:`Cube`.
-        
+
         Parameters
         ----------
         stacking_method : func, optional
@@ -530,7 +535,7 @@ class CubeInterpolator(VerboseMixin):
         cube_info : dict, optional
             Additional metadata to be included in the final :class:`Cube` or
             the intermediate RSS products.
-        
+
         Returns
         -------
         cube : :class:`Cube`
@@ -593,8 +598,9 @@ class CubeInterpolator(VerboseMixin):
             self.vprint(f"Additonal arguments for stacking: {stacking_args}")
         else:
             stacking_args = {}
-        datacube, datacube_var = stacking_method(self.all_datacubes,
-                                                 self.all_var, **stacking_args)
+        datacube, datacube_var = stacking_method(
+            self.all_datacubes, self.all_var, **stacking_args
+        )
         info = dict(kernel_size_arcsec=self.kernel.scale_arcsec, **cube_info)
         # Create the Cube
         cube = Cube(
