@@ -523,6 +523,18 @@ class CubeInterpolator(VerboseMixin):
         
         Parameters
         ----------
+        stacking_method : func, optional
+            Stacking method to use for combining the RSS (See :class:`CubeStacking`).
+        stacking_args : dict, optional
+            Additional arguments passed to the stacking method.
+        cube_info : dict, optional
+            Additional metadata to be included in the final :class:`Cube` or
+            the intermediate RSS products.
+        
+        Returns
+        -------
+        cube : :class:`Cube`
+            The resulting cube from combining the input RSS.
         """
         self.vprint("Cubing input RSS set")
 
