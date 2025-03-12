@@ -161,7 +161,7 @@ class InterpolationKernel(object):
     """
 
     @property
-    def scale(self):
+    def scale(self) -> u.Quantity:
         """Kernel scale size in pixels."""
         return self._scale
 
@@ -172,12 +172,12 @@ class InterpolationKernel(object):
         )
 
     @property
-    def scale_arcsec(self):
+    def scale_arcsec(self) -> u.Quantity:
         """Kernel scale size in arcseconds."""
         return self.scale.to(u.arcsec, self.pixel_scale)
 
     @property
-    def truncation_radius(self):
+    def truncation_radius(self) -> float:
         """Maximum value of `u` beyond which the kernel is set to 0."""
         return self._truncation_radius
 
@@ -186,7 +186,7 @@ class InterpolationKernel(object):
         self._truncation_radius = value
 
     @property
-    def pixel_scale(self):
+    def pixel_scale(self) -> u.Equivalency:
         """Target pixel scale in arcsec per pixel."""
         return self._pixel_scale
 
@@ -421,6 +421,7 @@ class DrizzlingKernel(TopHatKernel):
         "hexagon": ancillary.pixel_in_hexagon,
         "square": ancillary.pixel_in_square,
     }
+    """Dictionary mapping the available fibre shapes to the corresponding method."""
 
     def __init__(self, pixel_scale, scale, **kwargs):
         super().__init__(pixel_scale, scale, **kwargs)
@@ -491,6 +492,50 @@ class CubeInterpolator(VerboseMixin):
     >>> interpolator = CubeInterpolator(rss_set=[mock_rss()])
     >>> cube = interpolator.build_cube()
     """
+
+    @property
+    def rss_set(self) -> list:
+        """List of target :class:`RSS` to be combined into a :class:`Cube`."""
+        return self._rss_set
+    
+    @rss_set.setter
+    def rss_set(self, rss_set):
+        self._rss_set = rss_set
+    
+    @property
+    def adr_set(self) -> list:
+        """List of ADR to apply during interpolation."""
+        return self._adr_set
+
+    @adr_set.setter
+    def adr_set(self, adr_set):
+        self._adr_set = adr_set
+
+    @property
+    def mask_flags(self) -> list:
+        """List of flags to be included during the pixel masking."""
+        return self._mask_flags
+
+    @mask_flags.setter
+    def mask_flags(self, mask_flags):
+        self._mask_flags = mask_flags
+
+    @property
+    def target_wcs(self) -> WCS:
+        """Target WCS into which the RSS data will be interpolated."""
+        return self._target_wcs
+    
+    @target_wcs.setter
+    def target_wcs(self, wcs):
+        self._target_wcs = wcs
+    
+    @property
+    def kernel(self) -> InterpolationKernel:
+        """:class:`InterpolationKernel` used to combine the RSS data."""
+    
+    @kernel.setter
+    def kernel(self, kernel):
+        self._kernel = kernel
 
     def __init__(
         self,
@@ -601,7 +646,7 @@ class CubeInterpolator(VerboseMixin):
         stacking_method=CubeStacking.mad_clipping,
         stacking_args=None,
         cube_info={},
-    ):
+    ) -> Cube:
         """Perform the interpolation of the RSS into a  :class:`Cube`.
 
         Parameters
@@ -974,7 +1019,7 @@ def build_wcs(
     spectra_pix_size: u.Quantity,
     radesys="ICRS    ",
     equinox=2000.0,
-):
+) -> WCS:
     """Create a WCS using cubing information.
 
     Integer pixel values fall at the center of pixels.
@@ -1025,7 +1070,7 @@ def build_wcs_from_rss(
     spectra_pix_size: u.Quantity,
     join_type="outer",
     **kwargs,
-):
+) -> WCS:
     """Compute the effective WCS resulting from combining an input list of RSS.
 
     This methods creates a WCS that contains an input list RSS data. The joint
@@ -1130,7 +1175,8 @@ def make_white_image_from_array(data_array, wavelength=None, **kwargs):
     return cube.get_white_image(**kwargs)
 
 
-def make_dummy_cube_from_rss(rss, spa_pix_arcsec=0.5, kernel_pix_arcsec=1.0):
+def make_dummy_cube_from_rss(rss, spa_pix_arcsec=0.5, kernel_pix_arcsec=1.0
+                             ) -> Cube:
     """Create an empty datacube array from an input RSS.
 
     Parameters
