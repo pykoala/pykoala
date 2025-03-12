@@ -164,16 +164,18 @@ class InterpolationKernel(object):
 
     @property
     def scale(self):
-        """Kernel scale size."""
+        """Kernel scale size in pixels."""
         return self._scale
 
     @scale.setter
-    def scale(self, value):
-        self._scale = value
+    def scale(self, scale):
+        self._scale = ancillary.check_unit(scale, u.pixel,
+                                           equivalencies=self.pixel_scale)
 
     @property
     def scale_arcsec(self):
-        return self.scale * self.pixel_scale_arcsec
+        """Kernel scale size in arcseconds."""
+        return self.scale.to(u.arcsec, self.pixel_scale)
 
     @property
     def truncation_radius(self):
@@ -185,17 +187,19 @@ class InterpolationKernel(object):
         self._truncation_radius = value
 
     @property
-    def pixel_scale_arcsec(self):
-        return self._pixel_scale_arcsec
+    def pixel_scale(self):
+        """Target pixel scale in arcsec per pixel."""
+        return self._pixel_scale
 
-    @pixel_scale_arcsec.setter
-    def pixel_scale_arcsec(self, value):
-        self._pixel_scale_arcsec = value
+    @pixel_scale.setter
+    @u.quantity_input(pixel_scale=u.arcsec / u.pixel)
+    def pixel_scale(self, pixel_scale):
+        self._pixel_scale = u.pixel_scale(pixel_scale)
 
-    def __init__(self, scale, *args, **kwargs):
+    def __init__(self, pixel_scale, scale, **kwargs):
+        self.pixel_scale = pixel_scale
         self.scale = scale
         self.truncation_radius = kwargs.get("truncation_radius", 1.0)
-        self.pixel_scale_arcsec = kwargs.get("pixel_scale_arcsec")
 
     @abstractmethod
     def kernel_1D(self):
@@ -217,31 +221,33 @@ class ParabolicKernel(InterpolationKernel):
 
         K(u) = \frac{3}{4}(1 - u^2)
 
-    With :math:`u` restricted to the range [-1, 1]. This model enforces
-    `truncation_radius=1`.
+    With :math:`u` restricted to the range [-1, 1] (i.e., this model enforces
+    `truncation_radius=1`).
     """
 
-    def __init__(self, scale, *args, **kwargs):
+    def __init__(self, pixel_scale, scale, **kwargs):
         if "truncation_radius" in kwargs:
             del kwargs["truncation_radius"]
-        super().__init__(scale, truncation_radius=1, *args, **kwargs)
+        super().__init__(pixel_scale, scale, truncation_radius=1, **kwargs)
 
-    def cmf(self, u):
+    def cmf(self, ker_u):
         """Cumulative mass distribution.
 
         Parameters
         ----------
-        u : np.ndarray
+        ker_u : np.ndarray
+            Positions in units of the kernel scale.
 
         Returns
         -------
         cmf : np.ndarray
             The values of the cumulative distribution evaluated at the input
-            values of u.
+            values of ker_u.
         """
-        u_clip = np.atleast_1d(u).clip(-1, 1)
-        return (3.0 * u_clip - u_clip**3 + 2.0) / 4
+        ker_u_clip = np.atleast_1d(ker_u).clip(-1, 1)
+        return (3.0 * ker_u_clip - ker_u_clip**3 + 2.0) / 4
 
+    @u.quantity_input(x_edges=u.pixel)
     def kernel_1D(self, x_edges):
         """Compute the kernel weights associated to a 1D array of bins.
 
@@ -256,16 +262,21 @@ class ParabolicKernel(InterpolationKernel):
         weights : np.ndarray
             Array of kernel weights within each bin. The size is `len(x_edges) - 1`.
         """
+        # Check that the input values are in increasing order
         assert (
             x_edges[1:] > x_edges[:-1]
         ).all(), "Input x_edges values must be increasing"
+        # Convert pixels to kernel scale units
         u_edges = (x_edges / self.scale).clip(-1, 1)
+        # Compute the cumulative distribution
         cumulative = self.cmf(u_edges)
+        # Compute the weight on each bin
         weights = np.diff(cumulative)
         return weights
 
+    @u.quantity_input(x_edges=u.pixel, y_edges=u.pixel)
     def kernel_2D(self, x_edges, y_edges):
-        """Compute the map of kernel weights defined by input bin edges in x and y directions.
+        """Compute the kernel weights defined by bin edges in x and y directions.
 
         Parameters
         ----------
@@ -280,33 +291,56 @@ class ParabolicKernel(InterpolationKernel):
             Array of kernel weights within each bin. The size is
             `(len(y_edges) - 1, len(x_edges) - 1)`.
         """
-        if x_edges.ndim == 1:
-            z_yy, z_xx = np.meshgrid(y_edges / self.scale, x_edges / self.scale)
-        else:
-            z_xx = x_edges / self.scale
-            z_yy = y_edges / self.scale
-
-        cum_k = self.cmf(z_xx) * self.cmf(z_yy)
+        grid_yy, grid_xx = np.meshgrid(y_edges / self.scale,
+                                       x_edges / self.scale, indexing="ij")
+        cum_k = self.cmf(grid_xx) * self.cmf(grid_yy)
         weights = np.diff(cum_k, axis=0)
         weights = np.diff(weights, axis=1)
         return weights
 
 
 class GaussianKernel(InterpolationKernel):
-    """Gaussian InterpolationKernel."""
+    """Gaussian InterpolationKernel.
 
-    def __init__(self, scale, truncation_radius, *args, **kwargs):
-        super().__init__(scale, truncation_radius=truncation_radius, *args, **kwargs)
-        # Minimum and maximum percentiles used
+    Description
+    -----------
+    The Gaussian kernel is defined as:
+
+    .. math::
+
+        K(u) = \frac{1}{\sigma\sqrt{2\pi}} e^{-u^2/2)
+
+    Where :math:`\sigma` is the kernel scale in pixels.
+    The kernel domain is restricted to the range ``[-truncation_radius, truncation_radius]``.
+    By default ``truncation_radius=3``.
+    """
+    def __init__(self, pixel_scale, scale, truncation_radius=3.0, **kwargs):
+        super().__init__(pixel_scale, scale,
+                         truncation_radius=truncation_radius, **kwargs)
+        # Minimum and maximum percentiles used for renormalizing the kernel
         self.left_norm = 0.5 * (1 + erf(-self.truncation_radius / np.sqrt(2)))
         self.right_norm = 0.5 * (1 + erf(self.truncation_radius / np.sqrt(2)))
 
-    def cmf(self, z):
-        cmf = (0.5 * (1 + erf(z / np.sqrt(2))) - self.left_norm) / (
+    def cmf(self, ker_u):
+        """Kernel cumulative distribution function.
+        
+        Parameters
+        ----------
+        ker_u : np.ndarray
+            Positions in units of the kernel scale.
+
+        Returns
+        -------
+        cmf : np.ndarray
+            The values of the cumulative distribution evaluated at the input
+            values of ker_u.
+        """
+        cmf = (0.5 * (1 + erf(ker_u / np.sqrt(2))) - self.left_norm) / (
             self.right_norm - self.left_norm
         )
         return cmf.clip(0, 1)
 
+    @u.quantity_input(x_edges=u.pixel)
     def kernel_1D(self, x_edges, axis=0):
         cumulative = self.cmf(x_edges / self.scale)
         weights = np.diff(cumulative, axis=axis)
@@ -314,59 +348,106 @@ class GaussianKernel(InterpolationKernel):
 
     def kernel_2D(self, x_edges, y_edges):
         weights = (
-            self.kernel_1D(x_edges)[:, np.newaxis]
-            * self.kernel_1D(y_edges)[np.newaxis, :]
+            self.kernel_1D(x_edges)[np.newaxis, :]
+            * self.kernel_1D(y_edges)[:, np.newaxis]
         )
         return weights
 
 
 class TopHatKernel(InterpolationKernel):
-    def __init__(self, scale, *args, **kwargs):
-        super().__init__(scale, *args, **kwargs)
+    """TopHat (uniform) InterpolationKernel.
 
-    def cmf(self, z):
-        c = 0.5 * (z / self.truncation_radius + 1)
-        c[z > self.truncation_radius] = 1.0
-        c[z < -self.truncation_radius] = 0.0
-        return c
+    Description
+    -----------
+    The TopHat kernel is defined as:
 
-    def kernel_1D(self, x_edges):
-        z_edges = (x_edges / self.scale).clip(
-            -self.truncation_radius, self.truncation_radius
-        )
-        cumulative = self.cmf(z_edges)
-        weights = np.diff(cumulative)
+    .. math::
+
+        K(u) = \frac{1}{2}
+
+    With :math:`u` restricted to the range [-1, 1] (i.e., this model enforces
+    `truncation_radius=1`).
+    """
+    def __init__(self, pixel_scale, scale, **kwargs):
+        if "truncation_radius" in kwargs:
+            del kwargs["truncation_radius"]
+        super().__init__(pixel_scale, scale, truncation_radius=1, **kwargs)
+
+    def cmf(self, ker_u):
+        """Kernel cumulative distribution function.
+        
+        Parameters
+        ----------
+        ker_u : np.ndarray
+            Positions in units of the kernel scale.
+
+        Returns
+        -------
+        cmf : np.ndarray
+            The values of the cumulative distribution evaluated at the input
+            values of ker_u.
+        """
+        cmf = 0.5 * (ker_u + 1)
+        return cmf.clip(0, 1)
+
+    @u.quantity_input(x_edges=u.pixel)
+    def kernel_1D(self, x_edges, axis=0):
+        cumulative = self.cmf(x_edges / self.scale)
+        weights = np.diff(cumulative, axis=axis)
         return weights
 
     def kernel_2D(self, x_edges, y_edges):
         weights = (
-            self.kernel_1D(x_edges)[:, np.newaxis]
-            * self.kernel_1D(y_edges)[np.newaxis, :]
+            self.kernel_1D(x_edges)[np.newaxis, :]
+            * self.kernel_1D(y_edges)[:, np.newaxis]
         )
         return weights
 
 
+class CircularTopHatKernel(TopHatKernel):
+    """Circular TopHat kernel."""
+    def kernel_2D(self, x_edges, y_edges):
+        rad = x_edges[np.newaxis, :]**2 + y_edges[:, np.newaxis]**2
+        return self.kernel_1D(rad, axis=(0, 1))
+
+
 class DrizzlingKernel(TopHatKernel):
-    """Drizzling InterpolationKernel."""
+    """Drizzling InterpolationKernel.
+    
+    Description
+    -----------
+    This kernel follows the same phylosophy as in Fruchter & Hook 1997.
+    Users may define different fibre footprint shapes (``fibre_shape``) among:
+    ``squared``, ``circular``, or ``hexagonal``. This will determine what is the
+    overlapping fraction between a given spaxel and the fibre.
+    """
 
-    def __init__(self, scale, *args, **kwargs):
-        super().__init__(scale=scale, **kwargs)
-        self.truncation_radius = 1
+    fibre_frac = {"circle": ancillary.pixel_in_circle,
+                  "hexagon": ancillary.pixel_in_hexagon,
+                  "square": ancillary.pixel_in_square}
+    
+    def __init__(self, pixel_scale, scale, **kwargs):
+        super().__init__(pixel_scale, scale, **kwargs)
+        # Assume circular fibre footprint by default 
+        self.pixel_frac_method = self.fibre_frac[kwargs.get("fibre_shape",
+                                                            "circle")]
 
-    def kernel_1D(self, *args):
+    def kernel_1D(self):
         raise NotImplementedError("kernel_1D has not been implemented in this class")
 
     def kernel_2D(self, x_edges, y_edges):
-        weights = np.zeros((x_edges.size - 1, y_edges.size - 1))
-        # x == rows, y == columns
+        weights = np.zeros((y_edges.size - 1, x_edges.size - 1))
+        # y == rows, x == columns
         # Only the lower-left corner of every pixel is required.
-        pix_edge_x, pix_edge_y = np.meshgrid(x_edges[:-1], y_edges[:-1], indexing="ij")
+        pix_edge_y, pix_edge_x = np.meshgrid(y_edges[:-1].to_value("pixel"),
+                                             x_edges[:-1].to_value("pixel"),
+                                             indexing="ij")
         for i, pos in enumerate(zip(pix_edge_x.flatten(), pix_edge_y.flatten())):
-            _, area_fraction = ancillary.pixel_in_circle(
-                pos,
+            _, area_fraction = self.pixel_frac_method(
+                pixel_pos=pos,
                 pixel_size=1,
-                circle_pos=(0.0, 0.0),
-                circle_radius=self.scale.value / 2,
+                pos=(0.0, 0.0),
+                radius=self.scale.to_value("pixel") / 2,
             )
             weights[np.unravel_index(i, weights.shape)] = area_fraction
         return weights
@@ -421,8 +502,8 @@ class CubeInterpolator(VerboseMixin):
         rss_set,
         wcs=None,
         kernel=GaussianKernel,
-        kernel_size_arcsec=2.0,
-        kernel_truncation_radius=2.0,
+        kernel_scale=2.0 << u.arcsec,
+        kernel_truncation_radius=3.0,
         adr_set=None,
         mask_flags=None,
         qc_plots=False,
@@ -453,13 +534,12 @@ class CubeInterpolator(VerboseMixin):
             self.target_wcs = wcs
         # RSS Interpolation kernel
         if isinstance(kernel, type):
-            kernel_size_arcsec = ancillary.check_unit(kernel_size_arcsec, u.arcsec)
-            # Square pixel
-            pixel_size = (
-                np.abs(self.target_wcs.celestial.pixel_scale_matrix.diagonal()).mean()
-                << u.deg
+            kernel_scale = ancillary.check_unit(kernel_scale, u.arcsec)
+            # Assume square pixel
+            pixel_scale = (
+                np.abs(self.target_wcs.celestial.pixel_scale_matrix.diagonal()
+                       ).mean() << u.deg / u.pixel
             )
-            kernel_scale = (kernel_size_arcsec / pixel_size).decompose()
 
             self.vprint(
                 f"Initialising {kernel.__name__}"
@@ -468,13 +548,13 @@ class CubeInterpolator(VerboseMixin):
                 + f" ({kernel_scale * kernel_truncation_radius:.1f} px)"
             )
             self.kernel = kernel(
-                pixel_scale_arcsec=pixel_size,
+                pixel_scale=pixel_scale,
                 scale=kernel_scale,
                 truncation_radius=kernel_truncation_radius,
             )
         else:
             self.kernel = kernel
-            kernel_size_arcsec = self.kernel.scale * self.kernel.pixel_scale_arcsec
+            kernel_scale = self.kernel.scale_arcsec
             self.vprint(
                 f"User-provided interpolation kernel"
                 + f"\n Scale: {self.kernel.scale:.1f} (pixels)"
@@ -587,7 +667,7 @@ class CubeInterpolator(VerboseMixin):
                     variance=self.all_var[ith],
                     wcs=self.target_wcs,
                     info=dict(
-                        kernel_size_arcsec=self.kernel.scale_arcsec,
+                        kernel_scale=self.kernel.scale_arcsec,
                         name =  f"rss_{ith}"),
                 )
                 interp_info["cube"] = (ind_cube, qc_cube(ind_cube))
@@ -603,7 +683,7 @@ class CubeInterpolator(VerboseMixin):
         datacube, datacube_var = stacking_method(
             self.all_datacubes, self.all_var, **stacking_args
         )
-        info = dict(kernel_size_arcsec=self.kernel.scale_arcsec, **cube_info)
+        info = dict(kernel_scale=self.kernel.scale_arcsec, **cube_info)
         # Create the Cube
         cube = Cube(
             intensity=datacube, variance=datacube_var, wcs=self.target_wcs, info=info
@@ -678,25 +758,21 @@ class CubeInterpolator(VerboseMixin):
         ).to(rss.wavelength.unit)
 
         if adr_dec_arcsec is not None:
-            adr_dec_pixel = (
-                (adr_dec_arcsec / self.kernel.pixel_scale_arcsec).decompose().value
-            )
+            adr_dec_pixel = adr_dec_arcsec.to(u.pixel, self.kernel.pixel_scale)
             if cube_wavelength.size != rss.wavelength.size or np.allclose(
                 cube_wavelength, rss.wavelength
             ):
-                adr_dec_pixel = np.interp(
-                    cube_wavelength, rss.wavelength, adr_dec_pixel
-                )
+                adr_dec_pixel = np.interp(cube_wavelength, rss.wavelength,
+                                          adr_dec_pixel)
         else:
             adr_dec_pixel = None
         if adr_ra_arcsec is not None:
-            adr_ra_pixel = (
-                (adr_ra_arcsec / self.kernel.pixel_scale_arcsec).decompose().value
-            )
+            adr_ra_pixel = adr_ra_arcsec.to(u.pixel, self.kernel.pixel_scale)
             if cube_wavelength.size != rss.wavelength.size or np.allclose(
                 cube_wavelength, rss.wavelength
             ):
-                adr_ra_pixel = np.interp(cube_wavelength, rss.wavelength, adr_ra_pixel)
+                adr_ra_pixel = np.interp(cube_wavelength, rss.wavelength,
+                                         adr_ra_pixel)
         else:
             adr_ra_pixel = None
         # Interpolate all RSS fibres
@@ -713,9 +789,9 @@ class CubeInterpolator(VerboseMixin):
                 fibre_pixel_pos_cols,
                 fibre_pixel_pos_rows,
                 fibre_diam=getattr(
-                    rss, "fibre_diameter", 1.25 / self.kernel.pixel_scale_arcsec
-                ),
-            )
+                    rss, "fibre_diameter", 1.25 << u.arcsec).to(
+                        u.pixel, self.kernel.pixel_scale)
+                )
             interm_products["qc_fibres_on_fov"] = qc_fig
 
         if cube_wavelength.size != rss.wavelength.size or np.allclose(
@@ -750,8 +826,8 @@ class CubeInterpolator(VerboseMixin):
                 cube=datacube,
                 cube_var=datacube_var,
                 cube_weight=datacube_weight,
-                pix_pos_cols=fibre_pixel_pos_cols[fibre],
-                pix_pos_rows=fibre_pixel_pos_rows[fibre],
+                pix_pos_cols=fibre_pixel_pos_cols[fibre] << u.pixel,
+                pix_pos_rows=fibre_pixel_pos_rows[fibre] << u.pixel,
                 adr_cols=adr_ra_pixel,
                 adr_rows=adr_dec_pixel,
                 fibre_mask=f_mask,
@@ -819,11 +895,12 @@ class CubeInterpolator(VerboseMixin):
             Dictionary that stores intermediate products and metadata.
         """
         if adr_rows is None and adr_cols is None:
-            adr_rows = np.zeros(fib_spectra.size)
-            adr_cols = np.zeros(fib_spectra.size)
+            adr_rows = np.zeros(fib_spectra.size) << u.pixel
+            adr_cols = np.zeros(fib_spectra.size) << u.pixel
             spectral_window = fib_spectra.size
         else:
             # Estimate spectral window
+            adr_pixel_frac = ancillary.check_unit(adr_pixel_frac, u.pixel)
             spectral_window = int(
                 np.min(
                     (
@@ -849,28 +926,32 @@ class CubeInterpolator(VerboseMixin):
             wl_slice = slice(wl_range, wl_range + spectral_window)
             # Kernel along columns direction (x, ra)
             kernel_centre_cols = pix_pos_cols - np.nanmedian(adr_cols[wl_slice])
-            kernel_offset = self.kernel.scale.value * self.kernel.truncation_radius
-            cols_min = max(int(kernel_centre_cols - kernel_offset) - 1, 0)
+            kernel_offset = self.kernel.scale * self.kernel.truncation_radius
+            cols_min = max(
+                int(kernel_centre_cols.value - kernel_offset.value) - 1, 0)
             cols_max = min(
-                int(kernel_centre_cols + kernel_offset) + 1, cube.shape[2] - 1
-            )
+                int(kernel_centre_cols.value + kernel_offset.value) + 1,
+                cube.shape[2] - 1)
             columns_slice = slice(cols_min, cols_max + 1, 1)
             # Kernel along rows direction (y, dec)
             kernel_centre_rows = pix_pos_rows - np.nanmedian(adr_rows[wl_slice])
-            rows_min = max(int(kernel_centre_rows - kernel_offset) - 1, 0)
+            rows_min = max(
+                int(kernel_centre_rows.value - kernel_offset.value) - 1, 0)
             rows_max = min(
-                int(kernel_centre_rows + kernel_offset) + 1, cube.shape[1] - 1
-            )
+                int(kernel_centre_rows.value + kernel_offset.value) + 1,
+                cube.shape[1] - 1)
             rows_slice = slice(rows_min, rows_max + 1, 1)
 
             if (cols_max < cols_min) | (rows_max < rows_min):
                 continue
-            column_edges = np.arange(cols_min - 0.5, cols_max + 1.5, 1.0)
-            row_edges = np.arange(rows_min - 0.5, rows_max + 1.5, 1.0)
-            pos_col_edges = column_edges - kernel_centre_cols
-            pos_row_edges = row_edges - kernel_centre_rows
+
             # Compute the kernel weight associated to each location
-            weights = self.kernel.kernel_2D(pos_row_edges, pos_col_edges)
+            weights = self.kernel.kernel_2D(
+                np.arange(cols_min - 0.5, cols_max + 1.5, 1.0) * u.pixel
+                - kernel_centre_cols,
+                np.arange(rows_min - 0.5, rows_max + 1.5, 1.0) * u.pixel
+                - kernel_centre_rows)
+
             fibre_weights.append((wl_slice, rows_slice, columns_slice, weights))
 
             weights = weights[np.newaxis]
@@ -1084,7 +1165,7 @@ def make_dummy_cube_from_rss(rss, spa_pix_arcsec=0.5, kernel_pix_arcsec=1.0):
         [rss],
         pixel_size_arcsec=spa_pix_arcsec,
         wcs=wcs,
-        kernel_size_arcsec=kernel_pix_arcsec,
+        kernel_scale=kernel_pix_arcsec,
     )
     cube = interpolator.build_cube()
     return cube
