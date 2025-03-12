@@ -16,7 +16,7 @@ rss = mock_rss()
 interpolator = CubeInterpolator(rss_set=[rss],
                                 kernel=DrizzlingKernel(
                                 scale=4 << u.dimensionless_unscaled,
-                                pixel_scale_arcsec=1))
+                                pixel_scale=1))
 
 
 cube = interpolator.build_cube()

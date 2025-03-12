@@ -7,7 +7,7 @@ from pykoala.ancillary import pixel_in_circle
 from shapely import geometry
 
 # kernel = cubing.DrizzlingKernel(scale= 10 << u.dimensionless_unscaled,
-#                                 pixel_scale_arcsec=1 << u.arcsec)
+#                                 pixel_scale=1 << u.arcsec)
 
 
 # x_edges = np.arange(-10, 10)
