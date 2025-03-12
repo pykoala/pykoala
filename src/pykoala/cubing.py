@@ -532,7 +532,8 @@ class CubeInterpolator(VerboseMixin):
     @property
     def kernel(self) -> InterpolationKernel:
         """:class:`InterpolationKernel` used to combine the RSS data."""
-    
+        return self._kernel
+
     @kernel.setter
     def kernel(self, kernel):
         self._kernel = kernel
