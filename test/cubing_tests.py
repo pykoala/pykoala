@@ -20,7 +20,8 @@ class TestKernel(unittest.TestCase):
         self.pix_size = 1
 
     def test_parabolic_kernel(self):
-        kernel = cubing.ParabolicKernel(scale=1)
+        kernel = cubing.ParabolicKernel(pixel_scale= 1 * u.arcsec / u.pixel,
+                                        scale=1 * u.arcsec)
 
         # Check that the cumulative mass function is correct
         self.assertTrue(kernel.cmf(-1.0) == 0)
@@ -80,7 +81,7 @@ class TestCubing(unittest.TestCase):
         assert wcs.has_spectral, "WCS has not spectral axis"
 
         interpolator = cubing.CubeInterpolator(self.rss_list, wcs=wcs,
-                                               kernel_size_arcsec=2.0,
+                                               kernel_scale=2.0,
                                                kernel=cubing.DrizzlingKernel,
                                                adr_set=adr_corr_set,
                                                qc_plots=True,
