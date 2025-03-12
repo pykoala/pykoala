@@ -465,7 +465,7 @@ def cross_correlate_images(list_of_images, oversample=100):
 #             # Interpolate RSS to a datacube
 #             datacube, _, _ = interpolate_rss(
 #                 data, pixel_size_arcsec=quick_cube_pix_size,
-#                 kernel_size_arcsec=1.,
+#                 kernel_scale=1.,
 #                 datacube=datacube)
 #             image = make_white_image_from_array(datacube, data.wavelength,
 #                                                 wave_range=wave_range, s_clip=3.0)
