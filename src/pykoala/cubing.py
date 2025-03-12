@@ -142,17 +142,15 @@ class CubeStacking:
 
 
 class InterpolationKernel(object):
-    """Interpolation Kernel.
+    r"""Interpolation Kernel.
 
-    Description
-    -----------
     A Kernel is a window function, :math:`K(u)`, used to perform the
     interpolation of individual fibre spectra at a given location in the sky
     :math:`(\alpha_0,\,\delta_0)` into a 3D grid.
 
     .. math::
 
-    I(\alpha, \delta) = \int_{-\inf}^{\inf} I_{fib}(\alpha_0,\,\delta_0) \cdot K(\alpha - \alpha_0, \delta - \delta_0) d\alpha d\delta
+        I(\alpha, \delta) = \int_{-\inf}^{\inf} I_{fib}(\alpha_0,\,\delta_0) \cdot K(\alpha - \alpha_0, \delta - \delta_0) d\alpha d\delta
 
     Different kernels have different domains, e.g. :math:`u\leq1` for
     Parabolic kernel, and therefore a scale parameter is sometimes required to
@@ -169,8 +167,9 @@ class InterpolationKernel(object):
 
     @scale.setter
     def scale(self, scale):
-        self._scale = ancillary.check_unit(scale, u.pixel,
-                                           equivalencies=self.pixel_scale)
+        self._scale = ancillary.check_unit(
+            scale, u.pixel, equivalencies=self.pixel_scale
+        )
 
     @property
     def scale_arcsec(self):
@@ -211,18 +210,15 @@ class InterpolationKernel(object):
 
 
 class ParabolicKernel(InterpolationKernel):
-    """Parabolic or Epanechnikov InterpolationKernel.
+    r"""Parabolic or Epanechnikov InterpolationKernel.
 
-    Description
-    -----------
     The parabolic kernel is defined as:
 
     .. math::
 
-        K(u) = \frac{3}{4}(1 - u^2)
+        K(u) = \frac{3}{4}(1 - u^2),\, u\in [-1, 1]
 
-    With :math:`u` restricted to the range [-1, 1] (i.e., this model enforces
-    `truncation_radius=1`).
+    This model enforces `truncation_radius=1`.
     """
 
     def __init__(self, pixel_scale, scale, **kwargs):
@@ -291,8 +287,9 @@ class ParabolicKernel(InterpolationKernel):
             Array of kernel weights within each bin. The size is
             `(len(y_edges) - 1, len(x_edges) - 1)`.
         """
-        grid_yy, grid_xx = np.meshgrid(y_edges / self.scale,
-                                       x_edges / self.scale, indexing="ij")
+        grid_yy, grid_xx = np.meshgrid(
+            y_edges / self.scale, x_edges / self.scale, indexing="ij"
+        )
         cum_k = self.cmf(grid_xx) * self.cmf(grid_yy)
         weights = np.diff(cum_k, axis=0)
         weights = np.diff(weights, axis=1)
@@ -300,30 +297,29 @@ class ParabolicKernel(InterpolationKernel):
 
 
 class GaussianKernel(InterpolationKernel):
-    """Gaussian InterpolationKernel.
+    r"""Gaussian InterpolationKernel.
 
-    Description
-    -----------
     The Gaussian kernel is defined as:
 
     .. math::
 
-        K(u) = \frac{1}{\sigma\sqrt{2\pi}} e^{-u^2/2)
+        K(u) = \frac{1}{\sqrt{2\pi}} e^{-u^2/2},\, u\in [-\infty, \infty]
 
-    Where :math:`\sigma` is the kernel scale in pixels.
     The kernel domain is restricted to the range ``[-truncation_radius, truncation_radius]``.
     By default ``truncation_radius=3``.
     """
+
     def __init__(self, pixel_scale, scale, truncation_radius=3.0, **kwargs):
-        super().__init__(pixel_scale, scale,
-                         truncation_radius=truncation_radius, **kwargs)
+        super().__init__(
+            pixel_scale, scale, truncation_radius=truncation_radius, **kwargs
+        )
         # Minimum and maximum percentiles used for renormalizing the kernel
         self.left_norm = 0.5 * (1 + erf(-self.truncation_radius / np.sqrt(2)))
         self.right_norm = 0.5 * (1 + erf(self.truncation_radius / np.sqrt(2)))
 
     def cmf(self, ker_u):
         """Kernel cumulative distribution function.
-        
+
         Parameters
         ----------
         ker_u : np.ndarray
@@ -355,19 +351,18 @@ class GaussianKernel(InterpolationKernel):
 
 
 class TopHatKernel(InterpolationKernel):
-    """TopHat (uniform) InterpolationKernel.
+    r"""TopHat (uniform) InterpolationKernel.
 
-    Description
-    -----------
     The TopHat kernel is defined as:
 
     .. math::
 
-        K(u) = \frac{1}{2}
+        K(u) = \frac{1}{2},\, u\in [-1, 1]
 
     With :math:`u` restricted to the range [-1, 1] (i.e., this model enforces
     `truncation_radius=1`).
     """
+
     def __init__(self, pixel_scale, scale, **kwargs):
         if "truncation_radius" in kwargs:
             del kwargs["truncation_radius"]
@@ -375,7 +370,7 @@ class TopHatKernel(InterpolationKernel):
 
     def cmf(self, ker_u):
         """Kernel cumulative distribution function.
-        
+
         Parameters
         ----------
         ker_u : np.ndarray
@@ -406,31 +401,31 @@ class TopHatKernel(InterpolationKernel):
 
 class CircularTopHatKernel(TopHatKernel):
     """Circular TopHat kernel."""
+
     def kernel_2D(self, x_edges, y_edges):
-        rad = x_edges[np.newaxis, :]**2 + y_edges[:, np.newaxis]**2
+        rad = x_edges[np.newaxis, :] ** 2 + y_edges[:, np.newaxis] ** 2
         return self.kernel_1D(rad, axis=(0, 1))
 
 
 class DrizzlingKernel(TopHatKernel):
     """Drizzling InterpolationKernel.
-    
-    Description
-    -----------
+
     This kernel follows the same phylosophy as in Fruchter & Hook 1997.
     Users may define different fibre footprint shapes (``fibre_shape``) among:
     ``squared``, ``circular``, or ``hexagonal``. This will determine what is the
     overlapping fraction between a given spaxel and the fibre.
     """
 
-    fibre_frac = {"circle": ancillary.pixel_in_circle,
-                  "hexagon": ancillary.pixel_in_hexagon,
-                  "square": ancillary.pixel_in_square}
-    
+    fibre_frac = {
+        "circle": ancillary.pixel_in_circle,
+        "hexagon": ancillary.pixel_in_hexagon,
+        "square": ancillary.pixel_in_square,
+    }
+
     def __init__(self, pixel_scale, scale, **kwargs):
         super().__init__(pixel_scale, scale, **kwargs)
-        # Assume circular fibre footprint by default 
-        self.pixel_frac_method = self.fibre_frac[kwargs.get("fibre_shape",
-                                                            "circle")]
+        # Assume circular fibre footprint by default
+        self.pixel_frac_method = self.fibre_frac[kwargs.get("fibre_shape", "circle")]
 
     def kernel_1D(self):
         raise NotImplementedError("kernel_1D has not been implemented in this class")
@@ -439,9 +434,11 @@ class DrizzlingKernel(TopHatKernel):
         weights = np.zeros((y_edges.size - 1, x_edges.size - 1))
         # y == rows, x == columns
         # Only the lower-left corner of every pixel is required.
-        pix_edge_y, pix_edge_x = np.meshgrid(y_edges[:-1].to_value("pixel"),
-                                             x_edges[:-1].to_value("pixel"),
-                                             indexing="ij")
+        pix_edge_y, pix_edge_x = np.meshgrid(
+            y_edges[:-1].to_value("pixel"),
+            x_edges[:-1].to_value("pixel"),
+            indexing="ij",
+        )
         for i, pos in enumerate(zip(pix_edge_x.flatten(), pix_edge_y.flatten())):
             _, area_fraction = self.pixel_frac_method(
                 pixel_pos=pos,
@@ -461,8 +458,6 @@ class DrizzlingKernel(TopHatKernel):
 class CubeInterpolator(VerboseMixin):
     """A class for combining multiple RSS into a 3D datacube.
 
-    Description
-    -----------
     This class performs the combination of a set of RSS data into a 3D regular
     grid defined by a WCS.
 
@@ -537,8 +532,8 @@ class CubeInterpolator(VerboseMixin):
             kernel_scale = ancillary.check_unit(kernel_scale, u.arcsec)
             # Assume square pixel
             pixel_scale = (
-                np.abs(self.target_wcs.celestial.pixel_scale_matrix.diagonal()
-                       ).mean() << u.deg / u.pixel
+                np.abs(self.target_wcs.celestial.pixel_scale_matrix.diagonal()).mean()
+                << u.deg / u.pixel
             )
 
             self.vprint(
@@ -666,9 +661,7 @@ class CubeInterpolator(VerboseMixin):
                     intensity=self.all_datacubes[ith],
                     variance=self.all_var[ith],
                     wcs=self.target_wcs,
-                    info=dict(
-                        kernel_scale=self.kernel.scale_arcsec,
-                        name =  f"rss_{ith}"),
+                    info=dict(kernel_scale=self.kernel.scale_arcsec, name=f"rss_{ith}"),
                 )
                 interp_info["cube"] = (ind_cube, qc_cube(ind_cube))
 
@@ -762,8 +755,9 @@ class CubeInterpolator(VerboseMixin):
             if cube_wavelength.size != rss.wavelength.size or np.allclose(
                 cube_wavelength, rss.wavelength
             ):
-                adr_dec_pixel = np.interp(cube_wavelength, rss.wavelength,
-                                          adr_dec_pixel)
+                adr_dec_pixel = np.interp(
+                    cube_wavelength, rss.wavelength, adr_dec_pixel
+                )
         else:
             adr_dec_pixel = None
         if adr_ra_arcsec is not None:
@@ -771,8 +765,7 @@ class CubeInterpolator(VerboseMixin):
             if cube_wavelength.size != rss.wavelength.size or np.allclose(
                 cube_wavelength, rss.wavelength
             ):
-                adr_ra_pixel = np.interp(cube_wavelength, rss.wavelength,
-                                         adr_ra_pixel)
+                adr_ra_pixel = np.interp(cube_wavelength, rss.wavelength, adr_ra_pixel)
         else:
             adr_ra_pixel = None
         # Interpolate all RSS fibres
@@ -788,10 +781,10 @@ class CubeInterpolator(VerboseMixin):
                 datacube.shape[1:],
                 fibre_pixel_pos_cols,
                 fibre_pixel_pos_rows,
-                fibre_diam=getattr(
-                    rss, "fibre_diameter", 1.25 << u.arcsec).to(
-                        u.pixel, self.kernel.pixel_scale)
-                )
+                fibre_diam=getattr(rss, "fibre_diameter", 1.25 << u.arcsec).to(
+                    u.pixel, self.kernel.pixel_scale
+                ),
+            )
             interm_products["qc_fibres_on_fov"] = qc_fig
 
         if cube_wavelength.size != rss.wavelength.size or np.allclose(
@@ -927,19 +920,19 @@ class CubeInterpolator(VerboseMixin):
             # Kernel along columns direction (x, ra)
             kernel_centre_cols = pix_pos_cols - np.nanmedian(adr_cols[wl_slice])
             kernel_offset = self.kernel.scale * self.kernel.truncation_radius
-            cols_min = max(
-                int(kernel_centre_cols.value - kernel_offset.value) - 1, 0)
+            cols_min = max(int(kernel_centre_cols.value - kernel_offset.value) - 1, 0)
             cols_max = min(
                 int(kernel_centre_cols.value + kernel_offset.value) + 1,
-                cube.shape[2] - 1)
+                cube.shape[2] - 1,
+            )
             columns_slice = slice(cols_min, cols_max + 1, 1)
             # Kernel along rows direction (y, dec)
             kernel_centre_rows = pix_pos_rows - np.nanmedian(adr_rows[wl_slice])
-            rows_min = max(
-                int(kernel_centre_rows.value - kernel_offset.value) - 1, 0)
+            rows_min = max(int(kernel_centre_rows.value - kernel_offset.value) - 1, 0)
             rows_max = min(
                 int(kernel_centre_rows.value + kernel_offset.value) + 1,
-                cube.shape[1] - 1)
+                cube.shape[1] - 1,
+            )
             rows_slice = slice(rows_min, rows_max + 1, 1)
 
             if (cols_max < cols_min) | (rows_max < rows_min):
@@ -950,7 +943,8 @@ class CubeInterpolator(VerboseMixin):
                 np.arange(cols_min - 0.5, cols_max + 1.5, 1.0) * u.pixel
                 - kernel_centre_cols,
                 np.arange(rows_min - 0.5, rows_max + 1.5, 1.0) * u.pixel
-                - kernel_centre_rows)
+                - kernel_centre_rows,
+            )
 
             fibre_weights.append((wl_slice, rows_slice, columns_slice, weights))
 
@@ -1034,8 +1028,6 @@ def build_wcs_from_rss(
 ):
     """Compute the effective WCS resulting from combining an input list of RSS.
 
-    Description
-    -----------
     This methods creates a WCS that contains an input list RSS data. The joint
     spectral coverage and field of view, resulting from the combination of the
     individual RSS exposures, can consists of the space that contains all RSS
