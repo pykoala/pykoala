@@ -68,69 +68,11 @@ to deactivate the Python environment.
 
 For more information about installation and usage of Python virtual environment, check the [documentation](https://pykoala.readthedocs.io/en/latest/getting-started/virtual-environment.html) or the oficial [Python documentation](https://docs.python.org/3/library/venv.html).
 
-## Package structure
 
+## Tutorials
 ---
 
-### *Data containers*
-Represent the different types of data used by PyKOALA.
-- RSS
-- Cube
-#### Data Wrappers: Instrument-specific classes based on Data Containers for reading the data
-- koala_rss
-
----
-
-### *Cubing*
-#### cubing.interpolate_fibre
-#### cubing.interpolate_rss
-#### cubing.build_cube
-
-### *Registration*
-#### registration.register_stars
-
----
-
-
-### *Corrections*
-
-All the corrections applied to the data are build upon the Correction base class.
-
-#### Fibre Throughput
-#### Atmospheric corrections
-- AtmosphericExtinction
-- Atmospheric Differential Refraction (ADR)
-#### Sky
-- Sky substraction (SkySubsCorrection)
-  - Sky continuum
-  - Sky emission lines
-- Telluric correction (TelluricCorrection)
-#### Flux calibration (Spectral throughput)
-#### Cleaning
-- Cosmics
-- NaN's
-- CCD edges
-
-#### Ancillary
-
----
-
-## Basic reduction procedure
-
----
-(See examples)
-
-### Reducing calibration star data
-
-- Read RSS data.
-- Apply fibre throughput.
-- Correct data for atmospheric extinction.
-- Correct data from telluric atmospheric absorption.
-- Substract sky (continuum + emission lines).
-- Build cube
-
-
----
+See the list of available [tutorials](https://github.com/pykoala/pykoala-tutorials)
 
 ## License and Acknowledgements
 

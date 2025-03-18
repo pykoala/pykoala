@@ -13,6 +13,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy import interpolate
 from scipy import optimize
+from shapely import geometry
 # =============================================================================
 # Astropy and associated packages
 # =============================================================================
@@ -27,7 +28,7 @@ from astropy.modeling.models import custom_model
 from pykoala import vprint
 
 
-def check_unit(quantity, default_unit=None):
+def check_unit(quantity, default_unit=None, equivalencies=[]):
     """Check the units of an input quantity.
     
     Parameters
@@ -47,11 +48,12 @@ def check_unit(quantity, default_unit=None):
         return quantity
     isq = isinstance(quantity, u.Quantity)
     if isq and default_unit is not None:
-        if not quantity.unit.is_equivalent(default_unit):
+        if not quantity.unit.is_equivalent(default_unit,
+                                           equivalencies=equivalencies):
             raise u.UnitTypeError(
                 "Input quantity does not have the appropriate units")
         else:
-            return quantity.to(default_unit)
+            return quantity.to(default_unit, equivalencies=equivalencies)
     elif not isq and default_unit is not None:
         return quantity * default_unit
     elif not isq and default_unit is None:
@@ -561,24 +563,38 @@ def smooth_spectrum(wlm, s, wave_min=0, wave_max=0, step=50, exclude_wlm=[[0, 0]
     # (fit_median+fit_median_interpolated)/2      # Decide if fit_median or fit_median_interpolated
     return weight_fit_median*fit_median + (1-weight_fit_median)*fit_median_interpolated
 
-# TODO: replace by np.linalg.norm
-def vect_norm(a, b):
-    """Compute the norm of two vectors."""
-    return np.sqrt(np.sum((a - b)**2, axis=-1))
+def pixel_in_square(pixel_pos, pixel_size, pos, radius):
+    """Compute the area of a pixel within a square.
 
+    Parameters
+    ----------
+    - pixel_pos: tuple
+        Position of the lower left corner of the pixel
+    - pixel_size: float
+        Size of the pixel.
+    - pos: tuple
+        Position of the square centre
+    - radius: float
+        Half size of the square.
 
-def in_rectangle(pos, rectangle_pos):
-    """Check if a point lies in the perimeter of a rectangle."""
-    in_rectangle = (
-        (pos[0] <= rectangle_pos[:, 0]).any()
-        & (pos[0] >= rectangle_pos[:, 0]).any()
-        & (pos[1] <= rectangle_pos[:, 1]).any()
-        & (pos[1] >= rectangle_pos[:, 1]).any()
-    )
-    return in_rectangle
+    Returns
+    -------
+    - area_pixel:
+        Area of the pixel contained within the square
+    - area_fraction:
+        Fration of the square area that overlaps with the pixel.
+    """
+    square = geometry.box(pos[0] - radius,
+                          pos[1] - radius,
+                          pos[0] + radius,
+                          pos[1] + radius)
+    rectangle = geometry.box(pixel_pos[0], pixel_pos[1],
+                             pixel_pos[0] + pixel_size,
+                             pixel_pos[1] + pixel_size)    
+    intersection = square.intersection(rectangle)
+    return intersection.area, intersection.area / square.area
 
-
-def pixel_in_circle(pixel_pos, pixel_size, circle_pos, circle_radius):
+def pixel_in_circle(pixel_pos, pixel_size, pos, radius):
     """Compute the area of a pixel within a circle.
 
     Parameters
@@ -587,9 +603,9 @@ def pixel_in_circle(pixel_pos, pixel_size, circle_pos, circle_radius):
         Position of the lower left corner of the pixel
     - pixel_size: float
         Size of the pixel.
-    - circle_pos: tuple
+    - pos: tuple
         Position of the circle centre
-    - circle_raidus: float
+    - radius: float
         Radius of the circle.
 
     Returns
@@ -599,130 +615,56 @@ def pixel_in_circle(pixel_pos, pixel_size, circle_pos, circle_radius):
     - area_fraction:
         Fration of the circle area that overlaps with the pixel.
     """
-    pixel_vertices = (np.atleast_1d(pixel_pos)[np.newaxis, :]
-                      + pixel_size * np.array([[0, 0], [0, 1], [1, 0], [1, 1]])
-                      )
-    # Find those pixels inside the circle
-    inside = vect_norm(pixel_vertices, np.array(circle_pos)[np.newaxis]
-                       ) < circle_radius
-    n_inside = np.count_nonzero(inside)
-    if n_inside == 0:
-        return 0, 0
+    circle = geometry.Point(*pos).buffer(radius)
+    rectangle = geometry.box(pixel_pos[0], pixel_pos[1],
+                             pixel_pos[0] + pixel_size,
+                             pixel_pos[1] + pixel_size)    
+    intersection = circle.intersection(rectangle)
+    return intersection.area, intersection.area / circle.area
 
-    pixel_center = np.array([pixel_pos[0] + pixel_size / 2,
-                             pixel_pos[1] + pixel_size / 2])
-    pixel_area = pixel_size**2
-    vertex_in = pixel_vertices[inside].squeeze()
-    vertex_out = pixel_vertices[~inside].squeeze()
-    cr_s = circle_radius**2
-    circle_area = np.pi * cr_s
+def pixel_in_hexagon(pixel_pos, pixel_size, pos, radius):
+    """Copmute the area of a pixel overlapping with a regular hexagon.
+    
+    Description
+    -----------
+    The hexagon is assumed to be regular.
 
-    if n_inside == 1:
-        x_cross = (cr_s - (vertex_in[1] - circle_pos[1])**2)**0.5
-        x_cross = np.array([[circle_pos[0] + x_cross, vertex_in[1]],
-                            [circle_pos[0] - x_cross, vertex_in[1]]])
-        xcross_pt = np.argmin(vect_norm(pixel_center[np.newaxis, :], x_cross))
-        x_cross = x_cross[xcross_pt]
+    Parameters
+    ----------
+    - pixel_pos: tuple
+        Position of the lower left corner of the pixel
+    - pixel_size: float
+        Size of the pixel.
+    - pos: tuple
+        Position of the hexagon centre.
+    - radius: float
+        Radius of the circle that inscribes the hexagon. In other words, the
+        distance of the hexagon vertices to the centre.
 
-        y_cross = (cr_s - (vertex_in[0] - circle_pos[0])**2)**0.5
-        y_cross = np.array([[vertex_in[0], circle_pos[1] + y_cross],
-                            [vertex_in[0], circle_pos[1] - y_cross]])
-        ycross_pt = np.argmin(vect_norm(pixel_center[np.newaxis, :], y_cross))
-        y_cross = y_cross[ycross_pt]
-        arc_length = vect_norm(x_cross, y_cross)
-        phi = np.arccos(
-            (2*circle_radius**2 - arc_length**2) / (2 * circle_radius**2))
-
-        # Area of the triangle formed by the circle center and the intersection
-        area_triangle = 0.5 * circle_radius**2 * np.sin(phi)
-        area_sector = phi / 2 * circle_radius**2
-        # Area of the triangle within the pixel surface inside the circle
-        area_pixel_triangle = 0.5 * np.sqrt(
-            (vertex_in[0] - x_cross[0])**2 * (vertex_in[1] - y_cross[1])**2)
-        area_pixel = area_sector - area_triangle + area_pixel_triangle
-
-    elif n_inside == 2:
-        parallel_axis = np.where(vertex_in[0] == vertex_in[1])[0][0]
-        perpendicular_axis = [0, 1]
-        perpendicular_axis.remove(parallel_axis)
-        dist = np.abs(vertex_in[0][perpendicular_axis
-                                   ] - vertex_in[1][perpendicular_axis]).squeeze()
-        intersection_points = np.zeros((2, 2))
-        for i, v in enumerate(vertex_in):
-            x_cross = (cr_s - (v[1] - circle_pos[1])**2)**0.5
-            x_cross = np.array([[circle_pos[0] + x_cross, v[1]],
-                                [circle_pos[0] - x_cross, v[1]]])
-            xcross_pt = np.argmin(
-                vect_norm(pixel_center[np.newaxis, :], x_cross))
-            x_cross = x_cross[xcross_pt]
-            if in_rectangle(x_cross, pixel_vertices):
-                intersection_points[i] = x_cross
-                continue
-            y_cross = (cr_s - (v[0] - circle_pos[0])**2)**0.5
-            y_cross = np.array([[v[0], circle_pos[1] + y_cross],
-                                [v[0], circle_pos[1] - y_cross]])
-            ycross_pt = np.argmin(
-                vect_norm(pixel_center[np.newaxis, :], y_cross))
-            y_cross = y_cross[ycross_pt]
-            if in_rectangle(y_cross, pixel_vertices):
-                intersection_points[i] = y_cross
-
-        # Parallel sides of the trapezium
-        a = np.abs(
-            vertex_in[0][parallel_axis]
-            - intersection_points[0][parallel_axis])
-        b = np.abs(
-            vertex_in[1][parallel_axis]
-            - intersection_points[1][parallel_axis])
-
-        area_trapezoid = dist * (a + b) / 2
-        arc_length = vect_norm(intersection_points[0], intersection_points[1])
-        phi = np.arccos(
-            (2*circle_radius**2 - arc_length**2) / (2 * circle_radius**2))
-        area_triangle = 0.5 * cr_s * np.sin(phi)
-        area_sector = phi / 2 * cr_s
-        area_pixel = area_sector - area_triangle + area_trapezoid
-
-    elif n_inside == 3:
-        dist_to_center = vect_norm(vertex_in, np.array(circle_pos)[np.newaxis])
-        corner_pos = np.argmin(dist_to_center)
-        intersection_points = np.zeros((2, 2))
-        for i, v in enumerate(np.delete(vertex_in, corner_pos, axis=0)):
-            x_cross = (cr_s - (v[1] - circle_pos[1])**2)**0.5
-            x_cross = np.array([[circle_pos[0] + x_cross, v[1]],
-                                [circle_pos[0] - x_cross, v[1]]])
-            xcross_pt = np.argmin(
-                vect_norm(pixel_center[np.newaxis, :], x_cross))
-            x_cross = x_cross[xcross_pt]
-            if in_rectangle(x_cross, pixel_vertices):
-                intersection_points[i] = x_cross
-                continue
-
-            y_cross = (cr_s - (v[0] - circle_pos[0])**2)**0.5
-            y_cross = np.array([[v[0], circle_pos[1] + y_cross],
-                                [v[0], circle_pos[1] - y_cross]])
-            ycross_pt = np.argmin(
-                vect_norm(pixel_center[np.newaxis, :], y_cross))
-            y_cross = y_cross[ycross_pt]
-            if in_rectangle(y_cross, pixel_vertices):
-                intersection_points[i] = y_cross
-
-        arc_length = vect_norm(intersection_points[0], intersection_points[1])
-        phi = np.arccos(
-            (2*circle_radius**2 - arc_length**2) / (2 * circle_radius**2))
-
-        area_inner_triangle = 0.5 * cr_s * np.sin(phi)
-        area_sector = phi / 2 * cr_s
-
-        area_outer_triangle = 0.5 * (
-            vect_norm(intersection_points[0], vertex_out)
-            * vect_norm(intersection_points[1], vertex_out))
-        area_pixel = (pixel_area - area_outer_triangle
-                      + (area_sector - area_inner_triangle))
-    else:
-        area_pixel = pixel_size**2
-    area_fraction = area_pixel / (circle_area + 1e-100)
-    return area_pixel, area_fraction
+    Returns
+    -------
+    - area_pixel:
+        Area of the pixel contained within the circle
+    - area_fraction:
+        Fration of the circle area that overlaps with the pixel.
+    """
+    # cos(30) * rad / sin(30) * rad
+    rad_cos_30 = 0.866 * radius
+    rad_sin_30 = 0.5
+    # Coordinates are provided in anticlock-wise order starting from the top
+    hexagon = geometry.Polygon([
+        (pos[0], pos[1] + radius),
+        (pos[0] - rad_cos_30, pos[1] + rad_sin_30),
+        (pos[0] - rad_cos_30, pos[1] - rad_sin_30),
+        (pos[0], pos[1] - radius),
+        (pos[0] + rad_cos_30, pos[1] - rad_sin_30),
+        (pos[0] + rad_cos_30, pos[1] + rad_sin_30),
+        (pos[0], pos[1] + radius)])
+    rectangle = geometry.box(pixel_pos[0], pixel_pos[1],
+                             pixel_pos[0] + pixel_size,
+                             pixel_pos[1] + pixel_size)    
+    intersection = hexagon.intersection(rectangle)
+    return intersection.area, intersection.area / hexagon.area
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Models and fitting

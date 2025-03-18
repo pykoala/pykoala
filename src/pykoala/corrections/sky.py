@@ -432,10 +432,12 @@ def uves_sky_lines():
             fwhm = f[1].data['FWHM']
             flux = f[1].data['FLUX']
 
-            line_wavelength = np.hstack((line_wavelength, wave)) << u.angstrom
-            line_fwhm = np.hstack((line_fwhm, fwhm)) << u.angstrom
+            line_wavelength = np.hstack((line_wavelength, wave))
+            line_fwhm = np.hstack((line_fwhm, fwhm))
             line_flux = np.hstack((line_flux, flux))
 
+    line_fwhm = line_fwhm << u.angstrom
+    line_wavelength = line_wavelength << u.angstrom
     # Sort lines by wavelength
     sort_pos = np.argsort(line_wavelength)
     return line_wavelength[sort_pos], line_fwhm[sort_pos], line_flux[sort_pos]
