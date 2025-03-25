@@ -139,7 +139,7 @@ class BackgroundEstimator:
         m = (I_hi - I_low) / (flux_hi - flux_low)
         b = I_low - m * flux_low
 
-        sky_flux_candidate = np.arange(0, flux_cut_hi, .01*np.min(flux))
+        sky_flux_candidate = np.arange(0, flux_cut_hi.value, .01*np.min(flux.value)) << flux.unit
         sky_filtered = m[np.newaxis, :] * \
             sky_flux_candidate[:, np.newaxis] + b[np.newaxis, :]
         x = np.nancumsum(sky_filtered, axis=1)
@@ -1678,10 +1678,12 @@ class WaveletFilter(object):
             fig.savefig(save_as)
 
     def get_throughput_object(self):
-        return Throughput(throughput_data=np.repeat(self.fibre_throughput[:, np.newaxis], self.wavelength.size + 3*self.scale, axis=1))
+        return Throughput(throughput_data=np.repeat(self.fibre_throughput[:, np.newaxis], self.wavelength.size + 3*self.scale, axis=1),
+                          throughput_error=np.full([self.fibre_throughput.size, self.wavelength.size + 3*self.scale], np.nan)
+                         )
 
     def get_wavelength_offset(self):
-        return WavelengthOffset(offset_data=np.repeat(self.fibre_offset[:, np.newaxis], self.wavelength.size + 3*self.scale, axis=1))
+        return WavelengthOffset(offset_data=np.repeat(self.fibre_offset[:, np.newaxis], self.wavelength.size + 3*self.scale, axis=1) << u.pix)
 
 
 class SkySelfCalibration(CorrectionBase):
