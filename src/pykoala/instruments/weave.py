@@ -51,12 +51,13 @@ def weave_rss(filename):
     info['fib_dec'] = fibtable['FIBREDEC'] << u.deg
     
     return RSS(intensity=intensity,
-           wavelength=wavelength,
-           variance=variance,
-           log=log,
-           #header=header,
-           info=info,
-           wcs=wcs
+               wavelength=wavelength,
+               variance=variance,
+               fibre_diameter = 2.6 << u.arcsec,
+               log=log,
+               #header=header,
+               info=info,
+               wcs=wcs
            )
 
 
