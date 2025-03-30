@@ -973,31 +973,27 @@ class SkySubsCorrection(CorrectionBase):
         fig : :class:`matplotlib.figure.Figure`
             The figure object containing the plots.
         """
-        fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(10, 10),
-                                sharex=True, sharey=True)
+        
         if data_cont.intensity.ndim == 2:
             original_image = data_cont.intensity
             corr_image = data_cont_corrected.intensity
         elif data_cont.intensity.ndim == 3:
             original_image = data_cont.get_white_image()
+            data_unit = str(original_image.unit)
+            original_image = original_image
             corr_image = data_cont_corrected.get_white_image()
 
-        im_args = kwargs.get(
-            'im_args', dict(aspect='auto', interpolation='none',
-                            cmap='nipy_spectral',
-                            vmin=np.nanpercentile(original_image, 1),
-                            vmax=np.nanpercentile(original_image, 99))
-        )
+        norm = plt.Normalize(np.nanpercentile(original_image.value, 1),
+                             np.nanpercentile(original_image.value, 99))
+        fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(10, 5),
+                                constrained_layout=True,
+                                sharex=True, sharey=True)
 
-        ax = axs[0]
-        ax.set_title("Original")
-        ax.imshow(original_image, **im_args)
+        plot_image(fig, axs[0], data=original_image, norm=norm)
+        plot_image(fig, axs[1], data=corr_image, norm=norm)
+        axs[0].set_title("Original")
+        axs[1].set_title("Sky emission subtracted")
 
-        ax = axs[1]
-        ax.set_title("Sky emission subtracted")
-        mappable = ax.imshow(corr_image, **im_args)
-        cax = ax.inset_axes((-1.2, -.1, 2.2, 0.02))
-        plt.colorbar(mappable, cax=cax, orientation="horizontal")
         if kwargs.get("show", False):
             plt.show()
         else:
@@ -1456,8 +1452,10 @@ class TelluricCorrection(CorrectionBase):
         # Copy input RSS for storage the changes implemented in the task
         spectra_container_out = spectra_container.copy()
         self.vprint("Applying telluric correction")
-        spectra_container_out.rss_intensity *= self.telluric_correction
-        spectra_container_out.rss_variance *= self.telluric_correction**2
+        spectra_container_out.rss_intensity = (spectra_container_out.rss_intensity
+                                               * self.telluric_correction)
+        spectra_container_out.rss_variance = (spectra_container_out.rss_variance
+                                              * self.telluric_correction**2)
         self.record_correction(spectra_container_out, status='applied')
         return spectra_container_out
 
