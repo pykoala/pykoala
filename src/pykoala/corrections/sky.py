@@ -1114,6 +1114,15 @@ class TelluricCorrection(CorrectionBase):
     def wavelength(self, value):
         self._wavelength = check_unit(value, u.angstrom)
 
+    @property
+    def airmass(self) -> float:
+        """Airmass at which the model has been created."""
+        return self._airmass
+    
+    @airmass.setter
+    def airmass(self, value):
+        self._airmass = value
+
     def __init__(self,
                 #  data_container=None,
                  telluric_correction,
@@ -1450,6 +1459,8 @@ class TelluricCorrection(CorrectionBase):
             return spectra_container
 
         # Copy input RSS for storage the changes implemented in the task
+        tell_correction = self.telluric_correction**(
+            spectra_container.info["airmass"] / self.airmass)
         spectra_container_out = spectra_container.copy()
         self.vprint("Applying telluric correction")
         spectra_container_out.rss_intensity = (spectra_container_out.rss_intensity
@@ -1495,6 +1506,11 @@ class TelluricCorrection(CorrectionBase):
             Extra arguments to be passed to :func:`numpy.savetxt`.
         """
         self.vprint(f"Saving telluric correction into file {filename}")
+        if "header" in kwargs:
+            kwargs["header"] = f"airmass+{self.airmass}/n" + kwargs["header"]
+        else:
+            kwargs["header"] = f"airmass+{self.airmass}/n"
+
         np.savetxt(filename, np.array(
             [self.wavelength, self.telluric_correction]).T, **kwargs)
 
