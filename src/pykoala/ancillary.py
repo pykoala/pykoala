@@ -9,6 +9,7 @@ in the current modular scheme.
 # =============================================================================
 # Basics packages
 # =============================================================================
+import os
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy import interpolate
@@ -715,12 +716,24 @@ lines = {
 
 def mask_lines(wave_array, width=30, lines=lines.values()):
     wave_array = check_unit(wave_array, u.AA)
-    width = check_unit(width, u.AA)
+    width = check_unit(width, wave_array.unit)
+    if width.size == 1:
+        width = width * np.ones(len(lines))
     mask = np.ones(wave_array.size, dtype=bool)
-    for line in lines:
+    for line, w in zip(lines, width):
         line = check_unit(line, u.AA)
-        mask[(wave_array < line + width) & (wave_array > line - width)] = False
+        mask[(wave_array < line + w) & (wave_array > line - w)] = False
     return mask
+
+def mask_telluric_lines(wave_array, width_clip=3 << u.AA):
+    model_file = os.path.join(os.path.dirname(__file__),
+                                      'input_data', 'sky_lines',
+                                      'telluric_lines.txt')
+    w_l_1, w_l_2 = np.loadtxt(model_file, unpack=True, usecols=(0, 1))
+    w_l_1 = w_l_1 << u.angstrom
+    w_l_2 = w_l_2 << u.angstrom
+    return mask_lines(wave_array, width= np.clip(w_l_2 - w_l_1, a_min=width_clip, a_max=None),
+                      lines=(w_l_1 + w_l_2) / 2)
 
 # =============================================================================
 # Mr Krtxo \(ﾟ▽ﾟ)/
