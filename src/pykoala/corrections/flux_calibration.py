@@ -476,8 +476,8 @@ class FluxCalibration(CorrectionBase):
         ax.grid(visible=True, which='both')
         ax.legend()
         ax = axs[0, 1]
-        ax.plot(wavelength, star_flux, '-', lw=2, label=f'Extracted stellar flux ')
-        ax.plot(wavelength, residuals, '-', lw=2, label=f'Mean model residuals')
+        ax.plot(wavelength, star_flux, '-', lw=0.7, label=f'Extracted stellar flux ')
+        ax.plot(wavelength, residuals, '-', lw=0.7, label=f'Mean model residuals')
         ax.legend()
         ax.set_ylabel(f'Flux ({star_flux.unit})')
         ax.set_xlabel('Wavelength')
@@ -647,19 +647,19 @@ class FluxCalibration(CorrectionBase):
         final_response = check_unit(response(obs_wave.to_value("AA")),
                                     raw_response.unit)
         if plot:
-            fig, axs = plt.subplots(nrows=2, constrained_layout=True,
-                                    sharex=True)
+            fig, axs = plt.subplots(nrows=3, constrained_layout=True,
+                                    sharex=True, height_ratios=[3, 3, 1])
             ax = axs[0]
             ax.annotate('{}-deg polynomial fit'.format(pol_deg), xy=(0.05, 0.95),
                         xycoords='axes fraction', va='top', ha='left')
             ax.annotate(r'Median filter size: {}'.format(median_filter_n),
                         xy=(0.05, 0.80), xycoords='axes fraction',
                         va='top', ha='left')
-            ax.plot(obs_wave, obs_spectra / int_ref_spectra, '-', lw=2, label='Obs/Ref')
-            ax.plot(obs_wave, raw_response, '-', lw=2, label='Filtered')
+            ax.plot(obs_wave, obs_spectra / int_ref_spectra, '-', lw=0.7, label='Obs/Ref')
+            ax.plot(obs_wave, raw_response, '-', lw=0.7, label='Filtered')
             ax.plot(obs_wave, final_response, label='Final response')
             ax.set_xlabel('Wavelength')
-            ax.set_ylabel(r'$R(\lambda)$' + f" ({raw_response.unit})")
+            ax.set_ylabel(r'$R(\lambda)$' + f" ({raw_response.unit})", fontsize="small")
             ax.legend()
             ax.set_ylim(final_response.min()*0.8, final_response.max()*1.2)
 
@@ -668,7 +668,6 @@ class FluxCalibration(CorrectionBase):
             ax.plot(obs_wave, obs_spectra / raw_response, '-', lw=0.7, label='Filtered')
             ax.plot(obs_wave, obs_spectra / final_response, lw=1,
                     label='Final response')
-            ax.set_xlabel('Wavelength')
             ax.set_ylabel(r'$F$')
             ax.set_ylim(int_ref_spectra.min()*0.8, int_ref_spectra.max()*1.2)
             ax.set_xlim(obs_wave.min(), obs_wave.max())
@@ -677,6 +676,15 @@ class FluxCalibration(CorrectionBase):
             twax = ax.twinx()
             twax.plot(obs_wave, weights, label='Relative weights', color='fuchsia',
                       alpha=0.7, lw=0.7)
+            ax = axs[2]
+            ax.axhline(1, ls="--", color="r", alpha=0.5)
+            ax.axhline(1.1, ls=":", color="r", alpha=0.5)
+            ax.axhline(0.9, ls=":", color="r", alpha=0.5)
+            ax.plot(obs_wave, obs_spectra / final_response / int_ref_spectra,
+                    lw=0.7, c='k')
+            ax.set_ylim(0.7, 1.3)
+            ax.set_ylabel("Obs / Ref")
+            ax.set_xlabel('Wavelength')
             # twax.legend()
             plt.close(fig)
             return response_wrapper, fig
