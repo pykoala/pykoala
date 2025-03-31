@@ -1127,6 +1127,7 @@ class TelluricCorrection(CorrectionBase):
                 #  data_container=None,
                  telluric_correction,
                  wavelength,
+                 airmass,
                  telluric_correction_file="unknown",
                 #  n_fibres=10,
                 #  frac=0.5,
@@ -1155,6 +1156,7 @@ class TelluricCorrection(CorrectionBase):
 
         self.telluric_correction = telluric_correction
         self.wavelength = wavelength
+        self.airmass = airmass
         self.telluric_correction_file = telluric_correction_file
 
     @classmethod
@@ -1176,9 +1178,16 @@ class TelluricCorrection(CorrectionBase):
         vprint("Initialising telluric correction from text file")
         wavelength, telluric_correction = np.loadtxt(path, unpack=True,
                                                      usecols=(0, 1))
+        with open(path, "r") as f:
+            line = f.readline()
+            if "airmass" in line:
+                airmass = float(line.split("=")[1])
+            else:
+                raise ValueError("Telluric correction file must include"
+                                 " airmas=value in the first line")
         return cls(telluric_correction=telluric_correction,
                    wavelength=wavelength,
-                   telluric_correction_file=path)
+                   telluric_correction_file=path, airmass=airmass)
 
     @classmethod
     def from_smoothed_spectra_container(cls, spectra_container,
