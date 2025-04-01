@@ -113,12 +113,9 @@ def plot_image(fig, ax, data,
         Figure where the colour map will be drawn.
     ax : mpl.Axes
         Axes where the colour map will be drawn.
-    cblabel : str
-        Label of the colorbar
     data : ndarray
         2D array to be represented.
     cmap : str or mpl.colors.Norm
-    norm : mpl.colors.Norm
     xlabel: str, optional
         Label of x axis.
     x : ndarray, optional
@@ -129,7 +126,9 @@ def plot_image(fig, ax, data,
         Values along y axes (defaults to pixel number)
     cbax: mpl.Axes
         Axes where the colour bar will be drawn.
-
+    norm : mpl.colors.Norm
+    cblabel : str
+        Label of the colorbar
     Returns
     -------
     im : mpl.AxesImage
