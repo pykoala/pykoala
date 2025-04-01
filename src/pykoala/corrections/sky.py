@@ -1512,9 +1512,9 @@ class TelluricCorrection(CorrectionBase):
         """
         self.vprint(f"Saving telluric correction into file {filename}")
         if "header" in kwargs:
-            kwargs["header"] = f"airmass+{self.airmass}/n" + kwargs["header"]
+            kwargs["header"] = f"airmass={self.airmass}\n" + kwargs["header"]
         else:
-            kwargs["header"] = f"airmass+{self.airmass}/n"
+            kwargs["header"] = f"airmass={self.airmass}\n"
 
         np.savetxt(filename, np.array(
             [self.wavelength, self.telluric_correction]).T, **kwargs)
