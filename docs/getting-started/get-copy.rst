@@ -8,7 +8,7 @@ To get PyKOALA, clone the repository, using git:
 
 ::
     
-    git clone https://github.com/pykoala/koala.git
+    git clone https://github.com/pykoala/pykoala.git
 
 
 Setting username and email address
@@ -18,7 +18,7 @@ Before pushing changes, make sure your name and email address are set as follows
 
 ::
 
-    cd koala
+    cd pykoala
     git config --global user.name "Ben Kenobi"
     git config --global user.email "obi.wan@mq.edu.au"
 
@@ -31,7 +31,7 @@ Getting updates from your fork
 
 If the main repository has been updated, you may want to get those in your local version of the code. If so, your version will be in on of these cases:
 
-- If you have not made changes in your local version, enter in the ``koala`` directory and use:
+- If you have not made changes in your local version, enter in the ``pykoala`` directory and use:
 
 ::
 
