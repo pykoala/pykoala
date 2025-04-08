@@ -4,14 +4,8 @@
 
 ---
 
-**PyKOALA** is a Python package to reduce KOALA+AAOmega integral field spectroscopy (IFS) data creating a data cube. It produces full calibrated (wavelength, flux and astrometry) data cubes ready for science.
-
-[KOALA][koala_website], the Kilofibre Optical AAT Lenslet Array, is a wide-field, high efficiency, integral field unit used by the 
-AAOmega spectrograph on the 3.9m AAT ([Anglo-Australian Telescope][aat_website]) at Siding Spring Observatory. **PyKOALA** is the forthcoming data reduction pipeline for creating science-ready 3D data cubes using Raw Stacked Spectra (RSS) images created with [2dfdr][2dfdr_website].
-
-[koala_website]: https://aat.anu.edu.au/science/instruments/current/koala/overview
-[aat_website]: https://aat.anu.edu.au/about-us/AAT
-[2dfdr_website]: https://aat.anu.edu.au/science/instruments/current/AAOmega/reduction
+PyKOALA is an innovative Python-based library designed to provide a robust and flexible framework for Integral Field Spectroscopy (IFS) data reduction.
+By addressing the complexities of transforming raw measurements into scientifically valuable spectra, PyKOALA simplifies the data reduction pipeline while remaining instrument-agnostic and user-friendly.
 
 ---
 ## Status
@@ -25,24 +19,16 @@ AAOmega spectrograph on the 3.9m AAT ([Anglo-Australian Telescope][aat_website])
 ---
 ## Documentation
 
-**PyKOALA** full documentation can be found here: https://pykoala.readthedocs.io/en/latest/index.html
+**PyKOALA** online documentation can be found here: https://pykoala.readthedocs.io/en/latest/index.html
 
 ---
-## Download
+## Installation
 
-**PyKOALA** can be obtained by cloning the repository, using git:
-
-```bash
-git clone https://github.com/pykoala/pykoala.git
-```
-
-## Installation (recommended)
-
-We recommend the use of Python environments for the installation of **PyKOALA**. First, from the terminal enter in the downloaded **PyKOALA** package and create the Python environment:
+### Creating a virtual environment (recommended)
+To avoid dependency conflicts, we recommend the use of virtual environments for the installation of **PyKOALA**. For example, a simple way to setup the python environment is by using the [`venv`](https://docs.python.org/3/library/venv.html) module:
 
 ```bash
-cd pykoala
-python3 -m venv venv_koala
+python3 -m venv venv_pykoala # common conventions are .venv or venv
 ```
 
 To activate the environment, use:
@@ -51,28 +37,42 @@ To activate the environment, use:
 source venv_koala/bin/activate
 ```
 
-then install all required packages with:
-
-```bash
-pip install -r requirements.txt
-pip install .
-```
-
-The second command will also install **PyKOALA** in the virtual environment. Once you are finished with your **PyKOALA** session, use:
+To stop using the environment:
 
 ```bash
 deactivate
 ```
 
-to deactivate the Python environment.
 
-For more information about installation and usage of Python virtual environment, check the [documentation](https://pykoala.readthedocs.io/en/latest/getting-started/virtual-environment.html) or the oficial [Python documentation](https://docs.python.org/3/library/venv.html).
+### Installing from pypi
+
+```bash
+python3 -m pip install pykoala-ifs
+```
+
+### Installing from the source repository
+
+**PyKOALA** can be obtained by cloning this repository using:
+
+```bash
+git clone https://github.com/pykoala/pykoala.git
+```
+
+Then users can install all required packages with:
+
+```bash
+cd path/to/pykoala
+python3 -m pip install -r requirements.txt  # Install the dependencies
+python3 -m pip install .  # Install pykoala
+```
+
+For more further instructions about the installation and virtual environtment setup, check the [quick-start documentation](https://pykoala.readthedocs.io/en/latest/getting-started/index.html#quickstart).
 
 
 ## Tutorials
 ---
 
-See the list of available [tutorials](https://github.com/pykoala/pykoala-tutorials)
+We provide a set of introductory tutorials and test data in a separate [repository](https://github.com/pykoala/pykoala-tutorials).
 
 ## License and Acknowledgements
 
