@@ -1,0 +1,18 @@
+digraph "classes" {
+/* rankdir=BT */
+rankdir=RL
+charset="utf-8"
+"pykoala.data_container.DataMask" [color="aliceblue", fontcolor="black", label=<DataMask>, shape="ellipse", style="filled"];
+"pykoala.data_container.DataContainerHistory" [color="aliceblue", fontcolor="black", label=<DataContainerHistory>, shape="ellipse", style="filled"];
+"pykoala.data_container.Cube" [color="aliceblue", fontcolor="black", label=<Cube>, shape="record", style="filled"];
+"pykoala.data_container.DataContainer" [color="aliceblue", fontcolor="black", label=<DataContainer>, shape="record", style="filled"];
+"pykoala.data_container.RSS" [color="aliceblue", fontcolor="black", label=<RSS>, shape="record", style="filled"];
+{"pykoala.data_container.DataContainerHistory"; "pykoala.data_container.DataMask"} -> "pykoala.data_container.DataContainer"  [arrowhead="empty", arrowtail="none", style="dotted"];
+/*"pykoala.data_container.DataContainerHistory" -> "pykoala.data_container.DataContainer"  [arrowhead="empty", arrowtail="none"];*/
+/*"pykoala.data_container.DataMask" -> "pykoala.data_container.DataContainer"  [arrowhead="empty", arrowtail="none"];*/
+"pykoala.data_container.SpectraContainer" [color="aliceblue", fontcolor="black", label=<SpectraContainer>, shape="record", style="filled"];
+"pykoala.data_container.Cube" -> "pykoala.data_container.SpectraContainer" [arrowhead="empty", arrowtail="none"];
+"pykoala.data_container.RSS" -> "pykoala.data_container.SpectraContainer" [arrowhead="empty", arrowtail="none"];
+"pykoala.data_container.SpectraContainer" -> "pykoala.data_container.DataContainer" [arrowhead="empty", arrowtail="none"];
+
+}
