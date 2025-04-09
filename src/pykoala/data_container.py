@@ -934,7 +934,8 @@ class RSS(SpectraContainer):
                       fib_dec="Fibre DEC position (deg)"))
         info_header = fits.Header()
         info_header["NAME    "] = self.info.get("name", "N/A"), "Object name"
-        info_header["EXPTIME "] = self.info["exptime"].to_value("s"), "exposure time (s)"
+        info_header["EXPTIME "] = self.info.get("exptime", 0 << u.second).to_value(
+            "second"), "exposure time (s)"
         info_header["AIRMASS "] = self.info["airmass"], "airmass at centre of FoV"
         info_header["FIBDIAM "] = self.fibre_diameter.to_value("arcsec"), "fibre diameter size (arcsec)"
 
@@ -1369,7 +1370,8 @@ class Cube(SpectraContainer):
         # Fill the INFO extension
         info_header = fits.Header()
         info_header["NAME    "] = self.info.get("name", "N/A"), "Object name"
-        info_header["EXPTIME "] = self.info.get("exptime"), "exposure time (s)"
+        info_header["EXPTIME "] = self.info.get("exptime", 0 << u.second).to_value(
+            "second"), "exposure time (s)"
         info_header["AIRMASS "] = self.info.get("airmass"), "airmass at centre of FoV"
         hdul.append(fits.BinTableHDU(name="INFO", data=None, header=info_header))
 
