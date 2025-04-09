@@ -1370,6 +1370,7 @@ class Cube(SpectraContainer):
         info_header = fits.Header()
         info_header["NAME    "] = self.info.get("name", "N/A"), "Object name"
         info_header["EXPTIME "] = self.info.get("exptime"), "exposure time (s)"
+        info_header["AIRMASS "] = self.info.get("airmass"), "airmass at centre of FoV"
         hdul.append(fits.BinTableHDU(name="INFO", data=None, header=info_header))
 
         # Save the HDUL into a FITS file.
