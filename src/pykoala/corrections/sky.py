@@ -139,7 +139,7 @@ class BackgroundEstimator:
         m = (I_hi - I_low) / (flux_hi - flux_low)
         b = I_low - m * flux_low
 
-        sky_flux_candidate = np.arange(0, flux_cut_hi, .01*np.min(flux))
+        sky_flux_candidate = np.linspace(0, flux_cut_hi, int(100*flux_cut_hi/flux_cut_low))
         sky_filtered = m[np.newaxis, :] * \
             sky_flux_candidate[:, np.newaxis] + b[np.newaxis, :]
         x = np.nancumsum(sky_filtered, axis=1)
@@ -1591,17 +1591,18 @@ class WaveletFilter(object):
         Relative wavelenght calibration. Offset, in pixels, with respect to the sky (from weighted cross-correlation).
     '''
 
-    def __init__(self, rss: RSS):
+    def __init__(self, rss: RSS, h=None):
 
         # 1. Estimate the FWHM of emission lines from the autocorrelation of the median (~ sky) spectrum.
+        
+        if h is None:
+            x = np.nanmedian(rss.intensity, axis=0)  # median ~ sky spectrum
+            x -= np.nanmean(x)
+            x = scipy.signal.correlate(x, x, mode='same')
+            h = (np.count_nonzero(x > 0.5*np.nanmax(x)) + 1) // 2
 
-        x = np.nanmedian(rss.intensity, axis=0)  # median ~ sky spectrum
-        x -= np.nanmean(x)
-        x = scipy.signal.correlate(x, x, mode='same')
-        h = (np.count_nonzero(x > 0.5*np.nanmax(x)) + 1) // 2
-        # h = 0
         self.scale = 2*h + 1
-        vprint(f'> Wavelet filter scale: {self.scale} pixels')
+        vprint(f'> Wavelet --filter scale: {self.scale} pixels')
 
         # 2. Apply a (mexican top hat) wavelet filter to detect features on that scale (i.e. filter out the continuum).
 
@@ -1667,8 +1668,8 @@ class WaveletFilter(object):
             self.filtered, x[np.newaxis, ::-1], mode='same', axes=1)[:, mid-s:mid+s+1]
         idx = np.arange(x.shape[1])
         weight = np.where(x > 0, x, 0)
-        self.fibre_offset = np.nansum(
-            (idx - s)[np.newaxis, :] * weight, axis=1) / np.nansum(weight, axis=1)
+        self.fibre_offset = np.nansum((idx - s)[np.newaxis, :] * weight, axis=1
+                                     ) / np.nansum(weight, axis=1) << u.pixel
 
     def qc_plots(self, show=False, save_as=None):
         '''
@@ -1700,7 +1701,10 @@ class WaveletFilter(object):
             fig.savefig(save_as)
 
     def get_throughput_object(self):
-        return Throughput(throughput_data=np.repeat(self.fibre_throughput[:, np.newaxis], self.wavelength.size + 3*self.scale, axis=1))
+        return Throughput(
+            throughput_data=np.repeat(self.fibre_throughput[:, np.newaxis], self.wavelength.size + 3*self.scale, axis=1),
+            throughput_error=np.full(self.fibre_throughput.shape+(self.wavelength.size + 3*self.scale,), np.nan),
+        )
 
     def get_wavelength_offset(self):
         return WavelengthOffset(offset_data=np.repeat(self.fibre_offset[:, np.newaxis], self.wavelength.size + 3*self.scale, axis=1))

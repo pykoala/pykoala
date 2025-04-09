@@ -163,7 +163,7 @@ class WavelengthCorrection(CorrectionBase):
 
         rss_out = rss.copy()
         self.vprint("Applying correction to input RSS")
-        if self.offset.offset_data.unit is u.pixel:
+        if self.offset.offset_data.unit.is_equivalent(u.pixel):
             x = np.arange(rss.wavelength.size) << u.pixel
         elif self.offset.offset_data.unit.is_equivalent(u.AA):
             x = rss.wavelength.to(self.offset.offset_data.unit)
@@ -325,6 +325,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
             path = os.path.join(os.path.dirname(__file__), '..',
                      'input_data', 'spectrophotometric_stars',
                      'sun_mod_001.fits')
+        vprint(f'Solar spectrum from {path}')
         with fits.open(path) as hdul:
             sun_wavelength = hdul[extension].data['WAVELENGTH'] << u.AA
             sun_wavelength = vac_to_air(sun_wavelength)
