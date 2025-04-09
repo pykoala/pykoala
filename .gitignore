@@ -3,6 +3,7 @@
 venv_koala/
 # Tutorials stuff
 tutorials/*.fits*
+tutorials/corrections/*.fits*
 tutorials/products/*.fits*
 tutorials/data/weave
 
