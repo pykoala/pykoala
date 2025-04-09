@@ -32,7 +32,7 @@ from pykoala.corrections.correction import CorrectionBase
 from pykoala.corrections.throughput import Throughput
 from pykoala.corrections.wavelength import WavelengthOffset
 from pykoala.data_container import DataContainer, RSS
-from pykoala.ancillary import check_unit
+from pykoala.ancillary import check_unit, symmetric_background
 
 
 #TODO: Move to a math module
@@ -48,7 +48,7 @@ class BackgroundEstimator:
     mad(data, axis=0)
         Estimate the background and dispersion using the Median Absolute Deviation (MAD) method.
 
-    mode(data, axis=0, n_bins=None, bin_range=None)
+    mode(data, axis=None)
         Estimate the background and dispersion using the mode of the data distribution.
     """
 
@@ -80,7 +80,8 @@ class BackgroundEstimator:
     @staticmethod
     def mad(data, axis=0):
         """
-        Estimate the background and dispersion using the Median Absolute Deviation (MAD) method.
+        Estimate the background from the median and the dispersion from
+        the Median Absolute Deviation (MAD) along the given axis.
 
         Parameters
         ----------
@@ -102,9 +103,34 @@ class BackgroundEstimator:
         background_sigma = 1.4826 * mad
         return background, background_sigma
 
+    @staticmethod
+    def biweight(data, axis=0):
+        """
+        Estimate the background and dispersion using the biweight method.
+
+        Parameters
+        ----------
+        data : np.ndarray
+            Input data from which to compute the background and dispersion.
+        axis : int, optional
+            Axis along which to compute the biweight location and scale.
+            Default is 0.
+
+        Returns
+        -------
+        background : np.ndarray
+            Computed background (location) of the data.
+        background_sigma : np.ndarray
+            Dispersion (scale) of the data.
+        """
+        background = stats.biweight_location(data, axis=axis)
+        background_sigma = stats.biweight_scale(data, axis=axis)
+        return background, background_sigma
+
+    @staticmethod
     def fit(data, axis, wavelet):
         """
-        Background estimator from linear fit (Work in progress).
+        Background estimator from linear fit (Work in progress: UNSTABLE).
 
         Parameters
         ----------
@@ -177,29 +203,35 @@ class BackgroundEstimator:
         return sky_intensity, np.nan + sky_intensity
 
     @staticmethod
-    def mode(data, axis=0, n_bins=None, bin_range=None):
+    def mode(rss_intensity, axis=None):
         """
-        Estimate the background and dispersion using the mode of the data distribution.
+        Estimate the background and dispersion using the mode.
+        WARNING: assumes data is RSS-sorted (ignores `axis`).
+        TODO: honor `axis`
 
         Parameters
         ----------
-        data : np.ndarray
-            The input data array from which to compute the background and dispersion.
-        axis : int, optional
-            The axis along which to compute the mode. Default is 0.
-        n_bins : int, optional
-            The number of bins to use for the histogram. Default is None.
-        bin_range : tuple of float, optional
-            The range of values for the histogram bins. Default is None.
+        rss_intensity : np.ndarray
+            The input array (n_fibres x n_wavelength) from which to
+            compute the background and dispersion.
+            WARNING: assumes data is RSS-sorted (ignores `axis`).
 
-        Raises
-        ------
-        NotImplementedError
-            This method is not yet implemented.
+        Returns
+        -------
+        background : np.ndarray
+            The computed background sky.
+        background_sigma : np.ndarray
+            Scaled MAD of the data behind the mode.
         """
-        # TODO: Implement mode estimation method
-        raise NotImplementedError("Sorry, not implemented :(")
+        mode = np.empty_like(rss_intensity[0])
+        sigma = np.empty_like(mode)
+        for wavelength_index in range(mode.size):
+            fibre_flux = rss_intensity[:, wavelength_index]
+            mode[wavelength_index], dummy = symmetric_background(fibre_flux)
+            sigma[wavelength_index] = 1.4826 * np.nanmedian(
+                mode[wavelength_index] - fibre_flux[fibre_flux < mode[wavelength_index]])
 
+        return mode, sigma
 
 #TODO : Move to a math module
 # =============================================================================
@@ -894,14 +926,9 @@ class SkyFromObject(SkyModel):
             raise NameError(
                 f"Input background estimator {bckgr_estimator} does not exist")
 
-        data = self.dc.intensity.copy()
-
-        if data.ndim == 3:
-            bckgr_params["axis"] = bckgr_params.get("axis", (1, 2))
-            dims_to_expand = (1, 2)
-        elif data.ndim == 2:
-            bckgr_params["axis"] = bckgr_params.get("axis", 0)
-            dims_to_expand = (0)
+        data = self.dc.rss_intensity.copy()
+        bckgr_params["axis"] = bckgr_params.get("axis", 0)
+        dims_to_expand = (0)
 
         if source_mask_nsigma is not None:
             vprint("Pre-estimating background using all data")
