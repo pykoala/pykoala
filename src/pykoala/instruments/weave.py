@@ -31,6 +31,7 @@ def weave_rss(filename):
         wavelength = wcs.spectral.array_index_to_world(pixels)
         intensity = hdu[3].data << u.adu
         variance = np.where(hdu[4].data > 0, 1/hdu[4].data, np.nan) << u.adu**2
+        sky = np.nanmedian(hdu[3].data - hdu[1].data, axis=0) << u.adu
         fibtable = Table.read(hdu['FIBTABLE'])
 
     log = DataContainerHistory()
@@ -49,6 +50,7 @@ def weave_rss(filename):
     info['airmass'] = header['AIRMASS']  # Airmass
     info['fib_ra'] = fibtable['FIBRERA'] << u.deg
     info['fib_dec'] = fibtable['FIBREDEC'] << u.deg
+    info['sky_CASU'] = sky
     
     return RSS(intensity=intensity,
                wavelength=wavelength,
