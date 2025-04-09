@@ -216,6 +216,7 @@ def update_wcs_coords(wcs, ra_dec_val=None, ra_dec_offset=None):
 # ----------------------------------------------------------------------------------------------------------------------
 # Arithmetic operations
 # ----------------------------------------------------------------------------------------------------------------------
+
 def med_abs_dev(x, axis=0):
     """Compute the Median Absolute Deviation (MAD) from an input array.
     
@@ -273,10 +274,124 @@ def running_mean(x, n_window):
     -------
     running_mean_x: (n - n_window,) np.ndarray
         Running mean array.
-
     """
     cumsum = np.cumsum(np.insert(x, 0, 0))
     return (cumsum[n_window:] - cumsum[:-n_window]) / n_window
+
+def symmetric_background(x, weights=None, fig_name=None):
+    """
+    This function calculates the mode of an array,
+    assuming that the data can be decomposed as:
+    signal plus uniform background plus noise with a symmetric
+    probability distribution.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Data.
+    weigths : np.ndarray (None)
+        Statistical weight of each point (defaults to None; equal weights).
+    fig_name : str (None)
+        Name of the figure to be plotted, if desired.
+
+    Returns
+    -------
+    mode : x.dtype
+        Mode of the input array.
+    threshold : x.dtype
+        Optimal separation between signal and noise background.
+    """
+    if weights is None:
+        weights = np.ones_like(x)
+
+    valid = np.where(np.isfinite(x) & np.isfinite(weights))
+    n_valid = valid[0].size
+    if not n_valid > 0:
+        return np.nan, np.nan
+
+    sorted_by_x = np.argsort(x[valid].flatten())
+    sorted_x = x[valid].flatten()[sorted_by_x]
+    sorted_weight = weights[valid].flatten()[sorted_by_x]
+
+    cumulative_mass = np.cumsum(sorted_weight)
+    total_mass = cumulative_mass[-1]
+    sorted_weight /= total_mass
+    cumulative_mass /= total_mass
+    
+    
+    nbins = int(np.sqrt(4*n_valid + 1) - 1)
+    m_left = np.linspace(0, 0.5, nbins)[1:-1]
+    m_mid = 2 * m_left
+    m_right = 0.5 + m_left
+
+    x_left = np.interp(m_left, cumulative_mass, sorted_x)
+    x_mid = np.interp(m_mid, cumulative_mass, sorted_x)
+    x_right = np.interp(m_right, cumulative_mass, sorted_x)
+
+    h = np.fmin(x_right-x_mid, x_mid-x_left)
+    valid = np.where(h > 0)
+    if not valid[0].size > 0:
+        return np.nan, np.nan
+    x_mid = x_mid[valid]
+    h = h[valid]
+    rho = (np.interp(x_mid+h, sorted_x, cumulative_mass) - np.interp(x_mid-h, sorted_x, cumulative_mass)) /2/h
+
+    rho_threshold = np.nanpercentile(rho, 100*(1 - 1/np.sqrt(nbins)))
+    peak_region = x_mid[rho > rho_threshold]
+    index_min = np.searchsorted(sorted_x, np.min(peak_region))
+    index_max = np.searchsorted(sorted_x, np.max(peak_region))
+    index_mode = (index_min+index_max) // 2
+    mode = sorted_x[index_mode]
+    m_mode = cumulative_mass[index_mode]
+
+    rho_bg = np.fmin(rho, np.interp(x_mid, (2*mode - x_mid)[::-1], rho[::-1], left=0, right=0))
+    if m_mode <= 0.5:
+        total_bg = 2 * m_mode
+        threshold = sorted_x[np.clip(int(n_valid * total_bg), 0, n_valid-1)]
+        contamination = np.interp(2*mode-threshold, sorted_x, cumulative_mass)
+    else:
+        total_bg = 2 * (1 - m_mode)
+        threshold = sorted_x[np.clip(int(n_valid * (1-total_bg)), 0, n_valid-1)]
+        contamination = 1 - np.interp(2*mode-threshold, sorted_x, cumulative_mass)
+
+    if fig_name is not None:
+        plt.close(fig_name)
+        fig = plt.figure(fig_name, figsize=(8, 5))
+        axes = fig.subplots(nrows=1, ncols=1, squeeze=False,
+                            sharex='col', sharey='row',
+                            gridspec_kw={'hspace': 0, 'wspace': 0},
+                           )
+
+        ax = axes[0, 0]
+        ax.set_ylabel('probability density')
+        #ax.set_yscale('log')
+        ax.plot(x_mid, rho-rho_bg, 'b-', alpha=.5, label='p(signal)')
+        ax.plot(x_mid, rho_bg, 'r-', alpha=.5, label='p(background)')
+        ax.plot(x_mid, rho, 'k-', alpha=.5, label='total')
+
+
+        ax.set_xlabel('value')
+        L = 5 * np.abs(threshold - mode)
+        vmin = np.max([mode - L, x_mid[0]])
+        vmax = np.min([mode + L, x_mid[-1]])
+        ax.set_xlim(vmin, vmax)
+
+        for ax in axes.flatten():
+            ax.tick_params(which='both', bottom=True, top=True, left=True, right=True)
+            ax.tick_params(which='major', direction='inout', length=8, grid_alpha=.3)
+            ax.tick_params(which='minor', direction='in', length=2, grid_alpha=.1)
+            ax.grid(True, which='both')
+            ax.axvspan(sorted_x[index_min], sorted_x[index_max], color='k', alpha=.1)
+            ax.axvline(mode, c='k', ls=':', label=f'background = {mode:.4g}')
+            ax.axvline(threshold, c='b', ls='-.', label=f'signal threshold = {threshold:.4g}')
+            ax.axvline(2*mode - threshold, c='r', ls='-.', alpha=.5, label=f'contamination = {100*contamination/(1-total_bg):.2f}%')
+            ax.legend()
+
+        fig.suptitle(fig_name)
+        fig.set_tight_layout(True)
+        plt.show()
+        
+    return mode, threshold
 
 def parabolic_maximum(x, f):
     """Find the maximum by fitting a parabolic function to three points.
