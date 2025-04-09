@@ -7,7 +7,7 @@ from astropy import units as u
 from pykoala.instruments.mock import mock_rss
 from pykoala.corrections.atmospheric_corrections import AtmosphericExtCorrection
 
-class TestAstrometry(unittest.TestCase):
+class TestAtmExtCorr(unittest.TestCase):
 
     @classmethod
     def setUpClass(self):
@@ -18,18 +18,21 @@ class TestAstrometry(unittest.TestCase):
                                              "source_dec" :45 << u.deg})
   
     def test_from_file(self):
-        # Using a dummy null extinction curve
-        np.savetxt("extinction_curve_model.dat",
+        # Using a dummy null extinction curve of 2.5 magnitudes per airmass
+        np.savetxt("./extinction_curve_model.dat",
                    np.array([self.rss.wavelength.to_value("AA"),
-                             2.5 * np.ones(self.rss.wavelength.size, dtype=float)]))
+                             2.5 * np.ones(self.rss.wavelength.size, dtype=float)]).T)
         correction = AtmosphericExtCorrection.from_text_file(
-            path="extinction_curve_model.dat")        
-        self.assertTrue(
-            np.alltrue(correction.extinction(self.rss.wavelength) == 1.0))
+            path="./extinction_curve_model.dat")        
+        extinction_array = correction.extinction(self.rss.wavelength, airmass=1.0)
+        self.assertTrue(np.alltrue(extinction_array == 10.0))
 
-        os.unlink("extinction_curve_model.dat")
+        os.unlink("./extinction_curve_model.dat")
 
     def test_apply(self):
         # Using the default model
         correction = AtmosphericExtCorrection.from_text_file()
         correction.apply(self.rss)
+
+if __name__ == "__main__":
+    unittest.main()
