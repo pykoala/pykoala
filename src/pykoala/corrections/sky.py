@@ -1149,6 +1149,10 @@ class TelluricCorrection(CorrectionBase):
 
         self.telluric_correction = telluric_correction
         self.wavelength = wavelength
+        if self.telluric_correction.size != self.wavelength.size:
+            raise ValueError("Size of telluric correction and input wavelength"
+                             " vector are not compatible: "
+                             f"{self.telluric_correction.size}, {self.wavelength.size}")
         self.airmass = airmass
         self.telluric_correction_file = telluric_correction_file
 
@@ -1457,21 +1461,24 @@ class TelluricCorrection(CorrectionBase):
         if not spectra_container.wavelength.size == self.wavelength.size or not np.allclose(
             spectra_container.wavelength, self.wavelength, equal_nan=True):
             self.vprint("Interpolating correction to input wavelength")
-            self.interpolate_model(spectra_container.wavelength, update=update)
+            tell_correction = self.interpolate_model(
+                spectra_container.wavelength, update=update)
+        else:
+            tell_correction = self.telluric_correction
 
         if spectra_container.is_corrected(self.name):
             self.vprint("Data already calibrated")
             return spectra_container
 
         # Copy input RSS for storage the changes implemented in the task
-        tell_correction = self.telluric_correction**(
+        tell_correction = tell_correction**(
             spectra_container.info["airmass"] / self.airmass)
         spectra_container_out = spectra_container.copy()
         self.vprint("Applying telluric correction")
         spectra_container_out.rss_intensity = (spectra_container_out.rss_intensity
-                                               * self.telluric_correction)
+                                               * tell_correction)
         spectra_container_out.rss_variance = (spectra_container_out.rss_variance
-                                              * self.telluric_correction**2)
+                                              * tell_correction**2)
         self.record_correction(spectra_container_out, status='applied')
         return spectra_container_out
 
@@ -1492,10 +1499,11 @@ class TelluricCorrection(CorrectionBase):
             The interpolated telluric correction.
         """
         telluric_correction = np.interp(
-            wavelength, self.wavelength, self.telluric_correction, left=1, right=1)
+            wavelength, self.wavelength, self.telluric_correction,
+            left=1, right=1)
 
         if update:
-            self.teluric_correction = telluric_correction
+            self.telluric_correction = telluric_correction
             self.wavelength = wavelength
         return telluric_correction
 
