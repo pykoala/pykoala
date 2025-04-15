@@ -84,9 +84,7 @@ class FluxCalibration(CorrectionBase):
     response_units : float
         Units of the response function, default is 1e16 (erg/s/cm^2/AA).
     """
-
     name = "FluxCalibration"
-    verbosity = True
 
     def __init__(self, response=None, response_wavelength=None,
                  response_file=None, **correction_kwargs):
