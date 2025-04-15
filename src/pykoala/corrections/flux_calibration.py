@@ -103,14 +103,13 @@ class FluxCalibration(CorrectionBase):
 
         self.response_wavelength = check_unit(response_wavelength, u.angstrom)
         self.response = check_unit(response)
-
         if response_err is not None:
             self.response_err = check_unit(response_err, self.response.unit)
         else:
             self.response_err = np.zeros_like(self.response_err)
 
         self.response_file = response_file
-    
+
     @classmethod
     def from_text_file(cls, path=None):
         """Load the resonse function from a text file.
@@ -130,7 +129,16 @@ class FluxCalibration(CorrectionBase):
         """
         if path is None:
             path = cls.default_extinction
-        wavelength, response = np.loadtxt(path, unpack=True)
+
+        data = np.loadtxt(path, dtype=float)
+        if data.shape[0] == 2:
+            wavelength, response = data
+            response_err = np.zeros_like(response)
+        elif data.shape[0] == 3:
+            wavelength, response, response_err = data
+        else:
+            raise ArithmeticError("Unrecognized number of columns")
+
         with open(path, "r") as f:
             _ = f.readline()
             line = f.readline()
@@ -141,6 +149,7 @@ class FluxCalibration(CorrectionBase):
             resp_unit = u.Unit(
                 response_header[response_idx[0] + 1 : response_idx[1]])
         return cls(response=response << resp_unit,
+                   response_err=response_err << resp_unit,
                    response_wavelength=wavelength << wave_unit,
                    response_file=path)
 
