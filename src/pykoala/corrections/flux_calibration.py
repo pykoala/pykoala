@@ -106,7 +106,7 @@ class FluxCalibration(CorrectionBase):
         if response_err is not None:
             self.response_err = check_unit(response_err, self.response.unit)
         else:
-            self.response_err = np.zeros_like(self.response_err)
+            self.response_err = np.zeros_like(self.response)
 
         self.response_file = response_file
 
