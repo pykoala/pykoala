@@ -17,11 +17,9 @@ from pykoala.data_container import SpectraContainer
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.ancillary import check_unit
 
-# =============================================================================
-# TODO: the names are very confusing. extinction_correction should be called
-# extinction law
+
 class AtmosphericExtCorrection(CorrectionBase):
-    """Atmospheric Extinction Correction.
+    r"""Atmospheric Extinction Correction.
 
     This module accounts for the brightness reduction caused due to the absorption of 
     photons by the atmosphere.
@@ -38,9 +36,9 @@ class AtmosphericExtCorrection(CorrectionBase):
 
     Attributes
     ----------
-    extinction_correction: np.ndarray, optional, default=None
+    extinction_curve: np.ndarray, optional, default=None
         Atmospheric extinction curve.
-    extinction_correction_wave: np.ndarray, optional, default=None
+    extinction_curve_wave: np.ndarray, optional, default=None
         Atmospheric extinction curve wavelength array.
     extinction_file: str
         Path to a text file containing a wavelength, and a extinction curve.
@@ -51,18 +49,18 @@ class AtmosphericExtCorrection(CorrectionBase):
     default_extinction = os.path.join(os.path.dirname(__file__), '..', 'input_data',
                                       'observatory_extinction', 'ssoextinct.dat')
     def __init__(self,
-                 extinction_correction=None,
-                 extinction_correction_wave=None,
-                 extinction_correction_file='unknown',
+                 extinction_curve=None,
+                 extinction_curve_wave=None,
+                 extinction_curve_file='unknown',
                  **correction_args):
         super().__init__(**correction_args)
         self.vprint("Initialising correction")
 
         # Initialise variables
-        self.extinction_correction = extinction_correction
-        self.extinction_correction_wave = check_unit(
-            extinction_correction_wave, u.angstrom)
-        self.extinction_correction_file = extinction_correction_file
+        self.extinction_curve = extinction_curve
+        self.extinction_curve_wave = check_unit(
+            extinction_curve_wave, u.angstrom)
+        self.extinction_curve_file = extinction_curve_file
 
     @classmethod
     def from_text_file(cls, path=None):
@@ -83,9 +81,9 @@ class AtmosphericExtCorrection(CorrectionBase):
         if path is None:
             path = cls.default_extinction
         wavelength, extinct = np.loadtxt(path, unpack=True)
-        return cls(extinction_correction=extinct,
-                   extinction_correction_wave=wavelength << u.angstrom,
-                   extinction_correction_file=path)
+        return cls(extinction_curve=extinct,
+                   extinction_curve_wave=wavelength << u.angstrom,
+                   extinction_curve_file=path)
 
     def extinction(self, wavelength : u.Quantity, airmass):
         """Compute the atmospheric extinction for a given airmass and wavelength.
@@ -102,10 +100,10 @@ class AtmosphericExtCorrection(CorrectionBase):
         extinction: np.ndarray
             Extinction at a given wavelength and airmass.
         """
-        extinction_correction = np.interp(wavelength,
-                                          self.extinction_correction_wave,
-                                          self.extinction_correction)
-        return 10**(0.4 * airmass * extinction_correction)
+        extinction_curve = np.interp(wavelength,
+                                        self.extinction_curve_wave,
+                                        self.extinction_curve)
+        return 10**(0.4 * airmass * extinction_curve)
 
     def apply(self, spectra_container, airmass=None):
         """Apply the Extinction Correction to a DataContainer.
@@ -126,12 +124,12 @@ class AtmosphericExtCorrection(CorrectionBase):
         if airmass is None:
             airmass = spectra_container.info['airmass']
 
-        if self.extinction_correction is not None:
+        if self.extinction_curve is not None:
             self.vprint("Applying model-based extinction correction to"
                         f"Data Container ({airmass:.2f} airmass)")
             extinction = self.extinction(spectra_container_out.wavelength, airmass)
             comment = ("Atm. extinction file :" + os.path.basename(
-                        self.extinction_correction_file)
+                        self.extinction_curve_file)
                         + f"|airmass={airmass:.2f}")
         else:
             raise AttributeError("Extinction correction not provided")
