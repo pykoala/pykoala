@@ -86,7 +86,7 @@ class FluxCalibration(CorrectionBase):
     """
     name = "FluxCalibration"
 
-    def __init__(self, response=None, response_wavelength=None,
+    def __init__(self, response=None, response_err=None, response_wavelength=None,
                  response_file=None, **correction_kwargs):
         """
         Initializes the FluxCalibration object.
@@ -103,6 +103,12 @@ class FluxCalibration(CorrectionBase):
 
         self.response_wavelength = check_unit(response_wavelength, u.angstrom)
         self.response = check_unit(response)
+
+        if response_err is not None:
+            self.response_err = check_unit(response_err, self.response.unit)
+        else:
+            self.response_err = np.zeros_like(self.response_err)
+
         self.response_file = response_file
     
     @classmethod
