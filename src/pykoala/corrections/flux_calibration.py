@@ -131,20 +131,20 @@ class FluxCalibration(CorrectionBase):
             path = cls.default_extinction
 
         data = np.loadtxt(path, dtype=float)
-        if data.shape[0] == 2:
-            wavelength, response = data
+        if data.shape[1] == 2:
+            wavelength, response = data.T
             response_err = np.zeros_like(response)
-        elif data.shape[0] == 3:
-            wavelength, response, response_err = data
+        elif data.shape[1] == 3:
+            wavelength, response, response_err = data.T
         else:
-            raise ArithmeticError("Unrecognized number of columns")
+            raise ArithmeticError(f"Unrecognized number of columns: {data.shape[1]}")
 
         with open(path, "r") as f:
             _ = f.readline()
             line = f.readline()
-            wave_header, response_header = line.split(",")
-            wave_idx = wave_header.find("("), wave_header.find(")")
-            response_idx = response_header.find("("), response_header.find(")")
+            wave_header, response_header, response_err_header = line.split(",")
+            wave_idx = wave_header.find("("), wave_header.rfind(")")
+            response_idx = response_header.find("("), response_header.rfind(")")
             wave_unit = u.Unit(wave_header[wave_idx[0] + 1 : wave_idx[1]])
             resp_unit = u.Unit(
                 response_header[response_idx[0] + 1 : response_idx[1]])
@@ -750,12 +750,13 @@ class FluxCalibration(CorrectionBase):
         """
         self.vprint(f"Saving response function at: {fname}")
         # TODO: Use a QTable and dump to FITS instead.
-        np.savetxt(fname, np.array([self.response_wavelength, self.response]).T,
+        np.savetxt(fname, np.array([self.response_wavelength, self.response,
+                                    self.response_err]).T,
                    header="Spectral Response curve\n"
                     + f" wavelength ({self.response_wavelength.unit}),"
-                    + f" R ({self.response.unit})"
+                    + f" R ({self.response.unit}), Rerr ({self.response_err.unit})" 
                    )
-        
+
     def apply(self, spectra_container):
         """
         Computes the response curve from observed and reference spectra.
