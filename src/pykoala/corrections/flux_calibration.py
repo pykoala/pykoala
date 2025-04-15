@@ -787,37 +787,19 @@ class FluxCalibration(CorrectionBase):
                     + f" R ({self.response.unit}), Rerr ({self.response_err.unit})" 
                    )
 
-    def apply(self, spectra_container):
+    def apply(self, spectra_container : SpectraContainer) -> SpectraContainer:
         """
-        Computes the response curve from observed and reference spectra.
+        Applies the response curve to a given SpectraContainer.
 
         Parameters
         ----------
-        wave : array-like
-            Wavelength array.
-        obs_spectra : array-like
-            Observed spectra.
-        ref_spectra : array-like
-            Reference spectra.
-        pol_deg : int, optional
-            Degree of the polynomial fit. If None, no polynomial fit is applied.
-        spline : bool, optional
-            If True, uses a spline fit.
-        spline_args : dict, optional
-            Additional arguments for the spline fit.
-        gauss_smooth_sigma : float, optional
-            Sigma for Gaussian smoothing.
-        plot : bool, optional
-            If True, plots the response curve.
-        mask_absorption : bool, optional
-            If True, masks absorption features.
+        spectra_container : :class:`SpectraContainer`
+            Target object to be corrected.
 
         Returns
         -------
-        response_curve : callable
-            Function representing the response curve.
-        response_fig : matplotlib.figure.Figure
-            Figure of the response curve plot, if plot is True.
+        spectra_container_out : :class:`SpectraContainer`
+            Corrected version of the input :class:`SpectraContainer`.
         """
         assert isinstance(spectra_container, SpectraContainer)
         spectra_container_out = spectra_container.copy()
@@ -828,18 +810,26 @@ class FluxCalibration(CorrectionBase):
         # Check that the model is sampled in the same wavelength grid
         if not spectra_container_out.wavelength.size == self.response_wavelength.size or not np.allclose(
             spectra_container_out.wavelength, self.response_wavelength, equal_nan=True):
-            response = self.interpolate_response(spectra_container_out.wavelength)
+            response, response_err = self.interpolate_response(
+                spectra_container_out.wavelength, update=False)
         else:
-            response = self.response
+            response, response_err = self.response, self.response_err
 
         # Apply the correction
-        spectra_container_out.rss_intensity = (spectra_container_out.rss_intensity
-                                           / response[np.newaxis, :])
-        spectra_container_out.rss_variance = (spectra_container_out.rss_variance
-                                           / response[np.newaxis, :]**2)
+        spectra_container_out.rss_intensity = (
+            spectra_container_out.rss_intensity / response[np.newaxis, :])
+        # Propagate the uncertainty of the flux calibration
+        resp_inv_snr = np.power(response_err / response, 2)
+
+        spectra_container_out.rss_variance = (
+            spectra_container_out.rss_intensity**2 * (
+            # Use the original inverse SNR and avoid 0 snr
+            1 / spectra_container.rss_snr.clip(0.01, None)**2
+            # Add the flux cal uncertainty
+            + resp_inv_snr
+            ))
         self.record_correction(spectra_container_out, status='applied',
                                units=str(self.response.unit))
         return spectra_container_out
-
 
 # Mr Krtxo \(ﾟ▽ﾟ)/
