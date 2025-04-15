@@ -225,43 +225,69 @@ class FluxCalibration(CorrectionBase):
                 cls(response=resp_curve(data[i].wavelength),
                     response_wavelength=data[i].wavelength))
         if combine:
-            master_flux_corr = FluxCalibration.master_flux_auto(flux_corrections)
+            master_flux_corr = cls.master_flux_auto(flux_corrections)
         else:
             master_flux_corr = None
         return flux_cal_results, flux_corrections, master_flux_corr
 
-    @staticmethod
-    def master_flux_auto(flux_calibration_corrections: list):
+    @classmethod
+    def master_flux_auto(cls, flux_calibration_corrections: list,
+                         combine_method="median"):
         """
-        Create a master response function from the results returned by FluxCalibration.auto.
+        Combine several :class:`FluxCalibration` into a master calibration.
 
         Parameters
         ----------
-        flux_cal_results : dict
-            Dictionary containing the results from the flux calibration process for each of the stars provided.
+        flux_calibration_corrections : list
+            List containing the :class:`FluxCalibration` to combine.
 
         Returns
         -------
-        master_resp : array-like
+        master_resp : :class:`FluxCalibration`
             The master response function.
         """
         vprint("Mastering response function")
-        spectral_response = []
         if len(flux_calibration_corrections) == 1:
             return flux_calibration_corrections[0]
 
-        for fcal_corr in flux_calibration_corrections[1:]:
-            # Update model with the star values
-            spectral_response.append(
-                fcal_corr.interpolate_response(
-                    flux_calibration_corrections[0].response_wavelength))
+        # Select a reference wavelength array
+        ref_wave = flux_calibration_corrections[0].response_wavelength
+        ref_resp_unit = flux_calibration_corrections[0].response.unit
+        spectral_response = np.full((len(flux_calibration_corrections),
+                                         ref_wave.size), fill_value=np.nan)
+        spectral_response_err = np.full_like(spectral_response,
+                                        fill_value=np.nan)
 
-        vprint("Obtaining median spectral response")
-        master_resp = np.nanmedian(spectral_response, axis=0)
+        spectral_response[0] = flux_calibration_corrections[0].response.to_value(ref_resp_unit)
+        spectral_response_err[1] = flux_calibration_corrections[0].response_err.to_value(ref_resp_unit)
+
+        for ith, fcal_corr in enumerate(flux_calibration_corrections[1:]):
+            resp, resp_err = fcal_corr.interpolate_response(ref_wave)
+            spectral_response[ith + 1] = resp.to_value(ref_resp_unit)
+            spectral_response_err[ith + 1] = resp_err.to_value(ref_resp_unit)
+
+        if combine_method == "median":
+            master_resp = np.nanmedian(spectral_response, axis=0)
+            # Compute the std error of the median (1.2533 * std of mean)
+            master_resp_err = np.sqrt(np.nansum(spectral_response_err**2, axis=0
+                                        ) / spectral_response_err.shape[0])
+            master_resp_err *= 1.2533
+        elif combine_method == "mean":
+            master_resp = np.nanmean(spectral_response, axis=0)
+            # Compute the std error of the median (1.2533 * std of mean)
+            master_resp_err = np.sqrt(np.nansum(spectral_response_err**2, axis=0
+                                        ) / spectral_response_err.shape[0])
+        elif combine_method == "wmean":
+            master_resp = np.nansum(
+                spectral_response / spectral_response_err, axis=0) / np.nansum(
+                    1 / spectral_response_err, axis=0)
+            # Compute the std error of the median (1.2533 * std of mean)
+            master_resp_err = np.sqrt(np.nansum(spectral_response_err**2, axis=0
+                                        ) / spectral_response_err.shape[0])
         master_flux_calibration = FluxCalibration(
-            response=master_resp,
-            response_wavelength=flux_calibration_corrections[0]
-            .response_wavelength)
+            response=master_resp << ref_resp_unit,
+            response_err=master_resp_err << ref_resp_unit,
+            response_wavelength=ref_wave)
         return master_flux_calibration
 
     @staticmethod
@@ -723,11 +749,15 @@ class FluxCalibration(CorrectionBase):
         self.vprint("Interpolating spectral response to input wavelength array")
         response = np.interp(wavelength, self.response_wavelength, self.response,
                              right=0., left=0.)
+        response_err = np.interp(wavelength, self.response_wavelength,
+                                 self.response_err,
+                                 right=np.nan, left=np.nan)
         if update:
             self.vprint("Updating response and wavelength arrays")
             self.response = response
+            self.response_err = response_err
             self.response_wavelength = wavelength
-        return response
+        return response, response_err
 
     def save_response(self, fname):
         """
