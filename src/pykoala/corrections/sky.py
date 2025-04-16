@@ -832,7 +832,7 @@ class SkyOffset(SkyModel):
         #TODO: This should create a 2D model that uses the median sky
         # but shifts it to the posiotoin given on each individual fibre
         self.intensity, self.variance = BackgroundEstimator.percentile(
-            self.dc.intensity, percentiles=[16, 50, 84])
+            self.dc.rss_intensity, percentiles=[16, 50, 84])
         self.intensity, self.variance = (
             self.intensity / self.exptime,
             self.variance / self.exptime)
@@ -860,8 +860,10 @@ class SkyFromObject(SkyModel):
         Estimated continuum. Initialized as None.
     """
 
-    def __init__(self, dc, bckgr_estimator='mad', bckgr_params=None,
-                 source_mask_nsigma=3, remove_cont=False,
+    def __init__(self, dc,
+                 bckgr_estimator='mad', bckgr_params=None,
+                 sky_fibres='auto', source_mask_nsigma=None,
+                 remove_cont=False,
                  cont_estimator='median', cont_estimator_args=None):
         """
         Initialize the SkyFromObject model.
@@ -874,8 +876,12 @@ class SkyFromObject(SkyModel):
             Background estimator method to be used. Default is 'mad'.
         bckgr_params : dict, optional
             Parameters for the background estimator. Default is None.
+        sky_fibres : None, 'all', list of indices, or 'auto' (optional)
+            List of sky fibres. None or 'all' select all spectra.
+            Default is 'auto', which will automatically determine an
+            appropriate threshold based on the mean intensity.
         source_mask_nsigma : float, optional
-            Sigma level for masking sources. Default is 3.
+            Sigma level for masking sources. Default is None.
         remove_cont : bool, optional
             If True, the continuum will be removed. Default is False.
         cont_estimator : str, optional
@@ -889,7 +895,7 @@ class SkyFromObject(SkyModel):
         vprint("Estimating sky background contribution...")
 
         bckg, bckg_sigma = self.estimate_background(
-            bckgr_estimator, bckgr_params, source_mask_nsigma)
+            bckgr_estimator, bckgr_params, sky_fibres, source_mask_nsigma)
         super().__init__(wavelength=self.dc.wavelength,
                          intensity=bckg,
                          variance=bckg_sigma**2)
@@ -897,7 +903,8 @@ class SkyFromObject(SkyModel):
             vprint("Removing background continuum")
             self.remove_continuum(cont_estimator, cont_estimator_args)
 
-    def estimate_background(self, bckgr_estimator, bckgr_params=None, source_mask_nsigma=3):
+    def estimate_background(self, bckgr_estimator, bckgr_params=None,
+                            sky_fibres='auto', source_mask_nsigma=None):
         """
         Estimate the background.
 
@@ -907,8 +914,12 @@ class SkyFromObject(SkyModel):
             Background estimator method. Available methods: 'mad', 'percentile'.
         bckgr_params : dict, optional
             Parameters for the background estimator. Default is None.
+        sky_fibres : None, 'all', list of indices, or 'auto' (optional)
+            List of sky fibres. None or 'all' select all spectra.
+            Default is 'auto', which will automatically determine an
+            appropriate threshold based on the mean intensity.
         source_mask_nsigma : float, optional
-            Sigma level for masking sources. Default is 3.
+            Sigma level for masking sources. Default is None.
 
         Returns
         -------
@@ -926,15 +937,21 @@ class SkyFromObject(SkyModel):
             raise NameError(
                 f"Input background estimator {bckgr_estimator} does not exist")
 
-        data = self.dc.rss_intensity.copy()
         bckgr_params["axis"] = bckgr_params.get("axis", 0)
-        dims_to_expand = (0)
+        
+        self.sky_fibres = sky_fibres
+        if sky_fibres is None or sky_fibres == "all":
+            self.sky_fibres = np.arange(int(self.dc.n_spectra))
+        elif sky_fibres == "auto":
+            self.sky_fibres = self.estimate_sky_fibres()
+        data = np.take(self.dc.rss_intensity, self.sky_fibres, bckgr_params["axis"])
 
         if source_mask_nsigma is not None:
             vprint("Pre-estimating background using all data")
             bckgr, bckgr_sigma = estimator(data, **bckgr_params)
             vprint(
                 f"Applying sigma-clipping mask (n-sigma={source_mask_nsigma})")
+            dims_to_expand = (0)
             source_mask = (data > np.expand_dims(bckgr, dims_to_expand) +
                            source_mask_nsigma
                            * np.expand_dims(bckgr_sigma, dims_to_expand))
@@ -943,6 +960,41 @@ class SkyFromObject(SkyModel):
         bckgr, bckgr_sigma = estimator(data, **bckgr_params)
         return bckgr, bckgr_sigma
 
+    def estimate_sky_fibres(self):
+        """Find a mean flux threshold to identify sky-dominated fibres."""
+
+        fibre_mean = np.nanmean(self.dc.rss_intensity, axis=1)
+        sorted_by_fibre_mean = np.argsort(fibre_mean)
+        n = 1 + np.arange(sorted_by_fibre_mean.size)
+
+        norm_intensity = self.dc.rss_intensity[sorted_by_fibre_mean, :]
+        norm_intensity /= fibre_mean[sorted_by_fibre_mean][:, np.newaxis]
+        cumulative_norm = np.nancumsum(norm_intensity, axis=0) / n[:, np.newaxis]
+        #cumulative_norm_err = np.nancumsum((norm_intensity-cumulative_norm)**2, axis=0)
+        #cumulative_norm_err = cumulative_norm_err / (n*(n-1))[:, np.newaxis]
+        #cumulative_norm_err = np.sqrt(cumulative_norm_err / (n*(n-1))[:, np.newaxis])
+
+        cumulative_intensity = np.nancumsum(self.dc.rss_intensity[sorted_by_fibre_mean, :], axis=0)
+        cumulative_intensity /= np.nancumsum(fibre_mean[sorted_by_fibre_mean])[:, np.newaxis]
+        '''
+        #rms_error = np.sqrt(np.nanmean((cumulative_intensity/cumulative_norm - 1)**2, axis=1))
+        #rms_mode, rms_threshold = symmetric_background(rms_error)
+        rms_error = np.sqrt(np.nanmean(((cumulative_intensity - cumulative_norm) / cumulative_norm_err)**2, axis=1))
+        rms_threshold = 1
+        fibre_mean_threshold = np.nanmax(fibre_mean[sorted_by_fibre_mean][rms_error < rms_threshold])
+        '''
+        target_stat = np.sqrt(np.nanmean((cumulative_norm - cumulative_intensity)**2, axis=1))
+        n_start = 2
+        n_end = int(self.dc.n_spectra)
+        t_start = target_stat[n_start-1]
+        t_end = target_stat[n_end-1]
+        alpha = np.log(t_end/t_start) / np.log(n_end/n_start)
+        #print(t_start, t_end, n_start, n_end, alpha)
+        power_law = t_start * (n/n_start)**alpha
+        n_sky_fibres = n_start + np.argmax(power_law[n_start:n_end] / target_stat[n_start:n_end])
+        sky_fibres = sorted_by_fibre_mean[:n_sky_fibres]
+        vprint(f"{n_sky_fibres} sky fibres found below {fibre_mean[sky_fibres[-1]]:.2f}")
+        return sky_fibres
 
 # =============================================================================
 # Sky Substraction Correction
