@@ -39,18 +39,30 @@ from pykoala.ancillary import check_unit, symmetric_background
 class BackgroundEstimator:
     """
     Class for estimating background and its dispersion using different statistical methods.
-
-    Methods
-    -------
-    percentile(data, percentiles=[16, 50, 84], axis=0)
-        Compute the background and dispersion from specified percentiles.
-
-    mad(data, axis=0)
-        Estimate the background and dispersion using the Median Absolute Deviation (MAD) method.
-
-    mode(data, axis=None)
-        Estimate the background and dispersion using the mode of the data distribution.
     """
+
+    @staticmethod
+    def mean(data, axis=0):
+        """
+        Compute the mean and standard deviation of the spectra.
+
+        Parameters
+        ----------
+        data : np.ndarray
+            The input data array from which to compute the background and dispersion.
+        axis : int, optional
+            The axis along which to compute the results. Default is 0.
+
+        Returns
+        -------
+        background : np.ndarray
+            The computed background (mean) of the data.
+        background_sigma : np.ndarray
+            The dispersion (standard deviation) of the data.
+        """
+        background = np.nanmean(data, percentiles, axis=axis)
+        background_sigma = np.nanstd(data, percentiles, axis=axis)
+        return background, background_sigma
 
     @staticmethod
     def percentile(data, percentiles=[16, 50, 84], axis=0):
@@ -126,81 +138,6 @@ class BackgroundEstimator:
         background = stats.biweight_location(data, axis=axis)
         background_sigma = stats.biweight_scale(data, axis=axis)
         return background, background_sigma
-
-    @staticmethod
-    def fit(data, axis, wavelet):
-        """
-        Background estimator from linear fit (Work in progress: UNSTABLE).
-
-        Parameters
-        ----------
-        data : np.ndarray
-            The input data array from which to compute the background.
-            TODO: Make it a `DataContainer`.
-        axis : int, optional
-            TODO: remove from the call in `SkyFromObject`.
-        wavelet: WaveletFilter
-            Used to estimate the mean sky flux.
-
-        Returns
-        -------
-        background : np.ndarray
-            The computed background sky.
-        background_sigma : np.ndarray
-            TODO: An error estimate.
-        """
-        flux = np.nanmean(data, axis=1)
-        mean_flux = np.nanmean(flux)
-        flux_cut_low = np.nanmedian(flux[flux < mean_flux])
-        flux_cut_hi = 2*mean_flux - flux_cut_low
-        flux_low = np.nanmean(flux[flux < flux_cut_low])
-        flux_med = np.nanmean(flux[(flux > flux_cut_low) & (flux < mean_flux)])
-        flux_hi = np.nanmean(flux[(flux > mean_flux) & (flux < flux_cut_hi)])
-
-        I_low = np.nanmean(data[flux < flux_cut_low, :], axis=0)
-        I_med = np.nanmean(data[(flux > flux_cut_low) &
-                           (flux < mean_flux), :], axis=0)
-        I_hi = np.nanmean(
-            data[(flux > mean_flux) & (flux < flux_cut_hi), :], axis=0)
-        m = (I_hi - I_low) / (flux_hi - flux_low)
-        b = I_low - m * flux_low
-
-        sky_flux_candidate = np.arange(0, flux_cut_hi.value, .01*np.min(flux.value)) << flux.unit
-        sky_filtered = m[np.newaxis, :] * \
-            sky_flux_candidate[:, np.newaxis] + b[np.newaxis, :]
-        x = np.nancumsum(sky_filtered, axis=1)
-        s = wavelet.scale
-        sky_filtered = (x[:, 2*s:-s] - x[:, s:-2*s]) / s
-        sky_filtered -= (x[:, 3*s:] - x[:, :-3*s]) / (3*s)
-        chi2_no_sky = np.nanstd(sky_filtered*(1 - wavelet.sky_weight), axis=1)
-
-        ''' Unsuccessful attempt (keep for a while, just in case)
-        # Wavelet scale:
-        x = b - np.nanmean(b)
-        x = scipy.signal.correlate(x, x, mode='same')
-        h = (np.count_nonzero(x > 0.5*np.nanmax(x)) + 1) // 2
-        s = 2*h + 1
-
-        sky_flux_candidate = np.arange(0, flux_cut_hi, .01*np.min(flux))
-        sky_filtered = m[np.newaxis, :] * sky_flux_candidate[:, np.newaxis] + b[np.newaxis, :]
-        x = np.nancumsum(sky_filtered, axis=1)
-        sky_filtered = (x[:, 2*s:-s] - x[:, s:-2*s]) / s
-        sky_filtered -= (x[:, 3*s:] - x[:, :-3*s]) / (3*s)
-
-        # Sky-based weight:
-        print(s, data.shape, sky_filtered.shape)
-        p16, p50, p84 = np.nanpercentile(data[:, s+h+1:-s-h], [16, 50, 84], axis=0)
-        not_sky = np.exp(-.5 * (p50 / np.fmax((p84 - p50), (p50 - p16)))**2)
-
-        # Select optimal flux:
-        chi2_no_sky = np.nanstd(sky_filtered * not_sky[np.newaxis, :], axis=1)
-        '''
-
-        sky_flux = sky_flux_candidate[np.nanargmin(chi2_no_sky)]
-        sky_intensity = b + m*sky_flux
-        vprint(f"{s} {sky_flux}")
-
-        return sky_intensity, np.nan + sky_intensity
 
     @staticmethod
     def mode(rss_intensity, axis=None):
@@ -892,7 +829,7 @@ class SkyFromObject(SkyModel):
         vprint("Creating SkyModel from input Data Container")
         self.dc = dc
         # self.exptime = dc.info['exptime']
-        vprint("Estimating sky background contribution...")
+        #vprint(f"Estimating sky background contribution from the {bckgr_estimator}...")
 
         bckg, bckg_sigma = self.estimate_background(
             bckgr_estimator, bckgr_params, sky_fibres, source_mask_nsigma)
@@ -914,10 +851,15 @@ class SkyFromObject(SkyModel):
             Background estimator method. Available methods: 'mad', 'percentile'.
         bckgr_params : dict, optional
             Parameters for the background estimator. Default is None.
-        sky_fibres : None, 'all', list of indices, or 'auto' (optional)
-            List of sky fibres. None or 'all' select all spectra.
-            Default is 'auto', which will automatically determine an
-            appropriate threshold based on the mean intensity.
+        sky_fibres : None, 'auto', 'all', or list of 1D indices (optional)
+            Default is None, which will read the sky fibre list from
+            the `info` attribute; if absent or empty, it will trigger 'auto'.
+            The 'auto' option will call `estimate_sky_fibres` to identify
+            sky fibres based on a mean intensity threshold, automatically
+            determined from the shape of the normalised spectra.
+            Selecting `all` will use every spectrum in the `DataContainer`.
+            Othrwise, this argument will be interpreted as a list of
+            integer indices identifying sky spectra, assuming 1D RSS order.
         source_mask_nsigma : float, optional
             Sigma level for masking sources. Default is None.
 
@@ -957,43 +899,52 @@ class SkyFromObject(SkyModel):
                            * np.expand_dims(bckgr_sigma, dims_to_expand))
             data[source_mask] = np.nan
 
+        vprint(f"Applying the {bckgr_estimator} estimator to {data.shape[0]} sky fibres")
         bckgr, bckgr_sigma = estimator(data, **bckgr_params)
         return bckgr, bckgr_sigma
 
     def estimate_sky_fibres(self):
-        """Find a mean flux threshold to identify sky-dominated fibres."""
+        """
+        Identify sky fibres by imposing a mean intensity threshold, based on
+        the shape of the normalised spectra.
+        """
+        
+        total_flux = np.nanmean(self.dc.rss_intensity, axis=1).value
+        sorted_by_flux = np.argsort(total_flux)
+        n = 1 + np.arange(sorted_by_flux.size)
+        half_sample = sorted_by_flux.size // 2
 
-        fibre_mean = np.nanmean(self.dc.rss_intensity, axis=1)
-        sorted_by_fibre_mean = np.argsort(fibre_mean)
-        n = 1 + np.arange(sorted_by_fibre_mean.size)
+        flux_mean = np.nancumsum(total_flux[sorted_by_flux]) / n
 
-        norm_intensity = self.dc.rss_intensity[sorted_by_fibre_mean, :]
-        norm_intensity /= fibre_mean[sorted_by_fibre_mean][:, np.newaxis]
-        cumulative_norm = np.nancumsum(norm_intensity, axis=0) / n[:, np.newaxis]
-        #cumulative_norm_err = np.nancumsum((norm_intensity-cumulative_norm)**2, axis=0)
-        #cumulative_norm_err = cumulative_norm_err / (n*(n-1))[:, np.newaxis]
-        #cumulative_norm_err = np.sqrt(cumulative_norm_err / (n*(n-1))[:, np.newaxis])
+        norm_fibre = self.dc.rss_intensity.value[sorted_by_flux, :] / total_flux[sorted_by_flux][:, np.newaxis]
+        norm_sum1 = np.nancumsum(norm_fibre, axis=0)
+        norm_sum2 = np.nancumsum(norm_fibre**2, axis=0)
 
-        cumulative_intensity = np.nancumsum(self.dc.rss_intensity[sorted_by_fibre_mean, :], axis=0)
-        cumulative_intensity /= np.nancumsum(fibre_mean[sorted_by_fibre_mean])[:, np.newaxis]
-        '''
-        #rms_error = np.sqrt(np.nanmean((cumulative_intensity/cumulative_norm - 1)**2, axis=1))
-        #rms_mode, rms_threshold = symmetric_background(rms_error)
-        rms_error = np.sqrt(np.nanmean(((cumulative_intensity - cumulative_norm) / cumulative_norm_err)**2, axis=1))
-        rms_threshold = 1
-        fibre_mean_threshold = np.nanmax(fibre_mean[sorted_by_fibre_mean][rms_error < rms_threshold])
-        '''
-        target_stat = np.sqrt(np.nanmean((cumulative_norm - cumulative_intensity)**2, axis=1))
-        n_start = 2
-        n_end = int(self.dc.n_spectra)
-        t_start = target_stat[n_start-1]
-        t_end = target_stat[n_end-1]
-        alpha = np.log(t_end/t_start) / np.log(n_end/n_start)
-        #print(t_start, t_end, n_start, n_end, alpha)
-        power_law = t_start * (n/n_start)**alpha
-        n_sky_fibres = n_start + np.argmax(power_law[n_start:n_end] / target_stat[n_start:n_end])
-        sky_fibres = sorted_by_fibre_mean[:n_sky_fibres]
-        vprint(f"{n_sky_fibres} sky fibres found below {fibre_mean[sky_fibres[-1]]:.2f}")
+        left_side_mean = norm_sum1[1:half_sample] / n[1:half_sample, np.newaxis]
+        right_side_mean = norm_sum1[3::2] / n[1:half_sample, np.newaxis] - left_side_mean
+
+        left_side_err = norm_sum2[1:half_sample] / n[1:half_sample, np.newaxis]
+        right_side_err = norm_sum2[3::2] / n[1:half_sample, np.newaxis] - left_side_err
+
+        left_side_err -= left_side_mean**2
+        left_side_err[~(left_side_err > 0)] = np.nan
+        left_side_err = np.sqrt(left_side_err / n[:half_sample-1, np.newaxis])  # n-1
+
+        right_side_err -= right_side_mean**2
+        right_side_err[~(right_side_err > 0)] = np.nan
+        right_side_err = np.sqrt(right_side_err / n[:half_sample-1, np.newaxis])  # n-1
+
+        weight = np.exp(np.nanmean(
+            -(right_side_mean - left_side_mean)**2 * (1/right_side_err**2 + 1/left_side_err**2),
+            axis=1))
+        sky_flux = np.nansum(total_flux[sorted_by_flux][3::2] * weight) / np.nansum(weight)
+
+        n_sky = min(
+            np.searchsorted(flux_mean, sky_flux),
+            2 * np.searchsorted(total_flux[sorted_by_flux], sky_flux))
+        flux_threshold = total_flux[sorted_by_flux[n_sky-1]]
+        sky_fibres = sorted_by_flux[:n_sky]
+        vprint(f'{n_sky} sky fibres found below {flux_threshold:.5g} (sky flux = {sky_flux:.5g}) {self.dc.rss_intensity.unit}')
         return sky_fibres
 
 # =============================================================================
@@ -1763,99 +1714,6 @@ class WaveletFilter(object):
 
     def get_wavelength_offset(self):
         return WavelengthOffset(offset_data=np.repeat(self.fibre_offset[:, np.newaxis], self.wavelength.size + 3*self.scale, axis=1) << u.pix)
-
-
-class SkySelfCalibration(CorrectionBase):
-    """TODO> Finish documentaion
-    Wavelength calibration, throughput, and sky model based on strong sky lines."""
-    name = "SkySelfCalibration"
-    verbose = True
-
-    # TODO: Don't assume RSS format (intensity[spec_id, wavelength])
-    #       def __init__(self, dc:DataContainer, continuum:ContinuumModel):
-    def __init__(self, dc: RSS, **correction_kwargs):
-        super().__init__(**correction_kwargs)
-        self.update(dc)
-
-    def update(self, dc: RSS):
-        self.dc = dc
-        self.biweight_sky()
-        self.update_sky_lines()
-        self.calibrate()
-
-    # TODO: use SkyModel as an argument to update()?
-
-    def biweight_sky(self):
-        # self.wavelength = self.dc.wavelength.to_value(u.Angstrom)
-        self.sky_intensity = stats.biweight.biweight_location(
-            self.dc.intensity, axis=0)
-
-    def update_sky_lines(self):
-        sky_cont, sky_err = ContinuumEstimator.lower_envelope(
-            self.dc.wavelength, self.sky_intensity)  # , min_separation)
-        sky_lines = self.sky_intensity - sky_cont
-
-        self.continuum = ContinuumModel(self.dc)
-        self.continuum.strong_sky_lines.add_column(
-            0.*u.Angstrom, name='sky_wavelength')
-        self.continuum.strong_sky_lines.add_column(0., name='sky_intensity')
-        for line in self.continuum.strong_sky_lines:
-            wavelength = self.dc.wavelength[line['left']:line['right']]
-            spectrum = sky_lines[line['left']:line['right']]
-            weight = spectrum**2
-            line['sky_wavelength'] = np.nansum(
-                weight*wavelength) / np.nansum(weight)
-            line['sky_intensity'] = np.nanmean(spectrum)
-
-    # TODO: Don't assume RSS format (intensity[spec_id, wavelength])
-
-    def calibrate(self):
-        n_spectra = self.dc.intensity.shape[0]
-        self.wavelength_offset = np.zeros(
-            n_spectra) * self.dc.wavelength[0]  # dirty hack to specify units
-        self.wavelength_offset_err = np.zeros_like(self.wavelength_offset)
-        self.relative_throughput = np.zeros(n_spectra)
-        self.relative_throughput_err = np.zeros(n_spectra)
-        self.vprint(f"> Calibrating for {n_spectra} spectra:")
-        t0 = time()
-        for spec_id in range(n_spectra):
-            line_wavelength, line_intensity = self.measure_lines(spec_id)
-            y = line_wavelength - \
-                self.continuum.strong_sky_lines['sky_wavelength']
-            self.wavelength_offset[spec_id] = stats.biweight.biweight_location(
-                y)
-            self.wavelength_offset_err[spec_id] = stats.biweight.biweight_scale(
-                y)
-            y = line_intensity / \
-                self.continuum.strong_sky_lines['sky_intensity']
-            self.relative_throughput[spec_id] = stats.biweight.biweight_location(
-                y)
-            self.relative_throughput_err[spec_id] = stats.biweight.biweight_scale(
-                y)
-        self.vprint(f"  Done ({time()-t0:.3g} s)")
-
-    def measure_lines(self, spec_id):
-        intensity = self.dc.intensity[spec_id]
-        continuum = self.continuum.intensity[spec_id]
-        sky_wavelength = self.continuum.strong_sky_lines['sky_wavelength'].to_value(
-            u.Angstrom)
-        line_wavelength = np.zeros_like(sky_wavelength)
-        sky_intensity = self.continuum.strong_sky_lines['sky_intensity']
-        line_intensity = np.zeros_like(sky_intensity)
-        wavelength = self.dc.wavelength.to_value(u.Angstrom)
-        for i, line in enumerate(self.continuum.strong_sky_lines):
-            section_wavelength = wavelength[line['left']:line['right']]
-            section_intensity = (
-                intensity - continuum)[line['left']:line['right']]
-            weight = section_intensity**2
-            line_wavelength[i] = np.nansum(
-                weight*section_wavelength) / np.nansum(weight)
-            line_intensity[i] = np.nanmean(section_intensity)
-        return line_wavelength*u.Angstrom, line_intensity
-
-    def apply(self, rss):
-        #TODO : finish this module
-        pass
 
 
 # =============================================================================
