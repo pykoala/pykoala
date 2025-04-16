@@ -224,6 +224,11 @@ class FluxCalibration(CorrectionBase):
             flux_corrections.append(
                 cls(response=resp_curve(data[i].wavelength),
                     response_wavelength=data[i].wavelength))
+
+        if len(flux_corrections) == 0:
+            vprint("No flux calibration was created", level="warning")
+            return None, None, None
+
         if combine:
             master_flux_corr = cls.master_flux_auto(flux_corrections)
         else:
