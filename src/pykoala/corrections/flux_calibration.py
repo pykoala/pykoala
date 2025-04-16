@@ -183,7 +183,7 @@ class FluxCalibration(CorrectionBase):
         """
         if extract_args is None:
             # Default extraction arguments
-            extract_args = dict(wave_range=None, wave_window=30, plot=False)
+            extract_args = dict(wave_range=None, wave_window=None, plot=False)
         if response_params is None:
             # Default response curve parameters
             response_params = dict(pol_deg=5, plot=False)
