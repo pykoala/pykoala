@@ -36,22 +36,20 @@ from pykoala.ancillary import check_unit, symmetric_background
 
 
 #TODO: Move to a math module
-class BackgroundEstimator:
+class BackgroundEstimator(object):
     """
     Class for estimating background and its dispersion using different statistical methods.
     """
 
     @staticmethod
-    def mean(data, axis=0):
+    def mean(rss_intensity):
         """
         Compute the mean and standard deviation of the spectra.
 
         Parameters
         ----------
-        data : np.ndarray
-            The input data array from which to compute the background and dispersion.
-        axis : int, optional
-            The axis along which to compute the results. Default is 0.
+        rss_intensity : np.ndarray
+            Input array (n_fibres x n_wavelength).
 
         Returns
         -------
@@ -60,23 +58,21 @@ class BackgroundEstimator:
         background_sigma : np.ndarray
             The dispersion (standard deviation) of the data.
         """
-        background = np.nanmean(data, percentiles, axis=axis)
-        background_sigma = np.nanstd(data, percentiles, axis=axis)
+        background = np.nanmean(rss_intensity, percentiles, axis=0)
+        background_sigma = np.nanstd(rss_intensity, percentiles, axis=0)
         return background, background_sigma
 
     @staticmethod
-    def percentile(data, percentiles=[16, 50, 84], axis=0):
+    def percentile(rss_intensity, percentiles=[16, 50, 84]):
         """
         Compute the background and dispersion from specified percentiles.
 
         Parameters
         ----------
-        data : np.ndarray
-            The input data array from which to compute the background and dispersion.
+        rss_intensity : np.ndarray
+            Input array (n_fibres x n_wavelength).
         percentiles : list of float, optional
             The percentiles to use for computation. Default is [16, 50, 84].
-        axis : int, optional
-            The axis along which to compute the percentiles. Default is 0.
 
         Returns
         -------
@@ -85,22 +81,20 @@ class BackgroundEstimator:
         background_sigma : np.ndarray
             The dispersion (half the interpercentile range) of the data.
         """
-        plow, background, pup = np.nanpercentile(data, percentiles, axis=axis)
+        plow, background, pup = np.nanpercentile(rss_intensity, percentiles, axis=0)
         background_sigma = (pup - plow) / 2
         return background, background_sigma
 
     @staticmethod
-    def mad(data, axis=0):
+    def mad(rss_intensity):
         """
         Estimate the background from the median and the dispersion from
         the Median Absolute Deviation (MAD) along the given axis.
 
         Parameters
         ----------
-        data : np.ndarray
-            The input data array from which to compute the background and dispersion.
-        axis : int, optional
-            The axis along which to compute the median and MAD. Default is 0.
+        rss_intensity : np.ndarray
+            Input array (n_fibres x n_wavelength).
 
         Returns
         -------
@@ -109,24 +103,21 @@ class BackgroundEstimator:
         background_sigma : np.ndarray
             The dispersion (scaled MAD) of the data.
         """
-        background = np.nanmedian(data, axis=axis)
+        background = np.nanmedian(rss_intensity, axis=0)
         mad = np.nanmedian(
-            np.abs(data - np.expand_dims(background, axis=axis)), axis=axis)
+            np.abs(rss_intensity - background[np.newaxis:])), axis=0)
         background_sigma = 1.4826 * mad
         return background, background_sigma
 
     @staticmethod
-    def biweight(data, axis=0):
+    def biweight(rss_intensity):
         """
         Estimate the background and dispersion using the biweight method.
 
         Parameters
         ----------
-        data : np.ndarray
-            Input data from which to compute the background and dispersion.
-        axis : int, optional
-            Axis along which to compute the biweight location and scale.
-            Default is 0.
+        rss_intensity : np.ndarray
+            Input array (n_fibres x n_wavelength).
 
         Returns
         -------
@@ -135,23 +126,19 @@ class BackgroundEstimator:
         background_sigma : np.ndarray
             Dispersion (scale) of the data.
         """
-        background = stats.biweight_location(data, axis=axis)
-        background_sigma = stats.biweight_scale(data, axis=axis)
+        background = stats.biweight_location(rss_intensity, axis=0)
+        background_sigma = stats.biweight_scale(rss_intensity, axis=0)
         return background, background_sigma
 
     @staticmethod
-    def mode(rss_intensity, axis=None):
+    def mode(rss_intensity):
         """
         Estimate the background and dispersion using the mode.
-        WARNING: assumes data is RSS-sorted (ignores `axis`).
-        TODO: honor `axis`
 
         Parameters
         ----------
         rss_intensity : np.ndarray
-            The input array (n_fibres x n_wavelength) from which to
-            compute the background and dispersion.
-            WARNING: assumes data is RSS-sorted (ignores `axis`).
+            Input array (n_fibres x n_wavelength).
 
         Returns
         -------
