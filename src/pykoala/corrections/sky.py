@@ -10,7 +10,7 @@ import copy
 import os
 from time import time
 import matplotlib.pyplot as plt
-# from matplotlib.colors import LogNorm
+from matplotlib.colors import LogNorm, Normalize
 import scipy
 # =============================================================================
 # Astropy and associated packages
@@ -27,7 +27,7 @@ import scipy.signal
 # PyKOALA
 # =============================================================================
 from pykoala import vprint
-from pykoala.plotting.utils import new_figure, plot_image
+from pykoala.plotting.utils import new_figure, plot_image, plot_fibres
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.corrections.throughput import Throughput
 from pykoala.corrections.wavelength import WavelengthOffset
@@ -799,9 +799,10 @@ class SkyFromObject(SkyModel):
 
     def __init__(self, dc,
                  bckgr_estimator='mad', bckgr_params=None,
-                 sky_fibres='auto', source_mask_nsigma=None,
+                 sky_fibres=None, source_mask_nsigma=None,
                  remove_cont=False,
-                 cont_estimator='median', cont_estimator_args=None):
+                 cont_estimator='median', cont_estimator_args=None,
+                 qc_plots={}):
         """
         Initialize the SkyFromObject model.
 
@@ -813,10 +814,15 @@ class SkyFromObject(SkyModel):
             Background estimator method to be used. Default is 'mad'.
         bckgr_params : dict, optional
             Parameters for the background estimator. Default is None.
-        sky_fibres : None, 'all', list of indices, or 'auto' (optional)
-            List of sky fibres. None or 'all' select all spectra.
-            Default is 'auto', which will automatically determine an
-            appropriate threshold based on the mean intensity.
+        sky_fibres : None, 'auto', 'all', or list of 1D indices (optional)
+            Default is None, which will read the sky fibre list from
+            the `info` attribute; if absent or empty, it will trigger 'auto'.
+            The 'auto' option will call `estimate_sky_fibres` to identify
+            sky fibres based on a mean intensity threshold, automatically
+            determined from the shape of the normalised spectra.
+            Selecting `all` will use every spectrum in the `DataContainer`.
+            Othrwise, this argument will be interpreted as a list of
+            integer indices identifying sky spectra, assuming 1D RSS order.
         source_mask_nsigma : float, optional
             Sigma level for masking sources. Default is None.
         remove_cont : bool, optional
@@ -825,14 +831,18 @@ class SkyFromObject(SkyModel):
             Method to estimate the continuum signal. Default is 'median'.
         cont_estimator_args : dict, optional
             Arguments for the continuum estimator. Default is None.
+        qc_plots: dict
+            Dictionary to control QC plots.
         """
         vprint("Creating SkyModel from input Data Container")
         self.dc = dc
         # self.exptime = dc.info['exptime']
         #vprint(f"Estimating sky background contribution from the {bckgr_estimator}...")
+        
+        self.qc_plots = {}
 
         bckg, bckg_sigma = self.estimate_background(
-            bckgr_estimator, bckgr_params, sky_fibres, source_mask_nsigma)
+            bckgr_estimator, bckgr_params, sky_fibres, source_mask_nsigma, qc_plots)
         super().__init__(wavelength=self.dc.wavelength,
                          intensity=bckg,
                          variance=bckg_sigma**2)
@@ -841,7 +851,8 @@ class SkyFromObject(SkyModel):
             self.remove_continuum(cont_estimator, cont_estimator_args)
 
     def estimate_background(self, bckgr_estimator, bckgr_params=None,
-                            sky_fibres='auto', source_mask_nsigma=None):
+                            sky_fibres=None, source_mask_nsigma=None,
+                            qc_plots={}):
         """
         Estimate the background.
 
@@ -862,6 +873,8 @@ class SkyFromObject(SkyModel):
             integer indices identifying sky spectra, assuming 1D RSS order.
         source_mask_nsigma : float, optional
             Sigma level for masking sources. Default is None.
+        qc_plots: dict
+            Dictionary to control QC plots.
 
         Returns
         -------
@@ -878,16 +891,46 @@ class SkyFromObject(SkyModel):
         else:
             raise NameError(
                 f"Input background estimator {bckgr_estimator} does not exist")
-
-        bckgr_params["axis"] = bckgr_params.get("axis", 0)
+        
+        # Determine sky fibres:
         
         self.sky_fibres = sky_fibres
-        if sky_fibres is None or sky_fibres == "all":
-            self.sky_fibres = np.arange(int(self.dc.n_spectra))
-        elif sky_fibres == "auto":
+        if sky_fibres is None:
+            self.sky_fibres = self.dc.info.get('sky_fibres', None)
+            if self.sky_fibres is None or len(self.sky_fibres) == 0:
+                sky_fibres = 'auto'
+        if sky_fibres == "auto":
             self.sky_fibres = self.estimate_sky_fibres()
-        data = np.take(self.dc.rss_intensity, self.sky_fibres, bckgr_params["axis"])
+        elif sky_fibres == "all":
+            self.sky_fibres = np.arange(int(self.dc.n_spectra))
+        #bckgr_params["axis"] = bckgr_params.get("axis", 0)
+        #data = np.take(self.dc.rss_intensity, self.sky_fibres, bckgr_params["axis"])
+        data = self.dc.rss_intensity[self.sky_fibres]
+        
+        show_plot = qc_plots.get('show', True)
+        plot_filename = qc_plots.get('filename_base', None)
+        if show_plot or plot_filename is not None:
+            fig_name = 'sky_fibres'
+            fig, axes = new_figure(fig_name)
+            total_flux = np.nanmean(self.dc.rss_intensity.value, axis=1)
+            ax, patch_collection, cb = plot_fibres(
+                fig, axes[0, 0], self.dc, data=total_flux,
+                cblabel=f'mean intensity [{self.dc.rss_intensity.unit}]',
+                cmap='Spectral_r',
+                norm=Normalize(vmax=np.nanmean(total_flux)))
+            handle, = ax.plot(self.dc.info['fib_ra'][self.sky_fibres],
+                              self.dc.info['fib_dec'][self.sky_fibres],
+                              'k+', label=f'{self.sky_fibres.size} sky fibres')
+            ax.legend(handles=[handle])
+            if plot_filename is not None:
+                fig.savefig(f'{plot_filename}_{fig_name}.png')
+            if show_plot:
+                self.qc_plots[fig_name] = fig
+            else:
+                plt.close(fig_name)
 
+        # Estimate sky spectrum:
+        
         if source_mask_nsigma is not None:
             vprint("Pre-estimating background using all data")
             bckgr, bckgr_sigma = estimator(data, **bckgr_params)
@@ -945,6 +988,7 @@ class SkyFromObject(SkyModel):
         flux_threshold = total_flux[sorted_by_flux[n_sky-1]]
         sky_fibres = sorted_by_flux[:n_sky]
         vprint(f'{n_sky} sky fibres found below {flux_threshold:.5g} (sky flux = {sky_flux:.5g}) {self.dc.rss_intensity.unit}')
+        
         return sky_fibres
 
 # =============================================================================
