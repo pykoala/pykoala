@@ -302,11 +302,11 @@ def symmetric_background(x, weights=None, fig_name=None):
         Optimal separation between signal and noise background.
     """
     if weights is None:
-        weights = np.ones_like(x)
+        weights = np.ones_like(x).astype(float)
 
     valid = np.where(np.isfinite(x) & np.isfinite(weights))
     n_valid = valid[0].size
-    if not n_valid > 0:
+    if not n_valid > 2:
         return np.nan, np.nan
 
     sorted_by_x = np.argsort(x[valid].flatten())
@@ -319,7 +319,7 @@ def symmetric_background(x, weights=None, fig_name=None):
     cumulative_mass /= total_mass
     
     
-    nbins = int(np.sqrt(4*n_valid + 1) - 1)
+    nbins = int(2 + np.sqrt(n_valid))
     m_left = np.linspace(0, 0.5, nbins)[1:-1]
     m_mid = 2 * m_left
     m_right = 0.5 + m_left
@@ -337,7 +337,7 @@ def symmetric_background(x, weights=None, fig_name=None):
     rho = (np.interp(x_mid+h, sorted_x, cumulative_mass) - np.interp(x_mid-h, sorted_x, cumulative_mass)) /2/h
 
     rho_threshold = np.nanpercentile(rho, 100*(1 - 1/np.sqrt(nbins)))
-    peak_region = x_mid[rho > rho_threshold]
+    peak_region = x_mid[rho >= rho_threshold]
     index_min = np.searchsorted(sorted_x, np.min(peak_region))
     index_max = np.searchsorted(sorted_x, np.max(peak_region))
     index_mode = (index_min+index_max) // 2
@@ -665,7 +665,7 @@ def smooth_spectrum(wlm, s, wave_min=0, wave_max=0, step=50, exclude_wlm=[[0, 0]
         plt.axvline(x=wave_min, color='k', linestyle='--')
         plt.axvline(x=wave_max, color='k', linestyle='--')
 
-        plt.xlabel("Wavelength [$\mathrm{\AA}$]")
+        plt.xlabel(r"Wavelength [$\mathrm{\AA}$]")
 
         if exclude_wlm[0][0] != 0:
             for i in range(len(exclude_wlm)):

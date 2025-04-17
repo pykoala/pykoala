@@ -58,8 +58,8 @@ class BackgroundEstimator(object):
         background_sigma : np.ndarray
             The dispersion (standard deviation) of the data.
         """
-        background = np.nanmean(rss_intensity, percentiles, axis=0)
-        background_sigma = np.nanstd(rss_intensity, percentiles, axis=0)
+        background = np.nanmean(rss_intensity, axis=0)
+        background_sigma = np.nanstd(rss_intensity, axis=0)
         return background, background_sigma
 
     @staticmethod
@@ -555,7 +555,7 @@ class SkyModel(object):
         emission_spectra : np.ndarray
             Emission spectra.
         """
-        assert self.intensity, "Sky Model intensity is None"
+        assert self.intensity is not None, "Sky Model intensity is None"
 
         if self.continuum is None:
             vprint("Sky Model intensity might contain continuum emission"
@@ -564,7 +564,7 @@ class SkyModel(object):
             errors = np.ones_like(self.intensity, dtype=float)
 
         finite_mask = np.isfinite(self.intensity)
-        p0_amplitude = np.interp(self.sky_lines, self.dc.wavelength[finite_mask],
+        p0_amplitude = np.interp(self.sky_lines, self.wavelength[finite_mask],
                                  self.intensity[finite_mask])
         p0_amplitude = np.clip(p0_amplitude, a_min=0, a_max=None)
         fit_g = fitting.LevMarLSQFitter()
@@ -690,7 +690,10 @@ class SkyModel(object):
         fig : :class:`matplotlib.pyplot.Figure`
             Figure containing the Sky Model plot.
         """
-        if self.intensity.ndim == 1:
+        if self.intensity is None:
+            return None
+        
+        elif self.intensity.ndim == 1:
             fig, axes = new_figure(fig_name)
             if 'dc' in self.__dict__:
                 title = f'1-D Sky Model for {self.dc.info['name']}'
@@ -700,9 +703,10 @@ class SkyModel(object):
             ax = axes[0, 0]
             ax.plot(self.wavelength, self.intensity,
                     color='b', alpha=0.5, label='sky intensity')
-            ax.fill_between(self.wavelength, self.intensity - self.variance**0.5,
-                            self.intensity + self.variance**0.5, color='b',
-                            alpha=0.2, label='uncertainty')
+            if self.variance is not None:
+                ax.fill_between(self.wavelength, self.intensity - self.variance**0.5,
+                                self.intensity + self.variance**0.5, color='b',
+                                alpha=0.2, label='uncertainty')
             ax.set_ylim(np.nanpercentile(self.intensity, [1, 99]).value)
             ax.set_ylabel(f"Intensity [{self.intensity.unit}]")
             ax.set_xlabel(f"Wavelength [{self.wavelength.unit}]")
@@ -720,9 +724,11 @@ class SkyModel(object):
             ax = fig.add_subplot(122, title='2-D Sky Model STD')
             mappable = ax.imshow(self.variance**0.5, **im_args)
             plt.colorbar(mappable, ax=ax)
-        if show:
-            plt.show(fig_name)
-        else:
+
+        #if show:
+        #    plt.show(fig_name)
+        #else:
+        if not show:
             plt.close(fig_name)
         return fig
 
@@ -943,9 +949,10 @@ class SkyFromObject(SkyModel):
             if plot_filename is not None:
                 fig.savefig(f'{plot_filename}_{fig_name}.png')
             self.qc_plots[fig_name] = fig
-            if show_plot:
-                plt.show(fig_name)
-            else:
+            #if show_plot:
+            #    plt.show(fig_name)
+            #else:
+            if not show_plot:
                 plt.close(fig_name)
 
         # Estimate sky spectrum:
