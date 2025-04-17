@@ -94,11 +94,12 @@ def new_figure(fig_name,
 
     return fig, axes
 
-def plot_image(fig, ax, cblabel, data,
+def plot_image(fig, ax, data,
                cmap=DEFAULT_CMAP,
                xlabel=None, x=None,
                ylabel=None, y=None,
                cbax=None, norm=None,
+               cblabel=None,
                norm_interval=visualization.AsymmetricPercentileInterval,
                interval_args={"lower_percentile": 1.0,
                               "upper_percentile": 99.0},
@@ -112,12 +113,9 @@ def plot_image(fig, ax, cblabel, data,
         Figure where the colour map will be drawn.
     ax : mpl.Axes
         Axes where the colour map will be drawn.
-    cblabel : str
-        Label of the colorbar
     data : ndarray
         2D array to be represented.
     cmap : str or mpl.colors.Norm
-    norm : mpl.colors.Norm
     xlabel: str, optional
         Label of x axis.
     x : ndarray, optional
@@ -128,7 +126,9 @@ def plot_image(fig, ax, cblabel, data,
         Values along y axes (defaults to pixel number)
     cbax: mpl.Axes
         Axes where the colour bar will be drawn.
-
+    norm : mpl.colors.Norm
+    cblabel : str
+        Label of the colorbar
     Returns
     -------
     im : mpl.AxesImage
@@ -179,7 +179,8 @@ def plot_image(fig, ax, cblabel, data,
     if cbax:
         cb.ax.yaxis.set_label_position("left")
         if unit is not None:
-            cblabel = f"{cblabel} {unit}"
+            if cblabel is None:
+                cblabel = f"{unit}"
         cb.set_label(cblabel)
         cb.ax.tick_params(labelsize='small')
     return im, cb

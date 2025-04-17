@@ -1126,31 +1126,27 @@ class SkySubsCorrection(CorrectionBase):
         fig : :class:`matplotlib.figure.Figure`
             The figure object containing the plots.
         """
-        fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(10, 10),
-                                sharex=True, sharey=True)
+        
         if data_cont.intensity.ndim == 2:
             original_image = data_cont.intensity
             corr_image = data_cont_corrected.intensity
         elif data_cont.intensity.ndim == 3:
             original_image = data_cont.get_white_image()
+            data_unit = str(original_image.unit)
+            original_image = original_image
             corr_image = data_cont_corrected.get_white_image()
 
-        im_args = kwargs.get(
-            'im_args', dict(aspect='auto', interpolation='none',
-                            cmap='nipy_spectral',
-                            vmin=np.nanpercentile(original_image, 1),
-                            vmax=np.nanpercentile(original_image, 99))
-        )
+        norm = plt.Normalize(np.nanpercentile(original_image.value, 1),
+                             np.nanpercentile(original_image.value, 99))
+        fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(10, 5),
+                                constrained_layout=True,
+                                sharex=True, sharey=True)
 
-        ax = axs[0]
-        ax.set_title("Original")
-        ax.imshow(original_image, **im_args)
+        plot_image(fig, axs[0], data=original_image, norm=norm)
+        plot_image(fig, axs[1], data=corr_image, norm=norm)
+        axs[0].set_title("Original")
+        axs[1].set_title("Sky emission subtracted")
 
-        ax = axs[1]
-        ax.set_title("Sky emission subtracted")
-        mappable = ax.imshow(corr_image, **im_args)
-        cax = ax.inset_axes((-1.2, -.1, 2.2, 0.02))
-        plt.colorbar(mappable, cax=cax, orientation="horizontal")
         if kwargs.get("show", False):
             plt.show()
         else:
@@ -1271,38 +1267,42 @@ class TelluricCorrection(CorrectionBase):
     def wavelength(self, value):
         self._wavelength = check_unit(value, u.angstrom)
 
+    @property
+    def airmass(self) -> float:
+        """Airmass at which the model has been created."""
+        return self._airmass
+    
+    @airmass.setter
+    def airmass(self, value):
+        self._airmass = value
+
     def __init__(self,
-                #  data_container=None,
                  telluric_correction,
                  wavelength,
+                 airmass,
                  telluric_correction_file="unknown",
-                #  n_fibres=10,
-                #  frac=0.5,
                  **correction_kwargs):
         """
         Initializes the TelluricCorrection object.
 
         Parameters
         ----------
-        data_container : object, optional
-            The data container to use for correction (default is None).
+        telluric_correction : :class:`numpy.ndarray`
+            Array containing the values of the telluric correction.
+        wavelength : :class:`astropy.units.Quantity`
+            Wavelength values associated to the ``telluric_correction``.
+        airmass : float
+            Airmass at which the model is estimated.
         telluric_correction_file : str, optional
-            Path to a file containing the telluric correction data (default is None).
-        telluric_correction : array, optional
-            The telluric correction array (default is None).
-        wavelength : array, optional
-            Wavelength array for the data (default is None).
-        n_fibres : int, optional
-            Number of fibers to consider (default is 10).
-        verbose : bool, optional
-            Controls verbosity of logging messages (default is True).
-        frac : float, optional
-            Fraction of the data to use for correction (default is 0.5).
+            Path to the file that contains the model.
+        **correction_kwargs:
+            Additional arguments passed to :class:`CorrectionBase`.
         """
         super().__init__(**correction_kwargs)
 
         self.telluric_correction = telluric_correction
         self.wavelength = wavelength
+        self.airmass = airmass
         self.telluric_correction_file = telluric_correction_file
 
     @classmethod
@@ -1324,9 +1324,17 @@ class TelluricCorrection(CorrectionBase):
         vprint("Initialising telluric correction from text file")
         wavelength, telluric_correction = np.loadtxt(path, unpack=True,
                                                      usecols=(0, 1))
+        # Read the value of the airmass at which the model was computed
+        with open(path, "r") as f:
+            line = f.readline()
+            if "airmass" in line:
+                airmass = float(line.split("=")[1])
+            else:
+                raise ValueError("Telluric correction file must include"
+                                 " airmass=value in the first line")
         return cls(telluric_correction=telluric_correction,
                    wavelength=wavelength,
-                   telluric_correction_file=path)
+                   telluric_correction_file=path, airmass=airmass)
 
     @classmethod
     def from_smoothed_spectra_container(cls, spectra_container,
@@ -1398,7 +1406,8 @@ class TelluricCorrection(CorrectionBase):
         else:
             fig = None
         return cls(telluric_correction=telluric_correction,
-                   wavelength=spectra_container.wavelength), fig
+                   wavelength=spectra_container.wavelength,
+                   airmass=spectra_container.info["airmass"]), fig
 
     @classmethod
     def from_model(cls, spectra_container, model_file=None,
@@ -1456,7 +1465,8 @@ class TelluricCorrection(CorrectionBase):
         else:
             fig = None
         return cls(telluric_correction=telluric_correction,
-                wavelength=spectra_container.wavelength), fig
+                   wavelength=spectra_container.wavelength,
+                   airmass=spectra_container.info["airmass"]), fig
 
     @classmethod
     def flag_data_container(cls, data_container, telluric_correction=None,
@@ -1607,10 +1617,14 @@ class TelluricCorrection(CorrectionBase):
             return spectra_container
 
         # Copy input RSS for storage the changes implemented in the task
+        tell_correction = self.telluric_correction**(
+            spectra_container.info["airmass"] / self.airmass)
         spectra_container_out = spectra_container.copy()
         self.vprint("Applying telluric correction")
-        spectra_container_out.rss_intensity *= self.telluric_correction
-        spectra_container_out.rss_variance *= self.telluric_correction**2
+        spectra_container_out.rss_intensity = (spectra_container_out.rss_intensity
+                                               * self.telluric_correction)
+        spectra_container_out.rss_variance = (spectra_container_out.rss_variance
+                                              * self.telluric_correction**2)
         self.record_correction(spectra_container_out, status='applied')
         return spectra_container_out
 
@@ -1650,6 +1664,11 @@ class TelluricCorrection(CorrectionBase):
             Extra arguments to be passed to :func:`numpy.savetxt`.
         """
         self.vprint(f"Saving telluric correction into file {filename}")
+        if "header" in kwargs:
+            kwargs["header"] = f"airmass={self.airmass}\n" + kwargs["header"]
+        else:
+            kwargs["header"] = f"airmass={self.airmass}\n"
+
         np.savetxt(filename, np.array(
             [self.wavelength, self.telluric_correction]).T, **kwargs)
 
@@ -1672,12 +1691,15 @@ def combine_telluric_corrections(list_of_telcorr, ref_wavelength):
     vprint("Combining input telluric corrections")
     telluric_corrections = np.zeros(
         (len(list_of_telcorr), ref_wavelength.size))
+    airmass = np.zeros(len(list_of_telcorr), dtype=float)
     for i, telcorr in enumerate(list_of_telcorr):
         telluric_corrections[i] = telcorr.interpolate_model(ref_wavelength)
+        airmass[i] = telcorr.airmass
 
     telluric_correction = np.nanmedian(telluric_corrections, axis=0)
     return TelluricCorrection(telluric_correction=telluric_correction,
-                              wavelength=ref_wavelength, verbose=False)
+                              wavelength=ref_wavelength,
+                              airmass=np.nanmedian(airmass), verbose=False)
 
 
 # =============================================================================
