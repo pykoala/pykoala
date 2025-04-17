@@ -81,7 +81,8 @@ class BackgroundEstimator(object):
         background_sigma : np.ndarray
             The dispersion (half the interpercentile range) of the data.
         """
-        plow, background, pup = np.nanpercentile(rss_intensity, percentiles, axis=0)
+        plow, background, pup = np.nanpercentile(
+            rss_intensity, percentiles, axis=0)
         background_sigma = (pup - plow) / 2
         return background, background_sigma
 
@@ -104,8 +105,8 @@ class BackgroundEstimator(object):
             The dispersion (scaled MAD) of the data.
         """
         background = np.nanmedian(rss_intensity, axis=0)
-        mad = np.nanmedian(
-            np.abs(rss_intensity - background[np.newaxis:])), axis=0)
+        mad = np.nanmedian(np.abs(rss_intensity - background[np.newaxis:]),
+                           axis=0)
         background_sigma = 1.4826 * mad
         return background, background_sigma
 
@@ -152,8 +153,9 @@ class BackgroundEstimator(object):
         for wavelength_index in range(mode.size):
             fibre_flux = rss_intensity[:, wavelength_index]
             mode[wavelength_index], dummy = symmetric_background(fibre_flux)
+            below_mode = fibre_flux < mode[wavelength_index]
             sigma[wavelength_index] = 1.4826 * np.nanmedian(
-                mode[wavelength_index] - fibre_flux[fibre_flux < mode[wavelength_index]])
+                mode[wavelength_index] - fibre_flux[below_mode])
 
         return mode, sigma
 
@@ -675,7 +677,7 @@ class SkyModel(object):
         self.sky_lines_fwhm = np.delete(self.sky_lines_fwhm, faint)
         self.sky_lines_f = np.delete(self.sky_lines_f, faint)
 
-    def plot_sky_model(self, show=False):
+    def plot_sky_model(self, show=False, fig_name='sky_model'):
         """Plot the sky model
 
         Parameters
@@ -688,20 +690,22 @@ class SkyModel(object):
         fig : :class:`matplotlib.pyplot.Figure`
             Figure containing the Sky Model plot.
         """
-        fig = plt.figure(constrained_layout=True)
         if self.intensity.ndim == 1:
-            ax = fig.add_subplot(111, title='1-D Sky Model')
-            ax.fill_between(self.wavelength, self.intensity - self.variance**0.5,
-                            self.intensity + self.variance**0.5, color='k',
-                            alpha=0.5, label='STD')
+            fig, axes = new_figure(fig_name)
+            fig.suptitle('1-D Sky Model')
+            ax = axes[0, 0]
             ax.plot(self.wavelength, self.intensity,
-                    color='r', label='intensity')
+                    color='b', alpha=0.5, label='sky intensity')
+            ax.fill_between(self.wavelength, self.intensity - self.variance**0.5,
+                            self.intensity + self.variance**0.5, color='b',
+                            alpha=0.2, label='uncertainty')
             ax.set_ylim(np.nanpercentile(self.intensity, [1, 99]).value)
-            ax.set_ylabel("Intensity")
-            ax.set_xlabel("Wavelength (AA)")
+            ax.set_ylabel(f"Intensity [{self.intensity.unit}]")
+            ax.set_xlabel(f"Wavelength [{self.wavelength.unit}]")
             ax.legend()
 
         elif self.intensity.ndim == 2:
+            fig = plt.figure(fig_name, constrained_layout=True)
             im_args = dict(
                 interpolation='none', aspect='auto', origin="lower",
                 extent=(1, self.intensity.shape[0],
@@ -713,9 +717,9 @@ class SkyModel(object):
             mappable = ax.imshow(self.variance**0.5, **im_args)
             plt.colorbar(mappable, ax=ax)
         if show:
-            plt.show()
+            plt.show(fig_name)
         else:
-            plt.close()
+            plt.close(fig_name)
         return fig
 
 
@@ -789,7 +793,7 @@ class SkyFromObject(SkyModel):
                  sky_fibres=None, source_mask_nsigma=None,
                  remove_cont=False,
                  cont_estimator='median', cont_estimator_args=None,
-                 qc_plots={}):
+                 qc_plots={'show': True}):
         """
         Initialize the SkyFromObject model.
 
@@ -836,6 +840,30 @@ class SkyFromObject(SkyModel):
         if remove_cont:
             vprint("Removing background continuum")
             self.remove_continuum(cont_estimator, cont_estimator_args)
+        
+        if len(qc_plots) > 0:
+            show_plot = qc_plots.get('show', True)
+            plot_filename = qc_plots.get('filename_base', None)
+            fig_name = 'sky_model'
+            fig = self.plot_sky_model(show=show_plot, fig_name=fig_name)
+            ax = fig.axes[0]
+            p16, p50, p84 = np.nanpercentile(self.dc.rss_intensity,
+                                             [16, 50, 84], axis=0)
+            ax.plot(self.dc.wavelength, p50, 'k-', alpha=.1)
+            ax.fill_between(self.dc.wavelength, p16, p84,
+                            color='k', alpha=.1,
+                            label=f'{self.dc.info['name']} (all fibres)')
+            if 'sky_CASU' in self.dc.info:
+                ax.plot(self.dc.wavelength, self.dc.info['sky_CASU'],
+                        'r-', alpha=.5, label='WEAVE pipeline')
+            ax.legend()
+            self.qc_plots[fig_name] = fig
+            if plot_filename is not None:
+                fig.savefig(f'{plot_filename}_{fig_name}.png')
+            if show_plot:
+                plt.show(fig_name)
+            else:
+                plt.close(fig_name)
 
     def estimate_background(self, bckgr_estimator, bckgr_params=None,
                             sky_fibres=None, source_mask_nsigma=None,
@@ -894,11 +922,12 @@ class SkyFromObject(SkyModel):
         #data = np.take(self.dc.rss_intensity, self.sky_fibres, bckgr_params["axis"])
         data = self.dc.rss_intensity[self.sky_fibres]
         
-        show_plot = qc_plots.get('show', True)
-        plot_filename = qc_plots.get('filename_base', None)
-        if show_plot or plot_filename is not None:
+        if len(qc_plots) > 0:
+            show_plot = qc_plots.get('show', True)
+            plot_filename = qc_plots.get('filename_base', None)
             fig_name = 'sky_fibres'
-            fig, axes = new_figure(fig_name)
+            fig, axes = new_figure(fig_name, figsize=(8, 6))
+            fig.suptitle(f'{self.dc.info['name']} {fig_name}')
             total_flux = np.nanmean(self.dc.rss_intensity.value, axis=1)
             ax, patch_collection, cb = plot_fibres(
                 fig, axes[0, 0], self.dc, data=total_flux,
@@ -911,8 +940,9 @@ class SkyFromObject(SkyModel):
             ax.legend(handles=[handle])
             if plot_filename is not None:
                 fig.savefig(f'{plot_filename}_{fig_name}.png')
+            self.qc_plots[fig_name] = fig
             if show_plot:
-                self.qc_plots[fig_name] = fig
+                plt.show(fig_name)
             else:
                 plt.close(fig_name)
 
