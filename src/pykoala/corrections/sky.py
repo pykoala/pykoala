@@ -930,7 +930,7 @@ class SkyFromObject(SkyModel):
         #data = np.take(self.dc.rss_intensity, self.sky_fibres, bckgr_params["axis"])
         data = self.dc.rss_intensity[self.sky_fibres]
         
-        if len(qc_plots) > 0:
+        if (len(qc_plots) > 0) and (self.dc.intensity.ndim == 2):
             show_plot = qc_plots.get('show', True)
             plot_filename = qc_plots.get('filename_base', None)
             fig_name = 'sky_fibres'
