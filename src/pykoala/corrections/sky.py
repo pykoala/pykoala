@@ -692,7 +692,11 @@ class SkyModel(object):
         """
         if self.intensity.ndim == 1:
             fig, axes = new_figure(fig_name)
-            fig.suptitle('1-D Sky Model')
+            if 'dc' in self.__dict__:
+                title = f'1-D Sky Model for {self.dc.info['name']}'
+            else:
+                title = '1-D Sky Model'
+            fig.suptitle(title)
             ax = axes[0, 0]
             ax.plot(self.wavelength, self.intensity,
                     color='b', alpha=0.5, label='sky intensity')
@@ -860,9 +864,7 @@ class SkyFromObject(SkyModel):
             self.qc_plots[fig_name] = fig
             if plot_filename is not None:
                 fig.savefig(f'{plot_filename}_{fig_name}.png')
-            if show_plot:
-                plt.show(fig_name)
-            else:
+            if not show_plot:
                 plt.close(fig_name)
 
     def estimate_background(self, bckgr_estimator, bckgr_params=None,
@@ -1007,6 +1009,59 @@ class SkyFromObject(SkyModel):
         vprint(f'{n_sky} sky fibres found below {flux_threshold:.5g} (sky flux = {sky_flux:.5g}) {self.dc.rss_intensity.unit}')
         
         return sky_fibres
+
+    def plot_individual_wavelength(self, wavelength):
+        """
+        Identify sky fibres by imposing a mean intensity threshold, based on
+        the shape of the normalised spectra.
+        """
+        idx = np.searchsorted(self.dc.wavelength, check_unit(wavelength, u.Angstrom)) - 1
+
+        intensity = self.dc.rss_intensity[:, idx].value
+        total_flux = np.nanmean(self.dc.rss_intensity, axis=1)
+        intensity_norm = intensity / total_flux
+
+        sorted_by_flux = np.argsort(total_flux)
+        flux_mean = np.nancumsum(total_flux[sorted_by_flux]) / np.arange(1, total_flux.size+1)
+        half_sample = total_flux.size // 2
+        
+        fig, axes = new_figure('single_wavelength_sky', nrows=2)
+
+        ax = axes[0, 0]
+        ax.set_ylabel(f'intensity ($\\lambda={self.dc.wavelength[idx]:.2f}\\ \\AA$)')
+        vmin = np.nanmin(intensity[self.sky_fibres])
+        vmax = np.nanmax(intensity[self.sky_fibres])
+        h = .1 * (vmax - vmin)
+        ax.set_ylim(vmin-h, vmax+2*h)
+
+        ax.plot(total_flux, intensity, 'k.', alpha=.1)
+        ax.plot(total_flux[self.sky_fibres], intensity[self.sky_fibres], 'b+', alpha=.5)
+        ax.axhline(self.intensity[idx], c='k', ls='--')
+        std = np.sqrt(self.variance[idx])
+        ax.axhline(self.intensity[idx] + std, c='k', ls=':')
+        ax.axhline(self.intensity[idx] - std, c='k', ls=':')
+
+
+        ax = axes[1, 0]
+        ax.set_ylabel(f'normalised intensity')
+        vmin = np.nanmin(intensity_norm[self.sky_fibres])
+        vmax = np.nanmax(intensity_norm[self.sky_fibres])
+        h = .1 * (vmax - vmin)
+        ax.set_ylim(vmin-h, vmax+2*h)
+
+        ax.plot(total_flux, intensity_norm, 'k.', alpha=.1)
+        ax.plot(total_flux[self.sky_fibres], intensity_norm[self.sky_fibres], 'b+', alpha=.5)
+        sky_flux = np.nanmean(self.intensity.value)
+        ax.axhline(self.intensity.value[idx]/sky_flux, c='k', ls='--')
+        ax.axhline((self.intensity[idx] + std).value/sky_flux, c='k', ls=':')
+        ax.axhline((self.intensity[idx] - std).value/sky_flux, c='k', ls=':')
+
+        ax.set_xlabel('total flux (mean fibre intensity)')
+        vmin, vmax = (flux_mean[0], flux_mean[-1])
+        h = .1 * (vmax - vmin)
+        ax.set_xlim(vmin-h, vmax+2*h)
+
+        return fig
 
 # =============================================================================
 # Sky Substraction Correction
