@@ -642,6 +642,28 @@ class CubeInterpolator(VerboseMixin):
         self.rss_inter_products = {}
         self.cube_plots = {}
 
+    def _fill_info(self, info):
+        """Fill the info metadata using the RSS set.
+        
+        Parameters
+        ----------
+        info : dict
+            Dictionary containing the Cube metadata.
+        
+        Returns
+        -------
+        info : dict
+            Updated dictionary
+        """
+        if "airmass" not in info:
+            info["airmass"] = np.nanmean(
+                [rss.info.get("airmass", np.nan) for rss in self.rss_set])
+        if "exptime" not in info:
+            info["exptime"] = np.nansum(
+                [rss.info.get("exptime").to_value("s") for rss in self.rss_set
+                 if rss.info.get("exptime") is not None]) << u.second
+        return info
+
     def build_cube(
         self,
         stacking_method=CubeStacking.mad_clipping,
@@ -723,10 +745,10 @@ class CubeInterpolator(VerboseMixin):
             self.all_datacubes, self.all_var, **stacking_args
         )
         info = dict(kernel_scale=self.kernel.scale_arcsec, **cube_info)
+        info = self._fill_info(info)
         # Create the Cube
-        cube = Cube(
-            intensity=datacube, variance=datacube_var, wcs=self.target_wcs, info=info
-        )
+        cube = Cube(intensity=datacube, variance=datacube_var,
+                    wcs=self.target_wcs, info=info)
         if self.make_qc_plots:
             self.vprint("Producing quality assessment plots")
             # Fibre coverage and exposure time maps
