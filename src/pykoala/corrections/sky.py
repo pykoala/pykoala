@@ -373,7 +373,9 @@ def uves_sky_lines():
     # Path to tables
     data_path = os.path.join(
         os.path.dirname(__file__), "..", "input_data", "sky_lines", "ESO-UVES")
-
+    if not os.path.isfile(data_path):
+        raise FileNotFoundError(f'Directory {data_path} not in {os.listdir(os.path.join(os.path.dirname(__file__), ".."))}')
+    
     # Initialize arrays to store line properties
     line_wavelength = np.empty(0)
     line_fwhm = np.empty(0)
@@ -383,7 +385,7 @@ def uves_sky_lines():
     for p in prefix:
         file = os.path.join(data_path, f"gident_{p}.tfits")
         if not os.path.isfile(file):
-            raise FileNotFoundError(f"File '{file}' could not be found")
+            raise FileNotFoundError(f"File '{file}' could not be found in {os.listdir(data_path)}")
 
         with fits.open(file) as f:
             wave = f[1].data['LAMBDA_AIR']
