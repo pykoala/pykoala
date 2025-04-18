@@ -1,4 +1,5 @@
 # Makefile
+# py.test -v test/*test?.py && py.test --nbval-lax `cat testable_notebooks.txt`
 default: all
 
 test-notebooks:
@@ -8,4 +9,4 @@ test-units:
 	py.test -v test/*test?.py
 
 all:
-	py.test -v test/*test?.py && py.test --nbval-lax `cat testable_notebooks.txt`
+	py.test -v test/sky_tests.py
