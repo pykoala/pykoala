@@ -696,7 +696,7 @@ class SkyModel(object):
         elif self.intensity.ndim == 1:
             fig, axes = new_figure(fig_name)
             if 'dc' in self.__dict__:
-                title = f'1-D Sky Model for {self.dc.info['name']}'
+                title = f"1-D Sky Model for {self.dc.info['name']}"
             else:
                 title = '1-D Sky Model'
             fig.suptitle(title)
@@ -862,7 +862,7 @@ class SkyFromObject(SkyModel):
             ax.plot(self.dc.wavelength, p50, 'k-', alpha=.1)
             ax.fill_between(self.dc.wavelength, p16, p84,
                             color='k', alpha=.1,
-                            label=f'{self.dc.info['name']} (all fibres)')
+                            label=f"{self.dc.info['name']} (all fibres)")
             if 'sky_CASU' in self.dc.info:
                 ax.plot(self.dc.wavelength, self.dc.info['sky_CASU'],
                         'r-', alpha=.5, label='WEAVE pipeline')
@@ -935,7 +935,7 @@ class SkyFromObject(SkyModel):
             plot_filename = qc_plots.get('filename_base', None)
             fig_name = 'sky_fibres'
             fig, axes = new_figure(fig_name, figsize=(8, 6))
-            fig.suptitle(f'{self.dc.info['name']} {fig_name}')
+            fig.suptitle(f"{self.dc.info['name']} {fig_name}")
             total_flux = np.nanmean(self.dc.rss_intensity.value, axis=1)
             ax, patch_collection, cb = plot_fibres(
                 fig, axes[0, 0], self.dc, data=total_flux,
