@@ -373,8 +373,8 @@ def uves_sky_lines():
     # Path to tables
     data_path = os.path.join(
         os.path.dirname(__file__), "..", "input_data", "sky_lines", "ESO-UVES")
-    if not os.path.isfile(data_path):
-        raise FileNotFoundError(f'Directory {data_path} not in {os.listdir(os.path.join(os.path.dirname(__file__), ".."))}')
+    if not os.path.isdir(data_path):
+        raise FileNotFoundError(f'Directory {data_path} not in {os.listdir(os.path.join(os.path.dirname(__file__), "..", "input_data"))}')
     
     # Initialize arrays to store line properties
     line_wavelength = np.empty(0)
