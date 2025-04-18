@@ -86,7 +86,7 @@ def new_figure(fig_name,
                    4 + kwargs.get("nrows", 1))
 
     fig, axes = plt.subplots(num=fig_name, figsize=figsize,
-                             **kwargs)
+                             layout="constrained", **kwargs)
     if tweak_axes:
         for ax in axes.flat:
             default_ax_setting(ax)

@@ -64,7 +64,7 @@ class AtmosphericExtCorrection(CorrectionBase):
 
     @classmethod
     def from_text_file(cls, path=None):
-        """Initialise the Correction from a text file.
+        r"""Initialise the Correction from a text file.
         
         Parameters
         ----------

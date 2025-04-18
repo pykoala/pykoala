@@ -3,7 +3,9 @@
 venv_koala/
 # Tutorials stuff
 tutorials/*.fits*
+tutorials/corrections/*.fits*
 tutorials/products/*.fits*
+tutorials/products/*.dat*
 tutorials/data/weave
 
 # Unit tests intermediate products
