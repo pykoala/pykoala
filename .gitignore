@@ -1,6 +1,7 @@
 # Other
 /deprecated
 venv_koala/
+sandbox/output/
 # Tutorials stuff
 tutorials/*.fits*
 tutorials/corrections/*.fits*
