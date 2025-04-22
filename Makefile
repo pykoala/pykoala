@@ -6,7 +6,6 @@ test-notebooks:
 	py.test --nbval-lax `cat testable_notebooks.txt`
 
 test-units:
-	py.test -v test/*test?.py
-
+	py.test -v test/sky_tests.py
 all:
 	py.test -v test/sky_tests.py

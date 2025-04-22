@@ -8,6 +8,7 @@ include tox.ini
 recursive-include src *.dat
 recursive-include src *.txt
 recursive-include src *.fits
+recursive-include src *.tfits
 recursive-include src *.ctio
 
 recursive-include docs *.bat
