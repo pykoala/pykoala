@@ -12,6 +12,7 @@ class TestSkyCorrections(unittest.TestCase):
         data = np.random.normal(size=(5, 10))
         for method in BackgroundEstimator.__dict__:
             if method[0] != '_':
+                print(f'Calling "{method}"')
                 intensity, variance = BackgroundEstimator.__dict__[method](data)
                 self.assertTrue(np.isfinite(intensity).all())
                 self.assertTrue(np.isfinite(variance).all())
