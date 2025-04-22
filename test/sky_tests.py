@@ -13,7 +13,8 @@ class TestSkyCorrections(unittest.TestCase):
         for method in BackgroundEstimator.__dict__:
             if method[0] != '_':
                 print(f'Calling "{method}"')
-                intensity, variance = BackgroundEstimator.__dict__[method](data)
+                estimator = BackgroundEstimator.__dict__[method].__get__(object, None)
+                intensity, variance = estimator(data)
                 self.assertTrue(np.isfinite(intensity).all())
                 self.assertTrue(np.isfinite(variance).all())
     
