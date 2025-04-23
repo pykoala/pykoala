@@ -844,7 +844,7 @@ class SkyFromObject(SkyModel):
         
         self.qc_plots = {}
 
-        bckg, bckg_sigma = self.estimate_background(
+        bckg, bckg_sigma = self._estimate_background(
             bckgr_estimator, bckgr_params, sky_fibres, source_mask_nsigma, qc_plots)
         super().__init__(wavelength=self.dc.wavelength,
                          intensity=bckg,
@@ -875,7 +875,7 @@ class SkyFromObject(SkyModel):
             if not show_plot:
                 plt.close(fig_name)
 
-    def estimate_background(self, bckgr_estimator, bckgr_params=None,
+    def _estimate_background(self, bckgr_estimator, bckgr_params=None,
                             sky_fibres=None, source_mask_nsigma=None,
                             qc_plots={}):
         """
@@ -925,7 +925,7 @@ class SkyFromObject(SkyModel):
             if self.sky_fibres is None or len(self.sky_fibres) == 0:
                 sky_fibres = 'auto'
         if sky_fibres == "auto":
-            self.sky_fibres = self.estimate_sky_fibres()
+            self.sky_fibres = self._estimate_sky_fibres()
         elif sky_fibres == "all":
             self.sky_fibres = np.arange(int(self.dc.n_spectra))
         #bckgr_params["axis"] = bckgr_params.get("axis", 0)
@@ -974,7 +974,7 @@ class SkyFromObject(SkyModel):
         bckgr, bckgr_sigma = estimator(data, **bckgr_params)
         return bckgr, bckgr_sigma
 
-    def estimate_sky_fibres(self):
+    def _estimate_sky_fibres(self):
         """
         Identify sky fibres by imposing a mean intensity threshold, based on
         the shape of the normalised spectra.
