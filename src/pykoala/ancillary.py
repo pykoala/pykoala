@@ -390,7 +390,7 @@ def symmetric_background(x, weights=None, fig_name=None):
 
         fig.suptitle(fig_name)
         fig.set_tight_layout(True)
-        plt.show()
+        return mode, threshold, fig
         
     return mode, threshold
 
