@@ -50,12 +50,17 @@ def weave_rss(filename):
     info['airmass'] = header['AIRMASS']  # Airmass
     info['fib_ra'] = fibtable['FIBRERA'] << u.deg
     info['fib_dec'] = fibtable['FIBREDEC'] << u.deg
+    info['sky_fibres'] = np.where(fibtable['TARGUSE'] == "S")[0]
     info['sky_CASU'] = sky
+    if header['OBSMODE'] == "LIFU":
+        fibre_diameter = 2.6 << u.arcsec
+    else:
+        fibre_diameter = 1.3 << u.arcsec
     
     return RSS(intensity=intensity,
                wavelength=wavelength,
                variance=variance,
-               fibre_diameter = 2.6 << u.arcsec,
+               fibre_diameter = fibre_diameter,
                log=log,
                #header=header,
                info=info,
