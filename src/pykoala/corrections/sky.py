@@ -10,7 +10,7 @@ import copy
 import os
 from time import time
 import matplotlib.pyplot as plt
-# from matplotlib.colors import LogNorm
+from matplotlib.colors import LogNorm, Normalize
 import scipy
 # =============================================================================
 # Astropy and associated packages
@@ -27,44 +27,52 @@ import scipy.signal
 # PyKOALA
 # =============================================================================
 from pykoala import vprint
-from pykoala.plotting.utils import new_figure, plot_image
+from pykoala.plotting.utils import new_figure, plot_image, plot_fibres
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.corrections.throughput import Throughput
 from pykoala.corrections.wavelength import WavelengthOffset
 from pykoala.data_container import DataContainer, RSS
-from pykoala.ancillary import check_unit
+from pykoala.ancillary import check_unit, symmetric_background
 
 
 #TODO: Move to a math module
-class BackgroundEstimator:
+class BackgroundEstimator(object):
     """
     Class for estimating background and its dispersion using different statistical methods.
-
-    Methods
-    -------
-    percentile(data, percentiles=[16, 50, 84], axis=0)
-        Compute the background and dispersion from specified percentiles.
-
-    mad(data, axis=0)
-        Estimate the background and dispersion using the Median Absolute Deviation (MAD) method.
-
-    mode(data, axis=0, n_bins=None, bin_range=None)
-        Estimate the background and dispersion using the mode of the data distribution.
     """
 
     @staticmethod
-    def percentile(data, percentiles=[16, 50, 84], axis=0):
+    def mean(rss_intensity):
+        """
+        Compute the mean and standard deviation of the spectra.
+
+        Parameters
+        ----------
+        rss_intensity : np.ndarray
+            Input array (n_fibres x n_wavelength).
+
+        Returns
+        -------
+        background : np.ndarray
+            The computed background (mean) of the data.
+        background_sigma : np.ndarray
+            The dispersion (standard deviation) of the data.
+        """
+        background = np.nanmean(rss_intensity, axis=0)
+        background_sigma = np.nanstd(rss_intensity, axis=0)
+        return background, background_sigma
+
+    @staticmethod
+    def percentile(rss_intensity, percentiles=[16, 50, 84]):
         """
         Compute the background and dispersion from specified percentiles.
 
         Parameters
         ----------
-        data : np.ndarray
-            The input data array from which to compute the background and dispersion.
+        rss_intensity : np.ndarray
+            Input array (n_fibres x n_wavelength).
         percentiles : list of float, optional
             The percentiles to use for computation. Default is [16, 50, 84].
-        axis : int, optional
-            The axis along which to compute the percentiles. Default is 0.
 
         Returns
         -------
@@ -73,21 +81,21 @@ class BackgroundEstimator:
         background_sigma : np.ndarray
             The dispersion (half the interpercentile range) of the data.
         """
-        plow, background, pup = np.nanpercentile(data, percentiles, axis=axis)
+        plow, background, pup = np.nanpercentile(
+            rss_intensity, percentiles, axis=0)
         background_sigma = (pup - plow) / 2
         return background, background_sigma
 
     @staticmethod
-    def mad(data, axis=0):
+    def mad(rss_intensity):
         """
-        Estimate the background and dispersion using the Median Absolute Deviation (MAD) method.
+        Estimate the background from the median and the dispersion from
+        the Median Absolute Deviation (MAD) along the given axis.
 
         Parameters
         ----------
-        data : np.ndarray
-            The input data array from which to compute the background and dispersion.
-        axis : int, optional
-            The axis along which to compute the median and MAD. Default is 0.
+        rss_intensity : np.ndarray
+            Input array (n_fibres x n_wavelength).
 
         Returns
         -------
@@ -96,110 +104,60 @@ class BackgroundEstimator:
         background_sigma : np.ndarray
             The dispersion (scaled MAD) of the data.
         """
-        background = np.nanmedian(data, axis=axis)
-        mad = np.nanmedian(
-            np.abs(data - np.expand_dims(background, axis=axis)), axis=axis)
+        background = np.nanmedian(rss_intensity, axis=0)
+        mad = np.nanmedian(np.abs(rss_intensity - background[np.newaxis:]),
+                           axis=0)
         background_sigma = 1.4826 * mad
         return background, background_sigma
 
-    def fit(data, axis, wavelet):
+    @staticmethod
+    def biweight(rss_intensity):
         """
-        Background estimator from linear fit (Work in progress).
+        Estimate the background and dispersion using the biweight method.
 
         Parameters
         ----------
-        data : np.ndarray
-            The input data array from which to compute the background.
-            TODO: Make it a `DataContainer`.
-        axis : int, optional
-            TODO: remove from the call in `SkyFromObject`.
-        wavelet: WaveletFilter
-            Used to estimate the mean sky flux.
+        rss_intensity : np.ndarray
+            Input array (n_fibres x n_wavelength).
+
+        Returns
+        -------
+        background : np.ndarray
+            Computed background (location) of the data.
+        background_sigma : np.ndarray
+            Dispersion (scale) of the data.
+        """
+        background = stats.biweight_location(rss_intensity, axis=0)
+        background_sigma = stats.biweight_scale(rss_intensity, axis=0)
+        return background, background_sigma
+
+    @staticmethod
+    def mode(rss_intensity):
+        """
+        Estimate the background and dispersion using the mode.
+
+        Parameters
+        ----------
+        rss_intensity : np.ndarray
+            Input array (n_fibres x n_wavelength).
 
         Returns
         -------
         background : np.ndarray
             The computed background sky.
         background_sigma : np.ndarray
-            TODO: An error estimate.
+            Scaled MAD of the data behind the mode.
         """
-        flux = np.nanmean(data, axis=1)
-        mean_flux = np.nanmean(flux)
-        flux_cut_low = np.nanmedian(flux[flux < mean_flux])
-        flux_cut_hi = 2*mean_flux - flux_cut_low
-        flux_low = np.nanmean(flux[flux < flux_cut_low])
-        flux_med = np.nanmean(flux[(flux > flux_cut_low) & (flux < mean_flux)])
-        flux_hi = np.nanmean(flux[(flux > mean_flux) & (flux < flux_cut_hi)])
+        mode = np.empty_like(rss_intensity[0])
+        sigma = np.empty_like(mode)
+        for wavelength_index in range(mode.size):
+            fibre_flux = rss_intensity[:, wavelength_index]
+            mode[wavelength_index], dummy = symmetric_background(fibre_flux)
+            below_mode = fibre_flux < mode[wavelength_index]
+            sigma[wavelength_index] = 1.4826 * np.nanmedian(
+                mode[wavelength_index] - fibre_flux[below_mode])
 
-        I_low = np.nanmean(data[flux < flux_cut_low, :], axis=0)
-        I_med = np.nanmean(data[(flux > flux_cut_low) &
-                           (flux < mean_flux), :], axis=0)
-        I_hi = np.nanmean(
-            data[(flux > mean_flux) & (flux < flux_cut_hi), :], axis=0)
-        m = (I_hi - I_low) / (flux_hi - flux_low)
-        b = I_low - m * flux_low
-
-        sky_flux_candidate = np.arange(0, flux_cut_hi, .01*np.min(flux))
-        sky_filtered = m[np.newaxis, :] * \
-            sky_flux_candidate[:, np.newaxis] + b[np.newaxis, :]
-        x = np.nancumsum(sky_filtered, axis=1)
-        s = wavelet.scale
-        sky_filtered = (x[:, 2*s:-s] - x[:, s:-2*s]) / s
-        sky_filtered -= (x[:, 3*s:] - x[:, :-3*s]) / (3*s)
-        chi2_no_sky = np.nanstd(sky_filtered*(1 - wavelet.sky_weight), axis=1)
-
-        ''' Unsuccessful attempt (keep for a while, just in case)
-        # Wavelet scale:
-        x = b - np.nanmean(b)
-        x = scipy.signal.correlate(x, x, mode='same')
-        h = (np.count_nonzero(x > 0.5*np.nanmax(x)) + 1) // 2
-        s = 2*h + 1
-
-        sky_flux_candidate = np.arange(0, flux_cut_hi, .01*np.min(flux))
-        sky_filtered = m[np.newaxis, :] * sky_flux_candidate[:, np.newaxis] + b[np.newaxis, :]
-        x = np.nancumsum(sky_filtered, axis=1)
-        sky_filtered = (x[:, 2*s:-s] - x[:, s:-2*s]) / s
-        sky_filtered -= (x[:, 3*s:] - x[:, :-3*s]) / (3*s)
-
-        # Sky-based weight:
-        print(s, data.shape, sky_filtered.shape)
-        p16, p50, p84 = np.nanpercentile(data[:, s+h+1:-s-h], [16, 50, 84], axis=0)
-        not_sky = np.exp(-.5 * (p50 / np.fmax((p84 - p50), (p50 - p16)))**2)
-
-        # Select optimal flux:
-        chi2_no_sky = np.nanstd(sky_filtered * not_sky[np.newaxis, :], axis=1)
-        '''
-
-        sky_flux = sky_flux_candidate[np.nanargmin(chi2_no_sky)]
-        sky_intensity = b + m*sky_flux
-        vprint(f"{s} {sky_flux}")
-
-        return sky_intensity, np.nan + sky_intensity
-
-    @staticmethod
-    def mode(data, axis=0, n_bins=None, bin_range=None):
-        """
-        Estimate the background and dispersion using the mode of the data distribution.
-
-        Parameters
-        ----------
-        data : np.ndarray
-            The input data array from which to compute the background and dispersion.
-        axis : int, optional
-            The axis along which to compute the mode. Default is 0.
-        n_bins : int, optional
-            The number of bins to use for the histogram. Default is None.
-        bin_range : tuple of float, optional
-            The range of values for the histogram bins. Default is None.
-
-        Raises
-        ------
-        NotImplementedError
-            This method is not yet implemented.
-        """
-        # TODO: Implement mode estimation method
-        raise NotImplementedError("Sorry, not implemented :(")
-
+        return mode, sigma
 
 #TODO : Move to a math module
 # =============================================================================
@@ -415,7 +373,9 @@ def uves_sky_lines():
     # Path to tables
     data_path = os.path.join(
         os.path.dirname(__file__), "..", "input_data", "sky_lines", "ESO-UVES")
-
+    if not os.path.isdir(data_path):
+        raise FileNotFoundError(f'Directory {data_path} not in {os.listdir(os.path.join(os.path.dirname(__file__), "..", "input_data", "sky_lines"))}')
+    
     # Initialize arrays to store line properties
     line_wavelength = np.empty(0)
     line_fwhm = np.empty(0)
@@ -425,7 +385,7 @@ def uves_sky_lines():
     for p in prefix:
         file = os.path.join(data_path, f"gident_{p}.tfits")
         if not os.path.isfile(file):
-            raise FileNotFoundError(f"File '{file}' could not be found")
+            raise FileNotFoundError(f"File '{file}' could not be found in {os.listdir(data_path)}")
 
         with fits.open(file) as f:
             wave = f[1].data['LAMBDA_AIR']
@@ -597,7 +557,7 @@ class SkyModel(object):
         emission_spectra : np.ndarray
             Emission spectra.
         """
-        assert self.intensity, "Sky Model intensity is None"
+        assert self.intensity is not None, "Sky Model intensity is None"
 
         if self.continuum is None:
             vprint("Sky Model intensity might contain continuum emission"
@@ -606,7 +566,7 @@ class SkyModel(object):
             errors = np.ones_like(self.intensity, dtype=float)
 
         finite_mask = np.isfinite(self.intensity)
-        p0_amplitude = np.interp(self.sky_lines, self.dc.wavelength[finite_mask],
+        p0_amplitude = np.interp(self.sky_lines, self.wavelength[finite_mask],
                                  self.intensity[finite_mask])
         p0_amplitude = np.clip(p0_amplitude, a_min=0, a_max=None)
         fit_g = fitting.LevMarLSQFitter()
@@ -719,7 +679,7 @@ class SkyModel(object):
         self.sky_lines_fwhm = np.delete(self.sky_lines_fwhm, faint)
         self.sky_lines_f = np.delete(self.sky_lines_f, faint)
 
-    def plot_sky_model(self, show=False):
+    def plot_sky_model(self, show=False, fig_name='sky_model'):
         """Plot the sky model
 
         Parameters
@@ -732,20 +692,30 @@ class SkyModel(object):
         fig : :class:`matplotlib.pyplot.Figure`
             Figure containing the Sky Model plot.
         """
-        fig = plt.figure(constrained_layout=True)
-        if self.intensity.ndim == 1:
-            ax = fig.add_subplot(111, title='1-D Sky Model')
-            ax.fill_between(self.wavelength, self.intensity - self.variance**0.5,
-                            self.intensity + self.variance**0.5, color='k',
-                            alpha=0.5, label='STD')
+        if self.intensity is None:
+            return None
+        
+        elif self.intensity.ndim == 1:
+            fig, axes = new_figure(fig_name)
+            if 'dc' in self.__dict__:
+                title = f"1-D Sky Model for {self.dc.info['name']}"
+            else:
+                title = '1-D Sky Model'
+            fig.suptitle(title)
+            ax = axes[0, 0]
             ax.plot(self.wavelength, self.intensity,
-                    color='r', label='intensity')
+                    color='b', alpha=0.5, label='sky intensity')
+            if self.variance is not None:
+                ax.fill_between(self.wavelength, self.intensity - self.variance**0.5,
+                                self.intensity + self.variance**0.5, color='b',
+                                alpha=0.2, label='uncertainty')
             ax.set_ylim(np.nanpercentile(self.intensity, [1, 99]).value)
-            ax.set_ylabel("Intensity")
-            ax.set_xlabel("Wavelength (AA)")
+            ax.set_ylabel(f"Intensity [{self.intensity.unit}]")
+            ax.set_xlabel(f"Wavelength [{self.wavelength.unit}]")
             ax.legend()
 
         elif self.intensity.ndim == 2:
+            fig = plt.figure(fig_name, constrained_layout=True)
             im_args = dict(
                 interpolation='none', aspect='auto', origin="lower",
                 extent=(1, self.intensity.shape[0],
@@ -756,10 +726,12 @@ class SkyModel(object):
             ax = fig.add_subplot(122, title='2-D Sky Model STD')
             mappable = ax.imshow(self.variance**0.5, **im_args)
             plt.colorbar(mappable, ax=ax)
-        if show:
-            plt.show()
-        else:
-            plt.close()
+
+        #if show:
+        #    plt.show(fig_name)
+        #else:
+        if not show:
+            plt.close(fig_name)
         return fig
 
 
@@ -800,7 +772,7 @@ class SkyOffset(SkyModel):
         #TODO: This should create a 2D model that uses the median sky
         # but shifts it to the posiotoin given on each individual fibre
         self.intensity, self.variance = BackgroundEstimator.percentile(
-            self.dc.intensity, percentiles=[16, 50, 84])
+            self.dc.rss_intensity, percentiles=[16, 50, 84])
         self.intensity, self.variance = (
             self.intensity / self.exptime,
             self.variance / self.exptime)
@@ -828,9 +800,12 @@ class SkyFromObject(SkyModel):
         Estimated continuum. Initialized as None.
     """
 
-    def __init__(self, dc, bckgr_estimator='mad', bckgr_params=None,
-                 source_mask_nsigma=3, remove_cont=False,
-                 cont_estimator='median', cont_estimator_args=None):
+    def __init__(self, dc,
+                 bckgr_estimator='mad', bckgr_params=None,
+                 sky_fibres=None, source_mask_nsigma=None,
+                 remove_cont=False,
+                 cont_estimator='median', cont_estimator_args=None,
+                 qc_plots={'show': True}):
         """
         Initialize the SkyFromObject model.
 
@@ -842,30 +817,67 @@ class SkyFromObject(SkyModel):
             Background estimator method to be used. Default is 'mad'.
         bckgr_params : dict, optional
             Parameters for the background estimator. Default is None.
+        sky_fibres : None, 'auto', 'all', or list of 1D indices (optional)
+            Default is None, which will read the sky fibre list from
+            the `info` attribute; if absent or empty, it will trigger 'auto'.
+            The 'auto' option will call `estimate_sky_fibres` to identify
+            sky fibres based on a mean intensity threshold, automatically
+            determined from the shape of the normalised spectra.
+            Selecting `all` will use every spectrum in the `DataContainer`.
+            Othrwise, this argument will be interpreted as a list of
+            integer indices identifying sky spectra, assuming 1D RSS order.
         source_mask_nsigma : float, optional
-            Sigma level for masking sources. Default is 3.
+            Sigma level for masking sources. Default is None.
         remove_cont : bool, optional
             If True, the continuum will be removed. Default is False.
         cont_estimator : str, optional
             Method to estimate the continuum signal. Default is 'median'.
         cont_estimator_args : dict, optional
             Arguments for the continuum estimator. Default is None.
+        qc_plots: dict
+            Dictionary to control QC plots.
         """
         vprint("Creating SkyModel from input Data Container")
         self.dc = dc
         # self.exptime = dc.info['exptime']
-        vprint("Estimating sky background contribution...")
+        #vprint(f"Estimating sky background contribution from the {bckgr_estimator}...")
+        
+        self.qc_plots = {}
 
-        bckg, bckg_sigma = self.estimate_background(
-            bckgr_estimator, bckgr_params, source_mask_nsigma)
+        bckg, bckg_sigma = self._estimate_background(
+            bckgr_estimator, bckgr_params, sky_fibres, source_mask_nsigma, qc_plots)
         super().__init__(wavelength=self.dc.wavelength,
                          intensity=bckg,
                          variance=bckg_sigma**2)
         if remove_cont:
             vprint("Removing background continuum")
             self.remove_continuum(cont_estimator, cont_estimator_args)
+        
+        if len(qc_plots) > 0:
+            show_plot = qc_plots.get('show', True)
+            plot_filename = qc_plots.get('filename_base', None)
+            fig_name = 'sky_model'
+            fig = self.plot_sky_model(show=show_plot, fig_name=fig_name)
+            ax = fig.axes[0]
+            p16, p50, p84 = np.nanpercentile(self.dc.rss_intensity,
+                                             [16, 50, 84], axis=0)
+            ax.plot(self.dc.wavelength, p50, 'k-', alpha=.1)
+            ax.fill_between(self.dc.wavelength, p16, p84,
+                            color='k', alpha=.1,
+                            label=f"{self.dc.info['name']} (all fibres)")
+            if 'sky_CASU' in self.dc.info:
+                ax.plot(self.dc.wavelength, self.dc.info['sky_CASU'],
+                        'r-', alpha=.5, label='WEAVE pipeline')
+            ax.legend()
+            self.qc_plots[fig_name] = fig
+            if plot_filename is not None:
+                fig.savefig(f'{plot_filename}_{fig_name}.png')
+            if not show_plot:
+                plt.close(fig_name)
 
-    def estimate_background(self, bckgr_estimator, bckgr_params=None, source_mask_nsigma=3):
+    def _estimate_background(self, bckgr_estimator, bckgr_params=None,
+                            sky_fibres=None, source_mask_nsigma=None,
+                            qc_plots={}):
         """
         Estimate the background.
 
@@ -875,8 +887,19 @@ class SkyFromObject(SkyModel):
             Background estimator method. Available methods: 'mad', 'percentile'.
         bckgr_params : dict, optional
             Parameters for the background estimator. Default is None.
+        sky_fibres : None, 'auto', 'all', or list of 1D indices (optional)
+            Default is None, which will read the sky fibre list from
+            the `info` attribute; if absent or empty, it will trigger 'auto'.
+            The 'auto' option will call `estimate_sky_fibres` to identify
+            sky fibres based on a mean intensity threshold, automatically
+            determined from the shape of the normalised spectra.
+            Selecting `all` will use every spectrum in the `DataContainer`.
+            Othrwise, this argument will be interpreted as a list of
+            integer indices identifying sky spectra, assuming 1D RSS order.
         source_mask_nsigma : float, optional
-            Sigma level for masking sources. Default is 3.
+            Sigma level for masking sources. Default is None.
+        qc_plots: dict
+            Dictionary to control QC plots.
 
         Returns
         -------
@@ -893,29 +916,161 @@ class SkyFromObject(SkyModel):
         else:
             raise NameError(
                 f"Input background estimator {bckgr_estimator} does not exist")
+        
+        # Determine sky fibres:
+        
+        self.sky_fibres = sky_fibres
+        if sky_fibres is None:
+            self.sky_fibres = self.dc.info.get('sky_fibres', None)
+            if self.sky_fibres is None or len(self.sky_fibres) == 0:
+                sky_fibres = 'auto'
+        if sky_fibres == "auto":
+            self.sky_fibres = self._estimate_sky_fibres()
+        elif sky_fibres == "all":
+            self.sky_fibres = np.arange(int(self.dc.n_spectra))
+        #bckgr_params["axis"] = bckgr_params.get("axis", 0)
+        #data = np.take(self.dc.rss_intensity, self.sky_fibres, bckgr_params["axis"])
+        data = self.dc.rss_intensity[self.sky_fibres]
+        
+        if (len(qc_plots) > 0) and (self.dc.intensity.ndim == 2):
+            show_plot = qc_plots.get('show', True)
+            plot_filename = qc_plots.get('filename_base', None)
+            fig_name = 'sky_fibres'
+            fig, axes = new_figure(fig_name, figsize=(8, 6))
+            fig.suptitle(f"{self.dc.info['name']} {fig_name}")
+            total_flux = np.nanmean(self.dc.rss_intensity.value, axis=1)
+            ax, patch_collection, cb = plot_fibres(
+                fig, axes[0, 0], self.dc, data=total_flux,
+                cblabel=f'mean intensity [{self.dc.rss_intensity.unit}]',
+                cmap='Spectral_r',
+                norm=Normalize(vmax=np.nanmean(total_flux)))
+            handle, = ax.plot(self.dc.info['fib_ra'][self.sky_fibres],
+                              self.dc.info['fib_dec'][self.sky_fibres],
+                              'k+', label=f'{self.sky_fibres.size} sky fibres')
+            ax.legend(handles=[handle])
+            if plot_filename is not None:
+                fig.savefig(f'{plot_filename}_{fig_name}.png')
+            self.qc_plots[fig_name] = fig
+            #if show_plot:
+            #    plt.show(fig_name)
+            #else:
+            if not show_plot:
+                plt.close(fig_name)
 
-        data = self.dc.intensity.copy()
-
-        if data.ndim == 3:
-            bckgr_params["axis"] = bckgr_params.get("axis", (1, 2))
-            dims_to_expand = (1, 2)
-        elif data.ndim == 2:
-            bckgr_params["axis"] = bckgr_params.get("axis", 0)
-            dims_to_expand = (0)
-
+        # Estimate sky spectrum:
+        
         if source_mask_nsigma is not None:
             vprint("Pre-estimating background using all data")
             bckgr, bckgr_sigma = estimator(data, **bckgr_params)
             vprint(
                 f"Applying sigma-clipping mask (n-sigma={source_mask_nsigma})")
+            dims_to_expand = (0)
             source_mask = (data > np.expand_dims(bckgr, dims_to_expand) +
                            source_mask_nsigma
                            * np.expand_dims(bckgr_sigma, dims_to_expand))
             data[source_mask] = np.nan
 
+        vprint(f"Applying the {bckgr_estimator} estimator to {data.shape[0]} sky fibres")
         bckgr, bckgr_sigma = estimator(data, **bckgr_params)
         return bckgr, bckgr_sigma
 
+    def _estimate_sky_fibres(self):
+        """
+        Identify sky fibres by imposing a mean intensity threshold, based on
+        the shape of the normalised spectra.
+        """
+        
+        total_flux = np.nanmean(self.dc.rss_intensity, axis=1).value
+        sorted_by_flux = np.argsort(total_flux)
+        n = 1 + np.arange(sorted_by_flux.size)
+        half_sample = sorted_by_flux.size // 2
+
+        flux_mean = np.nancumsum(total_flux[sorted_by_flux]) / n
+
+        norm_fibre = self.dc.rss_intensity.value[sorted_by_flux, :] / total_flux[sorted_by_flux][:, np.newaxis]
+        norm_sum1 = np.nancumsum(norm_fibre, axis=0)
+        norm_sum2 = np.nancumsum(norm_fibre**2, axis=0)
+
+        left_side_mean = norm_sum1[1:half_sample] / n[1:half_sample, np.newaxis]
+        right_side_mean = norm_sum1[3::2] / n[1:half_sample, np.newaxis] - left_side_mean
+
+        left_side_err = norm_sum2[1:half_sample] / n[1:half_sample, np.newaxis]
+        right_side_err = norm_sum2[3::2] / n[1:half_sample, np.newaxis] - left_side_err
+
+        left_side_err -= left_side_mean**2
+        left_side_err[~(left_side_err > 0)] = np.nan
+        left_side_err = np.sqrt(left_side_err / n[:half_sample-1, np.newaxis])  # n-1
+
+        right_side_err -= right_side_mean**2
+        right_side_err[~(right_side_err > 0)] = np.nan
+        right_side_err = np.sqrt(right_side_err / n[:half_sample-1, np.newaxis])  # n-1
+
+        weight = np.exp(np.nanmean(
+            -(right_side_mean - left_side_mean)**2 * (1/right_side_err**2 + 1/left_side_err**2),
+            axis=1))
+        sky_flux = np.nansum(total_flux[sorted_by_flux][3::2] * weight) / np.nansum(weight)
+
+        n_sky = min(
+            np.searchsorted(flux_mean, sky_flux),
+            2 * np.searchsorted(total_flux[sorted_by_flux], sky_flux))
+        flux_threshold = total_flux[sorted_by_flux[n_sky-1]]
+        sky_fibres = sorted_by_flux[:n_sky]
+        vprint(f'{n_sky} sky fibres found below {flux_threshold:.5g} (sky flux = {sky_flux:.5g}) {self.dc.rss_intensity.unit}')
+        
+        return sky_fibres
+
+    def plot_individual_wavelength(self, wavelength):
+        """
+        Identify sky fibres by imposing a mean intensity threshold, based on
+        the shape of the normalised spectra.
+        """
+        idx = np.searchsorted(self.dc.wavelength, check_unit(wavelength, u.Angstrom)) - 1
+
+        intensity = self.dc.rss_intensity[:, idx].value
+        total_flux = np.nanmean(self.dc.rss_intensity, axis=1)
+        intensity_norm = intensity / total_flux
+
+        sorted_by_flux = np.argsort(total_flux)
+        flux_mean = np.nancumsum(total_flux[sorted_by_flux]) / np.arange(1, total_flux.size+1)
+        half_sample = total_flux.size // 2
+        
+        fig, axes = new_figure('single_wavelength_sky', nrows=2)
+
+        ax = axes[0, 0]
+        ax.set_ylabel(f'intensity ($\\lambda={self.dc.wavelength[idx]:.2f}\\ \\AA$)')
+        vmin = np.nanmin(intensity[self.sky_fibres])
+        vmax = np.nanmax(intensity[self.sky_fibres])
+        h = .1 * (vmax - vmin)
+        ax.set_ylim(vmin-h, vmax+2*h)
+
+        ax.plot(total_flux, intensity, 'k.', alpha=.1)
+        ax.plot(total_flux[self.sky_fibres], intensity[self.sky_fibres], 'b+', alpha=.5)
+        ax.axhline(self.intensity[idx], c='k', ls='--')
+        std = np.sqrt(self.variance[idx])
+        ax.axhline(self.intensity[idx] + std, c='k', ls=':')
+        ax.axhline(self.intensity[idx] - std, c='k', ls=':')
+
+
+        ax = axes[1, 0]
+        ax.set_ylabel(f'normalised intensity')
+        vmin = np.nanmin(intensity_norm[self.sky_fibres])
+        vmax = np.nanmax(intensity_norm[self.sky_fibres])
+        h = .1 * (vmax - vmin)
+        ax.set_ylim(vmin-h, vmax+2*h)
+
+        ax.plot(total_flux, intensity_norm, 'k.', alpha=.1)
+        ax.plot(total_flux[self.sky_fibres], intensity_norm[self.sky_fibres], 'b+', alpha=.5)
+        sky_flux = np.nanmean(self.intensity.value)
+        ax.axhline(self.intensity.value[idx]/sky_flux, c='k', ls='--')
+        ax.axhline((self.intensity[idx] + std).value/sky_flux, c='k', ls=':')
+        ax.axhline((self.intensity[idx] - std).value/sky_flux, c='k', ls=':')
+
+        ax.set_xlabel('total flux (mean fibre intensity)')
+        vmin, vmax = (flux_mean[0], flux_mean[-1])
+        h = .1 * (vmax - vmin)
+        ax.set_xlim(vmin-h, vmax+2*h)
+
+        return fig
 
 # =============================================================================
 # Sky Substraction Correction
@@ -1708,103 +1863,12 @@ class WaveletFilter(object):
             fig.savefig(save_as)
 
     def get_throughput_object(self):
-        return Throughput(throughput_data=np.repeat(self.fibre_throughput[:, np.newaxis], self.wavelength.size + 3*self.scale, axis=1))
+        return Throughput(throughput_data=np.repeat(self.fibre_throughput[:, np.newaxis], self.wavelength.size + 3*self.scale, axis=1),
+                          throughput_error=np.full([self.fibre_throughput.size, self.wavelength.size + 3*self.scale], np.nan)
+                         )
 
     def get_wavelength_offset(self):
-        return WavelengthOffset(offset_data=np.repeat(self.fibre_offset[:, np.newaxis], self.wavelength.size + 3*self.scale, axis=1))
-
-
-class SkySelfCalibration(CorrectionBase):
-    """TODO> Finish documentaion
-    Wavelength calibration, throughput, and sky model based on strong sky lines."""
-    name = "SkySelfCalibration"
-    verbose = True
-
-    # TODO: Don't assume RSS format (intensity[spec_id, wavelength])
-    #       def __init__(self, dc:DataContainer, continuum:ContinuumModel):
-    def __init__(self, dc: RSS, **correction_kwargs):
-        super().__init__(**correction_kwargs)
-        self.update(dc)
-
-    def update(self, dc: RSS):
-        self.dc = dc
-        self.biweight_sky()
-        self.update_sky_lines()
-        self.calibrate()
-
-    # TODO: use SkyModel as an argument to update()?
-
-    def biweight_sky(self):
-        # self.wavelength = self.dc.wavelength.to_value(u.Angstrom)
-        self.sky_intensity = stats.biweight.biweight_location(
-            self.dc.intensity, axis=0)
-
-    def update_sky_lines(self):
-        sky_cont, sky_err = ContinuumEstimator.lower_envelope(
-            self.dc.wavelength, self.sky_intensity)  # , min_separation)
-        sky_lines = self.sky_intensity - sky_cont
-
-        self.continuum = ContinuumModel(self.dc)
-        self.continuum.strong_sky_lines.add_column(
-            0.*u.Angstrom, name='sky_wavelength')
-        self.continuum.strong_sky_lines.add_column(0., name='sky_intensity')
-        for line in self.continuum.strong_sky_lines:
-            wavelength = self.dc.wavelength[line['left']:line['right']]
-            spectrum = sky_lines[line['left']:line['right']]
-            weight = spectrum**2
-            line['sky_wavelength'] = np.nansum(
-                weight*wavelength) / np.nansum(weight)
-            line['sky_intensity'] = np.nanmean(spectrum)
-
-    # TODO: Don't assume RSS format (intensity[spec_id, wavelength])
-
-    def calibrate(self):
-        n_spectra = self.dc.intensity.shape[0]
-        self.wavelength_offset = np.zeros(
-            n_spectra) * self.dc.wavelength[0]  # dirty hack to specify units
-        self.wavelength_offset_err = np.zeros_like(self.wavelength_offset)
-        self.relative_throughput = np.zeros(n_spectra)
-        self.relative_throughput_err = np.zeros(n_spectra)
-        self.vprint(f"> Calibrating for {n_spectra} spectra:")
-        t0 = time()
-        for spec_id in range(n_spectra):
-            line_wavelength, line_intensity = self.measure_lines(spec_id)
-            y = line_wavelength - \
-                self.continuum.strong_sky_lines['sky_wavelength']
-            self.wavelength_offset[spec_id] = stats.biweight.biweight_location(
-                y)
-            self.wavelength_offset_err[spec_id] = stats.biweight.biweight_scale(
-                y)
-            y = line_intensity / \
-                self.continuum.strong_sky_lines['sky_intensity']
-            self.relative_throughput[spec_id] = stats.biweight.biweight_location(
-                y)
-            self.relative_throughput_err[spec_id] = stats.biweight.biweight_scale(
-                y)
-        self.vprint(f"  Done ({time()-t0:.3g} s)")
-
-    def measure_lines(self, spec_id):
-        intensity = self.dc.intensity[spec_id]
-        continuum = self.continuum.intensity[spec_id]
-        sky_wavelength = self.continuum.strong_sky_lines['sky_wavelength'].to_value(
-            u.Angstrom)
-        line_wavelength = np.zeros_like(sky_wavelength)
-        sky_intensity = self.continuum.strong_sky_lines['sky_intensity']
-        line_intensity = np.zeros_like(sky_intensity)
-        wavelength = self.dc.wavelength.to_value(u.Angstrom)
-        for i, line in enumerate(self.continuum.strong_sky_lines):
-            section_wavelength = wavelength[line['left']:line['right']]
-            section_intensity = (
-                intensity - continuum)[line['left']:line['right']]
-            weight = section_intensity**2
-            line_wavelength[i] = np.nansum(
-                weight*section_wavelength) / np.nansum(weight)
-            line_intensity[i] = np.nanmean(section_intensity)
-        return line_wavelength*u.Angstrom, line_intensity
-
-    def apply(self, rss):
-        #TODO : finish this module
-        pass
+        return WavelengthOffset(offset_data=np.repeat(self.fibre_offset[:, np.newaxis], self.wavelength.size + 3*self.scale, axis=1) << u.pix)
 
 
 # =============================================================================
