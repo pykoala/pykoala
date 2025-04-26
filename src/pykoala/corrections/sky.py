@@ -1589,6 +1589,7 @@ class TelluricCorrection(CorrectionBase):
                     exclude_wlm[i][1].to_value(spectra_container.wavelength.unit),
                     color='lightgreen', alpha=0.1)
         ax.minorticks_on()
+        ax.set_xlim(spectra_container.wavelength[[0, -1]].value)
         if kwargs.get('plot', False):
             plt.show()
         else:
