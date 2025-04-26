@@ -1,9 +1,9 @@
 [build-system]
-requires = ["setuptools >= 61.0", "versioneer[toml]"]
+requires = ["setuptools >= 75.0", "versioneer[toml]"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pykoala"
+name = "pykoala-ifs"
 dynamic = ["version"]
 authors = [
   { name="Pablo Corcho-Caballero", email="p.corcho.caballero@rug.nl" },
@@ -23,13 +23,20 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.versioneer]
+VCS = 'git'
+style = 'pep440'
+versionfile_source = 'src/pykoala/_version.py'
+versionfile_build = 'pykoala/_version.py'
+tag_prefix = 'v'
 
 [project.urls]
 Homepage = "https://github.com/pykoala/koala"
