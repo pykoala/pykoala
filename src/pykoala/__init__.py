@@ -86,3 +86,5 @@ class VerboseMixin():
 
 __all__ = ["__version__", "pykoala_logger", "log_into_file", "vprint",
            "VerboseMixin"]
+from . import _version
+__version__ = _version.get_versions()['version']
