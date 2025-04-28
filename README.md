@@ -19,13 +19,13 @@ By addressing the complexities of transforming raw measurements into scientifica
 ---
 ## Documentation
 
-**PyKOALA** online documentation can be found here: https://pykoala.readthedocs.io/en/latest/index.html
+**PyKOALA** documentation can be found [here](https://pykoala.readthedocs.io/en/latest/index.html).
 
 ---
 ## Installation
 
 ### Creating a virtual environment (recommended)
-To avoid dependency conflicts, we recommend the use of virtual environments for the installation of **PyKOALA**. For example, a simple way to setup the python environment is by using the [`venv`](https://docs.python.org/3/library/venv.html) module:
+To avoid dependency conflicts, we recommend the use of virtual environments for the installation of **PyKOALA**. For example, a simple way to setup a python environment is by using the [`venv`](https://docs.python.org/3/library/venv.html) module:
 
 ```bash
 python3 -m venv venv_pykoala # common conventions are .venv or venv
@@ -43,16 +43,19 @@ To stop using the environment:
 deactivate
 ```
 
-
 ### Installing from pypi
+
+Every release of PyKOALA is automatically avaialable through [PyPI](https://pypi.org/):
 
 ```bash
 python3 -m pip install pykoala-ifs
 ```
 
+You can check this [link](https://github.com/pykoala/pykoala/releases) for a complete list of previous releases.
+
 ### Installing from the source repository
 
-**PyKOALA** can be obtained by cloning this repository using:
+**PyKOALA** can be installed by cloning this repository using:
 
 ```bash
 git clone https://github.com/pykoala/pykoala.git
@@ -68,11 +71,11 @@ python3 -m pip install .  # Install pykoala
 
 For more further instructions about the installation and virtual environtment setup, check the [quick-start documentation](https://pykoala.readthedocs.io/en/latest/getting-started/index.html#quickstart).
 
+Users that would like to contribute to the development of PyKOALA can follow the instructions available [here](https://pykoala.readthedocs.io/en/latest/developer-guide/index.html).
 
 ## Tutorials
----
 
-We provide a set of introductory tutorials and test data in a separate [repository](https://github.com/pykoala/pykoala-tutorials).
+We provide a comprehensive set tutorials and test data in a [dedicated repository](https://github.com/pykoala/pykoala-tutorials).
 
 ## License and Acknowledgements
 
