@@ -18,8 +18,4 @@ Clone a copy of your fork onto a local machine:
 
 This gets a copy of the entire repository. Here replace USERNAME with your GitHub username.
 
-
-How to update your fork from the main PyKOALA repo
---------------------------------------------------
-
-Make a
+Additional documentation is avaialable [here](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo).
