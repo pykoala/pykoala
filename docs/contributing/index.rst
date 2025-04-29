@@ -1,12 +1,17 @@
 Contributing
 ============
 
-PyKOALA is an open community, where users are greatly welcomed to contribute to the development of the library.
+PyKOALA is an open-source project, and we warmly welcome contributions from the community! There are several ways you can help improve the library:
 
-The list of current issues of PyKOALA can be found `here <https://github.com/pykoala/pykoala/issues>`_.
+- **Report Issues**
 
-Contributors are encouraged to read the `contributing guide <https://github.com/pykoala/pykoala/main/CONTRIBUTING.md>`_ before creating a pull request.
+Share feedback, request features, or report bugs by opening a new `issue <https://github.com/pykoala/pykoala/issues>`_ on GitHub.
 
+- **Contribute Code**
+
+If you’d like to contribute code, please follow the guidelines outlined in our `Contributing guide <https://github.com/pykoala/pykoala/blob/main/CONTRIBUTING.md>`_.
+
+Whether you're fixing a bug, improving documentation, or adding a new feature, your help is appreciated!
 
 Contents
 --------
