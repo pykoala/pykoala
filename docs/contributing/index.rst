@@ -13,8 +13,8 @@ If you’d like to contribute code, please follow the guidelines outlined in our
 
 Whether you're fixing a bug, improving documentation, or adding a new feature, your help is much appreciated!
 
-Contents
---------
+Additional information
+----------------------
 
 .. toctree::
     :maxdepth: 1
