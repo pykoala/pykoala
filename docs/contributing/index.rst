@@ -11,7 +11,7 @@ Share feedback, request features, or report bugs by opening a new `issue <https:
 
 If you’d like to contribute code, please follow the guidelines outlined in our `Contributing guide <https://github.com/pykoala/pykoala/blob/main/CONTRIBUTING.md>`_.
 
-Whether you're fixing a bug, improving documentation, or adding a new feature, your help is appreciated!
+Whether you're fixing a bug, improving documentation, or adding a new feature, your help is much appreciated!
 
 Contents
 --------
