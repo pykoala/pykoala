@@ -1,3 +1,5 @@
+.. _user-guide:
+
 User guide
 ===============
 
@@ -5,4 +7,5 @@ User guide
     :maxdepth: 1
 
     intro
+    quickstart
     tutorials
