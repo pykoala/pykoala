@@ -20,6 +20,8 @@ Data Structures
    :caption: Available modules
 
 
+.. _supported_instruments:
+
 Supported IFS Instruments
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
