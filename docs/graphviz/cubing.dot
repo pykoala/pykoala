@@ -1,0 +1,13 @@
+digraph "classes" {
+rankdir=BT
+charset="utf-8"
+"pykoala.cubing.DrizzlingKernel" [color="black", fontcolor="black", label=<DrizzlingKernel>, shape="record", style="solid"];
+"pykoala.cubing.GaussianKernel" [color="black", fontcolor="black", label=<GaussianKernel>, shape="record", style="solid"];
+"pykoala.cubing.InterpolationKernel" [color="black", fontcolor="black", label=<InterpolationKernel>, shape="record", style="solid"];
+"pykoala.cubing.ParabolicKernel" [color="black", fontcolor="black", label=<ParabolicKernel>, shape="record", style="solid"];
+"pykoala.cubing.TopHatKernel" [color="black", fontcolor="black", label=<TopHatKernel>, shape="record", style="solid"];
+"pykoala.cubing.DrizzlingKernel" -> "pykoala.cubing.TopHatKernel" [arrowhead="empty", arrowtail="none"];
+"pykoala.cubing.GaussianKernel" -> "pykoala.cubing.InterpolationKernel" [arrowhead="empty", arrowtail="none"];
+"pykoala.cubing.ParabolicKernel" -> "pykoala.cubing.InterpolationKernel" [arrowhead="empty", arrowtail="none"];
+"pykoala.cubing.TopHatKernel" -> "pykoala.cubing.InterpolationKernel" [arrowhead="empty", arrowtail="none"];
+}

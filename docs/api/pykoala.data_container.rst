@@ -3,6 +3,8 @@
    :undoc-members:
    :show-inheritance:
 
+.. _data-container:
+
 DataContainer
 -------------
 .. autoclass:: pykoala.data_container.DataContainer
@@ -17,12 +19,16 @@ SpectraContainer
    :undoc-members:
    :show-inheritance:
 
+.. _rss:
+
 RSS
 ^^^
 .. autoclass:: pykoala.data_container.RSS
    :members:
    :undoc-members:
    :show-inheritance:
+
+.. _cube:
 
 Cube
 ^^^^
