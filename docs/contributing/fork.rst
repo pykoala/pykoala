@@ -1,24 +1,33 @@
-Developer setup
+Developer Setup
 ===============
 
 Forking PyKOALA
 ---------------
 
-Working on a fork enables you to develop your own copy of PyKOALA, contributing your code back to the main repository through a "pull request."
+Forking the PyKOALA repository allows you to develop and test changes independently. Once you're ready, you can contribute back by opening a pull request to the main repository.
 
 How to fork
 ^^^^^^^^^^^
-First, click “Fork this repository” on the main PyKOALA repository in github. You then have your own copy of PyKOALA in github.com/USERNAME/koala
+
+To create your own fork of PyKOALA:
+
+1. Go to the main `PyKOALA GitHub repository <https://github.com/pykoala/pykoala>`_.
+2. Click the **“Fork”** button at the top right of the page.
+3. GitHub will create a copy of the repository under your account, e.g., ``github.com/USERNAME/pykoala``.
 
 .. figure:: ../_static/figures/fork_buttom.png
+   :alt: GitHub "Fork" button
 
-How to work on your fork
+
+
+How to Work on Your Fork
 ^^^^^^^^^^^^^^^^^^^^^^^^
-Clone a copy of your fork onto a local machine:
+
+Once you've forked the repository, clone it to your local machine:
 ::
 
     git clone git@github.com:USERNAME/koala
 
-This gets a copy of the entire repository. Here replace USERNAME with your GitHub username.
+Replace ``USERNAME`` with your actual GitHub username. This command downloads a complete copy of the repository to your system.
 
-Additional documentation is avaialable `here <https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo>`_.
+To learn more about working with forks and contributing through pull requests, refer to the official GitHub documentation `here <https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo>`_.
