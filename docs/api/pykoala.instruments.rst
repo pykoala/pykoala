@@ -1,5 +1,3 @@
-.. _instruments:
-
 pykoala.instruments package
 ===========================
 
