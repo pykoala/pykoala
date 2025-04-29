@@ -26,7 +26,7 @@ creating science-ready 3D data cubes using Raw Stacked Spectra (RSS) images crea
 
     getting-started/index
     user-guide/index
-    developer-guide/index
+    contributing/index
     api/api
     license
 
