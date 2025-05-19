@@ -259,9 +259,9 @@ def plot_fibres(fig, ax, rss=None, x=None, y=None,
 
     if norm is None:
         interval = norm_interval(**interval_args)
-        norm = visualization.ImageNormalize(data, interval=interval,
-                              stretch=stretch(**stretch_args),
-                              clip=False)
+        norm = visualization.ImageNormalize(ancillary.remove_unit(data), interval=interval,
+                                            stretch=stretch(**stretch_args),
+                                            clip=False)
     elif isinstance(norm, str):
         norm = getattr(colors, norm)()
 
@@ -269,7 +269,8 @@ def plot_fibres(fig, ax, rss=None, x=None, y=None,
         cmap = plt.get_cmap(cmap).copy()
 
     if data is not None:
-        fib_colors = cmap(norm(data))
+        normed_data = norm(ancillary.remove_unit(data))
+        fib_colors = cmap(normed_data)
         mappable = ScalarMappable(norm=norm, cmap=cmap)
         if cbax is None:
             cb = fig.colorbar(mappable, ax=ax, orientation='vertical', shrink=.9)

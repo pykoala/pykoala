@@ -1,10 +1,14 @@
-Corrections Library
+.. _corrections:
+
+Corrections
 -------------------
 
 .. automodule:: pykoala.corrections
    :members: CorrectionBase
    :undoc-members:
    :show-inheritance:
+
+.. _astrometry:
 
 Astrometry
 ---------------------------------------------------
@@ -13,6 +17,8 @@ Astrometry
    :members:
    :undoc-members:
    :show-inheritance:
+
+.. _atmospheric_extinction:
 
 Atmospheric Corrections
 ---------------------------------------------------
@@ -37,6 +43,8 @@ Flux Calibration
    :members:
    :undoc-members:
    :show-inheritance:
+
+.. _sky:
 
 Sky
 ------------------------------

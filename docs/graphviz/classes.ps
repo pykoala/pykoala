@@ -1,0 +1,1720 @@
+%!PS-Adobe-3.0
+%%Creator: graphviz version 2.43.0 (0)
+%%Title: classes
+%%Pages: (atend)
+%%BoundingBox: (atend)
+%%EndComments
+save
+%%BeginProlog
+/DotDict 200 dict def
+DotDict begin
+
+/setupLatin1 {
+mark
+/EncodingVector 256 array def
+ EncodingVector 0
+
+ISOLatin1Encoding 0 255 getinterval putinterval
+EncodingVector 45 /hyphen put
+
+% Set up ISO Latin 1 character encoding
+/starnetISO {
+        dup dup findfont dup length dict begin
+        { 1 index /FID ne { def }{ pop pop } ifelse
+        } forall
+        /Encoding EncodingVector def
+        currentdict end definefont
+} def
+/Times-Roman starnetISO def
+/Times-Italic starnetISO def
+/Times-Bold starnetISO def
+/Times-BoldItalic starnetISO def
+/Helvetica starnetISO def
+/Helvetica-Oblique starnetISO def
+/Helvetica-Bold starnetISO def
+/Helvetica-BoldOblique starnetISO def
+/Courier starnetISO def
+/Courier-Oblique starnetISO def
+/Courier-Bold starnetISO def
+/Courier-BoldOblique starnetISO def
+cleartomark
+} bind def
+
+%%BeginResource: procset graphviz 0 0
+/coord-font-family /Times-Roman def
+/default-font-family /Times-Roman def
+/coordfont coord-font-family findfont 8 scalefont def
+
+/InvScaleFactor 1.0 def
+/set_scale {
+       dup 1 exch div /InvScaleFactor exch def
+       scale
+} bind def
+
+% styles
+/solid { [] 0 setdash } bind def
+/dashed { [9 InvScaleFactor mul dup ] 0 setdash } bind def
+/dotted { [1 InvScaleFactor mul 6 InvScaleFactor mul] 0 setdash } bind def
+/invis {/fill {newpath} def /stroke {newpath} def /show {pop newpath} def} bind def
+/bold { 2 setlinewidth } bind def
+/filled { } bind def
+/unfilled { } bind def
+/rounded { } bind def
+/diagonals { } bind def
+/tapered { } bind def
+
+% hooks for setting color 
+/nodecolor { sethsbcolor } bind def
+/edgecolor { sethsbcolor } bind def
+/graphcolor { sethsbcolor } bind def
+/nopcolor {pop pop pop} bind def
+
+/beginpage {	% i j npages
+	/npages exch def
+	/j exch def
+	/i exch def
+	/str 10 string def
+	npages 1 gt {
+		gsave
+			coordfont setfont
+			0 0 moveto
+			(\() show i str cvs show (,) show j str cvs show (\)) show
+		grestore
+	} if
+} bind def
+
+/set_font {
+	findfont exch
+	scalefont setfont
+} def
+
+% draw text fitted to its expected width
+/alignedtext {			% width text
+	/text exch def
+	/width exch def
+	gsave
+		width 0 gt {
+			[] 0 setdash
+			text stringwidth pop width exch sub text length div 0 text ashow
+		} if
+	grestore
+} def
+
+/boxprim {				% xcorner ycorner xsize ysize
+		4 2 roll
+		moveto
+		2 copy
+		exch 0 rlineto
+		0 exch rlineto
+		pop neg 0 rlineto
+		closepath
+} bind def
+
+/ellipse_path {
+	/ry exch def
+	/rx exch def
+	/y exch def
+	/x exch def
+	matrix currentmatrix
+	newpath
+	x y translate
+	rx ry scale
+	0 0 1 0 360 arc
+	setmatrix
+} bind def
+
+/endpage { showpage } bind def
+/showpage { } def
+
+/layercolorseq
+	[	% layer color sequence - darkest to lightest
+		[0 0 0]
+		[.2 .8 .8]
+		[.4 .8 .8]
+		[.6 .8 .8]
+		[.8 .8 .8]
+	]
+def
+
+/layerlen layercolorseq length def
+
+/setlayer {/maxlayer exch def /curlayer exch def
+	layercolorseq curlayer 1 sub layerlen mod get
+	aload pop sethsbcolor
+	/nodecolor {nopcolor} def
+	/edgecolor {nopcolor} def
+	/graphcolor {nopcolor} def
+} bind def
+
+/onlayer { curlayer ne {invis} if } def
+
+/onlayers {
+	/myupper exch def
+	/mylower exch def
+	curlayer mylower lt
+	curlayer myupper gt
+	or
+	{invis} if
+} def
+
+/curlayer 0 def
+
+%%EndResource
+%%EndProlog
+%%BeginSetup
+14 default-font-family set_font
+% /arrowlength 10 def
+% /arrowwidth 5 def
+
+% make sure pdfmark is harmless for PS-interpreters other than Distiller
+/pdfmark where {pop} {userdict /pdfmark /cleartomark load put} ifelse
+% make '<<' and '>>' safe on PS Level 1 devices
+/languagelevel where {pop languagelevel}{1} ifelse
+2 lt {
+    userdict (<<) cvn ([) cvn load put
+    userdict (>>) cvn ([) cvn load put
+} if
+
+%%EndSetup
+setupLatin1
+%%Page: 1 1
+%%PageBoundingBox: 36 36 5321 317
+%%PageOrientation: Portrait
+0 0 1 beginpage
+gsave
+36 36 5285 281 boxprim clip newpath
+1 1 set_scale 0 rotate 40 40 translate
+% pykoala.corrections.astrometry.AstrometryCorrection
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 1660 88.5 moveto
+1660 124.5 lineto
+1833 124.5 lineto
+1833 88.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 1660 88.5 moveto
+1660 124.5 lineto
+1833 124.5 lineto
+1833 88.5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+1668 102.8 moveto 157 (AstrometryCorrection) alignedtext
+grestore
+% pykoala.corrections.correction.CorrectionBase
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 869 162.5 moveto
+869 198.5 lineto
+996 198.5 lineto
+996 162.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 869 162.5 moveto
+869 198.5 lineto
+996 198.5 lineto
+996 162.5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+877 176.8 moveto 111 (CorrectionBase) alignedtext
+grestore
+% pykoala.corrections.astrometry.AstrometryCorrection->pykoala.corrections.correction.CorrectionBase
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 1659.9671 123.7798 moveto
+1656.7757 124.2193 1653.6121 124.6285 1650.5 125 curveto
+1511.0058 141.6513 1162.9211 141.1039 1006.1187 162.1388 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 1005.4844 158.6936 moveto
+996.0712 163.556 lineto
+1006.4621 165.625 lineto
+closepath stroke
+grestore
+% pykoala.corrections.astrometry.AstrometryOffsetCorrection
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 329.5 88.5 moveto
+329.5 124.5 lineto
+545.5 124.5 lineto
+545.5 88.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 329.5 88.5 moveto
+329.5 124.5 lineto
+545.5 124.5 lineto
+545.5 88.5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+337.5 102.8 moveto 200 (AstrometryOffsetCorrection) alignedtext
+grestore
+% pykoala.corrections.astrometry.AstrometryOffsetCorrection->pykoala.corrections.correction.CorrectionBase
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 545.55 123.6825 moveto
+548.5655 124.1274 551.5535 124.5672 554.5 125 curveto
+660.2861 140.5374 782.789 158.1257 858.9722 169.0159 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 858.5532 172.4915 moveto
+868.9478 170.4415 lineto
+859.5435 165.5619 lineto
+closepath stroke
+grestore
+% pykoala.corrections.atmospheric_corrections.AtmosphericExtCorrection
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 564 88.5 moveto
+564 124.5 lineto
+771 124.5 lineto
+771 88.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 564 88.5 moveto
+564 124.5 lineto
+771 124.5 lineto
+771 88.5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+572 102.8 moveto 191 (AtmosphericExtCorrection) alignedtext
+grestore
+% pykoala.corrections.atmospheric_corrections.AtmosphericExtCorrection->pykoala.corrections.correction.CorrectionBase
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 730.3013 124.563 moveto
+769.1853 135.1277 819.2647 148.7342 859.8555 159.7626 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 859.123 163.1904 moveto
+869.6908 162.4349 lineto
+860.9584 156.4353 lineto
+closepath stroke
+grestore
+% pykoala.corrections.sky.BackgroundEstimator
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 1870 .5 moveto
+1870 36.5 lineto
+2043 36.5 lineto
+2043 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 1870 .5 moveto
+1870 36.5 lineto
+2043 36.5 lineto
+2043 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+1878 14.8 moveto 157 (BackgroundEstimator) alignedtext
+grestore
+% pykoala.exceptions.exceptions.CalibrationError
+gsave
+0.44314 0.50196 1 nodecolor
+newpath 2061 .5 moveto
+2061 36.5 lineto
+2196 36.5 lineto
+2196 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.44314 0.50196 1 nodecolor
+newpath 2061 .5 moveto
+2061 36.5 lineto
+2196 36.5 lineto
+2196 .5 lineto
+closepath stroke
+0 1 1 nodecolor
+14 /Times-Roman set_font
+2069 14.8 moveto 119 (CalibrationError) alignedtext
+grestore
+% pykoala.exceptions.exceptions.ClassError
+gsave
+0.44314 0.50196 1 nodecolor
+newpath 2214.5 .5 moveto
+2214.5 36.5 lineto
+2308.5 36.5 lineto
+2308.5 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.44314 0.50196 1 nodecolor
+newpath 2214.5 .5 moveto
+2214.5 36.5 lineto
+2308.5 36.5 lineto
+2308.5 .5 lineto
+closepath stroke
+0 1 1 nodecolor
+14 /Times-Roman set_font
+2222.5 14.8 moveto 78 (ClassError) alignedtext
+grestore
+% pykoala.corrections.sky.ContinuumEstimator
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 2327 .5 moveto
+2327 36.5 lineto
+2494 36.5 lineto
+2494 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 2327 .5 moveto
+2327 36.5 lineto
+2494 36.5 lineto
+2494 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+2335 14.8 moveto 151 (ContinuumEstimator) alignedtext
+grestore
+% pykoala.corrections.sky.ContinuumModel
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 177.5 .5 moveto
+177.5 36.5 lineto
+317.5 36.5 lineto
+317.5 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 177.5 .5 moveto
+177.5 36.5 lineto
+317.5 36.5 lineto
+317.5 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+185.5 14.8 moveto 124 (ContinuumModel) alignedtext
+grestore
+% pykoala.corrections.sky.SkySelfCalibration
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 161.5 88.5 moveto
+161.5 124.5 lineto
+311.5 124.5 lineto
+311.5 88.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 161.5 88.5 moveto
+161.5 124.5 lineto
+311.5 124.5 lineto
+311.5 88.5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+169.5 102.8 moveto 134 (SkySelfCalibration) alignedtext
+grestore
+% pykoala.corrections.sky.ContinuumModel->pykoala.corrections.sky.SkySelfCalibration
+gsave
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 245.274 36.9034 moveto
+243.8332 48.1675 241.9212 63.116 240.2499 76.1827 curveto
+stroke
+0 0 0 edgecolor
+newpath 240.2077 76.513 moveto
+243.4141 82.972 lineto
+238.6852 88.416 lineto
+235.4788 81.957 lineto
+closepath fill
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 240.2077 76.513 moveto
+243.4141 82.972 lineto
+238.6852 88.416 lineto
+235.4788 81.957 lineto
+closepath stroke
+0.33333 1 1 edgecolor
+14 /Times-Roman set_font
+243.5 58.8 moveto 76 (continuum) alignedtext
+grestore
+% pykoala.VerboseMixin
+gsave
+0.57647 0.058824 1 nodecolor
+newpath 875.5 236.5 moveto
+875.5 272.5 lineto
+989.5 272.5 lineto
+989.5 236.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.57647 0.058824 1 nodecolor
+newpath 875.5 236.5 moveto
+875.5 272.5 lineto
+989.5 272.5 lineto
+989.5 236.5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+883.5 250.8 moveto 98 (VerboseMixin) alignedtext
+grestore
+% pykoala.corrections.correction.CorrectionBase->pykoala.VerboseMixin
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 932.5 198.563 moveto
+932.5 206.6928 932.5 216.6239 932.5 225.7953 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 929.0001 226.0593 moveto
+932.5 236.0593 lineto
+936.0001 226.0594 lineto
+closepath stroke
+grestore
+% pykoala.exceptions.exceptions.CorrectionClassError
+gsave
+0.44314 0.50196 1 nodecolor
+newpath 2512.5 .5 moveto
+2512.5 36.5 lineto
+2682.5 36.5 lineto
+2682.5 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.44314 0.50196 1 nodecolor
+newpath 2512.5 .5 moveto
+2512.5 36.5 lineto
+2682.5 36.5 lineto
+2682.5 .5 lineto
+closepath stroke
+0 1 1 nodecolor
+14 /Times-Roman set_font
+2520.5 14.8 moveto 154 (CorrectionClassError) alignedtext
+grestore
+% pykoala.corrections.correction.CorrectionOffset
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 2701 .5 moveto
+2701 36.5 lineto
+2836 36.5 lineto
+2836 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 2701 .5 moveto
+2701 36.5 lineto
+2836 36.5 lineto
+2836 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+2709 14.8 moveto 119 (CorrectionOffset) alignedtext
+grestore
+% pykoala.data_container.Cube
+gsave
+0.57647 0.058824 1 nodecolor
+newpath 33.5 .5 moveto
+33.5 36.5 lineto
+87.5 36.5 lineto
+87.5 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.57647 0.058824 1 nodecolor
+newpath 33.5 .5 moveto
+33.5 36.5 lineto
+87.5 36.5 lineto
+87.5 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+42 14.8 moveto 37 (Cube) alignedtext
+grestore
+% pykoala.data_container.SpectraContainer
+gsave
+0.57647 0.058824 1 nodecolor
+newpath 0 88.5 moveto
+0 124.5 lineto
+143 124.5 lineto
+143 88.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.57647 0.058824 1 nodecolor
+newpath 0 88.5 moveto
+0 124.5 lineto
+143 124.5 lineto
+143 88.5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+8 102.8 moveto 127 (SpectraContainer) alignedtext
+grestore
+% pykoala.data_container.Cube->pykoala.data_container.SpectraContainer
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 62.726 36.9034 moveto
+64.2418 48.7541 66.2792 64.6831 68.0092 78.2083 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 64.5743 78.9409 moveto
+69.3148 88.416 lineto
+71.5177 78.0527 lineto
+closepath stroke
+grestore
+% pykoala.cubing.CubeStacking
+gsave
+0.57647 0.058824 1 nodecolor
+newpath 2854.5 .5 moveto
+2854.5 36.5 lineto
+2970.5 36.5 lineto
+2970.5 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.57647 0.058824 1 nodecolor
+newpath 2854.5 .5 moveto
+2854.5 36.5 lineto
+2970.5 36.5 lineto
+2970.5 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+2862.5 14.8 moveto 100 (CubeStacking) alignedtext
+grestore
+% pykoala.data_container.DataContainer
+gsave
+0.57647 0.058824 1 nodecolor
+newpath 489 162.5 moveto
+489 198.5 lineto
+610 198.5 lineto
+610 162.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.57647 0.058824 1 nodecolor
+newpath 489 162.5 moveto
+489 198.5 lineto
+610 198.5 lineto
+610 162.5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+497 176.8 moveto 105 (DataContainer) alignedtext
+grestore
+% pykoala.data_container.DataContainer->pykoala.VerboseMixin
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 610.1875 192.9086 moveto
+679.689 205.9742 793.2253 227.3178 865.3332 240.8733 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 864.7496 244.3249 moveto
+875.2241 242.7327 lineto
+866.0429 237.4454 lineto
+closepath stroke
+grestore
+% pykoala.data_container.DataContainerHistory
+gsave
+0.57647 0.058824 1 nodecolor
+newpath 1014.5 162.5 moveto
+1014.5 198.5 lineto
+1188.5 198.5 lineto
+1188.5 162.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.57647 0.058824 1 nodecolor
+newpath 1014.5 162.5 moveto
+1014.5 198.5 lineto
+1188.5 198.5 lineto
+1188.5 162.5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+1022.5 176.8 moveto 158 (DataContainerHistory) alignedtext
+grestore
+% pykoala.data_container.DataContainerHistory->pykoala.VerboseMixin
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 1061.4494 198.563 moveto
+1037.6477 208.7033 1007.2685 221.646 981.9759 232.4215 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 980.3837 229.2954 moveto
+972.5557 236.4349 lineto
+983.1274 235.7353 lineto
+closepath stroke
+grestore
+% pykoala.data_container.DataMask
+gsave
+0.57647 0.058824 1 nodecolor
+newpath 2989 .5 moveto
+2989 36.5 lineto
+3078 36.5 lineto
+3078 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.57647 0.058824 1 nodecolor
+newpath 2989 .5 moveto
+2989 36.5 lineto
+3078 36.5 lineto
+3078 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+2997 14.8 moveto 73 (DataMask) alignedtext
+grestore
+% pykoala.cubing.DrizzlingKernel
+gsave
+0.57647 0.058824 1 nodecolor
+newpath 3096.5 .5 moveto
+3096.5 36.5 lineto
+3224.5 36.5 lineto
+3224.5 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.57647 0.058824 1 nodecolor
+newpath 3096.5 .5 moveto
+3096.5 36.5 lineto
+3224.5 36.5 lineto
+3224.5 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+3104.5 14.8 moveto 112 (DrizzlingKernel) alignedtext
+grestore
+% pykoala.cubing.TopHatKernel
+gsave
+0.57647 0.058824 1 nodecolor
+newpath 3103 88.5 moveto
+3103 124.5 lineto
+3218 124.5 lineto
+3218 88.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.57647 0.058824 1 nodecolor
+newpath 3103 88.5 moveto
+3103 124.5 lineto
+3218 124.5 lineto
+3218 88.5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+3111 102.8 moveto 99 (TopHatKernel) alignedtext
+grestore
+% pykoala.cubing.DrizzlingKernel->pykoala.cubing.TopHatKernel
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 3160.5 36.9034 moveto
+3160.5 48.7541 3160.5 64.6831 3160.5 78.2083 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 3157.0001 78.416 moveto
+3160.5 88.416 lineto
+3164.0001 78.416 lineto
+closepath stroke
+grestore
+% pykoala.exceptions.exceptions.FitError
+gsave
+0.44314 0.50196 1 nodecolor
+newpath 3242.5 .5 moveto
+3242.5 36.5 lineto
+3318.5 36.5 lineto
+3318.5 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.44314 0.50196 1 nodecolor
+newpath 3242.5 .5 moveto
+3242.5 36.5 lineto
+3318.5 36.5 lineto
+3318.5 .5 lineto
+closepath stroke
+0 1 1 nodecolor
+14 /Times-Roman set_font
+3250.5 14.8 moveto 60 (FitError) alignedtext
+grestore
+% pykoala.corrections.flux_calibration.FluxCalibration
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 789.5 88.5 moveto
+789.5 124.5 lineto
+917.5 124.5 lineto
+917.5 88.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 789.5 88.5 moveto
+789.5 124.5 lineto
+917.5 124.5 lineto
+917.5 88.5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+797.5 102.8 moveto 112 (FluxCalibration) alignedtext
+grestore
+% pykoala.corrections.flux_calibration.FluxCalibration->pykoala.corrections.correction.CorrectionBase
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 872.2219 124.563 moveto
+882.3798 133.8208 895.1004 145.4143 906.2348 155.5621 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 903.8901 158.1607 moveto
+913.6387 162.31 lineto
+908.6054 152.9871 lineto
+closepath stroke
+grestore
+% pykoala.cubing.GaussianKernel
+gsave
+0.57647 0.058824 1 nodecolor
+newpath 3236.5 88.5 moveto
+3236.5 124.5 lineto
+3364.5 124.5 lineto
+3364.5 88.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.57647 0.058824 1 nodecolor
+newpath 3236.5 88.5 moveto
+3236.5 124.5 lineto
+3364.5 124.5 lineto
+3364.5 88.5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+3244.5 102.8 moveto 112 (GaussianKernel) alignedtext
+grestore
+% pykoala.cubing.InterpolationKernel
+gsave
+0.57647 0.058824 1 nodecolor
+newpath 3222.5 162.5 moveto
+3222.5 198.5 lineto
+3378.5 198.5 lineto
+3378.5 162.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.57647 0.058824 1 nodecolor
+newpath 3222.5 162.5 moveto
+3222.5 198.5 lineto
+3378.5 198.5 lineto
+3378.5 162.5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+3230.5 176.8 moveto 140 (InterpolationKernel) alignedtext
+grestore
+% pykoala.cubing.GaussianKernel->pykoala.cubing.InterpolationKernel
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 3300.5 124.563 moveto
+3300.5 132.6928 3300.5 142.6239 3300.5 151.7953 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 3297.0001 152.0593 moveto
+3300.5 162.0593 lineto
+3304.0001 152.0594 lineto
+closepath stroke
+grestore
+% pykoala.data_container.HistoryRecord
+gsave
+0.57647 0.058824 1 nodecolor
+newpath 3336.5 .5 moveto
+3336.5 36.5 lineto
+3456.5 36.5 lineto
+3456.5 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.57647 0.058824 1 nodecolor
+newpath 3336.5 .5 moveto
+3336.5 36.5 lineto
+3456.5 36.5 lineto
+3456.5 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+3344.5 14.8 moveto 104 (HistoryRecord) alignedtext
+grestore
+% pykoala.corrections.sky.LSF_estimator
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 3475 .5 moveto
+3475 36.5 lineto
+3596 36.5 lineto
+3596 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 3475 .5 moveto
+3475 36.5 lineto
+3596 36.5 lineto
+3596 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+3483 14.8 moveto 105 (LSF_estimator) alignedtext
+grestore
+% pykoala.photometry.LegacySurveyQuery
+gsave
+0.57647 0.058824 1 nodecolor
+newpath 3614 .5 moveto
+3614 36.5 lineto
+3775 36.5 lineto
+3775 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.57647 0.058824 1 nodecolor
+newpath 3614 .5 moveto
+3614 36.5 lineto
+3775 36.5 lineto
+3775 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+3622 14.8 moveto 145 (LegacySurveyQuery) alignedtext
+grestore
+% pykoala.photometry.QueryMixin
+gsave
+0.57647 0.058824 1 nodecolor
+newpath 3713 88.5 moveto
+3713 124.5 lineto
+3814 124.5 lineto
+3814 88.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.57647 0.058824 1 nodecolor
+newpath 3713 88.5 moveto
+3713 124.5 lineto
+3814 124.5 lineto
+3814 88.5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+3721 102.8 moveto 85 (QueryMixin) alignedtext
+grestore
+% pykoala.photometry.LegacySurveyQuery->pykoala.photometry.QueryMixin
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 3708.4632 36.9034 moveto
+3718.5362 49.4581 3732.2816 66.5901 3743.5156 80.5919 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 3740.8051 82.8065 moveto
+3749.7931 88.416 lineto
+3746.265 78.4258 lineto
+closepath stroke
+grestore
+% pykoala.exceptions.exceptions.MaskBitError
+gsave
+0.44314 0.50196 1 nodecolor
+newpath 3892 .5 moveto
+3892 36.5 lineto
+4007 36.5 lineto
+4007 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.44314 0.50196 1 nodecolor
+newpath 3892 .5 moveto
+3892 36.5 lineto
+4007 36.5 lineto
+4007 .5 lineto
+closepath stroke
+0 1 1 nodecolor
+14 /Times-Roman set_font
+3900 14.8 moveto 99 (MaskBitError) alignedtext
+grestore
+% pykoala.exceptions.exceptions.MaskError
+gsave
+0.44314 0.50196 1 nodecolor
+newpath 3902.5 88.5 moveto
+3902.5 124.5 lineto
+3996.5 124.5 lineto
+3996.5 88.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.44314 0.50196 1 nodecolor
+newpath 3902.5 88.5 moveto
+3902.5 124.5 lineto
+3996.5 124.5 lineto
+3996.5 88.5 lineto
+closepath stroke
+0 1 1 nodecolor
+14 /Times-Roman set_font
+3910.5 102.8 moveto 78 (MaskError) alignedtext
+grestore
+% pykoala.exceptions.exceptions.MaskBitError->pykoala.exceptions.exceptions.MaskError
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 3949.5 36.9034 moveto
+3949.5 48.7541 3949.5 64.6831 3949.5 78.2083 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 3946.0001 78.416 moveto
+3949.5 88.416 lineto
+3953.0001 78.416 lineto
+closepath stroke
+grestore
+% pykoala.exceptions.exceptions.NoneAttrError
+gsave
+0.44314 0.50196 1 nodecolor
+newpath 4025.5 .5 moveto
+4025.5 36.5 lineto
+4147.5 36.5 lineto
+4147.5 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.44314 0.50196 1 nodecolor
+newpath 4025.5 .5 moveto
+4025.5 36.5 lineto
+4147.5 36.5 lineto
+4147.5 .5 lineto
+closepath stroke
+0 1 1 nodecolor
+14 /Times-Roman set_font
+4033.5 14.8 moveto 106 (NoneAttrError) alignedtext
+grestore
+% pykoala._version.NotThisMethod
+gsave
+0.57647 0.058824 1 nodecolor
+newpath 4165.5 .5 moveto
+4165.5 36.5 lineto
+4293.5 36.5 lineto
+4293.5 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.57647 0.058824 1 nodecolor
+newpath 4165.5 .5 moveto
+4165.5 36.5 lineto
+4293.5 36.5 lineto
+4293.5 .5 lineto
+closepath stroke
+0 1 1 nodecolor
+14 /Times-Roman set_font
+4173.5 14.8 moveto 112 (NotThisMethod) alignedtext
+grestore
+% pykoala.photometry.PSQuery
+gsave
+0.57647 0.058824 1 nodecolor
+newpath 3793.5 .5 moveto
+3793.5 36.5 lineto
+3873.5 36.5 lineto
+3873.5 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.57647 0.058824 1 nodecolor
+newpath 3793.5 .5 moveto
+3793.5 36.5 lineto
+3873.5 36.5 lineto
+3873.5 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+3801.5 14.8 moveto 64 (PSQuery) alignedtext
+grestore
+% pykoala.photometry.PSQuery->pykoala.photometry.QueryMixin
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 3819.3345 36.9034 moveto
+3809.1155 49.4581 3795.1709 66.5901 3783.774 80.5919 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 3781.0039 78.4509 moveto
+3777.4056 88.416 lineto
+3786.4328 82.8698 lineto
+closepath stroke
+grestore
+% pykoala.cubing.ParabolicKernel
+gsave
+0.57647 0.058824 1 nodecolor
+newpath 3383 88.5 moveto
+3383 124.5 lineto
+3512 124.5 lineto
+3512 88.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.57647 0.058824 1 nodecolor
+newpath 3383 88.5 moveto
+3383 124.5 lineto
+3512 124.5 lineto
+3512 88.5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+3391 102.8 moveto 113 (ParabolicKernel) alignedtext
+grestore
+% pykoala.cubing.ParabolicKernel->pykoala.cubing.InterpolationKernel
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 3412.6631 124.563 moveto
+3392.2335 134.5693 3366.2328 147.3044 3344.4098 157.9932 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 3342.7824 154.8929 moveto
+3335.3413 162.4349 lineto
+3345.8615 161.1794 lineto
+closepath stroke
+grestore
+% pykoala.data_container.Parameter
+gsave
+0.57647 0.058824 1 nodecolor
+newpath 4311.5 .5 moveto
+4311.5 36.5 lineto
+4403.5 36.5 lineto
+4403.5 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.57647 0.058824 1 nodecolor
+newpath 4311.5 .5 moveto
+4311.5 36.5 lineto
+4403.5 36.5 lineto
+4403.5 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+4319.5 14.8 moveto 76 (Parameter) alignedtext
+grestore
+% pykoala.data_container.RSS
+gsave
+0.57647 0.058824 1 nodecolor
+newpath 105.5 .5 moveto
+105.5 36.5 lineto
+159.5 36.5 lineto
+159.5 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.57647 0.058824 1 nodecolor
+newpath 105.5 .5 moveto
+105.5 36.5 lineto
+159.5 36.5 lineto
+159.5 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+117.5 14.8 moveto 30 (RSS) alignedtext
+grestore
+% pykoala.data_container.RSS->pykoala.corrections.sky.SkySelfCalibration
+gsave
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 153.546 36.9034 moveto
+168.7284 49.4581 189.4461 66.5901 206.3786 80.5919 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 206.5925 80.7688 moveto
+213.7655 81.5098 lineto
+215.8403 88.416 lineto
+208.6673 87.675 lineto
+closepath stroke
+0.33333 1 1 edgecolor
+14 /Times-Roman set_font
+191.5 58.8 moveto 17 (dc) alignedtext
+grestore
+% pykoala.data_container.RSS->pykoala.data_container.SpectraContainer
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 120.1557 36.9034 moveto
+111.3338 49.3408 99.3258 66.2702 89.4464 80.1985 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 86.5484 78.2345 moveto
+83.6177 88.416 lineto
+92.258 82.2844 lineto
+closepath stroke
+grestore
+% pykoala.corrections.sky.SkyFromObject
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 4421.5 .5 moveto
+4421.5 36.5 lineto
+4549.5 36.5 lineto
+4549.5 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 4421.5 .5 moveto
+4421.5 36.5 lineto
+4549.5 36.5 lineto
+4549.5 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+4429.5 14.8 moveto 112 (SkyFromObject) alignedtext
+grestore
+% pykoala.corrections.sky.SkyModel
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 4504 88.5 moveto
+4504 124.5 lineto
+4591 124.5 lineto
+4591 88.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 4504 88.5 moveto
+4504 124.5 lineto
+4591 124.5 lineto
+4591 88.5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+4512 102.8 moveto 71 (SkyModel) alignedtext
+grestore
+% pykoala.corrections.sky.SkyFromObject->pykoala.corrections.sky.SkyModel
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 4498.0466 36.9034 moveto
+4507.0131 49.3408 4519.2181 66.2702 4529.2594 80.1985 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 4526.4964 82.351 moveto
+4535.1836 88.416 lineto
+4532.1747 78.2574 lineto
+closepath stroke
+grestore
+% pykoala.corrections.sky.SkyOffset
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 4567.5 .5 moveto
+4567.5 36.5 lineto
+4653.5 36.5 lineto
+4653.5 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 4567.5 .5 moveto
+4567.5 36.5 lineto
+4653.5 36.5 lineto
+4653.5 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+4575.5 14.8 moveto 70 (SkyOffset) alignedtext
+grestore
+% pykoala.corrections.sky.SkyOffset->pykoala.corrections.sky.SkyModel
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 4597.751 36.9034 moveto
+4588.6399 49.3408 4576.2381 66.2702 4566.0348 80.1985 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 4563.1012 78.2806 moveto
+4560.015 88.416 lineto
+4568.7481 82.4173 lineto
+closepath stroke
+grestore
+% pykoala.corrections.sky.SkySelfCalibration->pykoala.corrections.correction.CorrectionBase
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 311.5282 123.5829 moveto
+314.5536 124.088 317.5529 124.5633 320.5 125 curveto
+513.5749 153.6093 743.3031 169.164 858.6509 175.71 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 858.5978 179.2124 moveto
+868.7782 176.2782 lineto
+858.99 172.2234 lineto
+closepath stroke
+grestore
+% pykoala.corrections.sky.SkySubsCorrection
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 935.5 88.5 moveto
+935.5 124.5 lineto
+1089.5 124.5 lineto
+1089.5 88.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 935.5 88.5 moveto
+935.5 124.5 lineto
+1089.5 124.5 lineto
+1089.5 88.5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+943.5 102.8 moveto 138 (SkySubsCorrection) alignedtext
+grestore
+% pykoala.corrections.sky.SkySubsCorrection->pykoala.corrections.correction.CorrectionBase
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 993.5411 124.563 moveto
+983.2547 133.8208 970.373 145.4143 959.0977 155.5621 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 956.6916 153.0187 moveto
+951.6 162.31 lineto
+961.3744 158.2218 lineto
+closepath stroke
+grestore
+% pykoala.corrections.wavelength.SolarCrossCorrOffset
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 1681.5 .5 moveto
+1681.5 36.5 lineto
+1851.5 36.5 lineto
+1851.5 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 1681.5 .5 moveto
+1681.5 36.5 lineto
+1851.5 36.5 lineto
+1851.5 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+1689.5 14.8 moveto 154 (SolarCrossCorrOffset) alignedtext
+grestore
+% pykoala.corrections.wavelength.WavelengthCorrection
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 1465.5 88.5 moveto
+1465.5 124.5 lineto
+1641.5 124.5 lineto
+1641.5 88.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 1465.5 88.5 moveto
+1465.5 124.5 lineto
+1641.5 124.5 lineto
+1641.5 88.5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+1473.5 102.8 moveto 160 (WavelengthCorrection) alignedtext
+grestore
+% pykoala.corrections.wavelength.SolarCrossCorrOffset->pykoala.corrections.wavelength.WavelengthCorrection
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 1724.1634 36.5937 moveto
+1689.9727 50.3984 1641.7156 69.8824 1605.2356 84.6114 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 1603.7188 81.4493 moveto
+1595.7565 88.4387 lineto
+1606.3396 87.9402 lineto
+closepath stroke
+grestore
+% pykoala.data_container.SpectraContainer->pykoala.data_container.DataContainer
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 143.4326 123.3392 moveto
+146.4924 123.9187 149.5247 124.4752 152.5 125 curveto
+265.9333 145.0095 398.6982 161.9331 478.3429 171.3928 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 478.4012 174.924 moveto
+488.7428 172.6215 lineto
+479.2225 167.9723 lineto
+closepath stroke
+grestore
+% pykoala.corrections.sky.TelluricCorrection
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 1107.5 88.5 moveto
+1107.5 124.5 lineto
+1253.5 124.5 lineto
+1253.5 88.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 1107.5 88.5 moveto
+1107.5 124.5 lineto
+1253.5 124.5 lineto
+1253.5 88.5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+1115.5 102.8 moveto 130 (TelluricCorrection) alignedtext
+grestore
+% pykoala.corrections.sky.TelluricCorrection->pykoala.corrections.correction.CorrectionBase
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 1121.7275 124.563 moveto
+1085.5687 135.0607 1039.0653 148.5617 1001.2081 159.5525 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 999.9075 156.2855 moveto
+991.2799 162.4349 lineto
+1001.8592 163.0079 lineto
+closepath stroke
+grestore
+% pykoala.exceptions.exceptions.TelluricError
+gsave
+0.44314 0.50196 1 nodecolor
+newpath 4695 88.5 moveto
+4695 124.5 lineto
+4804 124.5 lineto
+4804 88.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.44314 0.50196 1 nodecolor
+newpath 4695 88.5 moveto
+4695 124.5 lineto
+4804 124.5 lineto
+4804 88.5 lineto
+closepath stroke
+0 1 1 nodecolor
+14 /Times-Roman set_font
+4703 102.8 moveto 93 (TelluricError) alignedtext
+grestore
+% pykoala.exceptions.exceptions.TelluricNoFileError
+gsave
+0.44314 0.50196 1 nodecolor
+newpath 4671.5 .5 moveto
+4671.5 36.5 lineto
+4827.5 36.5 lineto
+4827.5 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.44314 0.50196 1 nodecolor
+newpath 4671.5 .5 moveto
+4671.5 36.5 lineto
+4827.5 36.5 lineto
+4827.5 .5 lineto
+closepath stroke
+0 1 1 nodecolor
+14 /Times-Roman set_font
+4679.5 14.8 moveto 140 (TelluricNoFileError) alignedtext
+grestore
+% pykoala.exceptions.exceptions.TelluricNoFileError->pykoala.exceptions.exceptions.TelluricError
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 4749.5 36.9034 moveto
+4749.5 48.7541 4749.5 64.6831 4749.5 78.2083 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 4746.0001 78.416 moveto
+4749.5 88.416 lineto
+4753.0001 78.416 lineto
+closepath stroke
+grestore
+% pykoala.corrections.wavelength.TelluricWavelengthCorrection
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 1433.5 .5 moveto
+1433.5 36.5 lineto
+1663.5 36.5 lineto
+1663.5 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 1433.5 .5 moveto
+1433.5 36.5 lineto
+1663.5 36.5 lineto
+1663.5 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+1441.5 14.8 moveto 214 (TelluricWavelengthCorrection) alignedtext
+grestore
+% pykoala.corrections.wavelength.TelluricWavelengthCorrection->pykoala.corrections.wavelength.WavelengthCorrection
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 1549.5118 36.9034 moveto
+1550.2008 48.7541 1551.1269 64.6831 1551.9133 78.2083 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 1548.4321 78.636 moveto
+1552.5067 88.416 lineto
+1555.4203 78.2297 lineto
+closepath stroke
+grestore
+% pykoala.corrections.throughput.Throughput
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 1309 .5 moveto
+1309 36.5 lineto
+1410 36.5 lineto
+1410 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 1309 .5 moveto
+1309 36.5 lineto
+1410 36.5 lineto
+1410 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+1317 14.8 moveto 85 (Throughput) alignedtext
+grestore
+% pykoala.corrections.throughput.ThroughputCorrection
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 1271.5 88.5 moveto
+1271.5 124.5 lineto
+1447.5 124.5 lineto
+1447.5 88.5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 1271.5 88.5 moveto
+1271.5 124.5 lineto
+1447.5 124.5 lineto
+1447.5 88.5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+1279.5 102.8 moveto 160 (ThroughputCorrection) alignedtext
+grestore
+% pykoala.corrections.throughput.Throughput->pykoala.corrections.throughput.ThroughputCorrection
+gsave
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 1359.5 36.9034 moveto
+1359.5 48.1675 1359.5 63.116 1359.5 76.1827 curveto
+stroke
+0 0 0 edgecolor
+newpath 1359.5001 76.416 moveto
+1363.5 82.416 lineto
+1359.5 88.416 lineto
+1355.5 82.416 lineto
+closepath fill
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 1359.5001 76.416 moveto
+1363.5 82.416 lineto
+1359.5 88.416 lineto
+1355.5 82.416 lineto
+closepath stroke
+0.33333 1 1 edgecolor
+14 /Times-Roman set_font
+1359.5 58.8 moveto 82 (throughput) alignedtext
+grestore
+% pykoala.corrections.throughput.ThroughputCorrection->pykoala.corrections.correction.CorrectionBase
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 1271.4949 123.5179 moveto
+1268.4612 124.0252 1265.456 124.5207 1262.5 125 curveto
+1151.7025 142.9645 1120.5316 140.4606 1005.9879 162.0064 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 1005.2965 158.5751 moveto
+996.1263 163.8815 lineto
+1006.6041 165.4518 lineto
+closepath stroke
+grestore
+% pykoala.cubing.TopHatKernel->pykoala.cubing.InterpolationKernel
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 3193.678 124.563 moveto
+3212.9775 134.4884 3237.4973 147.0986 3258.1763 157.7335 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 3256.5813 160.8489 moveto
+3267.0749 162.31 lineto
+3259.7828 154.6239 lineto
+closepath stroke
+grestore
+% pykoala._version.VersioneerConfig
+gsave
+0.57647 0.058824 1 nodecolor
+newpath 4846 .5 moveto
+4846 36.5 lineto
+4985 36.5 lineto
+4985 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.57647 0.058824 1 nodecolor
+newpath 4846 .5 moveto
+4846 36.5 lineto
+4985 36.5 lineto
+4985 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+4854 14.8 moveto 123 (VersioneerConfig) alignedtext
+grestore
+% pykoala.corrections.wavelength.WavelengthCorrection->pykoala.corrections.correction.CorrectionBase
+gsave
+1 setlinewidth
+0 0 0 edgecolor
+newpath 1465.2687 123.7913 moveto
+1462.3136 124.2177 1459.3845 124.6224 1456.5 125 curveto
+1260.297 150.6859 1205.8403 130.9022 1006.0212 162.0765 curveto
+stroke
+1 setlinewidth
+solid
+0 0 0 edgecolor
+newpath 1005.4152 158.6287 moveto
+996.0856 163.6495 lineto
+1006.5099 165.5426 lineto
+closepath stroke
+grestore
+% pykoala.corrections.wavelength.WavelengthOffset
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 5003 .5 moveto
+5003 36.5 lineto
+5146 36.5 lineto
+5146 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 5003 .5 moveto
+5003 36.5 lineto
+5146 36.5 lineto
+5146 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+5011 14.8 moveto 127 (WavelengthOffset) alignedtext
+grestore
+% pykoala.corrections.sky.WaveletFilter
+gsave
+0.094118 0.13725 0.98039 nodecolor
+newpath 5164 .5 moveto
+5164 36.5 lineto
+5277 36.5 lineto
+5277 .5 lineto
+closepath fill
+1 setlinewidth
+filled
+0.094118 0.13725 0.98039 nodecolor
+newpath 5164 .5 moveto
+5164 36.5 lineto
+5277 36.5 lineto
+5277 .5 lineto
+closepath stroke
+0 0 0 nodecolor
+14 /Times-Roman set_font
+5172 14.8 moveto 97 (WaveletFilter) alignedtext
+grestore
+endpage
+showpage
+grestore
+%%PageTrailer
+%%EndPage: 1
+%%Trailer
+%%Pages: 1
+%%BoundingBox: 36 36 5321 317
+end
+restore
+%%EOF

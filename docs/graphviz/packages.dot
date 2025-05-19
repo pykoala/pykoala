@@ -1,0 +1,8 @@
+digraph "packages" {
+rankdir=BT
+charset="utf-8"
+"pykoala.instruments" [color="black", label=<pykoala.instruments>, shape="box", style="solid"];
+"pykoala.instruments.hector_ifu" [color="black", label=<pykoala.instruments.hector_ifu>, shape="box", style="solid"];
+"pykoala.instruments.koala_ifu" [color="black", label=<pykoala.instruments.koala_ifu>, shape="box", style="solid"];
+"pykoala.instruments.weave" [color="black", label=<pykoala.instruments.weave>, shape="box", style="solid"];
+}
