@@ -75,7 +75,7 @@ Users that would like to contribute to the development of PyKOALA can follow the
 
 ## Tutorials
 
-We provide a comprehensive set tutorials and test data in a [dedicated repository](https://github.com/pykoala/pykoala-tutorials).
+We provide a comprehensive set of tutorials and test data in a [dedicated repository](https://github.com/pykoala/pykoala-tutorials).
 
 ## License and Acknowledgements
 
