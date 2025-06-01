@@ -31,12 +31,12 @@ charset="utf-8"
 "pykoala.corrections.wavelength.SolarCrossCorrOffset" -> "pykoala.corrections.wavelength.WavelengthCorrection" [arrowhead="empty", arrowtail="none"];
 "pykoala.corrections.wavelength.TelluricWavelengthCorrection" -> "pykoala.corrections.wavelength.WavelengthCorrection" [arrowhead="empty", arrowtail="none"];
 "pykoala.corrections.wavelength.WavelengthCorrection" -> "pykoala.corrections.correction.CorrectionBase" [arrowhead="empty", arrowtail="none"];
-"pykoala.corrections.sky.ContinuumModel" -> "pykoala.corrections.sky.SkySelfCalibration" [arrowhead="none", arrowtail="none", style="solid"];
-"pykoala.corrections.throughput.Throughput" -> "pykoala.corrections.throughput.ThroughputCorrection" [arrowhead="none", arrowtail="none", style="solid"];
+"pykoala.corrections.sky.ContinuumModel" -> "pykoala.corrections.sky.SkySelfCalibration" [arrowhead="odiamond", arrowtail="none", style="solid"];
+"pykoala.corrections.throughput.Throughput" -> "pykoala.corrections.throughput.ThroughputCorrection" [arrowhead="odiamond", arrowtail="none", style="solid"];
 "pykoala.corrections.sky.SkyModel" -> "pykoala.corrections.sky.SkySubsCorrection" [arrowhead="none", arrowtail="none", style="solid"];
 "pykoala.corrections.wavelength.WavelengthOffset" -> "pykoala.corrections.correction.CorrectionOffset" [arrowhead="empty", arrowtail="none", style="solid"];
-"pykoala.corrections.correction.CorrectionOffset" -> "pykoala.corrections.astrometry.AstrometryOffsetCorrection" [arrowhead="none", arrowtail="none", style="solid"];
-"pykoala.corrections.wavelength.WavelengthOffset" -> "pykoala.corrections.wavelength.SolarCrossCorrOffset" [arrowhead="none", arrowtail="none", style="solid"];
-"pykoala.corrections.wavelength.WavelengthOffset" -> "pykoala.corrections.wavelength.TelluricWavelengthCorrection" [arrowhead="none", arrowtail="none", style="solid"];
+"pykoala.corrections.correction.CorrectionOffset" -> "pykoala.corrections.astrometry.AstrometryOffsetCorrection" [arrowhead="odiamond", arrowtail="none", style="solid"];
+"pykoala.corrections.wavelength.WavelengthOffset" -> "pykoala.corrections.wavelength.SolarCrossCorrOffset" [arrowhead="odiamond", arrowtail="none", style="solid"];
+"pykoala.corrections.wavelength.WavelengthOffset" -> "pykoala.corrections.wavelength.TelluricWavelengthCorrection" [arrowhead="odiamond", arrowtail="none", style="solid"];
 
 }
