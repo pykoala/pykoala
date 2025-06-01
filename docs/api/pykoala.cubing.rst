@@ -53,8 +53,8 @@ Stacking
 
 
 
-Convenient functions
---------------------
+Auxiliary functions
+-------------------
 
 .. autofunction:: pykoala.cubing.build_wcs
 

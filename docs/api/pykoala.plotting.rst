@@ -1,21 +1,7 @@
-pykoala.plotting package
-========================
+Utils and QC
+============
 
-Submodules
-----------
-
-pykoala.plotting.qc\_plot module
---------------------------------
-
-.. automodule:: pykoala.plotting.qc_plot
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: pykoala.plotting
+.. automodule:: pykoala.plotting.utils
    :members:
    :undoc-members:
    :show-inheritance:
