@@ -25,15 +25,16 @@ PyKOALA
 
 The core design principles of PyKOALA are threefold: to provide a comprehensive framework adaptable to any IFS instrument; to establish a modular and extensible structure enabling customized workflows; and to enhance user accessibility through detailed documentation and tutorials.
 
-Astronomical data in PyKOALA is managed through :ref:`data-container` objects, designed to offer a uniform and efficient means of handling observations from various instruments. PyKOALA's API supports specific representations for two common formats widely used in IFS:
-Row-Stacked Spectra (:ref:`rss`), that represents the spectra collected by each individual fibre in the IFU after tracing and extraction from the raw exposures, and datacubes (:ref:`cube`), a 3D grid representation of spectra, sampled along one spectral and two spatial dimensions.
+Astronomical data in PyKOALA are represented by :ref:`data-container` objects--- an abstract interface designed to offer a uniform and efficient means of handling observations from various instruments. PyKOALA's API includes support for two widely used formats in IFS:
+- **Row-Stacked Spectra** (:ref:`rss`), which represent the spectra collected by each individual fibre in the IFU after tracing and extraction from the raw exposures.
+- **Datacubes** (:ref:`cube`), a 3D grid representation of spectra sampled along one spectral and two spatial dimensions.
 
 .. figure:: ../graphviz/dc.png
     :width: 400
     :align: center
     :alt: DataContainer class structure
 
-    PyKOALA's data model. Every dataset is represented by a :ref:`data-container` (DC).
+    `UML <https://en.wikipedia.org/wiki/Unified_Modeling_Language>`_ diagram of PyKOALA's :ref:`data-container` model.
 
 Since PyKOALA's development has been significantly driven by the requirements of KOALA+AAOmega, its initial focus has been on processing wavelength-calibrated RSS and datacubes, although the algorithmic implementation has been tested with other instruments (Hector and WEAVE).
 For KOALA+AAOmega data, the library includes dedicated methods for reading the RSS files produced by the `2dfdr <https://ui.adsabs.harvard.edu/abs/2015ascl.soft05015A/abstract>`_ pipeline.
@@ -49,7 +50,7 @@ PyKOALA currently supports the following corrections: atmospheric effects such a
     :align: center
     :alt: PyKOALA's corrections
 
-    PyKOALA's available :ref:`corrections`.
+    `UML <https://en.wikipedia.org/wiki/Unified_Modeling_Language>`_ diagram of PyKOALA's available :ref:`corrections`.
 
 
 PyKOALA also supports the interpolation of individual RSS exposures into 3D datacubes, offering users the flexibility to choose between inverse-distance weighted methods and alternative techniques, such as drizzling.
