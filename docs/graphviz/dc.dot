@@ -11,9 +11,9 @@ charset="utf-8"
 "pykoala.data_container.Cube" -> "pykoala.data_container.SpectraContainer" [arrowhead="empty", arrowtail="none"];
 "pykoala.data_container.RSS" -> "pykoala.data_container.SpectraContainer" [arrowhead="empty", arrowtail="none"];
 "pykoala.data_container.SpectraContainer" -> "pykoala.data_container.DataContainer" [arrowhead="empty", arrowtail="none"];
-"pykoala.data_container.DataMask" -> "pykoala.data_container.DataContainer" [arrowhead="diamond", arrowtail="none"];
-"pykoala.data_container.DataContainerHistory" -> "pykoala.data_container.DataContainer" [arrowhead="diamond", arrowtail="none"];
-"pykoala.data_container.HistoryRecord" -> "pykoala.data_container.DataContainerHistory" [arrowhead="diamond", arrowtail="none"];
+"pykoala.data_container.DataMask" -> "pykoala.data_container.DataContainer" [arrowhead="odiamond", arrowtail="none"];
+"pykoala.data_container.DataContainerHistory" -> "pykoala.data_container.DataContainer" [arrowhead="odiamond", arrowtail="none"];
+"pykoala.data_container.HistoryRecord" -> "pykoala.data_container.DataContainerHistory" [arrowhead="odiamond", arrowtail="none"];
 
 
 }
