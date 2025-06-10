@@ -1,20 +1,11 @@
 """
-This module contains the base classes that represent the data used
-during the reduction process of IFS data in `pykoala`.
+This module defines the base classes that represent the core data structures used during the reduction of Integral Field Spectroscopy (IFS) data in `pykoala`.
 
-In a nutshell, `pykoala` interprets all sources of data
-(e.g., images, raw stacked spectra, data cubes) as a :class:`DataContainer` (DC).
-All DC include a series of common properties (e.g., ``intensity`` or ``variance``)
-as well as common methods for I/O, data reduction tracking history or data masking.
+At its core, pykoala models all sources of data -- such as images, raw stacked spectra, and data cubes -- as instances of the :class:`DataContainer` (DC). This is a unified, homogeneous structure that provides a consistent way to organize, access, and manipulate various data types.
 
-A special type of data containers are the :class:`SpectraContainer`, which do not only
-include an ``intensity``, but also a ``wavelength`` property associated to each pixel along the
-spectral dimension of the data. This can be used to represent RSS or DataCubes commonly
-used in IFS, as well as, Multi Object Spectroscopy (MOS) datasets. In addition,
-all spectra containers must include a method for transforming the N-dimensional 
-``intensity`` and ``variance`` arrays into a 2D array (referred to as ``rss_intensity``)
-where the first and second dimensions correspond to the spatial (e.g. fibres, spaxels),
-and spectral dimension, respectively.
+Each :class:`DataContainer` includes a set of common attributes (e.g., ``intensity``, ``variance``) and methods for tasks such as input/output (I/O) operations, tracking data reduction history, and applying data masks.
+
+A specialized subclass of :class:`DataContainer` is the :class:`SpectraContainer`, designed to represent spectroscopic data. In addition to the intensity attribute, these containers include a wavelength array that defines the spectral coordinate for each pixel. :class:`SpectraContainer` can be used to represent row-stacked spectra (RSS), as well as 3D data cubes (commonly used in IFS).
 """
 
 from abc import ABC, abstractmethod

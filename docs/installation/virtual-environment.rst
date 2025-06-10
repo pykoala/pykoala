@@ -1,10 +1,10 @@
-Running PyKOALA in a Python virtual environment
+Running PyKOALA in a python virtual environment
 ===============================================
 
 What is a virtual environment?
 ------------------------------
 
-A Python virtual environment is an isolated setup containing a specific Python interpreter and its dependencies, separate from the system’s global Python setup. It enables projects to have their own set of dependencies without interfering with other projects or the system-wide Python installation.
+A python virtual environment is an isolated setup containing a specific Python interpreter and its dependencies, separate from the system’s global Python setup. It enables projects to have their own set of dependencies without interfering with other projects or the system-wide Python installation.
 **It enables projects to have their own set of dependencies without interfering with other projects or the system-wide Python installation**. Python environments, like virtual environments or Docker, offer these key benefits:
 
 1. **Isolation**: Keeps dependencies separate, avoiding conflicts.

@@ -1,0 +1,42 @@
+digraph "classes" {
+rankdir=LR
+charset="utf-8"
+"pykoala.corrections.astrometry.AstrometryOffsetCorrection" [color="black", fontcolor="black", label=<AstrometryCorrection>, shape="record", style="solid"];
+"pykoala.corrections.atmospheric_corrections.AtmosphericExtCorrection" [color="black", fontcolor="black", label=<AtmosphericExtCorrection>, shape="record", style="solid"];
+"pykoala.corrections.sky.ContinuumModel" [color="black", fontcolor="black", label=<ContinuumModel>, shape="record", style="solid"];
+"pykoala.corrections.correction.CorrectionBase" [color="black", fontcolor="black", label=<CorrectionBase>, shape="record", style="solid"];
+"pykoala.corrections.correction.CorrectionOffset" [color="black", fontcolor="black", label=<CorrectionOffset>, shape="record", style="solid"];
+"pykoala.corrections.flux_calibration.FluxCalibration" [color="black", fontcolor="black", label=<FluxCalibration>, shape="record", style="solid"];
+"pykoala.corrections.sky.SkyFromObject" [color="black", fontcolor="black", label=<SkyFromObject>, shape="record", style="solid"];
+"pykoala.corrections.sky.SkyModel" [color="black", fontcolor="black", label=<SkyModel>, shape="record", style="solid"];
+"pykoala.corrections.sky.SkyOffset" [color="black", fontcolor="black", label=<SkyOffset>, shape="record", style="solid"];
+"pykoala.corrections.sky.SkySelfCalibration" [color="black", fontcolor="black", label=<SkySelfCalibration>, shape="record", style="solid"];
+"pykoala.corrections.sky.SkySubsCorrection" [color="black", fontcolor="black", label=<SkySubsCorrection>, shape="record", style="solid"];
+"pykoala.corrections.wavelength.SolarCrossCorrOffset" [color="black", fontcolor="black", label=<SolarCrossCorrOffset>, shape="record", style="solid"];
+"pykoala.corrections.sky.TelluricCorrection" [color="black", fontcolor="black", label=<TelluricCorrection>, shape="record", style="solid"];
+"pykoala.corrections.wavelength.TelluricWavelengthCorrection" [color="black", fontcolor="black", label=<TelluricWavelengthCorrection>, shape="record", style="solid"];
+"pykoala.corrections.throughput.Throughput" [color="black", fontcolor="black", label=<Throughput>, shape="record", style="solid"];
+"pykoala.corrections.throughput.ThroughputCorrection" [color="black", fontcolor="black", label=<ThroughputCorrection>, shape="record", style="solid"];
+"pykoala.corrections.wavelength.WavelengthCorrection" [color="black", fontcolor="black", label=<WavelengthCorrection>, shape="record", style="solid"];
+"pykoala.corrections.wavelength.WavelengthOffset" [color="black", fontcolor="black", label=<WavelengthOffset>, shape="record", style="solid"];
+"pykoala.corrections.astrometry.AstrometryOffsetCorrection" -> "pykoala.corrections.correction.CorrectionBase" [arrowhead="empty", arrowtail="none"];
+"pykoala.corrections.atmospheric_corrections.AtmosphericExtCorrection" -> "pykoala.corrections.correction.CorrectionBase" [arrowhead="empty", arrowtail="none"];
+"pykoala.corrections.flux_calibration.FluxCalibration" -> "pykoala.corrections.correction.CorrectionBase" [arrowhead="empty", arrowtail="none"];
+"pykoala.corrections.sky.SkyFromObject" -> "pykoala.corrections.sky.SkyModel" [arrowhead="empty", arrowtail="none"];
+"pykoala.corrections.sky.SkyOffset" -> "pykoala.corrections.sky.SkyModel" [arrowhead="empty", arrowtail="none"];
+"pykoala.corrections.sky.SkySelfCalibration" -> "pykoala.corrections.correction.CorrectionBase" [arrowhead="empty", arrowtail="none"];
+"pykoala.corrections.sky.SkySubsCorrection" -> "pykoala.corrections.correction.CorrectionBase" [arrowhead="empty", arrowtail="none"];
+"pykoala.corrections.sky.TelluricCorrection" -> "pykoala.corrections.correction.CorrectionBase" [arrowhead="empty", arrowtail="none"];
+"pykoala.corrections.throughput.ThroughputCorrection" -> "pykoala.corrections.correction.CorrectionBase" [arrowhead="empty", arrowtail="none"];
+"pykoala.corrections.wavelength.SolarCrossCorrOffset" -> "pykoala.corrections.wavelength.WavelengthCorrection" [arrowhead="empty", arrowtail="none"];
+"pykoala.corrections.wavelength.TelluricWavelengthCorrection" -> "pykoala.corrections.wavelength.WavelengthCorrection" [arrowhead="empty", arrowtail="none"];
+"pykoala.corrections.wavelength.WavelengthCorrection" -> "pykoala.corrections.correction.CorrectionBase" [arrowhead="empty", arrowtail="none"];
+"pykoala.corrections.sky.ContinuumModel" -> "pykoala.corrections.sky.SkySelfCalibration" [arrowhead="odiamond", arrowtail="none", style="solid"];
+"pykoala.corrections.throughput.Throughput" -> "pykoala.corrections.throughput.ThroughputCorrection" [arrowhead="odiamond", arrowtail="none", style="solid"];
+"pykoala.corrections.sky.SkyModel" -> "pykoala.corrections.sky.SkySubsCorrection" [arrowhead="none", arrowtail="none", style="solid"];
+"pykoala.corrections.wavelength.WavelengthOffset" -> "pykoala.corrections.correction.CorrectionOffset" [arrowhead="empty", arrowtail="none", style="solid"];
+"pykoala.corrections.correction.CorrectionOffset" -> "pykoala.corrections.astrometry.AstrometryOffsetCorrection" [arrowhead="odiamond", arrowtail="none", style="solid"];
+"pykoala.corrections.wavelength.WavelengthOffset" -> "pykoala.corrections.wavelength.SolarCrossCorrOffset" [arrowhead="odiamond", arrowtail="none", style="solid"];
+"pykoala.corrections.wavelength.WavelengthOffset" -> "pykoala.corrections.wavelength.TelluricWavelengthCorrection" [arrowhead="odiamond", arrowtail="none", style="solid"];
+
+}
