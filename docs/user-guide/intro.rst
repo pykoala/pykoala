@@ -50,9 +50,9 @@ PyKOALA currently supports the following corrections: atmospheric effects such a
 .. figure:: ../graphviz/corrections.png
     :width: 600
     :align: center
-    :alt: PyKOALA's corrections
+    :alt: PyKOALA corrections modules
 
-    `UML <https://en.wikipedia.org/wiki/Unified_Modeling_Language>`_ diagram of PyKOALA's available :ref:`corrections`.
-
+    UML diagram of PyKOALA's available :ref:`corrections`.
 
 PyKOALA also supports the interpolation of individual RSS exposures into 3D datacubes, offering users the flexibility to choose between inverse-distance weighted methods and alternative techniques, such as drizzling.
+
