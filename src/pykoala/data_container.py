@@ -708,6 +708,10 @@ class SpectraContainer(DataContainer):
     def rss_variance(self):
         pass
 
+    @property
+    def rss_snr(self):
+        return self.rss_intensity / self.rss_variance**0.5
+
     @abstractmethod
     def rss_to_original(self, rss_shape_data):
         """Reshape an RSS-like array into the original ``intensity`` shape."""
