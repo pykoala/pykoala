@@ -84,11 +84,9 @@ class FluxCalibration(CorrectionBase):
     response_units : float
         Units of the response function, default is 1e16 (erg/s/cm^2/AA).
     """
-
     name = "FluxCalibration"
-    verbosity = True
 
-    def __init__(self, response=None, response_wavelength=None,
+    def __init__(self, response=None, response_err=None, response_wavelength=None,
                  response_file=None, **correction_kwargs):
         """
         Initializes the FluxCalibration object.
@@ -105,8 +103,13 @@ class FluxCalibration(CorrectionBase):
 
         self.response_wavelength = check_unit(response_wavelength, u.angstrom)
         self.response = check_unit(response)
+        if response_err is not None:
+            self.response_err = check_unit(response_err, self.response.unit)
+        else:
+            self.response_err = np.zeros_like(self.response)
+
         self.response_file = response_file
-    
+
     @classmethod
     def from_text_file(cls, path=None):
         """Load the resonse function from a text file.
@@ -126,17 +129,27 @@ class FluxCalibration(CorrectionBase):
         """
         if path is None:
             path = cls.default_extinction
-        wavelength, response = np.loadtxt(path, unpack=True)
+
+        data = np.loadtxt(path, dtype=float)
+        if data.shape[1] == 2:
+            wavelength, response = data.T
+            response_err = np.zeros_like(response)
+        elif data.shape[1] == 3:
+            wavelength, response, response_err = data.T
+        else:
+            raise ArithmeticError(f"Unrecognized number of columns: {data.shape[1]}")
+
         with open(path, "r") as f:
             _ = f.readline()
             line = f.readline()
-            wave_header, response_header = line.split(",")
-            wave_idx = wave_header.find("("), wave_header.find(")")
-            response_idx = response_header.find("("), response_header.find(")")
+            wave_header, response_header, response_err_header = line.split(",")
+            wave_idx = wave_header.find("("), wave_header.rfind(")")
+            response_idx = response_header.find("("), response_header.rfind(")")
             wave_unit = u.Unit(wave_header[wave_idx[0] + 1 : wave_idx[1]])
             resp_unit = u.Unit(
                 response_header[response_idx[0] + 1 : response_idx[1]])
         return cls(response=response << resp_unit,
+                   response_err=response_err << resp_unit,
                    response_wavelength=wavelength << wave_unit,
                    response_file=path)
 
@@ -170,7 +183,7 @@ class FluxCalibration(CorrectionBase):
         """
         if extract_args is None:
             # Default extraction arguments
-            extract_args = dict(wave_range=None, wave_window=30, plot=False)
+            extract_args = dict(wave_range=None, wave_window=None, plot=False)
         if response_params is None:
             # Default response curve parameters
             response_params = dict(pol_deg=5, plot=False)
@@ -211,44 +224,75 @@ class FluxCalibration(CorrectionBase):
             flux_corrections.append(
                 cls(response=resp_curve(data[i].wavelength),
                     response_wavelength=data[i].wavelength))
+
+        if len(flux_corrections) == 0:
+            vprint("No flux calibration was created", level="warning")
+            return None, None, None
+
         if combine:
-            master_flux_corr = FluxCalibration.master_flux_auto(flux_corrections)
+            master_flux_corr = cls.master_flux_auto(flux_corrections)
         else:
             master_flux_corr = None
         return flux_cal_results, flux_corrections, master_flux_corr
 
-    @staticmethod
-    def master_flux_auto(flux_calibration_corrections: list):
+    @classmethod
+    def master_flux_auto(cls, flux_calibration_corrections: list,
+                         combine_method="median"):
         """
-        Create a master response function from the results returned by FluxCalibration.auto.
+        Combine several :class:`FluxCalibration` into a master calibration.
 
         Parameters
         ----------
-        flux_cal_results : dict
-            Dictionary containing the results from the flux calibration process for each of the stars provided.
+        flux_calibration_corrections : list
+            List containing the :class:`FluxCalibration` to combine.
 
         Returns
         -------
-        master_resp : array-like
+        master_resp : :class:`FluxCalibration`
             The master response function.
         """
         vprint("Mastering response function")
-        spectral_response = []
         if len(flux_calibration_corrections) == 1:
             return flux_calibration_corrections[0]
 
-        for fcal_corr in flux_calibration_corrections[1:]:
-            # Update model with the star values
-            spectral_response.append(
-                fcal_corr.interpolate_response(
-                    flux_calibration_corrections[0].response_wavelength))
+        # Select a reference wavelength array
+        ref_wave = flux_calibration_corrections[0].response_wavelength
+        ref_resp_unit = flux_calibration_corrections[0].response.unit
+        spectral_response = np.full((len(flux_calibration_corrections),
+                                         ref_wave.size), fill_value=np.nan)
+        spectral_response_err = np.full_like(spectral_response,
+                                        fill_value=np.nan)
 
-        vprint("Obtaining median spectral response")
-        master_resp = np.nanmedian(spectral_response, axis=0)
+        spectral_response[0] = flux_calibration_corrections[0].response.to_value(ref_resp_unit)
+        spectral_response_err[1] = flux_calibration_corrections[0].response_err.to_value(ref_resp_unit)
+
+        for ith, fcal_corr in enumerate(flux_calibration_corrections[1:]):
+            resp, resp_err = fcal_corr.interpolate_response(ref_wave)
+            spectral_response[ith + 1] = resp.to_value(ref_resp_unit)
+            spectral_response_err[ith + 1] = resp_err.to_value(ref_resp_unit)
+
+        if combine_method == "median":
+            master_resp = np.nanmedian(spectral_response, axis=0)
+            # Compute the std error of the median (1.2533 * std of mean)
+            master_resp_err = np.sqrt(np.nansum(spectral_response_err**2, axis=0
+                                        ) / spectral_response_err.shape[0])
+            master_resp_err *= 1.2533
+        elif combine_method == "mean":
+            master_resp = np.nanmean(spectral_response, axis=0)
+            # Compute the std error of the median (1.2533 * std of mean)
+            master_resp_err = np.sqrt(np.nansum(spectral_response_err**2, axis=0
+                                        ) / spectral_response_err.shape[0])
+        elif combine_method == "wmean":
+            master_resp = np.nansum(
+                spectral_response / spectral_response_err, axis=0) / np.nansum(
+                    1 / spectral_response_err, axis=0)
+            # Compute the std error of the median (1.2533 * std of mean)
+            master_resp_err = np.sqrt(np.nansum(spectral_response_err**2, axis=0
+                                        ) / spectral_response_err.shape[0])
         master_flux_calibration = FluxCalibration(
-            response=master_resp,
-            response_wavelength=flux_calibration_corrections[0]
-            .response_wavelength)
+            response=master_resp << ref_resp_unit,
+            response_err=master_resp_err << ref_resp_unit,
+            response_wavelength=ref_wave)
         return master_flux_calibration
 
     @staticmethod
@@ -710,11 +754,15 @@ class FluxCalibration(CorrectionBase):
         self.vprint("Interpolating spectral response to input wavelength array")
         response = np.interp(wavelength, self.response_wavelength, self.response,
                              right=0., left=0.)
+        response_err = np.interp(wavelength, self.response_wavelength,
+                                 self.response_err,
+                                 right=np.nan, left=np.nan)
         if update:
             self.vprint("Updating response and wavelength arrays")
             self.response = response
+            self.response_err = response_err
             self.response_wavelength = wavelength
-        return response
+        return response, response_err
 
     def save_response(self, fname):
         """
@@ -737,43 +785,26 @@ class FluxCalibration(CorrectionBase):
         """
         self.vprint(f"Saving response function at: {fname}")
         # TODO: Use a QTable and dump to FITS instead.
-        np.savetxt(fname, np.array([self.response_wavelength, self.response]).T,
+        np.savetxt(fname, np.array([self.response_wavelength, self.response,
+                                    self.response_err]).T,
                    header="Spectral Response curve\n"
                     + f" wavelength ({self.response_wavelength.unit}),"
-                    + f" R ({self.response.unit})"
+                    + f" R ({self.response.unit}), Rerr ({self.response_err.unit})" 
                    )
-        
-    def apply(self, spectra_container):
+
+    def apply(self, spectra_container : SpectraContainer) -> SpectraContainer:
         """
-        Computes the response curve from observed and reference spectra.
+        Applies the response curve to a given SpectraContainer.
 
         Parameters
         ----------
-        wave : array-like
-            Wavelength array.
-        obs_spectra : array-like
-            Observed spectra.
-        ref_spectra : array-like
-            Reference spectra.
-        pol_deg : int, optional
-            Degree of the polynomial fit. If None, no polynomial fit is applied.
-        spline : bool, optional
-            If True, uses a spline fit.
-        spline_args : dict, optional
-            Additional arguments for the spline fit.
-        gauss_smooth_sigma : float, optional
-            Sigma for Gaussian smoothing.
-        plot : bool, optional
-            If True, plots the response curve.
-        mask_absorption : bool, optional
-            If True, masks absorption features.
+        spectra_container : :class:`SpectraContainer`
+            Target object to be corrected.
 
         Returns
         -------
-        response_curve : callable
-            Function representing the response curve.
-        response_fig : matplotlib.figure.Figure
-            Figure of the response curve plot, if plot is True.
+        spectra_container_out : :class:`SpectraContainer`
+            Corrected version of the input :class:`SpectraContainer`.
         """
         assert isinstance(spectra_container, SpectraContainer)
         spectra_container_out = spectra_container.copy()
@@ -784,18 +815,26 @@ class FluxCalibration(CorrectionBase):
         # Check that the model is sampled in the same wavelength grid
         if not spectra_container_out.wavelength.size == self.response_wavelength.size or not np.allclose(
             spectra_container_out.wavelength, self.response_wavelength, equal_nan=True):
-            response = self.interpolate_response(spectra_container_out.wavelength)
+            response, response_err = self.interpolate_response(
+                spectra_container_out.wavelength, update=False)
         else:
-            response = self.response
+            response, response_err = self.response, self.response_err
 
         # Apply the correction
-        spectra_container_out.rss_intensity = (spectra_container_out.rss_intensity
-                                           / response[np.newaxis, :])
-        spectra_container_out.rss_variance = (spectra_container_out.rss_variance
-                                           / response[np.newaxis, :]**2)
+        spectra_container_out.rss_intensity = (
+            spectra_container_out.rss_intensity / response[np.newaxis, :])
+        # Propagate the uncertainty of the flux calibration
+        resp_inv_snr = np.power(response_err / response, 2)
+
+        spectra_container_out.rss_variance = (
+            spectra_container_out.rss_intensity**2 * (
+            # Use the original inverse SNR and avoid 0 snr
+            1 / spectra_container.rss_snr.clip(0.01, None)**2
+            # Add the flux cal uncertainty
+            + resp_inv_snr
+            ))
         self.record_correction(spectra_container_out, status='applied',
                                units=str(self.response.unit))
         return spectra_container_out
-
 
 # Mr Krtxo \(ﾟ▽ﾟ)/
