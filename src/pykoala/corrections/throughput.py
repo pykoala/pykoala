@@ -1,23 +1,12 @@
 """
 Module for estimating a fibre throughput correction.
 """
-# =============================================================================
-# Basics packages
-# =============================================================================
 import os
 import numpy as np
-import copy
 from astropy.io import fits
-from scipy.ndimage import median_filter, percentile_filter
-# from scipy.ndimage import gaussian_filter
-# =============================================================================
-# Astropy and associated packages
-# =============================================================================
+from scipy.ndimage import median_filter
+from scipy.interpolate import UnivariateSpline
 
-# =============================================================================
-# KOALA packages
-# =============================================================================
-# Modular
 from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.data_container import RSS
@@ -74,30 +63,135 @@ class Throughput(object):
         hdul.close(verbose=True)
         vprint(f"Throughput saved at {output_path}")
 
-    @classmethod
-    def from_fits(cls, path):
-        """Create a :class:`Throughput` from an input FITS file.
-        
-        Throughput data and associated errors must be stored in HDUL extension 1,
-        and 2, respectively.
+    def smooth(self, method="none", axis=1, polydeg=3, spline_s=None,
+               update_error="residual", robust=True, random_state=42):
+        """
+        Smooth the throughput with a polynomial or a spline along one axis.
 
         Parameters
         ----------
-        path: str
-            Path to the FITS file containing the throughput data.
+        method : {"none", "polynomial", "spline"}, default "none"
+            Smoothing method. "polynomial" uses per-curve polyfit.
+            "spline" uses UnivariateSpline with optional smoothing factor s.
+        axis : {0, 1}, default 1
+            Axis along which to smooth: 0=fibre direction, 1=wavelength direction.
+        polydeg : int, default 3
+            Degree of the polynomial fit (for method="polynomial").
+        spline_s : float or None, default None
+            Smoothing factor 's' for UnivariateSpline (for method="spline").
+            If None, UnivariateSpline will pick a value based on noise.
+        update_error : {"residual", "keep"}, default "residual"
+            How to handle throughput_error. "residual" replaces it with a robust
+            scatter (NMAD) of residuals; "keep" leaves it unchanged.
+        robust : bool, default True
+            If True, iteratively sigma-clips residuals during fitting.
+        random_state : int, default 42
+            Seed used only to preserve deterministic behaviour in cases with
+            stochastic tie-breaking.
 
         Returns
         -------
-        throughput : :class:`Throughput`
-            A :class:`Throughput` initialised with the input data.
+        self : Throughput
+            The same object, modified in place.
         """
-        if not os.path.isfile(path):
-            raise NameError(f"Throughput file {path} does not exists.")
-        vprint(f"Loading throughput from {path}")
-        with fits.open(path) as hdul:
-            throughput_data = hdul[1].data
-            throughput_error = hdul[2].data
-        return cls(throughput_data, throughput_error, path)
+        if method not in {"none", "polynomial", "spline"}:
+            raise ValueError("method must be 'none', 'polynomial', or 'spline'")
+
+        if method == "none":
+            return self
+
+        rng = np.random.default_rng(random_state)
+        data = self.throughput_data
+        err = self.throughput_error
+
+        if data is None:
+            raise ValueError("throughput_data is None; nothing to smooth.")
+
+        # Work on a copy to avoid partial overwrites if something fails
+        smoothed = np.array(data, copy=True)
+        new_err = None if err is None else np.array(err, copy=True)
+
+        # Iterate curves along the orthogonal axis
+        n_fib, n_wave = data.shape
+        n_curves = n_fib if axis == 1 else n_wave
+        n_pts = n_wave if axis == 1 else n_fib
+        x = np.arange(n_pts, dtype=float)
+
+        # Fit each curve independently
+        for i in range(n_curves):
+            y = data[i, :] if axis == 1 else data[:, i]
+            mask = np.isfinite(y)
+            # If too few valid points, skip smoothing for this curve
+            if mask.sum() < max(polydeg + 1, 5):
+                # leave as is
+                continue
+
+            xx = x[mask]
+            yy = y[mask]
+            # Optional robust pre-clipping loop
+            if robust:
+                # 2 iterations of clipping
+                for _ in range(2):
+                    # Provisional fit to get residuals
+                    if method == "polynomial":
+                        coeff = np.polyfit(xx, yy, deg=polydeg)
+                        yfit = np.polyval(coeff, xx)
+                    else:
+                        spl = UnivariateSpline(xx, yy, s=spline_s)
+                        yfit = spl(xx)
+                    res = yy - yfit
+                    sig = ancillary.std_from_mad(res)
+                    if not np.isfinite(sig) or sig == 0:
+                        break
+                    clip = np.abs(res) < 3.0 * sig
+                    if clip.sum() < max(polydeg + 1, 5):
+                        break
+                    xx, yy = xx[clip], yy[clip]
+
+            # Final fit on clipped data
+            if method == "polynomial":
+                coeff = np.polyfit(xx, yy, deg=polydeg)
+                yhat = np.polyval(coeff, x)
+            else:
+                spl = UnivariateSpline(xx, yy, s=spline_s)
+                yhat = spl(x)
+
+            # Write back
+            if axis == 1:
+                smoothed[i, :] = yhat
+            else:
+                smoothed[:, i] = yhat
+
+            # Update error from residuals if requested
+            if update_error == "residual":
+                if axis == 1:
+                    res = data[i, :] - yhat
+                else:
+                    res = data[:, i] - yhat
+                # Use robust scatter and enforce a small floor
+                sigma = ancillary.std_from_mad(res)
+                if np.isnan(sigma) or sigma <= 0:
+                    sigma = 0.0
+                if new_err is None:
+                    # create error if missing
+                    new_err = np.zeros_like(smoothed)
+                if axis == 1:
+                    new_err[i, :] = sigma
+                else:
+                    new_err[:, i] = sigma
+
+        # Store results
+        self.throughput_data = smoothed
+        if update_error == "residual":
+            # If some curves were not updated, fall back to original error there
+            if self.throughput_error is not None and new_err is not None:
+                # replace zeros (un-updated) by original errors
+                replace_mask = (new_err == 0.0)
+                new_err = np.where(replace_mask, self.throughput_error, new_err)
+            self.throughput_error = new_err
+        # else: keep original error
+
+        return self
 
     def plot(self, pct=[1, 50, 99], random_seed=50):
         """Plot the Throughput data.
@@ -126,7 +220,7 @@ class Throughput(object):
             Figure containing the plots.
         """
         fig, ax = plot_utils.new_figure(
-            fig_name="throughput", figsize=(10, 8),
+            fig_name="Throughput", figsize=(8, 6),
             ncols=1, nrows=1
             )
         ax[0, 0].axis("off")
@@ -150,45 +244,73 @@ class Throughput(object):
                     p_values[0] - 0.1, 2.1 - p_values[0]],
                 log=True)
         for p_name, p in zip(pct, p_values):
-            ax.axvline(p, label=f"P{p_name}", ls=':')
+            ax.axvline(p, label=f"P{p_name}", ls=':', c="k")
         ax.set_ylabel("N pixels")
         ax.set_xlabel("Throughput value")
         ax.set_ylim(10, self.throughput_data.size // 100)
 
         ax = fig.add_subplot(gs[1, :])
 
+        # Median throughput along wavelength
         median_wavelength_throughput = np.nanmedian(self.throughput_data, axis=0)
-        std_wavelength_throughput = np.nanmedian(
-            np.abs(self.throughput_data - median_wavelength_throughput[np.newaxis, :]),
-            axis=0) * 1.4826
+        std_wavelength_throughput = ancillary.std_from_mad(self.throughput_data,
+                                                           axis=0)
+
         ax.fill_between(np.arange(0, self.throughput_data.shape[1]),
                         median_wavelength_throughput - std_wavelength_throughput,
                         median_wavelength_throughput + std_wavelength_throughput,
-                        alpha=0.3, color='r', label='Median +/- (MAD * 1.4826)')
+                        alpha=0.1, color='r', label='Median +/- NMAD')
         ax.plot(median_wavelength_throughput, label='Median',
                 lw=0.7, color='r')
+        
+        # Select 3 random fibres
         np.random.seed(random_seed)
-        fibre_idx = np.random.randint(low=0, high=self.throughput_data.shape[0], size=3)
+        fibre_idx = np.random.randint(low=0, high=self.throughput_data.shape[0],
+                                      size=3)
         for idx in fibre_idx:
             ax.plot(self.throughput_data[idx], label='Fibre {}'.format(idx),
-                    lw=1., alpha=0.8)
+                    lw=0.8, alpha=0.8)
         ax.set_ylim(0.75, 1.25)
         ax.set_xlabel("Spectral pixel")
-        ax.legend(ncol=3)
+        ax.legend(ncol=5, fontsize='small')
 
         ax = fig.add_subplot(gs[-1, :])
         wl_idx = np.random.randint(low=0, high=self.throughput_data.shape[1],
                                    size=3)
         for idx in wl_idx:
             ax.plot(self.throughput_data[:, idx].squeeze(),
-                    label='Wave column {}'.format(idx), lw=0.7,
+                    label='Wave col. {}'.format(idx), lw=0.7,
                     alpha=1.0)
         ax.set_ylim(0.75, 1.25)
         ax.set_xlabel("Fibre number")
-        ax.legend(ncol=4)
+        ax.legend(ncol=4, fontsize='small')
         
         return fig
         
+    @classmethod
+    def from_fits(cls, path):
+        """Create a :class:`Throughput` from an input FITS file.
+        
+        Throughput data and associated errors must be stored in HDUL extension 1,
+        and 2, respectively.
+
+        Parameters
+        ----------
+        path: str
+            Path to the FITS file containing the throughput data.
+
+        Returns
+        -------
+        throughput : :class:`Throughput`
+            A :class:`Throughput` initialised with the input data.
+        """
+        if not os.path.isfile(path):
+            raise NameError(f"Throughput file {path} does not exists.")
+        vprint(f"Loading throughput from {path}")
+        with fits.open(path) as hdul:
+            throughput_data = hdul[1].data
+            throughput_error = hdul[2].data
+        return cls(throughput_data, throughput_error, path)
 
 class ThroughputCorrection(CorrectionBase):
     """
@@ -242,7 +364,12 @@ class ThroughputCorrection(CorrectionBase):
 
     @classmethod
     def from_rss(cls, rss_set, clear_nan=True, statistic='median', medfilt=5,
-                 pct_outliers=[5, 95]):
+                 pct_outliers=[5, 95], smooth_method="none",
+                 smooth_axis=1,
+                 smooth_polydeg=3,
+                 smooth_spline_s=None,
+                 smooth_update_error="residual",
+                 smooth_robust=True):
         """Compute the throughput correctoin from a set of (dome/sky)flat exposures.
 
         Description
@@ -263,6 +390,18 @@ class ThroughputCorrection(CorrectionBase):
             If provided, apply a median filter to the throughput estimate.
         pct_outliers : 2-element tupla
             Percentile limits to clip outliers.
+        smooth_method : {"none","polynomial","spline"}, default "none"
+            Optional curve-wise smoothing of the final throughput.
+        smooth_axis : {0,1}, default 1
+            Axis along which to smooth (0=fibre, 1=wavelength).
+        smooth_polydeg : int, default 3
+            Degree for polynomial smoothing.
+        smooth_spline_s : float or None, default None
+            Smoothing factor 's' for UnivariateSpline (if method="spline").
+        smooth_update_error : {"residual","keep"}, default "residual"
+            Whether to recompute errors from residuals after smoothing.
+        smooth_robust : bool, default True
+            Apply light sigma-clipping before the final fit.
 
         Returns
         -------
@@ -312,6 +451,14 @@ class ThroughputCorrection(CorrectionBase):
 
         throughput = Throughput(throughput_data=throughput_data,
                                 throughput_error=throughput_error)
+        if smooth_method != "none":
+            throughput.smooth(method=smooth_method,
+                              axis=smooth_axis,
+                              polydeg=smooth_polydeg,
+                              spline_s=smooth_spline_s,
+                              update_error=smooth_update_error,
+                              robust=smooth_robust)
+
         return cls(throughput)
 
 
