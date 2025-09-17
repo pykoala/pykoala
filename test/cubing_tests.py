@@ -7,7 +7,6 @@ from astropy.wcs import WCS
 from pykoala.instruments.mock import mock_rss
 from pykoala import cubing
 from pykoala.plotting.utils import qc_cube
-from pykoala.corrections.atmospheric_corrections import get_adr
 
 np.random.seed(50)
 
