@@ -24,13 +24,13 @@ class AtmosphericExtCorrection(CorrectionBase):
     This module accounts for the brightness reduction caused due to the absorption of 
     photons by the atmosphere.
 
-    For a given observed (:math:`F_{obs}`) and intrinsic flux (:math:`F_{int}`), the extinction
-    :math:`E` takes the form:
+    For a given observed (:math:`F_{obs}`) and intrinsic flux (:math:`F_{int}`), the extinction correction
+    factor, :math:`C(\lambda)`, takes the form:
 
     .. math::
-        F_{int}(\lambda) = E(\lambda) * F_{obs}(\lambda)
+        F_{int}(\lambda) = C(\lambda) * F_{obs}(\lambda)
         
-        E(\lambda) = 10^{0.4 \cdot airmass \cdot \eta(\lambda)}
+        C(\lambda) = 10^{0.4 \cdot airmass \cdot \eta(\lambda)}
 
     where :math:`\eta(\lambda)` corresponds to the wavelength-dependent extinction curve.
 
@@ -101,8 +101,10 @@ class AtmosphericExtCorrection(CorrectionBase):
             Extinction at a given wavelength and airmass.
         """
         extinction_curve = np.interp(wavelength,
-                                        self.extinction_curve_wave,
-                                        self.extinction_curve)
+                                     self.extinction_curve_wave,
+                                     self.extinction_curve,
+                                     left=self.extinction_curve[0],
+                                     right=self.extinction_curve[-1])
         return 10**(0.4 * airmass * extinction_curve)
 
     def apply(self, spectra_container, airmass=None):
@@ -122,7 +124,9 @@ class AtmosphericExtCorrection(CorrectionBase):
         assert isinstance(spectra_container, SpectraContainer)
         spectra_container_out = spectra_container.copy()
         if airmass is None:
-            airmass = spectra_container.info['airmass']
+            airmass = spectra_container.info.get("airmass", None)
+            if airmass is None:
+                raise ValueError("Airmass not provided")
 
         if self.extinction_curve is not None:
             self.vprint("Applying model-based extinction correction to"
