@@ -28,6 +28,8 @@ from astropy.modeling.models import custom_model
 # =============================================================================
 from pykoala import vprint
 
+EPSILON_FLOAT32 = np.finfo(np.float32).tiny
+EPSILON_FLOAT64 = np.finfo(np.float64).tiny
 
 def check_unit(quantity, default_unit=None, equivalencies=[]):
     """Check the units of an input quantity.
