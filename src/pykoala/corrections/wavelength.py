@@ -497,32 +497,39 @@ class SolarCrossCorrOffset(WavelengthCorrection):
 
         """
         self.vprint("Computing grid of solar spectra models")
-        models_grid = np.zeros((pix_shift_array.size, pix_std_array.size,
-                                sun_intensity.size)) << sun_intensity.unit
-        weights_grid = np.zeros((pix_shift_array.size, pix_std_array.size,
-                                 sun_intensity.size))
+        models_grid = np.zeros(
+            (pix_shift_array.size, pix_std_array.size, sun_intensity.size)
+            ) << sun_intensity.unit
+        weights_grid = np.zeros(
+            (pix_shift_array.size, pix_std_array.size, sun_intensity.size)
+            )
         shift_idx, std_idx = np.indices(models_grid.shape[:-1])
 
         for z, (velshift, gauss_std) in enumerate(
-            zip(pix_shift_array[shift_idx.flatten()],
-                pix_std_array[std_idx.flatten()])):
+            zip(pix_shift_array[shift_idx.flatten()], pix_std_array[std_idx.flatten()])):
+
                 i, j = np.unravel_index(z, models_grid.shape[:-1])
+
                 new_pixel_array = pix_array + velshift
                 interp_sun_intensity = flux_conserving_interpolation(
                     new_pixel_array, pix_array, sun_intensity)
+                # gaussian_filter expects sigma in pixels
                 interp_sun_intensity = gaussian_filter(
                     interp_sun_intensity, gauss_std.value)
                 # Restore the intensity units removed by gaussian_filter
                 models_grid[i, j] = interp_sun_intensity << sun_intensity.unit
-                # Repeat the process for the weights
+                # propagate weights consistently, truncate to reduce long wings
                 interp_sun_weight = flux_conserving_interpolation(
                     new_pixel_array, pix_array, weights)
-                # Truncate the gaussian filter to 2-sigma
                 interp_sun_weight = gaussian_filter(
                     interp_sun_weight, gauss_std.value, truncate=2.0)
-                interp_sun_weight /= np.nansum(interp_sun_weight)
+                norm = np.nansum(interp_sun_weight)
+                if norm > 0:
+                    interp_sun_weight /= norm
                 weights_grid[i, j] = interp_sun_weight
+
         return models_grid, weights_grid
+
 
     def compute_shift_from_twilight(self, spectra_container,
                                     sun_window_size_aa=20, keep_features_frac=0.1,
