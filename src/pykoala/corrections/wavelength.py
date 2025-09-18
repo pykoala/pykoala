@@ -220,22 +220,18 @@ class WavelengthCorrection(CorrectionBase):
 
 
 class TelluricWavelengthCorrection(WavelengthCorrection):
-    """WavelengthCorrection based on the cross-correlation of telluric lines.
-    
-    This class constructs a WavelengthOffset using a cross-correlation of
-    telluric absorption lines.
+    """WavelengthCorrection based on the cross-correlation of telluric lines."""
 
-    """
     name = "TelluricWavelengthCorrection"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
     
     @classmethod
-    def from_rss(cls, rss,
+    def from_rss(cls, rss : RSS,
                  median_smooth=None, pol_fit_deg=None, oversampling=5,
                  wave_range=None, plot=False):
-        """Estimate the wavelength offset from an input data container.
+        """Estimate the wavelength offset from an input RSS using telluric absorption.
         
         Parameters
         ----------
@@ -250,6 +246,7 @@ class TelluricWavelengthCorrection(WavelengthCorrection):
             Wavelength range to fit the offset.
         plot : bool, optional
             If True, returns quality control plots.
+
         Returns
         -------
         WavelengthCorrection : :class:`WavelengthCorrection`
@@ -257,70 +254,82 @@ class TelluricWavelengthCorrection(WavelengthCorrection):
         """
         assert isinstance(rss, RSS), "Input data must be an instance of RSS"
 
-        # mask = rss.mask.get_flag_map(telluric_flat)[0]
-        # if not mask.any():
-        #     raise ValueError("No telluric lines present in the data")
-        # if wave_range is not None:
-        #     mask &= rss.wavelength >= check_unit(
-        #         wave_range[0], rss.wavelength.unit)
-        #     mask &= rss.wavelength <= check_unit(
-        #         wave_range[1], rss.wavelength.unit)
-
+        # Normalize each spectrum
         intensity = rss.intensity.value.copy()
-        intensity /= np.nanmedian(intensity, axis=1)[:, np.newaxis]
-        # Emphasize the regions dominated by telluric absorption
+        med = np.nanmedian(intensity, axis=1)
+        med[~np.isfinite(med)] = 1.0
+        intensity /= med[:, np.newaxis]
+
+        # Optional wavelength range mask
+        mask = np.isfinite(rss.wavelength)
+        if wave_range is not None:
+            lo = check_unit(wave_range[0], rss.wavelength.unit)
+            hi = check_unit(wave_range[1], rss.wavelength.unit)
+            mask &= (rss.wavelength >= lo) & (rss.wavelength <= hi)
+
+        # Oversample in wavelength index domain
         new_wavelength = np.interp(
-            np.arange(0, rss.wavelength.size, 1 / oversampling),
+            np.arange(0, rss.wavelength.size, 1.0 / oversampling),
             np.arange(rss.wavelength.size),
-            rss.wavelength)
+            rss.wavelength,
+        )
         interpolator = interp1d(rss.wavelength, intensity, axis=1)
         intensity = interpolator(new_wavelength)
 
+        # Restrict mask to resampled grid
+        res_mask = np.interp(new_wavelength, rss.wavelength, mask.astype(float)) > 0.5
+        # Reference median spectrum
         median_intensity = np.nanmedian(intensity, axis=0)
-        fibre_offset = np.zeros(intensity.shape[0])
+
+        fibre_offset = np.zeros(intensity.shape[0], dtype=float)
         for ith, fibre in enumerate(intensity):
-            fibre_mask = np.isfinite(fibre)
+            fibre_mask = np.isfinite(fibre) & res_mask
             if not fibre_mask.any():
                 continue
 
-            corr = correlate(fibre[fibre_mask],
-                             median_intensity[fibre_mask],
+            corr = correlate(fibre[fibre_mask], median_intensity[fibre_mask],
                              mode="full", method="fft")
             lags = correlation_lags(fibre[fibre_mask].size,
                                     median_intensity[fibre_mask].size)
-            max_corr = np.clip(np.argmax(corr), 1, corr.size - 2)
-            parabolic_max_lag = ancillary.parabolic_maximum(
-                lags[[max_corr - 1, max_corr, max_corr + 1]],
-                corr[[max_corr - 1, max_corr, max_corr + 1]])
-            fibre_offset[ith] = parabolic_max_lag / oversampling
+            max_corr = np.argmax(corr)
+            # guard edges for parabolic interpolation
+            i0 = max(max_corr - 1, 0)
+            i1 = max_corr
+            i2 = min(max_corr + 1, corr.size - 1)
+            x3 = lags[[i0, i1, i2]]
+            y3 = corr[[i0, i1, i2]]
+            # if duplicates happen at edges, skip parabolic and take argmax
+            if (i0 == i1) or (i1 == i2) or (i0 == i2):
+                peak = lags[max_corr]
+            else:
+                peak = ancillary.parabolic_maximum(x3, y3)
+            fibre_offset[ith] = peak / oversampling
 
         if median_smooth is not None:
-                fibre_offset = median_filter(fibre_offset, median_smooth)
+            fibre_offset = median_filter(fibre_offset, size=median_smooth)
 
         if pol_fit_deg is not None:
-                pol = np.polyfit(np.arange(fibre_offset.size), fibre_offset,
-                        deg=pol_fit_deg)
-                fibre_offset = np.poly1d(pol)(np.arange(fibre_offset.size))            
+            x = np.arange(fibre_offset.size, dtype=float)
+            pol = np.polyfit(x, fibre_offset, deg=pol_fit_deg)
+            fibre_offset = np.poly1d(pol)(x)
+
+        figs = None
         if plot:
             fig = plt.figure()
             ax = fig.add_subplot(111)
             ax.plot(fibre_offset)
-
-
-            ax.plot(fibre_offset)
-            ax.set_ylim(fibre_offset.min(), fibre_offset.max())
+            ax.set_ylim(np.nanmin(fibre_offset), np.nanmax(fibre_offset))
             ax.set_xlabel("Fibre number")
-            ax.set_ylabel(f"Average wavelength offset (pixel)")
+            ax.set_ylabel("Average wavelength offset (pixel)")
             fibre_map_fig = rss.plot_fibres(data=fibre_offset)
-            fig = (fig, fibre_map_fig)
-        else:
-            fig = None
+            figs = (fig, fibre_map_fig)
+            plt.close(fig)
 
         fibre_offset = fibre_offset << u.pixel
         offset = WavelengthOffset(
-            offset_data=fibre_offset,
-            offset_error=np.full_like(fibre_offset, fill_value=np.nan))
-        return cls(offset=offset), fig
+            offset_data=fibre_offset, offset_error=np.full_like(fibre_offset, fill_value=np.nan)
+        )
+        return cls(offset=offset), figs
 
 
 class SolarCrossCorrOffset(WavelengthCorrection):
