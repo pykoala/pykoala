@@ -73,7 +73,7 @@ class WavelengthOffset(object):
                               header=header)
         hdul = fits.HDUList([primary, data, error])
         hdul.writeto(output_path, overwrite=True)
-        hdul.close(verbose=True)
+        hdul.close()
         vprint(f"Wavelength offset saved at {output_path}")
 
     @classmethod
