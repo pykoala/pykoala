@@ -245,7 +245,7 @@ class TelluricWavelengthCorrection(WavelengthCorrection):
                              mode="full", method="fft")
             lags = correlation_lags(fibre[fibre_mask].size,
                                     median_intensity[fibre_mask].size)
-            max_corr = np.argmax(corr)
+            max_corr = np.clip(np.argmax(corr), 1, corr.size - 2)
             parabolic_max_lag = ancillary.parabolic_maximum(
                 lags[[max_corr - 1, max_corr, max_corr + 1]],
                 corr[[max_corr - 1, max_corr, max_corr + 1]])
