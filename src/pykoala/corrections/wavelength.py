@@ -128,8 +128,6 @@ class WavelengthCorrection(CorrectionBase):
         Correction name, to be recorded in the log.
     offset : :class:`WavelengthOffset`
         2D wavelength offset (n_fibres x n_wavelengths)
-    verbose: bool
-        False by default.
     """
     name = "WavelengthCorrection"
     offset = None
