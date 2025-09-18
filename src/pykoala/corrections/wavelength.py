@@ -10,10 +10,9 @@ from matplotlib.gridspec import GridSpec
 
 from astropy.io import fits
 from astropy import units as u
-from scipy.ndimage import (median_filter, gaussian_filter, percentile_filter,
-                           label, labeled_comprehension)
+from scipy.ndimage import median_filter, gaussian_filter, percentile_filter
 from scipy.interpolate import interp1d
-from scipy.signal import correlate, correlation_lags, convolve
+from scipy.signal import correlate, correlation_lags
 
 from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
@@ -37,6 +36,7 @@ class WavelengthOffset(object):
         Filename path.
 
     """
+
     offset_data = None
     offset_error = None
 
@@ -65,13 +65,27 @@ class WavelengthOffset(object):
                 raise NameError("Provide output path")
             else:
                 output_path = self.path
+
         primary = fits.PrimaryHDU()
-        header = fits.Header()
-        header["bunit"] = self.offset_data.unit.to_string()
-        data = fits.ImageHDU(data=self.offset_data.value, name='OFFSET', header=header)
-        error = fits.ImageHDU(data=self.offset_error.value, name='OFFSET_ERR',
-                              header=header)
-        hdul = fits.HDUList([primary, data, error])
+        # OFFSET
+        hdr_data = fits.Header()
+        if self.offset_data is None:
+            raise ValueError("offset_data is None")
+        hdr_data["BUNIT"] = self.offset_data.unit.to_string()
+        hdu_data = fits.ImageHDU(data=self.offset_data.value, name='OFFSET', header=hdr_data)
+
+        if self.offset_error is None:
+            # create an array of NaN with same shape and unit as data
+            err_values = np.full_like(self.offset_data.value, np.nan, dtype=float)
+            err_unit = self.offset_data.unit
+        else:
+            err_values = self.offset_error.value
+            err_unit = self.offset_error.unit
+        hdr_err = fits.Header()
+        hdr_err["BUNIT"] = err_unit.to_string()
+        hdu_err = fits.ImageHDU(data=err_values, name="OFFSET_ERR", header=hdr_err)
+
+        hdul = fits.HDUList([primary, hdu_data, hdu_err])
         hdul.writeto(output_path, overwrite=True)
         hdul.close()
         vprint(f"Wavelength offset saved at {output_path}")
@@ -548,7 +562,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
             weights[:100] = 0
             weights[-100:] = 0
         else:
-            weights = np.zeros(new_wavelength)
+            weights = np.zeros(new_wavelength.size)
             weights[slice(*np.searchsorted(new_wavelength, wave_range))] = 1.0
 
         valid_pixels = weights > 0
