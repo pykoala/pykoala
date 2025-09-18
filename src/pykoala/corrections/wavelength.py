@@ -16,7 +16,7 @@ from scipy.signal import correlate, correlation_lags
 
 from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
-from pykoala.data_container import RSS
+from pykoala.data_container import RSS, SpectraContainer
 from pykoala.ancillary import flux_conserving_interpolation, vac_to_air, check_unit
 from pykoala import ancillary
 
@@ -530,6 +530,186 @@ class SolarCrossCorrOffset(WavelengthCorrection):
 
         return models_grid, weights_grid
 
+    def estimate_lsf_vs_wavelength(self,
+        spectra_container: SpectraContainer,
+        n_windows=12,
+        window_overlap=0.25,
+        pix_std_array=None,
+        pix_shift_array=None,
+        poly_deg=3,
+        sun_window_size_aa=20,
+        keep_features_frac=0.15,
+        response_window_size_aa=200,
+    ):
+        """
+        Estimate LSF sigma in pixels as a function of wavelength using solar spectrum windows.
+
+        Description
+        -----------
+        Split the spectral range into overlapping windows. In each window:
+        - build weights to focus on solar absorption lines,
+        - estimate a local spectrograph response and normalize,
+        - grid-search for (shift, sigma) that best matches the data to the solar template.
+
+        Fit a smooth polynomial sigma(lambda) across window centers and store the model.
+
+        Parameters
+        ----------
+        spectra_container: `pykoala.data_container.SpectraContainer`
+            Spectra container (RSS or Cube) to use for the LSF estimation.
+        n_windows: int, optional
+            Number of wavelength windows to use. Default is 12.
+        window_overlap: float, optional
+            Fractional overlap between windows. Default is 0.25 (25% overlap).
+        pix_std_array: 1D-np.array, optional, default=np.arange(0.1, 5.0, 0.1)
+            Array containing the values of the gaussian LSF standard deviation
+            in pixels. See `compute_grid_of_models` for details.
+        pix_shift_array: 1D-np.array, optional, default=np.arange(-3.0, 3.0, 0.1)
+            Array containing the wavelength offsets expressed in pixels.
+        poly_deg: int, optional
+            Degree of the polynomial fit to sigma(lambda). Default is 3.
+        sun_window_size_aa: int, optional
+            Size of a spectral window in angstrom to perform a median filtering
+            and estimate the underlying continuum. Default is 20 AA.
+            See `get_solar_features` for details.
+        keep_features_frac: float, optional
+            Fraction of absorption-features weights to keep. All values below
+            that threshold will be set to 0. Default is 0.15.
+        response_window_size_aa: int, optional
+            Size of a spectral window in angstrom to estimate the spectrograph
+            response. Default is 200 AA.
+
+        Returns
+        -------
+        dict with keys:
+            "wave_centers": window centers,
+            "sigma_pix": best-fit sigma per window,
+            "poly_deg": degree used,
+            "poly_coeff": polynomial coefficients (highest power first)
+        """
+        if pix_std_array is None:
+            pix_std_array = np.arange(0.1, 5.0, 0.1)
+        if pix_shift_array is None:
+            pix_shift_array = np.arange(-3.0, 3.0, 0.1)
+
+        pix_std_array = check_unit(pix_std_array, u.pixel)
+        pix_shift_array = check_unit(pix_shift_array, u.pixel)
+
+        wave = spectra_container.wavelength
+        n = wave.size
+        w0 = wave[0]
+        w1 = wave[-1]
+
+        # define window edges
+        centers = np.linspace(w0, w1, n_windows + 2)[1:-1]  # exclude exact ends
+        half_span = (w1 - w0) / (n_windows * 2.0)
+        half_span = half_span * (1.0 + window_overlap)
+
+        sigma_per_window = []
+        wave_centers = []
+
+        for c in centers:
+            lo = c - half_span
+            hi = c + half_span
+            in_win = (wave >= lo) & (wave <= hi)
+            if np.count_nonzero(in_win) < 50:
+                continue
+
+            new_wavelength = wave[in_win]
+
+            # resample RSS in this window
+            rss_intensity = np.array(
+                [
+                    flux_conserving_interpolation(new_wavelength, wave, fibre)
+                    for fibre in spectra_container.rss_intensity
+                ]
+            ) << spectra_container.intensity.unit
+
+            # interpolate solar template to window
+            sun_intensity = flux_conserving_interpolation(new_wavelength, self.sun_wavelength, self.sun_intensity)
+
+            # build weights on solar features
+            weights = self.get_solar_features(new_wavelength, sun_intensity, window_size_aa=sun_window_size_aa)
+            # keep top fraction
+            thr = np.nanpercentile(weights, 100.0 * (1.0 - keep_features_frac))
+            weights = np.where(weights >= thr, weights, 0.0)
+            # zero out ends defensively
+            if new_wavelength.size > 200:
+                weights[:100] = 0
+                weights[-100:] = 0
+
+            # estimate response
+            delta_pixel = int(
+                (
+                    check_unit(response_window_size_aa, u.AA)
+                    / (new_wavelength[-1] - new_wavelength[0])
+                    * new_wavelength.size
+                ).decompose()
+            )
+            if delta_pixel % 2 == 0:
+                delta_pixel += 1
+
+            response = rss_intensity / sun_intensity[np.newaxis]
+            smooth_resp = median_filter(response, size=(1, delta_pixel)) << response.unit
+            upper_env = percentile_filter(smooth_resp, percentile=95, size=(1, delta_pixel)) << response.unit
+            fibre_weights = 1.0 / (1.0 + (upper_env / smooth_resp - np.nanmedian(upper_env / smooth_resp)) ** 2)
+
+            # normalized data
+            normalized = rss_intensity / smooth_resp
+
+            # pixel index array for this window
+            pix_array = (np.arange(new_wavelength.size)) << u.pixel
+
+            # build model grid and compute chi2
+            models_grid, weights_grid = self.compute_grid_of_models(
+                pix_shift_array, pix_std_array, pix_array, sun_intensity, weights
+            )
+
+            chi2 = np.zeros((pix_shift_array.size, pix_std_array.size))
+            # use median across fibres to be robust
+            # collapse last axis with weights
+            wsum = np.nansum(weights_grid, axis=-1)
+            wsum[wsum <= 0] = 1.0
+
+            # compare each model to the median spectrum to speed up
+            data_ref = np.nanmedian(normalized.value, axis=0)
+            for i in range(pix_shift_array.size):
+                diff = (models_grid[i] - data_ref[np.newaxis, :]).value
+                chi2[i] = np.nansum((diff ** 2) * (weights_grid[i] / wsum[i]), axis=-1)
+
+            best = np.unravel_index(np.argmin(chi2), chi2.shape)
+            best_sigma = pix_std_array[best[1]]
+            sigma_per_window.append(best_sigma.value)
+            wave_centers.append(c.to_value(wave.unit))
+
+        if len(sigma_per_window) < max(3, poly_deg + 1):
+            vprint("LSF estimation warning: too few windows, falling back to constant sigma")
+            # store a constant sigma poly
+            s_const = np.nanmedian(sigma_per_window) if sigma_per_window else 2.0
+            self._lsf_knots_wave = np.array(wave_centers)
+            self._lsf_knots_sigma_pix = np.array(sigma_per_window)
+            self._lsf_poly_deg = 0
+            self._lsf_poly_coeff = np.array([s_const])
+        else:
+            z = np.polyfit(wave_centers, sigma_per_window, deg=poly_deg)
+            self._lsf_knots_wave = np.array(wave_centers)
+            self._lsf_knots_sigma_pix = np.array(sigma_per_window)
+            self._lsf_poly_deg = poly_deg
+            self._lsf_poly_coeff = z
+
+        return {
+            "wave_centers": np.array(wave_centers),
+            "sigma_pix": np.array(sigma_per_window),
+            "poly_deg": self._lsf_poly_deg,
+            "poly_coeff": np.array(self._lsf_poly_coeff, copy=True),
+        }
+
+    def evaluate_lsf_sigma_pix(self, wavelength):
+        """Evaluate sigma(lambda) in pixels if a polynomial model has been stored."""
+        if self._lsf_poly_coeff is None:
+            raise RuntimeError("LSF model not available. Call estimate_lsf_vs_wavelength first.")
+        lam = check_unit(wavelength, self.sun_wavelength.unit).to_value(self.sun_wavelength.unit)
+        return np.polyval(self._lsf_poly_coeff, lam)
 
     def compute_shift_from_twilight(self, spectra_container,
                                     sun_window_size_aa=20, keep_features_frac=0.1,
