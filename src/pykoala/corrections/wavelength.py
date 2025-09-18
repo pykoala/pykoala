@@ -930,187 +930,6 @@ class SolarCrossCorrOffset(WavelengthCorrection):
             }
         return report
 
-
-
-    def estimate_lsf_vs_wavelength(
-        self,
-        spectra_container: SpectraContainer,
-        n_windows=12,
-        window_overlap=0.25,
-        pix_std_array=None,
-        poly_deg=3,
-        sun_window_size_aa=20,
-        keep_features_frac=0.15,
-        response_window_size_aa=200,
-        mask_tellurics=True,
-    ):
-        """
-        Estimate LSF sigma (in pixels) as a function of wavelength, per fibre.
-
-        Faster approach:
-        1) Build response-normalized spectra for all fibres over full band.
-        2) Build absorption-feature weights over full band from the solar template.
-        3) For each sigma in pix_std_array, convolve the solar template ONCE (full band).
-        4) Compute weighted chi2 for each sigma x fibre x lambda.
-        5) Collapse chi2 into overlapping wavelength windows; pick best sigma per fibre per window.
-        6) Fit a smooth polynomial sigma(lambda) PER FIBRE and store models in self._lsf_per_fibre.
-
-        Returns
-        -------
-        report : dict
-            Keys:
-            - "wave_centers": array of window centers
-            - "per_fibre": dict fibre_index -> {"sigma_pix": per-window best sigma, "poly_deg": int, "poly_coeff": np.ndarray}
-        """
-        if pix_std_array is None:
-            pix_std_array = np.arange(0.1, 5.0, 0.1)
-        
-        pix_std_array = check_unit(pix_std_array, u.pixel)
-        max_pix_std = np.max(pix_std_array)
-
-        wave = spectra_container.wavelength
-        n_fibre, n_wave = spectra_container.rss_intensity.shape
-
-        # 1) Build working arrays on the native grid
-        # Response estimate per fibre (median filter scale set by response_window_size_aa)
-        delta_pixel = int(
-            (
-                check_unit(response_window_size_aa, u.AA)
-                / (wave[-1] - wave[0])
-                * n_wave
-            ).decompose()
-        )
-        if delta_pixel % 2 == 0:
-            delta_pixel += 1
-
-        # Interpolate solar template to instrument grid
-        sun_on_grid = flux_conserving_interpolation(wave, self.sun_wavelength, self.sun_intensity)
-
-        # Optional masking of telluric-dominated regions by down-weighting later
-        # Weights that emphasize solar absorption features across full band
-        weights_full = self.get_solar_features(wave, sun_on_grid, window_size_aa=sun_window_size_aa)
-        if keep_features_frac is not None:
-            thr = np.nanpercentile(weights_full, 100.0 * (1.0 - keep_features_frac))
-            weights_full = np.where(weights_full >= thr, weights_full, 0.0)
-        # Remove edges where convolution would be unstable
-        sigma_wl = (wave[1] - wave[0]) * max_pix_std.value
-        weights_full[wave < (wave[0] + 3 * sigma_wl)] = 0.0
-        weights_full[wave > (wave[-1] - 3 * sigma_wl)] = 0.0
-        s = np.nansum(weights_full)
-        if s > 0:
-            weights_full /= s
-        else:
-            raise RuntimeError("No weights available after masking telluric regions; adjust parameters.")
-        # Response per fibre: data / solar
-        response = spectra_container.rss_intensity / sun_on_grid[np.newaxis]
-        smooth_resp = median_filter(response, size=(1, delta_pixel)) << response.unit
-        upper_env = percentile_filter(smooth_resp, percentile=95, size=(1, delta_pixel)) << response.unit
-        fibre_weights = 1.0 / (1.0 + (upper_env / smooth_resp - np.nanmedian(upper_env / smooth_resp)) ** 2)
-
-        if mask_tellurics:
-            # Optionally compress fibre_weights in typical telluric regions by multiplying with weights_full
-            # This is a mild down-weighting if telluric windows were not fully excluded
-            fibre_weights = fibre_weights * (weights_full[np.newaxis, :] + np.nanmedian(weights_full))
-
-        # Normalize data by smooth response
-        normalized = spectra_container.rss_intensity / smooth_resp  # shape (n_fibre, n_wave)
-
-        # 2) Build model grid across full band for all sigma
-        models_sigma = np.zeros((pix_std_array.size, n_wave)) << sun_on_grid.unit
-        weights_sigma = np.zeros((pix_std_array.size, n_wave))
-
-        for j, sigma_pix in enumerate(pix_std_array):
-            # No shift here; only broadening for LSF(lambda)
-            broadened = gaussian_filter(sun_on_grid, sigma_pix.value) << sun_on_grid.unit
-            models_sigma[j] = broadened
-
-            # Weights convolved for consistency; truncate wings
-            w = gaussian_filter(weights_full, sigma_pix.value, truncate=2.0)
-            s = np.nansum(w)
-            weights_sigma[j] = w / s if s > 0 else w
-
-        # 3) Compute weighted chi2 cube across full wavelength for all fibres
-        #    chi2[j, i, k] for sigma_j, fibre_i, lambda_k
-        #    Use broadcast: (n_sigma, 1, n_wave) vs (1, n_fibre, n_wave)
-        model_3d = models_sigma[:, np.newaxis, :]      # (n_sigma, 1, n_wave)
-        data_3d = normalized[np.newaxis, :, :]   # (1, n_fibre, n_wave)
-        w_line_3d = weights_sigma[:, np.newaxis, :]    # (n_sigma, 1, n_wave)
-        w_fibre_3d = fibre_weights.value[np.newaxis, :, :]  # (1, n_fibre, n_wave)
-
-        # combine weights: per-sigma line weights times per-fibre stability weights
-        weight_total = w_line_3d * w_fibre_3d 
-        diff = (model_3d - data_3d)  # (n_sigma, n_fibre, n_wave)
-        num_lambda = (diff.value ** 2) * weight_total                     # (n_sigma, n_fibre, n_wave)
-        den_lambda = weight_total                                       # (n_sigma, n_fibre, n_wave)
-
-        # 4) Define overlapping windows over wavelength and collapse chi2 into windows
-        centers, slices = self._build_overlapping_windows(wave, n_windows, window_overlap)
-
-        n_win = len(slices)
-        chi2_win = np.zeros((pix_std_array.size, n_fibre, n_win))
-        for k, sl in enumerate(slices):
-            nsum = np.nansum(num_lambda[:, :, sl], axis=2)
-            dsum = np.nansum(den_lambda[:, :, sl], axis=2)
-            dsum[dsum <= 0] = 1.0
-            chi2_win[:, :, k] = nsum / dsum  # (n_sigma, n_fibre)
-
-        # 5) Best sigma per fibre per window, then per-fibre polynomial fit
-        sigma_best_per_fibre = np.zeros((n_fibre, n_win), dtype=float)
-        for i in range(n_fibre):
-            # argmin over sigma for each window
-            best_idx = np.argmin(chi2_win[:, i, :], axis=0)   # (n_win,)
-            sigma_best = pix_std_array[best_idx].value        # float array
-            sigma_best_per_fibre[i] = sigma_best
-
-        # Fit polynomial per fibre over window centers
-        self._lsf_per_fibre = {"sigma_best_per_fibre": sigma_best_per_fibre}
-        centers_val = np.array([c.to_value(wave.unit) for c in centers], dtype=float)
-        for i in range(n_fibre):
-            y = sigma_best_per_fibre[i]
-            # Guard against too few points
-            deg = min(poly_deg, max(0, len(centers_val) - 1))
-            if len(centers_val) < 3:
-                coeff = np.array([np.nanmedian(y) if np.isfinite(y).any() else 2.0])
-                deg = 0
-            else:
-                coeff = np.polyfit(centers_val, y, deg=deg)
-            self._lsf_per_fibre[i] = {
-                "poly_deg": deg,
-                "poly_coeff": coeff,
-                "wave_centers": centers_val.copy(),
-                "sigma_pix": y.copy(),
-            }
-
-        # Also keep a simple field-average for convenience
-        field_avg = np.nanmedian(sigma_best_per_fibre, axis=0)
-        deg_field = min(poly_deg, max(0, len(centers_val) - 1))
-        coeff_field = np.polyfit(centers_val, field_avg, deg=deg_field) if len(centers_val) >= 3 else np.array([np.nanmedian(field_avg)])
-        self._lsf_knots_wave = centers_val.copy()
-        self._lsf_knots_sigma_pix = field_avg.copy()
-        self._lsf_poly_deg = deg_field
-        self._lsf_poly_coeff = coeff_field
-
-        self._lsf_diag = {
-            "wave": wave,
-            "centers": centers,
-            "slices": slices,
-            "pix_std_array": pix_std_array,
-            "models_sigma": models_sigma,
-            "weights_sigma": weights_sigma,
-            "normalized": normalized,
-            "fibre_weights": fibre_weights,
-            "chi2_win": chi2_win,
-            "sigma_best_per_fibre": sigma_best_per_fibre,
-        }
-        return {
-            "wave_centers": centers_val,
-            "per_fibre": {i: {"sigma_pix": self._lsf_per_fibre[i]["sigma_pix"],
-                            "poly_deg": self._lsf_per_fibre[i]["poly_deg"],
-                            "poly_coeff": self._lsf_per_fibre[i]["poly_coeff"]}
-                        for i in range(n_fibre)},
-        }
-
-
     def evaluate_lsf_sigma_pix(self, wavelength, fibre=None):
         """
         Evaluate sigma(lambda) in pixels.
@@ -1143,92 +962,133 @@ class SolarCrossCorrOffset(WavelengthCorrection):
         max_windows=None,
         show_models=True,
         show_residuals=True,
+        show_weights=True,
         figsize=(10, 6),
     ):
         """
-        Make QC plots for one fibre across all wavelength windows used in the LSF fit.
+        QC plots for one fibre across all wavelength windows after the batched joint fit.
 
-        Requirements
-        ------------
-        Call estimate_lsf_vs_wavelength first; this method consumes its cached diagnostics.
+        Requires
+        --------
+        - Run estimate_lsf_and_shift_batched(...) first. This method uses self._lsf_diag.
 
         Parameters
         ----------
         fibre_idx : int
-            RSS fibre index to inspect.
+            RSS fibre index to display.
         max_windows : int or None
-            If set, limit to the first N windows (useful for quick checks).
+            Limit to first N windows (for quick checks). None shows all.
         show_models : bool
-            Plot model overlay in each window panel.
+            Overlay best-fit model in each window panel.
         show_residuals : bool
-            Plot residuals panel beneath each window panel.
+            Add a residuals panel per window.
+        show_weights : bool
+            Overlay solar line weights (for best sigma) and per-fibre stability weights.
         figsize : tuple
-            Base figure size per window.
+            Figure size per window.
 
         Returns
         -------
         figs : list of matplotlib.figure.Figure
-            One figure per window, plus a summary figure at the end.
+            Window figures plus a final summary figure.
         """
         if not hasattr(self, "_lsf_diag"):
-            raise RuntimeError("No diagnostics available. Run estimate_lsf_vs_wavelength first.")
+            raise RuntimeError("No diagnostics available. Run the batched solver first.")
 
         d = self._lsf_diag
         wave = d["wave"]
         centers = d["centers"]
         slices_ = d["slices"]
-        pix_std_array = d["pix_std_array"]
-        models_sigma = d["models_sigma"]
-        weights_sigma = d["weights_sigma"]
-        normalized = d["normalized"]
-        fibre_weights = d["fibre_weights"]
-        chi2_win = d["chi2_win"]
-        sigma_best_per_fibre = d["sigma_best_per_fibre"]
+
+        best_shift = d["best_shift"]          # (n_fibre, n_win)
+        best_sigma = d["best_sigma"]          # (n_fibre, n_win)
+        mean_shift = d["mean_shift"]          # (n_fibre, n_win)
+        mean_sigma = d["mean_sigma"]          # (n_fibre, n_win)
+        std_shift  = d["std_shift"]           # (n_fibre, n_win)
+        std_sigma  = d["std_sigma"]           # (n_fibre, n_win)
+
+        normalized = d["normalized"]          # (n_fibre, n_wave) Quantity
+        fibre_weights = d["fibre_weights"]    # (n_fibre, n_wave) Quantity
 
         if fibre_idx < 0 or fibre_idx >= normalized.shape[0]:
             raise IndexError("fibre_idx out of range")
 
+        # Prepare solar template on instrument grid once
+        sun_on_grid = flux_conserving_interpolation(
+            wave, self.sun_wavelength, self.sun_intensity
+        )
+
+        # Base solar-feature weights across full band (unconvolved)
+        weights_full = self.get_solar_features(
+            wave, sun_on_grid, window_size_aa=20  # use same default as in solver
+        )
+
+        # convenience handles
         n_win = len(slices_)
         use_windows = n_win if max_windows is None else min(max_windows, n_win)
-
         figs = []
 
-        # window-by-window panels
+        # window-by-window plots
         for w in range(use_windows):
             sl = slices_[w]
             lam = wave[sl]
             data = normalized[fibre_idx, sl]
             fw = fibre_weights[fibre_idx, sl]
 
-            # best sigma index for this window and fibre
-            j_best = int(np.argmin(chi2_win[:, fibre_idx, w]))
-            sigma_best = pix_std_array[j_best]
-            model = models_sigma[j_best, sl]
-            weights_line = weights_sigma[j_best, sl]
+            # build best model for this window
+            sigma_pix = best_sigma[fibre_idx, w]
+            shift_pix = best_shift[fibre_idx, w]
 
-            fig, (ax1, ax2) = plt.subplots(
-                2 if show_residuals else 1, 1, figsize=figsize, sharex=True,
-                gridspec_kw=dict(height_ratios=[2, 1] if show_residuals else [1])
+            # broaden solar template with best sigma (full band), then shift and crop
+            broadened = gaussian_filter(sun_on_grid, sigma_pix) << sun_on_grid.unit
+            pix_array = (np.arange(wave.size)) << u.pixel
+            model_full = flux_conserving_interpolation(
+                pix_array, pix_array + (shift_pix << u.pixel), broadened
             )
-            if not isinstance(ax1, plt.Axes):
-                # matplotlib returns ndarray of axes if 2 rows; normalize
-                ax1, ax2 = ax1[0], ax1[1] if show_residuals else (ax1[0], None)
+            model = model_full[sl]
 
-            ax1.set_title(f"Fibre {fibre_idx}  Window {w+1}/{n_win}  center={centers[w]:.3g}  sigma_best={sigma_best:.3g} pix")
+            # weights used in this window (line weights convolved and shifted)
+            wline = gaussian_filter(weights_full, sigma_pix, truncate=2.0)
+            s = np.nansum(wline)
+            if s > 0:
+                wline = wline / s
+            wline_shifted = flux_conserving_interpolation(
+                pix_array, pix_array + (shift_pix << u.pixel), wline
+            )[sl]
+
+            # make the figure
+            nrows = 2 if show_residuals else 1
+            fig, axes = plt.subplots(nrows, 1, figsize=figsize, sharex=True,
+                                    gridspec_kw=dict(height_ratios=[2, 1] if show_residuals else [1]))
+            ax1 = axes if nrows == 1 else axes[0]
+            ax1.set_title(
+                f"Fibre {fibre_idx}  Window {w+1}/{n_win}  center={centers[w]:.3g}  "
+                f"best: shift={shift_pix:.3g} pix, sigma={sigma_pix:.3g} pix"
+            )
+
+            # data and model
             ax1.plot(lam, data, lw=1.0, color="k", label="data")
             if show_models:
                 ax1.plot(lam, model, lw=1.0, color="r", label="model")
-            # twin axis to show weights used
-            twin = ax1.twinx()
-            twin.plot(lam, weights_line, alpha=0.5, color="fuchsia", label="line weight")
-            twin.plot(lam, fw.value if hasattr(fw, "value") else fw, alpha=0.5, color="orange", label="fibre weight")
-            ax1.set_ylabel("Norm. intensity")
-            ax1.legend(loc="upper left", fontsize=8)
-            twin.legend(loc="upper right", fontsize=8)
 
+            # weights overlays
+            if show_weights:
+                tw = ax1.twinx()
+                tw.plot(lam, wline_shifted, alpha=0.5, color="fuchsia", label="line weight")
+                tw.plot(lam, (fw.value if hasattr(fw, "value") else fw), alpha=0.5, color="orange", label="fibre weight")
+                # small legends
+                ax1.legend(loc="upper left", fontsize=8)
+                tw.legend(loc="upper right", fontsize=8)
+            else:
+                ax1.legend(loc="upper left", fontsize=8)
+
+            ax1.set_ylabel("Norm. intensity")
+
+            # residuals
             if show_residuals:
+                ax2 = axes[1]
                 resid = (data - model).value if hasattr(data, "value") else (data - model)
-                ax2.plot(lam, resid, lw=0.8)
+                ax2.plot(lam, resid, lw=0.8, color="tab:gray")
                 ax2.axhline(0.0, color="k", lw=0.7, alpha=0.6)
                 ax2.set_ylabel("Residual")
                 ax2.set_xlabel(f"Wavelength [{wave.unit}]")
@@ -1239,26 +1099,46 @@ class SolarCrossCorrOffset(WavelengthCorrection):
             plt.close(fig)
             figs.append(fig)
 
-        # summary panel for sigma(lambda)
+        # summary figure: sigma and shift vs window centers, best and mean with error bars; overlay polys if available
         centers_val = np.array([c.to_value(wave.unit) for c in centers], dtype=float)
-        y = sigma_best_per_fibre[fibre_idx]
-        fig = plt.figure(figsize=(8, 5))
-        ax = fig.add_subplot(111)
-        ax.set_title(f"Fibre {fibre_idx}  sigma(lambda) best per window")
-        ax.plot(centers_val, y, "o", label="per-window best")
-        # overlay per-fibre polynomial fit if present
+        ysig_best = best_sigma[fibre_idx]
+        ysig_mean = mean_sigma[fibre_idx]
+        ysig_std  = std_sigma[fibre_idx]
+        ysh_best  = best_shift[fibre_idx]
+        ysh_mean  = mean_shift[fibre_idx]
+        ysh_std   = std_shift[fibre_idx]
+
+        fig = plt.figure(figsize=(10, 6))
+        ax1 = fig.add_subplot(211)
+        ax1.set_title(f"Fibre {fibre_idx}  sigma(lambda) and shift(lambda) per window")
+        ax1.errorbar(centers_val, ysig_mean, yerr=ysig_std, fmt="o", ms=4, label="sigma mean +- std")
+        ax1.plot(centers_val, ysig_best, ".", ms=4, label="sigma best")
+        # per-fibre sigma poly if present
         if hasattr(self, "_lsf_per_fibre") and (fibre_idx in self._lsf_per_fibre):
-            pf = self._lsf_per_fibre[fibre_idx]
+            pf_s = self._lsf_per_fibre[fibre_idx]
             xx = np.linspace(centers_val.min(), centers_val.max(), 512)
-            ax.plot(xx, np.polyval(pf["poly_coeff"], xx), "-", label=f"poly deg={pf['poly_deg']}")
-        ax.set_xlabel(f"Wavelength center [{wave.unit}]")
-        ax.set_ylabel("sigma (pix)")
-        ax.legend()
+            ax1.plot(xx, np.polyval(pf_s["poly_coeff"], xx), "-", label=f"sigma poly deg={pf_s['poly_deg']}")
+        ax1.set_ylabel("sigma (pix)")
+        ax1.legend(loc="best", fontsize=8)
+
+        ax2 = fig.add_subplot(212, sharex=ax1)
+        ax2.errorbar(centers_val, ysh_mean, yerr=ysh_std, fmt="o", ms=4, label="shift mean +- std")
+        ax2.plot(centers_val, ysh_best, ".", ms=4, label="shift best")
+        # per-fibre shift poly if present
+        if hasattr(self, "_shift_per_fibre") and (fibre_idx in self._shift_per_fibre):
+            pf_h = self._shift_per_fibre[fibre_idx]
+            xx = np.linspace(centers_val.min(), centers_val.max(), 512)
+            ax2.plot(xx, np.polyval(pf_h["poly_coeff"], xx), "-", label=f"shift poly deg={pf_h['poly_deg']}")
+        ax2.set_xlabel(f"Wavelength center [{wave.unit}]")
+        ax2.set_ylabel("shift (pix)")
+        ax2.legend(loc="best", fontsize=8)
+
         plt.tight_layout()
         plt.close(fig)
         figs.append(fig)
 
         return figs
+
 
 
     def compute_shift_from_twilight(self, spectra_container,
