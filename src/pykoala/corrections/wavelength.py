@@ -98,7 +98,7 @@ class WavelengthOffset(object):
         vprint(f"Loading wavelength offset from {path}")
         with fits.open(path) as hdul:
             offset_data = hdul[1].data << u.Unit(hdul[1].header.get("BUNIT", 1))
-            offset_error = hdul[2].data << u.Unit(hdul[1].header.get("BUNIT", 1))
+            offset_error = hdul[2].data << u.Unit(hdul[2].header.get("BUNIT", 1))
         return cls(offset_data=offset_data, offset_error=offset_error,
                    path=path)
 
@@ -163,7 +163,7 @@ class WavelengthCorrection(CorrectionBase):
 
         rss_out = rss.copy()
         self.vprint("Applying correction to input RSS")
-        if self.offset.offset_data.unit is u.pixel:
+        if self.offset.offset_data.unit == u.pixel:
             x = np.arange(rss.wavelength.size) << u.pixel
         elif self.offset.offset_data.unit.is_equivalent(u.AA):
             x = rss.wavelength.to(self.offset.offset_data.unit)
@@ -544,7 +544,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
         if wave_range is None:
             weights = self.get_solar_features(new_wavelength, sun_intensity,
                                             window_size_aa=sun_window_size_aa)
-            weights[weights < np.nanpercentile(weights, 1 - keep_features_frac)] = 0
+            weights[weights < np.nanpercentile(weights, 100*(1 - keep_features_frac))] = 0
             weights[:100] = 0
             weights[-100:] = 0
         else:
