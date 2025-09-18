@@ -335,16 +335,10 @@ class TelluricWavelengthCorrection(WavelengthCorrection):
 class SolarCrossCorrOffset(WavelengthCorrection):
     """WavelengthCorrection based on solar spectra cross-correlation.
     
-    This class constructs a WavelengthOffset and applies the resulting correction
-    from a cross-correlation between a reference spectrum of the Sun and a twilight
-    exposure, dominated by solar spectra features.
+    Constructs a WavelengthOffset using a cross-correlation between a solar
+    reference spectrum and a twilight exposure (dominated by solar features).
 
-    Attributes
-    ----------
-    sun_intensity : np.ndarray
-        Reference solar spectrum.
-    sun_wavelength : np.ndarray
-        Wavelength vector associated to ``sun_intensity``
+    Also implements LSF(lambda) estimation from the solar spectrum.
     """
     name = "SolarCrossCorrelationOffset"
 
@@ -353,10 +347,14 @@ class SolarCrossCorrOffset(WavelengthCorrection):
         self.sun_wavelength = check_unit(sun_wavelength, u.AA)
         self.sun_intensity = check_unit(sun_intensity,
                                         u.erg / u.s / u.AA / u.cm**2)
+        self._lsf_knots_wave = None
+        self._lsf_knots_sigma_pix = None
+        self._lsf_poly_coeff = None
+        self._lsf_poly_deg = None
 
     @classmethod
     def from_fits(cls, path=None, extension=1):
-        """Initialise a WavelegnthOffset correction from an input FITS file.
+        """Initialise a WavelengthOffset correction from an input FITS file.
         
         Parameters
         ----------
@@ -445,17 +443,25 @@ class SolarCrossCorrOffset(WavelengthCorrection):
 
         """
         self.vprint("Estimating regions of solar spectra dominated by absorption lines.")
+        # convert window size to pixels over the current wavelength span
         delta_pixel = int(
-            (check_unit(window_size_aa, u.AA) / (solar_wavelength[-1] - solar_wavelength[0])
-                          * solar_wavelength.size).decompose()
-                          )
+            (
+                check_unit(window_size_aa, u.AA)
+                / (solar_wavelength[-1] - solar_wavelength[0])
+                * solar_wavelength.size
+            ).decompose()
+        )
         if delta_pixel % 2 == 0:
             delta_pixel += 1
-        solar_continuum = median_filter(solar_spectra, delta_pixel
-                                        ) << solar_spectra.unit
+
+        solar_continuum = median_filter(solar_spectra, size=delta_pixel) << solar_spectra.unit
+        ratio = solar_spectra / (solar_continuum + ancillary.EPSILON_FLOAT64)
         # Detect absorption features
-        median_continuum_ratio = np.nanmedian(solar_spectra / solar_continuum)
-        weights = np.abs(solar_spectra / solar_continuum -  median_continuum_ratio)
+        median_continuum_ratio = np.nanmedian(ratio)
+        weights = np.abs(ratio -  median_continuum_ratio)
+        s = np.nansum(weights)
+        if s > 0:
+            weights = weights / s
         return weights
 
     def compute_grid_of_models(self, pix_shift_array, pix_std_array, pix_array,
