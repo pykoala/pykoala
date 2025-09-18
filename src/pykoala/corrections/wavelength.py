@@ -531,7 +531,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
             rss_intensity = np.array([flux_conserving_interpolation(
                 new_wavelength, spectra_container.wavelength, fibre
                 ) for fibre in spectra_container.rss_intensity]
-                ) << spectra_container.intensitu.unit
+                ) << spectra_container.intensity.unit
         else:
             new_wavelength = spectra_container.wavelength
             rss_intensity = spectra_container.rss_intensity
