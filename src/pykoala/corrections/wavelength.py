@@ -129,6 +129,7 @@ class WavelengthCorrection(CorrectionBase):
     offset : :class:`WavelengthOffset`
         2D wavelength offset (n_fibres x n_wavelengths)
     """
+
     name = "WavelengthCorrection"
     offset = None
     verbose = False
@@ -136,13 +137,12 @@ class WavelengthCorrection(CorrectionBase):
     def __init__(self, offset_path: str=None, offset: WavelengthOffset=None,
                  **correction_kwargs):
         super().__init__(**correction_kwargs)
-
         self.path = offset_path
         self.offset = offset
 
     @classmethod
-    def from_fits(cls, path):
-        """Initialise a WavelegnthOffset correction from an input FITS file.
+    def from_fits(cls, path: str):
+        """Initialise a WavelengthOffset correction from an input FITS file.
         
         Parameters
         ----------
@@ -157,7 +157,7 @@ class WavelengthCorrection(CorrectionBase):
         return cls(offset=WavelengthOffset.from_fits(path=path),
                    offset_path=path)
 
-    def apply(self, rss):
+    def apply(self, rss : RSS) -> RSS:
         """Apply a 2D wavelength offset model to a RSS.
 
         Parameters
@@ -173,18 +173,49 @@ class WavelengthCorrection(CorrectionBase):
 
         assert isinstance(rss, RSS)
 
+        if self.offset is None or self.offset.offset_data is None:
+            raise ValueError("No offset loaded")
+        
         rss_out = rss.copy()
         self.vprint("Applying correction to input RSS")
+
         if self.offset.offset_data.unit == u.pixel:
             x = np.arange(rss.wavelength.size) << u.pixel
         elif self.offset.offset_data.unit.is_equivalent(u.AA):
             x = rss.wavelength.to(self.offset.offset_data.unit)
+        else:
+            raise ValueError("Offset units must be pixel or wavelength")
 
-        for i in range(rss.intensity.shape[0]):
+        # per-fibre scalar or vector offsets
+        off = self.offset.offset_data
+        if off.ndim == 1:
+            if off.size != rss.intensity.shape[0]:
+                raise ValueError("offset_data shape is invalid for RSS")
+            for i in range(rss.intensity.shape[0]):
                 rss_out.intensity[i] = flux_conserving_interpolation(
-                    x, x - self.offset.offset_data[i], rss.intensity[i])
-                
-        self.record_correction(rss_out, status='applied')
+                    x, x - off[i], rss.intensity[i]
+                )
+                if hasattr(rss, "variance") and rss.variance is not None:
+                    rss_out.variance[i] = flux_conserving_interpolation(
+                        x, x - off[i], rss.variance[i]
+                    )
+        elif off.ndim == 2:
+            if off.shape != rss.intensity.shape:
+                raise ValueError("2D offset_data must match RSS intensity shape")
+            for i in range(rss.intensity.shape[0]):
+                rss_out.intensity[i] = flux_conserving_interpolation(
+                    x, x - off[i], rss.intensity[i]
+                )
+                if hasattr(rss, "variance") and rss.variance is not None:
+                    rss_out.variance[i] = flux_conserving_interpolation(
+                        x, x - off[i], rss.variance[i]
+                    )
+        else:
+            raise ValueError("offset_data must be 1D or 2D")
+
+        comment = f"wave-offset_unit={self.offset.offset_data.unit}; shape={self.offset.offset_data.shape}"
+        self.record_correction(rss_out, status="applied", comment=comment)
+
         return rss_out
 
 
