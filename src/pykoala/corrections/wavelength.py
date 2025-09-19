@@ -1266,6 +1266,8 @@ class SolarCrossCorrOffset(WavelengthCorrection):
         results["shift_pix_matrix"] = shift_pix
         results["sigma_pix_matrix"] = sigma_pix
 
+        self.offset.offset_data = np.nanmedian(shift_pix, axis=1) << u.pixel
+
         if make_lsf_model:
             lsf_model = FibreLSFModel.from_sparse(
                 wave, centers, sigma_values=sigma_pix, kind="spline")
