@@ -13,7 +13,8 @@ import os
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy import interpolate
-from scipy import optimize
+from scipy.ndimage import gaussian_filter1d
+from scipy.optimize import least_squares
 from shapely import geometry
 # =============================================================================
 # Astropy and associated packages
@@ -680,6 +681,232 @@ def smooth_spectrum(wlm, s, wave_min=0, wave_max=0, step=50, exclude_wlm=[[0, 0]
 
     # (fit_median+fit_median_interpolated)/2      # Decide if fit_median or fit_median_interpolated
     return weight_fit_median*fit_median + (1-weight_fit_median)*fit_median_interpolated
+
+def fit_reference_spectra(
+    wave_obs,
+    flux_obs,
+    flux_var=None,
+    ref_wave=None,
+    ref_flux=None,
+    shift_init_pix=0.0,
+    sigma_init_pix=2.0,
+    scale_init=1.0,
+    cont_order=1,
+    shift_bounds=(-10.0, 10.0),
+    sigma_bounds=(0.05, 15.0),
+    scale_bounds=(0.1, 10.0),
+    cont_bounds=(-0.5, 0.5),
+    mask=None,
+    return_model=True,
+):
+    """
+    Fit an observed spectrum with a reference spectra by applying
+    a pixel shift and Gaussian LSF broadening.
+
+    Model:
+        model(lambda) = scale * P(lambda) * Shift[ Gaussian( ref_flux_on_grid, sigma_pix ) ]
+    where:
+        - Shift is in pixels on the observed grid
+        - Gaussian uses sigma in pixels on the observed grid
+        - P(lambda) is a multiplicative polynomial continuum of degree cont_order
+          centered at median(wave_obs), with coefficients constrained to small ranges
+
+    Parameters
+    ----------
+    wave_obs : array (n,)
+        Observed wavelength grid (monotonic).
+    flux_obs : array (n,)
+        Observed flux on wave_obs.
+    flux_var : array (n,), optional
+        Variance of flux_obs. If None, unit weights are used.
+    ref_wave : array (m,)
+        Solar template wavelength grid.
+    ref_flux : array (m,)
+        Solar template flux on ref_wave.
+    shift_init_pix : float
+        Initial guess for pixel shift applied to the broadened template.
+        Positive means shifting the template to larger pixel indices.
+    sigma_init_pix : float
+        Initial guess for Gaussian sigma in pixels.
+    scale_init : float
+        Initial multiplicative scale for the model.
+    cont_order : int
+        Degree of multiplicative continuum polynomial (0 disables continuum).
+    shift_bounds : tuple
+        Bounds for shift in pixels, e.g. (-10, 10).
+    sigma_bounds : tuple
+        Bounds for sigma in pixels, e.g. (0.05, 15).
+    scale_bounds : tuple
+        Bounds for multiplicative scale.
+    cont_bounds : tuple
+        Bounds for each continuum coefficient around zero (small departures).
+        The constant term is fixed to 0 by construction of P(lambda).
+    mask : boolean array (n,), optional
+        True for samples to use. If None, all finite samples are used.
+    return_model : bool
+        If True, return the best-fit model vector on wave_obs.
+
+    Returns
+    -------
+    result : dict
+        Keys:
+          - "shift_pix": best-fit pixel shift (float)
+          - "sigma_pix": best-fit Gaussian sigma in pixels (float)
+          - "scale": best-fit multiplicative scale (float)
+          - "cont_coeff": array of continuum coefficients length cont_order
+                         (coefs for normalized polynomial basis)
+          - "cost": final weighted least squares cost
+          - "success": optimizer success flag
+          - "message": optimizer message
+          - "jacobian": Jacobian matrix at solution (2D array)
+          - "cov": approximate covariance matrix (2D array) or None if unavailable
+          - "model": best-fit model on wave_obs (only if return_model=True)
+
+    Notes
+    -----
+    1) Pixel shift and sigma are defined on the observed pixel grid.
+       This is robust and avoids repeated resampling of the data.
+    2) The reference template is first interpolated to wave_obs, then broadened,
+       then shifted by subpixel interpolation on the index axis.
+    3) Continuum is multiplicative: P(lambda) = 1 + sum_k c_k * B_k(lambda),
+       where B_k are powers of (lambda - median(lambda)) scaled to [-1, 1].
+    """
+
+    # Basic checks
+    wave_obs = np.asarray(wave_obs)
+    flux_obs = np.asarray(flux_obs)
+    if ref_wave is None or ref_flux is None:
+        raise ValueError("ref_wave and ref_flux must be provided.")
+    ref_wave = np.asarray(ref_wave)
+    ref_flux = np.asarray(ref_flux)
+
+    if wave_obs.ndim != 1 or flux_obs.ndim != 1:
+        raise ValueError("wave_obs and flux_obs must be 1D arrays.")
+    if wave_obs.size != flux_obs.size:
+        raise ValueError("wave_obs and flux_obs must have the same length.")
+    if not np.all(np.isfinite(wave_obs)) or not np.all(np.isfinite(flux_obs)):
+        raise ValueError("Non finite values in wave_obs or flux_obs.")
+
+    n = wave_obs.size
+    if flux_var is None:
+        wgt = np.ones(n, dtype=float)
+    else:
+        flux_var = np.asarray(flux_var)
+        if flux_var.shape != flux_obs.shape:
+            raise ValueError("flux_var must have the same shape as flux_obs.")
+        wgt = 1.0 / np.clip(flux_var, np.finfo(float).tiny, np.inf)
+
+    if mask is None:
+        mask = np.isfinite(flux_obs) & np.isfinite(wgt)
+    else:
+        mask = mask.astype(bool) & np.isfinite(flux_obs) & np.isfinite(wgt)
+    if mask.sum() < max(16, cont_order + 3):
+        raise ValueError("Not enough valid data points after masking.")
+
+    # Interpolate template onto observed wavelength grid once
+    # Use linear interpolation, fill with edge values to avoid NaNs at ends.
+    ref_on_grid = np.interp(wave_obs, ref_wave, ref_flux, left=ref_flux[0], right=ref_flux[-1])
+
+    # Build normalized polynomial basis for multiplicative continuum
+    # Basis B_k(x) = x^k for k=1..cont_order, with x normalized to [-1, 1].
+    lam0 = np.median(wave_obs)
+    x = (wave_obs - lam0) / (wave_obs.max() - wave_obs.min() + np.finfo(float).eps)
+    basis = None
+    if cont_order > 0:
+        basis = np.vstack([x**k for k in range(1, cont_order + 1)])  # shape (cont_order, n)
+
+    # Helper: subpixel shift on the pixel axis using linear interpolation
+    # Positive shift_pix moves the template toward larger indices.
+    idx = np.arange(n, dtype=float)
+
+    def shift_array_pixels(arr, shift_pix):
+        xi = idx - shift_pix
+        # clip to bounds to avoid NaNs
+        xi = np.clip(xi, 0.0, n - 1.0)
+        i0 = np.floor(xi).astype(int)
+        t = xi - i0
+        i1 = np.clip(i0 + 1, 0, n - 1)
+        return (1.0 - t) * arr[i0] + t * arr[i1]
+
+    # Model generator
+    def model_from_params(p):
+        # p = [shift_pix, sigma_pix, scale, c1, c2, ...]
+        shift_pix = p[0]
+        sigma_pix = p[1]
+        scale = p[2]
+
+        # Broadening first, then shift
+        broadened = gaussian_filter1d(ref_on_grid, sigma=sigma_pix, mode="nearest")
+        shifted = shift_array_pixels(broadened, shift_pix)
+
+        # Multiplicative continuum
+        if cont_order > 0:
+            coeff = p[3:]
+            # P = 1 + sum coeff_k * B_k
+            P = 1.0 + np.dot(coeff, basis)
+        else:
+            P = 1.0
+
+        return scale * P * shifted
+
+    # Residuals for least_squares (weighted)
+    y = flux_obs
+    sqrtw = np.sqrt(wgt)
+
+    # Initial parameter vector and bounds
+    p0 = [shift_init_pix, sigma_init_pix, scale_init]
+    lb = [shift_bounds[0], sigma_bounds[0], scale_bounds[0]]
+    ub = [shift_bounds[1], sigma_bounds[1], scale_bounds[1]]
+
+    if cont_order > 0:
+        p0.extend([0.0] * cont_order)
+        lb.extend([cont_bounds[0]] * cont_order)
+        ub.extend([cont_bounds[1]] * cont_order)
+
+    p0 = np.array(p0, dtype=float)
+    lb = np.array(lb, dtype=float)
+    ub = np.array(ub, dtype=float)
+
+    def fun_resid(p):
+        m = model_from_params(p)
+        r = (y - m) * sqrtw
+        return r[mask]
+
+    # Optimize
+    res = least_squares(fun_resid, p0, bounds=(lb, ub), method="trf",
+                        jac="2-point",
+                        xtol=1e-10, ftol=1e-10, gtol=1e-10, max_nfev=2000)
+
+    # Approximate covariance from Jacobian at solution (scaled by residual variance)
+    cov = None
+    if res.success and res.jac is not None:
+        # residual variance estimate
+        dof = max(mask.sum() - res.x.size, 1)
+        rss = np.sum(res.fun**2)
+        s2 = rss / dof
+        # J is for masked points only
+        try:
+            JTJ = res.jac.T @ res.jac
+            cov = s2 * np.linalg.pinv(JTJ)
+        except np.linalg.LinAlgError:
+            cov = None
+
+    out = {
+        "shift_pix": float(res.x[0]),
+        "sigma_pix": float(res.x[1]),
+        "scale": float(res.x[2]),
+        "cont_coeff": (res.x[3:].copy() if cont_order > 0 else np.array([], dtype=float)),
+        "cost": float(res.cost),
+        "success": bool(res.success),
+        "message": res.message,
+        "jacobian": res.jac,
+        "cov": cov,
+    }
+
+    if return_model:
+        out["model"] = model_from_params(res.x)
+
+    return out
 
 def pixel_in_square(pixel_pos, pixel_size, pos, radius):
     """Compute the area of a pixel within a square.
