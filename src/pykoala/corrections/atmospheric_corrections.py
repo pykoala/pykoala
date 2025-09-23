@@ -9,6 +9,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import os
 from astropy import units as u
+from astropy.stats import sigma_clip
 # =============================================================================
 # KOALA packages
 # =============================================================================
@@ -24,13 +25,13 @@ class AtmosphericExtCorrection(CorrectionBase):
     This module accounts for the brightness reduction caused due to the absorption of 
     photons by the atmosphere.
 
-    For a given observed (:math:`F_{obs}`) and intrinsic flux (:math:`F_{int}`), the extinction
-    :math:`E` takes the form:
+    For a given observed (:math:`F_{obs}`) and intrinsic flux (:math:`F_{int}`), the extinction correction
+    factor, :math:`C(\lambda)`, takes the form:
 
     .. math::
-        F_{int}(\lambda) = E(\lambda) * F_{obs}(\lambda)
+        F_{int}(\lambda) = C(\lambda) * F_{obs}(\lambda)
         
-        E(\lambda) = 10^{0.4 \cdot airmass \cdot \eta(\lambda)}
+        C(\lambda) = 10^{0.4 \cdot airmass \cdot \eta(\lambda)}
 
     where :math:`\eta(\lambda)` corresponds to the wavelength-dependent extinction curve.
 
@@ -101,8 +102,10 @@ class AtmosphericExtCorrection(CorrectionBase):
             Extinction at a given wavelength and airmass.
         """
         extinction_curve = np.interp(wavelength,
-                                        self.extinction_curve_wave,
-                                        self.extinction_curve)
+                                     self.extinction_curve_wave,
+                                     self.extinction_curve,
+                                     left=self.extinction_curve[0],
+                                     right=self.extinction_curve[-1])
         return 10**(0.4 * airmass * extinction_curve)
 
     def apply(self, spectra_container, airmass=None):
@@ -122,7 +125,9 @@ class AtmosphericExtCorrection(CorrectionBase):
         assert isinstance(spectra_container, SpectraContainer)
         spectra_container_out = spectra_container.copy()
         if airmass is None:
-            airmass = spectra_container.info['airmass']
+            airmass = spectra_container.info.get("airmass", None)
+            if airmass is None:
+                raise ValueError("Airmass not provided")
 
         if self.extinction_curve is not None:
             self.vprint("Applying model-based extinction correction to"
@@ -148,101 +153,176 @@ class AtmosphericExtCorrection(CorrectionBase):
 # =============================================================================
 # Differential Atmospheric Refraction
 # =============================================================================
-# TODO: refactor ADR by DAR. Create a class that performs this correction.
-def get_adr(spectra_container : SpectraContainer, max_adr=0.5, pol_deg=2,
-            plot=False):
-    """Computes the ADR for a given DataContainer.
-    
-    This method computes the spatial shift as function of wavelength that a
-    chromatic source light experiments due to the Atmospheric Differential
-    Refraction (ADR).
+
+class ADRCorrection(CorrectionBase):
+    """
+    Estimate and apply atmospheric differential refraction (ADR).
+
+    The correction is empirical:
+    1) Compute centroids as function of wavelength using several power weights.
+    2) Median-combine centroids across powers.
+    3) Fit polynomial models for RA and DEC offsets versus wavelength.
+    4) Store the offsets or apply them using a spatial shifter.
 
     Parameters
     ----------
-    spectra_container: :class:`SpectraContainer`
-        Target SpectraContainer.
-    max_adr : float, optional, default=0.5
-        Maxium ADR correction expressed in arcseconds to prevent unreliable
-        results when analyzing low-SNR data.
-    pol_deg : int, optional, default=2
-        Polynomial order to model the dependance of the spatial shift as function
-        of wavelength.
-
-    Returns
-    -------
-    - ra_polfit: np.poly1d
-        Callable that returns the RA offset in arcseconds as function of wavelength.
-    - dec_polfit: np.poly1d
-        Callable that returns the DEC offset in arcseconds as function of wavelength.
+    max_adr : astropy Quantity
+        Maximum allowed offset. Larger values are discarded. Default 0.5 arcsec.
+    pol_deg : int
+        Polynomial degree for the fit. Default 2.
+    n_com_powers : int
+        Number of center-of-mass powers to combine. Default 4.
+    clip_sigma : float
+        Sigma threshold for clipping outliers. Default 3.0.
+    min_points : int
+        Minimum valid points to attempt a fit. Default 20.
+    store_key : str
+        Key where offsets are stored in the container info. Default "adr_offsets".
     """
-    # Centre of mass using multiple power of the intensity
-    max_adr = check_unit(max_adr, u.arcsec)
-    com = []
-    for i in range(1, 5):
-        com.append(spectra_container.get_centre_of_mass(power=i))
-    com = np.array(com) << com[0][0].unit
-    com -= np.nanmedian(com, axis=2)[:, :, np.newaxis]
-    median_com = np.nanmedian(
-        com, axis=0) - np.nanmedian(com, axis=(0, 2))[:, np.newaxis]
-    median_com[np.abs(median_com) > max_adr] = np.nan
 
-    finite_mask = np.isfinite(median_com[0])
+    name = "ADRCorrection"
+    verbose = True
 
-    if finite_mask.any():
-        p_x = np.polyfit(
-            spectra_container.wavelength[finite_mask].to_value("angstrom"),
-            median_com[0][finite_mask].to_value("arcsec"), deg=pol_deg)
-        polfit_x = np.poly1d(p_x)(
-            spectra_container.wavelength.to_value("angstrom")) << u.arcsec
-    else:
-        vprint("[ADR] ERROR: Could not compute ADR-x, all NaN")
-        polfit_x = np.zeros(spectra_container.wavelength.size) << u.arcsec
+    def __init__(self,
+                 max_adr=0.5 * u.arcsec,
+                 pol_deg=2,
+                 n_com_powers=4,
+                 clip_sigma=3.0,
+                 min_points=20,
+                 store_key="adr_offsets",
+                 **correction_args):
+        super().__init__(**correction_args)
+        self.max_adr = check_unit(max_adr, u.arcsec)
+        self.pol_deg = int(pol_deg)
+        self.n_com_powers = int(n_com_powers)
+        self.clip_sigma = float(clip_sigma)
+        self.min_points = int(min_points)
+        self.store_key = str(store_key)
+        self._poly_ra = None
+        self._poly_dec = None
 
-    finite_mask = np.isfinite(median_com[1])
-    if finite_mask.any():
-        p_y = np.polyfit(
-            spectra_container.wavelength[finite_mask].to_value("angstrom"),
-            median_com[1][finite_mask].to_value("arcsec"), deg=pol_deg)
-        polfit_y = np.poly1d(p_y)(
-            spectra_container.wavelength.to_value("angstrom")) << u.arcsec
-    else:
-        vprint("[ADR] ERROR: Could not compute ADR-y, all NaN")
-        polfit_y = np.zeros_like(spectra_container.wavelength)
-    
+    def estimate(self, spectra_container, plot=False):
+        """
+        Estimate ADR offsets from a spectra container.
 
-    if plot:
+        Parameters
+        ----------
+        spectra_container : SpectraContainer
+            Input spectra container.
+        plot : bool
+            If True, generate a diagnostic plot.
+
+        Returns
+        -------
+        tuple
+            Returns polynomial fits for RA and DEC offsets.
+        """
+        assert isinstance(spectra_container, SpectraContainer)
+        wave = spectra_container.wavelength.to_value("angstrom")
+
+        com_tracks = []
+        for p in range(1, self.n_com_powers + 1):
+            com = spectra_container.get_centre_of_mass(power=p)
+            com_tracks.append(com)
+        com_tracks = np.array(com_tracks) << com_tracks[0][0].unit
+        com_tracks -= np.nanmedian(com_tracks, axis=2)[:, :, np.newaxis]
+        median_com = np.nanmedian(com_tracks, axis=0)
+
+        for k in (0, 1):
+            over = np.abs(median_com[k]) > self.max_adr
+            median_com[k][over] = np.nan
+
+        dra = median_com[0].to_value("arcsec")
+        ddec = median_com[1].to_value("arcsec")
+        dra_clip = sigma_clip(dra, sigma=self.clip_sigma, masked=True)
+        ddec_clip = sigma_clip(ddec, sigma=self.clip_sigma, masked=True)
+
+        m_ra = (~dra_clip.mask) & np.isfinite(dra)
+        m_dec = (~ddec_clip.mask) & np.isfinite(ddec)
+
+        if np.count_nonzero(m_ra) >= self.min_points:
+            self._poly_ra = np.poly1d(np.polyfit(wave[m_ra], dra[m_ra], deg=self.pol_deg))
+        else:
+            vprint("ADR WARNING: insufficient points for RA fit, using zeros")
+            self._poly_ra = np.poly1d([0.0])
+
+        if np.count_nonzero(m_dec) >= self.min_points:
+            self._poly_dec = np.poly1d(np.polyfit(wave[m_dec], ddec[m_dec], deg=self.pol_deg))
+        else:
+            vprint("ADR WARNING: insufficient points for DEC fit, using zeros")
+            self._poly_dec = np.poly1d([0.0])
+
+        fig = None
+        if plot:
+            fig = self._make_plot(wave, com_tracks, median_com, dra, ddec)
+            #plt.close(fig)
+
+        return self._poly_ra, self._poly_dec, fig
+
+    def predict(self, wavelength):
+        """
+        Predict offsets at given wavelengths.
+        Returns RA and DEC offsets in arcsec.
+        """
+        if self._poly_ra is None or self._poly_dec is None:
+            raise RuntimeError("ADR model not estimated. Call estimate() first.")
+        lam = wavelength.to_value("angstrom")
+        dra = self._poly_ra(lam) * u.arcsec
+        ddec = self._poly_dec(lam) * u.arcsec
+        return dra, ddec
+
+    def apply(self, spectra_container, copy=True):
+        """
+        Apply ADR correction.
+
+        Parameters
+        ----------
+        spectra_container : SpectraContainer
+            Input spectra container.
+        
+        Returns
+        -------
+        corrected_spectra_container : SpectraContainer
+            Corrected spectra container.
+        """
+        assert isinstance(spectra_container, SpectraContainer)
+        wave = spectra_container.wavelength
+        dra, ddec = self.predict(wave)
+
+        comment = f"ADR fit degree={self.pol_deg}, nCOM={self.n_com_powers}, clip_sigma={self.clip_sigma}"
+        if copy:
+            out = spectra_container.copy()
+        else:
+            out = spectra_container
+        out.info[self.store_key] = {
+            "dra_arcsec": dra.to("arcsec"),
+            "ddec_arcsec": ddec.to("arcsec"),
+        }
+        self.record_correction(out, status="applied", comment=comment)
+        return out
+
+    def _make_plot(self, wave, com_tracks, median_com, dra, ddec):
         fig = plt.figure(figsize=(10, 5))
-        ax = fig.add_subplot(121)
-        ax.plot(spectra_container.wavelength, com[0, 0].to("arcsec"),
-                label='COM', lw=0.7)
-        ax.plot(spectra_container.wavelength, com[1, 0], label='COM2', lw=0.7)
-        ax.plot(spectra_container.wavelength, com[2, 0], label='COM3', lw=0.7)
-        ax.plot(spectra_container.wavelength, com[3, 0], label='COM4', lw=0.7)
-        ax.plot(spectra_container.wavelength, median_com[0], c='k',
-                label='Median', lw=0.7)
-        ax.plot(spectra_container.wavelength, polfit_x, c='fuchsia',
-                label=f'pol. fit (deg={pol_deg})', lw=0.7)
-        ax.set_ylim(-max_adr, max_adr)
-        ax.legend(ncol=2, bbox_to_anchor=(0.5, 1), loc='lower center')
-        ax.set_ylabel(r'$\Delta RA$ (arcsec)')
-        ax.set_xlabel(r'$\lambda$')
+        ax1 = fig.add_subplot(121)
+        for i in range(com_tracks.shape[0]):
+            ax1.plot(wave, com_tracks[i, 0].to_value("arcsec"), lw=0.7, alpha=0.6)
+        ax1.plot(wave, median_com[0].to_value("arcsec"), c="k", lw=1.0, label="Median")
+        ax1.plot(wave, self._poly_ra(wave), c="fuchsia", lw=1.0, label="Poly fit")
+        ax1.set_ylim(-self.max_adr.value, self.max_adr.value)
+        ax1.set_ylabel("Delta RA (arcsec)")
+        ax1.set_xlabel("Wavelength (Angstrom)")
+        ax1.legend()
 
-        ax = fig.add_subplot(122)
-        ax.plot(spectra_container.wavelength, com[0, 1].to("arcsec"),
-                label='COM', lw=0.7)
-        ax.plot(spectra_container.wavelength, com[1, 1], label='COM2', lw=0.7)
-        ax.plot(spectra_container.wavelength, com[2, 1], label='COM3', lw=0.7)
-        ax.plot(spectra_container.wavelength, com[3, 1], label='COM4', lw=0.7)
-        ax.plot(spectra_container.wavelength, median_com[1], c='k',
-                label='Median', lw=0.7)
-        ax.plot(spectra_container.wavelength, polfit_y, c='fuchsia',
-                label=f'pol. fit (deg={pol_deg})', lw=0.7)
-        ax.set_ylim(-max_adr, max_adr)
-        ax.legend(ncol=2, bbox_to_anchor=(0.5, 1), loc='lower center')
-        ax.set_ylabel(r'$\Delta DEC$ (arcsec)')
-        ax.set_xlabel(r'$\lambda$')
+        ax2 = fig.add_subplot(122)
+        for i in range(com_tracks.shape[0]):
+            ax2.plot(wave, com_tracks[i, 1].to_value("arcsec"), lw=0.7, alpha=0.6)
+        ax2.plot(wave, median_com[1].to_value("arcsec"), c="k", lw=1.0, label="Median")
+        ax2.plot(wave, self._poly_dec(wave), c="fuchsia", lw=1.0, label="Poly fit")
+        ax2.set_ylim(-self.max_adr.value, self.max_adr.value)
+        ax2.set_ylabel("Delta DEC (arcsec)")
+        ax2.set_xlabel("Wavelength (Angstrom)")
+        ax2.legend()
 
         fig.subplots_adjust(wspace=0.3)
-        plt.close(fig)
-        return polfit_x, polfit_y, fig
-    return polfit_x, polfit_y
+        return fig
+
