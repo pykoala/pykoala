@@ -882,12 +882,12 @@ def fit_reference_spectra(
     if res.success and res.jac is not None:
         # residual variance estimate
         dof = max(mask.sum() - res.x.size, 1)
-        rss = np.sum(res.fun**2)
-        s2 = rss / dof
+        chi2 = np.sum(res.fun**2)
+        reduced_chi2 = rss / dof
         # J is for masked points only
         try:
             JTJ = res.jac.T @ res.jac
-            cov = s2 * np.linalg.pinv(JTJ)
+            cov = reduced_chi2 * np.linalg.pinv(JTJ)
         except np.linalg.LinAlgError:
             cov = None
 
