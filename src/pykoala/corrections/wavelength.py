@@ -1230,9 +1230,9 @@ class SolarCrossCorrOffset(WavelengthCorrection):
             for s in slices:
                 n_valid_s = np.count_nonzero(mask[s])
                 n_valid_frac = n_valid_s / mask[s].size
-
                 if n_valid_frac < win_pixel_valid_frac:
-                    self.vprint(f"Fibre {i} Window {s}: Not enough valid pixels ({n_valid_s}), skipping.")
+                    self.vprint(f"Fibre {i} Window {s}: Not enough valid pixels ({n_valid_s}), skipping.",
+                    level="WARNING")
                     results[f"fibre_{i}"].append(None)
                     continue
                 try:
@@ -1249,7 +1249,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
                     self.vprint(f"Fibre {i} Window {s}: Fit failed: {e}")
                     res = None
                 results[f"fibre_{i}"].append(res)
-        
+
         # Build the matrix of shift and sigma values
         shift_pix = np.full((n_fibre, len(slices)), fill_value=np.nan)
         sigma_pix = np.full((n_fibre, len(slices)), fill_value=np.nan)
@@ -1277,8 +1277,11 @@ class SolarCrossCorrOffset(WavelengthCorrection):
         median_shift = np.nanmedian(shift_pix, axis=1)
         if not np.isfinite(median_shift).all():
             good = np.isfinite(median_shift)
+            if not good.any():
+                raise ValueError("Median shift values contains all NaNs")
             x = np.arange(median_shift.size)
             median_shift = np.interp(x, x[good], median_shift[good])
+
         self.offset.offset_data = median_shift << u.pixel
 
         if make_lsf_model:
