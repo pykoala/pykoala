@@ -892,12 +892,12 @@ def fit_reference_spectra(
             cov = None
 
     out = {
-        "shift_pix": float(res.x[0]),
-        "sigma_pix": float(res.x[1]),
-        "scale": float(res.x[2]),
+        "shift_pix": res.x[0],
+        "sigma_pix": res.x[1],
+        "scale": res.x[2],
         "cont_coeff": (res.x[3:].copy() if cont_order > 0 else np.array([], dtype=float)),
-        "cost": float(res.cost),
-        "success": bool(res.success),
+        "cost": res.cost,
+        "success": res.success,
         "message": res.message,
         "jacobian": res.jac,
         "cov": cov,
