@@ -883,7 +883,7 @@ def fit_reference_spectra(
         # residual variance estimate
         dof = max(mask.sum() - res.x.size, 1)
         chi2 = np.sum(res.fun**2)
-        reduced_chi2 = rss / dof
+        reduced_chi2 = chi2 / dof
         # J is for masked points only
         try:
             JTJ = res.jac.T @ res.jac
