@@ -1051,6 +1051,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
         spectra_container: SpectraContainer,
         n_windows=1,
         window_overlap=0.25,
+        win_pixel_valid_frac=0.2,
         response_window_size_aa=200,
         mask_tellurics=False,
         smooth_sigma_pix=None,
@@ -1085,6 +1086,8 @@ class SolarCrossCorrOffset(WavelengthCorrection):
         window_overlap : float, optional
             Fractional half-overlap between adjacent windows in [0, 1).
             Default is 0.25.
+        win_pixel_valid_frac : float, optional
+            Minimum fraction of non-masked pixels per wavelength. Default is ``0.2``.
         response_window_size_aa : float or Quantity, optional
             Median-filter scale (in AA) used to estimate the response per fibre.
             Default is 200 AA.
@@ -1226,11 +1229,12 @@ class SolarCrossCorrOffset(WavelengthCorrection):
             results[f"fibre_{i}"] = []
             for s in slices:
                 n_valid_s = np.count_nonzero(mask[s])
-                if n_valid_s < 5:
+                n_valid_frac = n_valid_s / mask[s].size
+
+                if n_valid_frac < win_pixel_valid_frac:
                     self.vprint(f"Fibre {i} Window {s}: Not enough valid pixels ({n_valid_s}), skipping.")
                     results[f"fibre_{i}"].append(None)
                     continue
-                
                 try:
                     res = ancillary.fit_reference_spectra(
                         wave.value[s], flux[s], flux_var=var[s],
@@ -1238,6 +1242,9 @@ class SolarCrossCorrOffset(WavelengthCorrection):
                         ref_flux=self.sun_intensity.value,
                         **fit_kwargs
                     )
+                    res["n_valid_pix"] = n_valid_s
+                    res["n_valid_frac"] = n_valid_s / mask[s].size
+
                 except Exception as e:
                     self.vprint(f"Fibre {i} Window {s}: Fit failed: {e}")
                     res = None
@@ -1266,7 +1273,13 @@ class SolarCrossCorrOffset(WavelengthCorrection):
         results["shift_pix_matrix"] = shift_pix
         results["sigma_pix_matrix"] = sigma_pix
 
-        self.offset.offset_data = np.nanmedian(shift_pix, axis=1) << u.pixel
+        # Compute the median shift // TODO: create a 2D offset model.
+        median_shift = np.nanmedian(shift_pix, axis=1)
+        if not np.isfinite(median_shift).all():
+            good = np.isfinite(median_shift)
+            x = np.arange(median_shift.size)
+            median_shift = np.interp(x, x[good], median_shift[good])
+        self.offset.offset_data = median_shift << u.pixel
 
         if make_lsf_model:
             lsf_model = FibreLSFModel.from_sparse(
