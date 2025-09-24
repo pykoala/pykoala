@@ -1286,7 +1286,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
 
         if make_lsf_model:
             lsf_model = FibreLSFModel.from_sparse(
-                wave, centers, sigma_values=sigma_pix, kind="spline")
+                wave, centers, sigma_values=sigma_pix, kind="poly", degree=2)
             results["lsf_model"] = lsf_model
         return results
 
@@ -1371,6 +1371,12 @@ class SolarCrossCorrOffset(WavelengthCorrection):
                 nrows, 1, figsize=figsize, sharex=True,
                 gridspec_kw=dict(height_ratios=[2, 1] if show_residuals else [1])
             )
+            if res is None:
+                fig.suptitle(f"Fibre {fibre_idx}  Window {w+1}/{n_win_total}: No results available")
+                plt.close(fig)
+                figs.append(fig)
+                continue
+
             ax1 = axes if nrows == 1 else axes[0]
             ax1.set_title(
                 f"Fibre {fibre_idx}  Window {w+1}/{n_win_total} "
@@ -1422,21 +1428,22 @@ class SolarCrossCorrOffset(WavelengthCorrection):
 
         # Summary panel: shift and sigma vs window centers, with optional error bars
         centers_val = np.array([c.to_value(wave.unit) for c in centers], dtype=float)
-        shift_arr = np.array([r.get("shift_pix", np.nan) for r in per_win], dtype=float)
-        sigma_arr = np.array([r.get("sigma_pix", np.nan) for r in per_win], dtype=float)
+        shift_arr = np.array([r.get("shift_pix", np.nan) if r is not None else np.nan for r in per_win], dtype=float)
+        sigma_arr = np.array([r.get("sigma_pix", np.nan) if r is not None else np.nan for r in per_win], dtype=float)
 
         # Try to infer simple uncertainties from covariance if present
         shift_err = np.full_like(shift_arr, np.nan, dtype=float)
         sigma_err = np.full_like(sigma_arr, np.nan, dtype=float)
         for w in range(n_win_total):
-            cov = per_win[w].get("cov", None)
-            if cov is not None and np.ndim(cov) == 2 and cov.size >= 4:
-                # We expect parameter order like [shift, sigma, ...]; pull diag
-                try:
-                    shift_err[w] = np.sqrt(max(cov[0, 0], 0.0))
-                    sigma_err[w] = np.sqrt(max(cov[1, 1], 0.0))
-                except Exception:
-                    pass
+            if per_win[w] is not None:
+                cov = per_win[w].get("cov", None)
+                if cov is not None and np.ndim(cov) == 2 and cov.size >= 4:
+                    # We expect parameter order like [shift, sigma, ...]; pull diag
+                    try:
+                        shift_err[w] = np.sqrt(max(cov[0, 0], 0.0))
+                        sigma_err[w] = np.sqrt(max(cov[1, 1], 0.0))
+                    except Exception:
+                        pass
 
         fig = plt.figure(figsize=(10, 6))
         ax1 = fig.add_subplot(211)
