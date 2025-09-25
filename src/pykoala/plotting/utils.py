@@ -325,9 +325,9 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
 
     # Maps -----
     wl_spaxel_idx = np.sort(np.random.randint(
-        low=0, high=cube.intensity.shape[0], size=3))
+        low=0, high=cube.intensity.shape[0] - 1, size=3))
     wl_col = ['b', 'g', 'r']
-    for wl_idx, i in zip(wl_spaxel_idx, range(3)):
+    for i, wl_idx in enumerate(wl_spaxel_idx):
         ax = fig.add_subplot(gs[0, i:i+1])
         default_ax_setting(ax)
         ax.set_title(r"$\lambda@${:.1f}".format(cube.wavelength[wl_idx]),
