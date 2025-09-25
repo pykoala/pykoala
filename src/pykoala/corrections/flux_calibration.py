@@ -593,27 +593,22 @@ class FluxCalibration(CorrectionBase):
         flux : array-like
             Flux array of the calibration star.
         """
-        if name is not None:
-            name = name.lower()
-            if name[0] != 'f' or 'feige' in name:
-                name = 'f' + name
-            all_names, _ = FluxCalibration.list_available_stars(verbose=False)
-            matched = np.where(all_names == name)[0]
-            matched_name = all_names[matched]
-            if len(matched_name) > 0:
-                if len(matched_name) > 1:
-                    vprint("WARNING: More than one file found")
-                vprint("Input name {}, matches {}".format(name, matched_name)
-                        + f"\nSelecting {matched_name[-1]}")
-                path = os.path.join(os.path.dirname(__file__), '..',
-                                    'input_data', 'spectrophotometric_stars',
-                                    matched_name[-1] + ".dat")
-                calib_wave, calib_spectra = np.loadtxt(path, unpack=True,
-                                                       usecols=(0, 1))
-            else:
-                raise FileNotFoundError("Calibration star: {} not found".format(name))
-        if path is not None:
-            calib_wave, calib_spectra = np.loadtxt(path, unpack=True, usecols=(0, 1))
+        if path is None and name is None:
+            raise ValueError("Provide either a star `name` or a file `path`.")
+
+        if path is None:
+            nm = name.strip().lower()
+            if nm[0] != 'f' or 'feige' in nm:
+                nm = 'f' + nm
+            all_names, files = FluxCalibration.list_available_stars(verbose=False)
+            m = np.where(all_names == key)[0]
+            if len(m) == 0:
+                raise FileNotFoundError(f"Calibration star not found: {name}")
+            pick = files[m[-1]]
+            path = os.path.join(os.path.dirname(__file__), '..', 'input_data',
+                            'spectrophotometric_stars', pick)
+
+        calib_wave, calib_spectra = np.loadtxt(path, unpack=True, usecols=(0, 1))
         return calib_wave << u.AA, calib_spectra << 1e-16 * u.erg / u.s / u.AA / u.cm**2
 
     @staticmethod
