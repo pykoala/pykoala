@@ -477,12 +477,8 @@ class FluxCalibration(CorrectionBase):
                 vprint("Chunk between {} to {} AA contains no useful data"
                         .format(wave_edges[0], wave_edges[1]))
                 continue
-            vprint(f"Number of valid pixels: {np.count_nonzero(mask)}")
-            ###################################################################
-            # Computing the curve of growth
-            ###################################################################
+
             x0, y0 = centre_of_mass(slice_data[mask], x[mask], y[mask])
-            vprint(f"COM: {x0}, {y0}")
             # Make the growth curve
             distance = xy_coords.separation(
                 SkyCoord(ra=x0, dec=y0, frame="icrs"))
@@ -719,47 +715,48 @@ class FluxCalibration(CorrectionBase):
                 raw_response, size=median_filter_n) << raw_response.unit
             weights *= 1.0 / (
                 1.0 + np.abs(raw_response - filtered_raw_response).value)**2
-            raw_response = filtered_raw_response
-        
+        else:
+            filtered_raw_response = raw_response.copy()
+
         weights = np.clip(weights, 0.0, None)
         # Interpolation
         if pol_deg is not None:
             p_fit = np.polyfit(obs_wave.to_value("AA"),
-                               raw_response.value, deg=pol_deg, w=weights)
+                               filtered_raw_response.value, deg=pol_deg, w=weights)
             response = np.poly1d(p_fit)
             fit_label = f"{pol_deg}-deg polynomial"
         elif spline:
             response = make_smoothing_spline(
                 obs_wave.to_value("AA")[weights > 0],
-                raw_response.value[weights > 0],
+                filtered_raw_response.value[weights > 0],
                 w=weights[weights > 0])
             fit_label = f"spline k={spline_k} s={spline_s}"
         else:
             # Linear interpolation
             response = interp1d(obs_wave.to_value("AA")[weights > 0],
-                                raw_response.value[weights > 0],
+                                filtered_raw_response.value[weights > 0],
                                 fill_value="extrapolate", bounds_error=False)
             fit_label = "linear interp (fallback)"
 
         def response_wrapper(x):
             if isinstance(x, u.Quantity):
-                return response(x.to_value("AA")) << raw_response.unit
+                return response(x.to_value("AA")) << filtered_raw_response.unit
             else:
-                return response(x) << raw_response.unit
+                return response(x) << filtered_raw_response.unit
 
         final_response = check_unit(response(obs_wave.to_value("AA")),
-                                    raw_response.unit)
+                                    filtered_raw_response.unit)
         if plot:
             fig = FluxCalibration.plot_response(
             obs_wave=obs_wave,
             obs_spectra=obs_spectra,
             ref_interp=int_ref_spectra,
             raw_response=raw_response,
-            filtered_response=(use_vals * resp_unit),
+            filtered_response=filtered_raw_response,
             final_response=final_response,
             weights=weights,
             fit_label=fit_label,
-            median_filter_n=mf_n,
+            median_filter_n=median_filter_n,
             )
             return response_wrapper, fig
         else:
