@@ -484,13 +484,11 @@ def centre_of_mass(w, x, y):
         Center of mass expressed as ``(x_com, y_com)``
     """
     norm = np.nansum(w)
+    if not np.isfinite(norm):
+        raise ValueError("Input array of weights is all NaNs")
+    # Compute the centre of mass
     x_com, y_com = np.nansum(w * x) / norm, np.nansum(w * y) / norm
-    if np.isfinite(x_com) and np.isfinite(y_com):
-        return x_com, y_com
-    else:
-        raise RuntimeError(
-            "Failed computing centre of mass computed for\n w={}\n x={}\n y={}"
-            .format(w, x, y))
+    return x_com, y_com
 
 # TODO: Stale method
 def growth_curve_1d(f, x, y):
