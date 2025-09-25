@@ -484,8 +484,8 @@ def centre_of_mass(w, x, y):
         Center of mass expressed as ``(x_com, y_com)``
     """
     norm = np.nansum(w)
-    if not np.isfinite(norm):
-        raise ValueError("Input array of weights is all NaNs")
+    if not np.isfinite(norm) or norm < 0:
+        raise ValueError("Input array of weights is all NaNs or negative")
     # Compute the centre of mass
     x_com, y_com = np.nansum(w * x) / norm, np.nansum(w * y) / norm
     return x_com, y_com
