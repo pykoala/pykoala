@@ -111,7 +111,7 @@ class FluxCalibration(CorrectionBase):
         self.response_file = response_file
 
     @classmethod
-    def from_text_file(cls, path=None):
+    def from_text_file(cls, path):
         """Load the resonse function from a text file.
         
         Parameters
@@ -127,9 +127,6 @@ class FluxCalibration(CorrectionBase):
         flux_calibration : :class:`FluxCalibration`
             An instance of ``FluxCalibration``.
         """
-        if path is None:
-            path = cls.default_extinction
-
         data = np.loadtxt(path, dtype=float)
         if data.shape[1] == 2:
             wavelength, response = data.T
