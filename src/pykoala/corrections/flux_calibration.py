@@ -31,7 +31,7 @@ quantity_support()
 
 def curve_of_growth(radii : u.Quantity, data : u.Quantity,
                     ref_radii : u.Quantity, mask=None) -> u.Quantity:
-    """Compute a Curve Of Growth (COG).
+    """Compute a monotonic curve of growth sampled at ``ref_radii``.
 
     Parameters
     ----------
@@ -50,14 +50,29 @@ def curve_of_growth(radii : u.Quantity, data : u.Quantity,
     if mask is None:
         mask = np.ones(data.size, dtype=bool)
 
-    # 
-    sort_idx = np.argsort(radii)
-    n_good_pixels = np.cumsum(mask[sort_idx])
-    mean = np.nancumsum(data[sort_idx]) / n_good_pixels
-    cog = mean * np.arange(1, data.size + 1)
-    u_radii = np.unique(radii)
-    u_idx = np.searchsorted(radii[sort_idx], u_radii, side="right") - 1
-    return np.interp(ref_radii, u_radii, cog[u_idx], left=0)
+    radii = check_unit(radii, ref_radii.unit)
+    r_val = radii.to_value(ref_radii.unit)
+    data_val = data.value
+    unit = data.unit
+    
+    sort_idx = np.argsort(r_val)
+    good = mask[sort_idx]
+    # cumulative sum only over good pixels
+    data_sorted = np.where(good, data_val[sort_idx], 0.0)
+    n_good = np.nancumsum(good.astype(int))
+    # avoid divide-by-zero
+    n_good = np.maximum(n_good, 1)
+    mean = np.nancumsum(data_sorted) / n_good
+    cog = mean * np.arange(1, data_sorted.size + 1)
+
+    # unique radii mapping
+    u_r, u_idx_inv = np.unique(r_val, return_inverse=True)
+    last_idx = np.maximum.accumulate(u_idx_inv)
+    cog_at_u = cog[last_idx]
+
+    ref_vals = np.interp(ref_radii.to_value(ref_radii.unit), u_r,
+                         cog_at_u, left=0.0, right=cog_at_u[-1])
+    return ref_vals * unit
 
 #TODO: create a method for extracting stellar spectra outside FluxCalibration
 # extract stellar spectra
