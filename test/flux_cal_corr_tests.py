@@ -5,7 +5,7 @@ import numpy as np
 from astropy import units as u
 
 from pykoala.instruments.mock import mock_rss
-from pykoala.corrections.flux_calibration import FluxCalibration
+from pykoala.corrections.flux_calibration import FluxCalibration, curve_of_growth
 
 class TestFluxCalibration(unittest.TestCase):
 
@@ -16,6 +16,28 @@ class TestFluxCalibration(unittest.TestCase):
                               dec_cen=45 << u.deg,
                               source_kwargs={"source_ra": 180 << u.deg,
                                              "source_dec" :45 << u.deg})
+
+    def test_curve_of_growth_basic_monotonic_and_units(self):
+        # Unsorted inputs with duplicate radii
+        radii = np.array([1.0, 0.0, 2.0, 1.0, 0.5]) * u.arcsec
+        data_unit = u.erg / u.s / u.AA / u.cm**2
+        data = np.array([2.0, 1.0, 3.0, 2.0, 2.0]) * data_unit
+
+        ref = np.array([0.0, 0.5, 1.0, 1.5, 2.0, 3.0]) * u.arcsec
+        cog = curve_of_growth(radii, data, ref)
+
+        # Expected cumulative at unique radii:
+        # Sort by r: r=[0.0,0.5,1.0,1.0,2.0], d=[1,2,2,2,3]
+        # cumsum at unique radii: [1, 3, 7, 10]
+        # Interpolate to ref: [1, 3, 7, 8.5, 10, 10]
+        expected = np.array([1.0, 3.0, 7.0, 8.5, 10.0, 10.0]) * data_unit
+
+        assert cog.unit == data_unit
+        assert cog.shape == ref.shape
+        assert np.allclose(cog.value, expected.to_value(data_unit), rtol=0, atol=1e-12)
+
+        # Monotonic non decreasing
+        assert np.all(np.diff(cog.to_value(data_unit)) >= -1e-12)
 
     def test_factory(self):
         response_wavelength = np.arange(4000, 9000, 1) << u.AA
