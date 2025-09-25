@@ -692,50 +692,55 @@ class FluxCalibration(CorrectionBase):
             Figure of the response curve plot, if plot is True.
         """
         vprint("Computing spectrophotometric response")
+        if spline_args is None:
+            spline_args = {}
+        spline_k = int(spline_args.get("k", 3))
+        spline_s = spline_args.get("s", None)
 
         int_ref_spectra = flux_conserving_interpolation(obs_wave, ref_wave,
                                                         ref_spectra)
         raw_response = obs_spectra / int_ref_spectra
+
+        # Build weights
         weights = np.ones(raw_response.size, dtype=float)
-
         if mask_absorption:
-            vprint("Masking lines")
-            weights *= mask_lines(obs_wave)
-
+            vprint("Masking stellar absoprtion lines")
+            weights *= np.asarray(mask_lines(obs_wave), dtype=float)
         if mask_tellurics:
-            weights *= mask_telluric_lines(obs_wave)
-
+            vprint("Masking telluric lines")
+            weights *= np.asarray(mask_telluric_lines(obs_wave), dtype=float)
         if mask_zeros:
             vprint("Masking zeros")
-            weights *= obs_spectra >= 0
+            weights *= (obs_spectra.to_value(obs_spectra.unit) > 0).astype(float)
 
-        # Median filtering
-        if median_filter_n is not None:
+        # Optional median filtering and robust reweighting
+        if median_filter_n is not None and median_filter_n >= 2:
             filtered_raw_response = median_filter(
                 raw_response, size=median_filter_n) << raw_response.unit
-            weights *= 1 / (
-                1 + np.abs(raw_response - filtered_raw_response).value)**2
+            weights *= 1.0 / (
+                1.0 + np.abs(raw_response - filtered_raw_response).value)**2
             raw_response = filtered_raw_response
-
-        # Polynomial interpolation
+        
+        weights = np.clip(weights, 0.0, None)
+        # Interpolation
         if pol_deg is not None:
             p_fit = np.polyfit(obs_wave.to_value("AA"),
                                raw_response.value, deg=pol_deg, w=weights)
             response = np.poly1d(p_fit)
-
+            fit_label = f"{pol_deg}-deg polynomial"
         elif spline:
             response = make_smoothing_spline(
                 obs_wave.to_value("AA")[weights > 0],
                 raw_response.value[weights > 0],
                 w=weights[weights > 0])
-
+            fit_label = f"spline k={spline_k} s={spline_s}"
         else:
             # Linear interpolation
-            response = interp1d(obs_wave.to_value("AA"), raw_response.value,
-                                fill_value=0, bounds_error=False)
-            # Spline fit
-            # response = UnivariateSpline(wave, obs_spectra / ref_spectra)
-        
+            response = interp1d(obs_wave.to_value("AA")[weights > 0],
+                                raw_response.value[weights > 0],
+                                fill_value="extrapolate", bounds_error=False)
+            fit_label = "linear interp (fallback)"
+
         def response_wrapper(x):
             if isinstance(x, u.Quantity):
                 return response(x.to_value("AA")) << raw_response.unit
@@ -745,49 +750,110 @@ class FluxCalibration(CorrectionBase):
         final_response = check_unit(response(obs_wave.to_value("AA")),
                                     raw_response.unit)
         if plot:
-            fig, axs = plt.subplots(nrows=3, constrained_layout=True,
-                                    sharex=True, height_ratios=[3, 3, 1])
-            ax = axs[0]
-            ax.annotate('{}-deg polynomial fit'.format(pol_deg), xy=(0.05, 0.95),
-                        xycoords='axes fraction', va='top', ha='left')
-            ax.annotate(r'Median filter size: {}'.format(median_filter_n),
-                        xy=(0.05, 0.80), xycoords='axes fraction',
-                        va='top', ha='left')
-            ax.plot(obs_wave, obs_spectra / int_ref_spectra, '-', lw=0.7, label='Obs/Ref')
-            ax.plot(obs_wave, raw_response, '-', lw=0.7, label='Filtered')
-            ax.plot(obs_wave, final_response, label='Final response')
-            ax.set_xlabel('Wavelength')
-            ax.set_ylabel(r'$R(\lambda)$' + f" ({raw_response.unit})", fontsize="small")
-            ax.legend()
-            ax.set_ylim(final_response.min()*0.8, final_response.max()*1.2)
-
-            ax = axs[1]
-            ax.plot(obs_wave, int_ref_spectra, lw=0.7, label="Reference")
-            ax.plot(obs_wave, obs_spectra / raw_response, '-', lw=0.7, label='Filtered')
-            ax.plot(obs_wave, obs_spectra / final_response, lw=1,
-                    label='Final response')
-            ax.set_ylabel(r'$F$')
-            ax.set_ylim(int_ref_spectra.min()*0.8, int_ref_spectra.max()*1.2)
-            ax.set_xlim(obs_wave.min(), obs_wave.max())
-            ax.legend()
-            # ax.legend(ncol=1)
-            twax = ax.twinx()
-            twax.plot(obs_wave, weights, label='Relative weights', color='fuchsia',
-                      alpha=0.7, lw=0.7)
-            ax = axs[2]
-            ax.axhline(1, ls="--", color="r", alpha=0.5)
-            ax.axhline(1.1, ls=":", color="r", alpha=0.5)
-            ax.axhline(0.9, ls=":", color="r", alpha=0.5)
-            ax.plot(obs_wave, obs_spectra / final_response / int_ref_spectra,
-                    lw=0.7, c='k')
-            ax.set_ylim(0.7, 1.3)
-            ax.set_ylabel("Obs / Ref")
-            ax.set_xlabel('Wavelength')
-            # twax.legend()
-            plt.close(fig)
+            fig = FluxCalibration.plot_response(
+            obs_wave=obs_wave,
+            obs_spectra=obs_spectra,
+            ref_interp=int_ref_spectra,
+            raw_response=raw_response,
+            filtered_response=(use_vals * resp_unit),
+            final_response=final_response,
+            weights=weights,
+            fit_label=fit_label,
+            median_filter_n=mf_n,
+            )
             return response_wrapper, fig
         else:
             return response_wrapper, None
+
+    def plot_response(
+        *,
+        obs_wave,
+        obs_spectra,
+        ref_interp,
+        raw_response,
+        filtered_response,
+        final_response,
+        weights,
+        fit_label,
+        median_filter_n: None,
+    ):
+        """
+        Generate a three-panel QA plot for the response fit.
+
+        Top panel: raw obs/ref, filtered obs/ref (if any), and fitted response.
+        Middle panel: reference spectrum (interpolated) and calibrated observation using
+                    filtered response and final fitted response. Also overlays weights.
+        Bottom panel: ratio of calibrated observation to reference, should be near 1.
+
+        Parameters
+        ----------
+        obs_wave : Quantity, 1D
+            Observed wavelength grid.
+        obs_spectra : Quantity, 1D
+            Observed flux density on obs_wave.
+        ref_interp : Quantity, 1D
+            Reference flux density interpolated onto obs_wave.
+        raw_response : Quantity, 1D
+            Raw response Obs / Ref.
+        filtered_response : Quantity, 1D
+            Median-filtered response if applied, otherwise equal to raw response values.
+        final_response : Quantity, 1D
+            Final fitted response evaluated on obs_wave.
+        weights : ndarray, 1D
+            Relative weights used during fitting, nonnegative.
+        fit_label : str
+            Description of the fit method for annotation.
+        median_filter_n : int or None
+            Median filter window size if applied.
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure
+            The assembled QA figure.
+        """
+        import matplotlib.pyplot as plt
+
+        fig, axs = plt.subplots(nrows=3, ncols=1, figsize=(9, 8),
+                                constrained_layout=True, sharex=True,
+                                height_ratios=[3, 3, 1])
+
+        # Panel 1: responses
+        ax = axs[0]
+        ax.set_title("Instrumental response fit")
+        ax.plot(obs_wave, raw_response, lw=0.7, label="Obs/Ref (raw)")
+        if median_filter_n is not None and median_filter_n >= 2:
+            ax.plot(obs_wave, filtered_response, lw=0.8, label=f"Obs/Ref (median {median_filter_n})")
+        ax.plot(obs_wave, final_response, lw=1.2, label=f"Fit: {fit_label}")
+        ax.set_ylabel("R(lambda)")
+        ymin = np.nanmin(final_response.to_value(final_response.unit))
+        ymax = np.nanmax(final_response.to_value(final_response.unit))
+        if np.isfinite(ymin) and np.isfinite(ymax):
+            ax.set_ylim(ymin * 0.8, ymax * 1.2)
+        ax.legend(loc="best")
+
+        # Panel 2: calibrated spectra and weights
+        ax = axs[1]
+        ax.plot(obs_wave, ref_interp, lw=0.7, label="Reference (interp)")
+        ax.plot(obs_wave, obs_spectra / filtered_response, lw=0.7, label="Calibrated with median")
+        ax.plot(obs_wave, obs_spectra / final_response, lw=1.0, label="Calibrated with fit")
+        ax.set_ylabel("Flux")
+        ax.legend(loc="best")
+        tw = ax.twinx()
+        tw.plot(obs_wave, weights, lw=0.7, alpha=0.6, color="fuchsia", label="weights")
+        tw.set_ylabel("Relative weights")
+
+        # Panel 3: ratio vs 1
+        ax = axs[2]
+        ratio = (obs_spectra / final_response) / ref_interp
+        ax.axhline(1.00, ls="--", color="r", alpha=0.6)
+        ax.axhline(1.10, ls=":", color="r", alpha=0.4)
+        ax.axhline(0.90, ls=":", color="r", alpha=0.4)
+        ax.plot(obs_wave, ratio.to_value(ratio.unit), lw=0.8, color="k")
+        ax.set_ylim(0.7, 1.3)
+        ax.set_ylabel("Obs_cal / Ref")
+        ax.set_xlabel("Wavelength")
+        plt.close(fig)
+        return fig
 
     def interpolate_response(self, wavelength, update=True):
         """
@@ -874,12 +940,13 @@ class FluxCalibration(CorrectionBase):
         else:
             response, response_err = self.response, self.response_err
 
+        response = np.where(np.isfinite(response) & (response > 0),
+                            response, np.nan)
         # Apply the correction
+        good = np.isfinite(response) & (response > 0)
         sc_out.rss_intensity = (
             sc_out.rss_intensity / response[np.newaxis, :])
         # Propagate the uncertainty of the flux calibration
-        resp_inv_snr = np.power(response_err / response, 2)
-
         sc_out.rss_variance = sc_out.rss_variance / response[np.newaxis, :]**2
         sc_out.rss_variance += (
             spectra_container.rss_intensity**2
