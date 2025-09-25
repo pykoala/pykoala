@@ -1013,13 +1013,13 @@ def pixel_in_hexagon(pixel_pos, pixel_size, pos, radius):
 # Models and fitting
 # ----------------------------------------------------------------------------------------------------------------------
 
-def cumulative_1d_moffat(r2, l_star=1.0, alpha2=1.0, beta=1.0):
+def cumulative_1d_moffat(rad, l_star=1.0, alpha2=1.0, beta=1.0):
     """
     Cumulative Moffat ligth profile.
     Parameters
     ----------
-    r2 : np.array(float)
-        Square radius with respect to the profile centre.
+    rad : np.array(float)
+        Radius with respect to the profile centre.
     l_star : float
         Total luminosity integrating from 0 to inf.
     alpha2 : float
@@ -1031,7 +1031,7 @@ def cumulative_1d_moffat(r2, l_star=1.0, alpha2=1.0, beta=1.0):
     cum_moffat_prof: np.array(float)
         Cumulative Moffat profile
     """
-    return l_star * (1 - np.power(1 + (r2 / alpha2), -beta))
+    return l_star * (1 - np.power(1 + (rad**2 / alpha2), -beta))
 
 # =============================================================================
 # Lines
