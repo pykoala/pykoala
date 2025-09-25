@@ -127,24 +127,27 @@ class FluxCalibration(CorrectionBase):
         flux_calibration : :class:`FluxCalibration`
             An instance of ``FluxCalibration``.
         """
-        data = np.loadtxt(path, dtype=float)
-        if data.shape[1] == 2:
-            wavelength, response = data.T
-            response_err = np.zeros_like(response)
-        elif data.shape[1] == 3:
-            wavelength, response, response_err = data.T
-        else:
-            raise ArithmeticError(f"Unrecognized number of columns: {data.shape[1]}")
+        data = np.loadtxt(path, dtype=float, comments="#")
+        if data.ndim != 2 or data.shape[1] not in (2, 3):
+            raise ArithmeticError(f"Unrecognized shape: {data.shape}")
 
+        wavelength = data[:, 0]
+        response = data[:, 1]
+        response_err = data[:, 2] if data.shape[1] == 3 else np.zeros_like(resp_vals)
+
+        # Default units
+        wave_unit = u.AA
+        resp_unit = u.dimensionless_unscaled
         with open(path, "r") as f:
             _ = f.readline()
             line = f.readline()
-            wave_header, response_header, response_err_header = line.split(",")
-            wave_idx = wave_header.find("("), wave_header.rfind(")")
-            response_idx = response_header.find("("), response_header.rfind(")")
-            wave_unit = u.Unit(wave_header[wave_idx[0] + 1 : wave_idx[1]])
-            resp_unit = u.Unit(
-                response_header[response_idx[0] + 1 : response_idx[1]])
+            if line[0] == "#":
+                wave_header, response_header, response_err_header = line.split(",")
+                wave_idx = wave_header.find("("), wave_header.rfind(")")
+                response_idx = response_header.find("("), response_header.rfind(")")
+                wave_unit = u.Unit(wave_header[wave_idx[0] + 1 : wave_idx[1]])
+                resp_unit = u.Unit(
+                    response_header[response_idx[0] + 1 : response_idx[1]])
         return cls(response=response << resp_unit,
                    response_err=response_err << resp_unit,
                    response_wavelength=wavelength << wave_unit,
