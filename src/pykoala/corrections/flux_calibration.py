@@ -32,50 +32,92 @@ quantity_support()
 
 def curve_of_growth(radii : u.Quantity, data : u.Quantity,
                     ref_radii : u.Quantity, mask=None) -> u.Quantity:
-    """Compute a monotonic curve of growth sampled at ``ref_radii``.
+    """
+    Compute a curve of growth (cumulative flux versus radius) and evaluate it
+    at the requested reference radii.
+
+    The algorithm sorts samples by radius, applies the mask (if given), computes
+    the cumulative sum of the data over increasing radius, and linearly
+    interpolates that cumulative sum to the reference radii. The returned curve
+    is non decreasing by construction when data are non negative.
 
     Parameters
     ----------
-    radii : :class:`astropy.units.Quantity`
-        Distance to the center associated to each value of data.
-    data : :class:`astropy.units.Quantity`
-        Intensity values at each point given by ``radii``
-    ref_radii : :class:`astropy.units.Quantity`
-        Referece points where the COG will be estimated.
-    
+    radii
+        Radial distance of each sample. Must be a 1D astropy Quantity. It will
+        be converted to the unit of ref_radii.
+    data
+        Flux value of each sample. Must be a 1D astropy Quantity with the same
+        length as radii. The returned curve has the same unit as data.
+    ref_radii
+        Radii at which to evaluate the curve of growth. Must be a 1D astropy
+        Quantity. radii will be converted to this unit for sorting and
+        interpolation.
+    mask
+        Optional boolean array with the same length as radii. Samples with
+        mask False are ignored. If None, all samples are considered.
+
     Returns
     -------
-    cog : :class:`astropy.units.Quantity`
-        Curve of growth evaluated at ``ref_radii``.
+    cog
+        Curve of growth evaluated at ref_radii, as an astropy Quantity with the
+        same unit as data. If no valid samples are available, zeros are
+        returned.
+
+    Notes
+    -----
+    1. Non finite values in radii or data are ignored.
+    2. Duplicate radii are handled by taking the cumulative sum at the last
+       occurrence of each unique radius.
+    3. Linear interpolation is used between unique radii. Values below the
+       smallest radius are set to zero. Values above the largest radius are
+       set to the total cumulative flux.
+
+    Raises
+    ------
+    ValueError
+        If radii and data shapes differ, or if mask has an incompatible shape.
     """
     if mask is None:
         mask = np.ones(data.size, dtype=bool)
 
     radii = check_unit(radii, ref_radii.unit)
     r_val = radii.to_value(ref_radii.unit)
-    data_val = data.value
-    unit = data.unit
-    
-    sort_idx = np.argsort(r_val)
-    good = mask[sort_idx]
-    # cumulative sum only over good pixels
-    data_sorted = np.where(good, data_val[sort_idx], 0.0)
-    n_good = np.nancumsum(good.astype(int))
-    # avoid divide-by-zero
-    n_good = np.maximum(n_good, 1)
-    mean = np.nancumsum(data_sorted) / n_good
-    cog = mean * np.arange(1, data_sorted.size + 1)
+    d_val = data.value
+    data_unit = data.unit
 
-    # unique radii mapping
-    u_r, u_idx_inv = np.unique(r_val, return_inverse=True)
-    last_idx = np.maximum.accumulate(u_idx_inv)
-    cog_at_u = cog[last_idx]
-    # TODO
-    print(u_r, u_r.size)
-    print(cog_at_u, cog_at_u.size)
-    ref_vals = np.interp(ref_radii.to_value(ref_radii.unit), u_r,
-                         cog_at_u, left=0.0, right=cog_at_u[-1])
-    return ref_vals * unit
+    valid = np.isfinite(r_val) & np.isfinite(d_val)
+    if mask is not None:
+        valid &= mask.astype(bool)
+
+    if not np.any(valid):
+        # No usable samples
+        return np.zeros(ref_radii.size, dtype=float) * data_unit
+
+    sort_idx = np.argsort(r_val)
+    r_sorted = r_val[sort_idx]
+    d_sorted = d_val[sort_idx]
+    v_sorted = valid[sort_idx]
+
+    # Zero out invalid samples and accumulate
+    d_sorted = np.where(v_sorted, d_sorted, 0.0)
+    cumsum = np.cumsum(d_sorted)
+    # Map each unique radius to the last cumulative value at or below it
+    u_r = np.unique(r_sorted)
+    # index of last element <= each unique radius
+    last_idx = np.searchsorted(r_sorted, u_r, side="right") - 1
+    cog_at_u = cumsum[last_idx]
+    # Enforce non decreasing curve (robust to small negative values if present)
+    cog_at_u = np.maximum.accumulate(cog_at_u)
+    # Interpolate to requested radii
+    ref_vals = np.interp(
+        ref_radii.to_value(ref_radii.unit),
+        u_r,
+        cog_at_u,
+        left=0.0,
+        right=cog_at_u[-1] if cog_at_u.size > 0 else 0.0,
+    )
+    return ref_vals * data_unit
 
 #TODO: create a method for extracting stellar spectra outside FluxCalibration
 # extract stellar spectra
@@ -292,7 +334,7 @@ class FluxCalibration(CorrectionBase):
             master_resp = np.nanmean(spectral_response, axis=0)
             n_eff = np.sum(np.isfinite(spectral_response), axis=0).clip(min=1)
             master_resp_err = np.sqrt(
-                np.nansum(spectral_response_err**2, axis=0)) / n_eff
+                np.nansum(spectral_response_err**2, axis=0) / n_eff)
         elif combine_method == "wmean":
             w = 1.0 / np.where(
                 np.isfinite(spectral_response_err) & (spectral_response_err > 0),
@@ -366,7 +408,7 @@ class FluxCalibration(CorrectionBase):
         wavelength = wavelength[wave_mask]
 
         # Curve of growth radial bins
-        r2_dummy = check_unit(growth_r, u.arcsec)**2
+        r_dummy = check_unit(growth_r, u.arcsec)
 
         vprint("Extracting star flux.\n"
                 + " -> Wavelength range={}\n".format(wave_range)
@@ -445,10 +487,8 @@ class FluxCalibration(CorrectionBase):
             distance = xy_coords.separation(
                 SkyCoord(ra=x0, dec=y0, frame="icrs"))
 
-            r2 = distance**2
-            growth_c = curve_of_growth(r2, slice_data, r2_dummy, mask)
-            growth_c_var = curve_of_growth(r2, slice_var, r2_dummy, mask)
-            r2 = r2_dummy
+            growth_c = curve_of_growth(distance, slice_data, r_dummy, mask)
+            growth_c_var = curve_of_growth(distance, slice_var, r_dummy, mask)
 
             cog_mask = np.isfinite(growth_c) & (growth_c > 0)
             if not cog_mask.any():
@@ -461,18 +501,18 @@ class FluxCalibration(CorrectionBase):
                     # vprint("Automatic fit bounds")
                     p_bounds = ([0, 0, 0],
                                 [growth_c[cog_mask][-1].value * 2,
-                                 r2_dummy.to_value("arcsec^2").max(), 4])
+                                 r_dummy.to_value("arcsec").max(), 4])
                 else:
                     p_bounds = bounds
                 # Initial guess
                 p0=[growth_c[cog_mask][-1].value,
-                    r2_dummy.to_value("arcsec^2").mean(), 1.0]
+                    r_dummy.to_value("arcsec").mean(), 1.0]
                 popt, pcov = curve_fit(
-                    profile, r2_dummy[cog_mask].to_value("arcsec^2"),
+                    profile, r_dummy[cog_mask].to_value("arcsec"),
                     growth_c[cog_mask].value, bounds=p_bounds,
                     p0=p0, **fitter_args)
                 model_growth_c = profile(
-                    r2_dummy[cog_mask].to_value("arcsec^2"), *popt) << growth_c.unit
+                    r_dummy[cog_mask].to_value("arcsec"), *popt) << growth_c.unit
             except Exception as e:
                 vprint("There was a problem during the fit:\n", e)
             else:
@@ -490,7 +530,6 @@ class FluxCalibration(CorrectionBase):
         star_flux = np.interp(
             data_container.wavelength, wavelength[star_good],
             star_flux[star_good])
-        print(mean_residuals.unit)
         final_residuals = np.full(data_container.wavelength.size,
                                   fill_value=np.nan) << data.unit
         final_residuals[wave_mask] = mean_residuals
@@ -498,7 +537,7 @@ class FluxCalibration(CorrectionBase):
         if plot:
             fig = FluxCalibration.plot_extraction(
                 x.value, y.value, x0.value, y0.value,
-                data.value, r2_dummy.value**0.5, cog,
+                data.value, r_dummy.value**0.5, cog,
                 data_container.wavelength, star_flux, final_residuals)
         else:
             fig = None
