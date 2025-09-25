@@ -70,7 +70,9 @@ def curve_of_growth(radii : u.Quantity, data : u.Quantity,
     u_r, u_idx_inv = np.unique(r_val, return_inverse=True)
     last_idx = np.maximum.accumulate(u_idx_inv)
     cog_at_u = cog[last_idx]
-
+    # TODO
+    print(u_r, u_r.size)
+    print(cog_at_u, cog_at_u.size)
     ref_vals = np.interp(ref_radii.to_value(ref_radii.unit), u_r,
                          cog_at_u, left=0.0, right=cog_at_u[-1])
     return ref_vals * unit
@@ -428,16 +430,17 @@ class FluxCalibration(CorrectionBase):
             slice_var = np.nanmedian(slice_var, axis=0) / np.sqrt(slice_var.shape[0])
             slice_var[slice_var <= 0] = np.inf << slice_var.unit
 
-            mask = np.isfinite(slice_data) & np.isfinite(slice_var)
+            mask = np.isfinite(slice_data) & np.isfinite(slice_var) & (slice_data > 0)
             if not mask.any():
                 vprint("Chunk between {} to {} AA contains no useful data"
                         .format(wave_edges[0], wave_edges[1]))
                 continue
-
+            vprint(f"Number of valid pixels: {np.count_nonzero(mask)}")
             ###################################################################
             # Computing the curve of growth
             ###################################################################
             x0, y0 = centre_of_mass(slice_data[mask], x[mask], y[mask])
+            vprint(f"COM: {x0}, {y0}")
             # Make the growth curve
             distance = xy_coords.separation(
                 SkyCoord(ra=x0, dec=y0, frame="icrs"))
@@ -819,34 +822,33 @@ class FluxCalibration(CorrectionBase):
             Corrected version of the input :class:`SpectraContainer`.
         """
         assert isinstance(spectra_container, SpectraContainer)
-        spectra_container_out = spectra_container.copy()
-        if spectra_container_out.is_corrected(self.name):
+        sc_out = spectra_container.copy()
+        if sc_out.is_corrected(self.name):
             self.vprint("Data already calibrated")
-            return spectra_container_out
+            return sc_out
 
         # Check that the model is sampled in the same wavelength grid
-        if not spectra_container_out.wavelength.size == self.response_wavelength.size or not np.allclose(
-            spectra_container_out.wavelength, self.response_wavelength, equal_nan=True):
+        if not sc_out.wavelength.size == self.response_wavelength.size or not np.allclose(
+            sc_out.wavelength, self.response_wavelength, equal_nan=True):
             response, response_err = self.interpolate_response(
-                spectra_container_out.wavelength, update=False)
+                sc_out.wavelength, update=False)
         else:
             response, response_err = self.response, self.response_err
 
         # Apply the correction
-        spectra_container_out.rss_intensity = (
-            spectra_container_out.rss_intensity / response[np.newaxis, :])
+        sc_out.rss_intensity = (
+            sc_out.rss_intensity / response[np.newaxis, :])
         # Propagate the uncertainty of the flux calibration
         resp_inv_snr = np.power(response_err / response, 2)
 
-        spectra_container_out.rss_variance = (
-            spectra_container_out.rss_intensity**2 * (
-            # Use the original inverse SNR and avoid 0 snr
-            1 / spectra_container.rss_snr.clip(0.01, None)**2
-            # Add the flux cal uncertainty
-            + resp_inv_snr
-            ))
-        self.record_correction(spectra_container_out, status='applied',
+        sc_out.rss_variance = sc_out.rss_variance / response[np.newaxis, :]**2
+        sc_out.rss_variance += (
+            spectra_container.rss_intensity**2
+            * response_err[np.newaxis, :]**2
+            / response[np.newaxis, :]**4)
+
+        self.record_correction(sc_out, status='applied',
                                units=str(self.response.unit))
-        return spectra_container_out
+        return sc_out
 
 # Mr Krtxo \(ﾟ▽ﾟ)/
