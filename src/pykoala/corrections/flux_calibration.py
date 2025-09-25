@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import os
 from astropy import units as u
 from astropy.visualization import quantity_support
+from astropy.coordinates import SkyCoord
 # =============================================================================
 # KOALA packages
 # =============================================================================
@@ -103,15 +104,6 @@ class FluxCalibration(CorrectionBase):
 
     def __init__(self, response=None, response_err=None, response_wavelength=None,
                  response_file=None, **correction_kwargs):
-        """
-        Initializes the FluxCalibration object.
-
-        Parameters
-        ----------
-        response: #TODO
-        response_wavelength: #TODO
-        response_units: #TODO
-        """
         super().__init__(**correction_kwargs)
         
         self.vprint("Initialising Flux Calibration (Spectral Throughput)")
@@ -273,8 +265,10 @@ class FluxCalibration(CorrectionBase):
         # Select a reference wavelength array
         ref_wave = flux_calibration_corrections[0].response_wavelength
         ref_resp_unit = flux_calibration_corrections[0].response.unit
+        # Place holder
         spectral_response = np.full((len(flux_calibration_corrections),
-                                         ref_wave.size), fill_value=np.nan)
+                                         ref_wave.size), fill_value=np.nan,
+                                         dtype=float)
         spectral_response_err = np.full_like(spectral_response,
                                         fill_value=np.nan)
 
@@ -288,27 +282,29 @@ class FluxCalibration(CorrectionBase):
 
         if combine_method == "median":
             master_resp = np.nanmedian(spectral_response, axis=0)
-            # Compute the std error of the median (1.2533 * std of mean)
-            master_resp_err = np.sqrt(np.nansum(spectral_response_err**2, axis=0
-                                        ) / spectral_response_err.shape[0])
-            master_resp_err *= 1.2533
+            mad = 1.4826 * np.nanmedian(
+                np.abs(spectral_response - master_resp), axis=0)
+            n_eff = np.sum(np.isfinite(spectral_response), axis=0).clip(min=1)
+            master_resp_err = 1.2533 * mad / np.sqrt(n_eff)
         elif combine_method == "mean":
             master_resp = np.nanmean(spectral_response, axis=0)
-            # Compute the std error of the median (1.2533 * std of mean)
-            master_resp_err = np.sqrt(np.nansum(spectral_response_err**2, axis=0
-                                        ) / spectral_response_err.shape[0])
+            n_eff = np.sum(np.isfinite(spectral_response), axis=0).clip(min=1)
+            master_resp_err = np.sqrt(
+                np.nansum(spectral_response_err**2, axis=0)) / n_eff
         elif combine_method == "wmean":
-            master_resp = np.nansum(
-                spectral_response / spectral_response_err, axis=0) / np.nansum(
-                    1 / spectral_response_err, axis=0)
-            # Compute the std error of the median (1.2533 * std of mean)
-            master_resp_err = np.sqrt(np.nansum(spectral_response_err**2, axis=0
-                                        ) / spectral_response_err.shape[0])
-        master_flux_calibration = FluxCalibration(
-            response=master_resp << ref_resp_unit,
-            response_err=master_resp_err << ref_resp_unit,
-            response_wavelength=ref_wave)
-        return master_flux_calibration
+            w = 1.0 / np.where(
+                np.isfinite(spectral_response_err) & (spectral_response_err > 0),
+                spectral_response_err**2, np.nan)
+            num = np.nansum(w * spectral_response, axis=0)
+            den = np.nansum(w, axis=0)
+            master_resp = num / den
+            master_resp_err = 1.0 / np.sqrt(den)
+        else:
+            raise ValueError(f"Unknown combine_method: {combine_method}")
+
+        return FluxCalibration(response=master_resp << ref_resp_unit,
+                               response_err=master_resp_err << ref_resp_unit,
+                               response_wavelength=ref_wave)
 
     @staticmethod
     def extract_stellar_flux(data_container,
@@ -381,8 +377,8 @@ class FluxCalibration(CorrectionBase):
             variance = data_container.variance.copy()
             # Invert the matrix to get the wavelength dimension as 0.
             data, variance = data.T, variance.T
-            x = data_container.info['fib_ra']
-            y = data_container.info['fib_dec']
+            x = data_container.info['fib_ra'].copy()
+            y = data_container.info['fib_dec'].copy()
         elif isinstance(data_container, Cube):
             vprint("Extracting flux from input Cube")
             data = data_container.intensity.copy()
@@ -397,6 +393,9 @@ class FluxCalibration(CorrectionBase):
         else:
             raise NameError(
                 f"Unrecongnized datacontainer of type {type(data_container)}")
+        # Convert x and y to relative offset position wrt the mean centre
+        xy_coords = SkyCoord(ra=x, dec=y, frame="icrs")
+
         data = data[wave_mask, :]
         variance = variance[wave_mask, :]
 
@@ -440,7 +439,10 @@ class FluxCalibration(CorrectionBase):
             ###################################################################
             x0, y0 = centre_of_mass(slice_data[mask], x[mask], y[mask])
             # Make the growth curve
-            r2 = ((x - x0)**2 + (y - y0)**2)
+            distance = xy_coords.separation(
+                SkyCoord(ra=x0, dec=y0, frame="icrs"))
+
+            r2 = distance**2
             growth_c = curve_of_growth(r2, slice_data, r2_dummy, mask)
             growth_c_var = curve_of_growth(r2, slice_var, r2_dummy, mask)
             r2 = r2_dummy
@@ -601,7 +603,7 @@ class FluxCalibration(CorrectionBase):
             if nm[0] != 'f' or 'feige' in nm:
                 nm = 'f' + nm
             all_names, files = FluxCalibration.list_available_stars(verbose=False)
-            m = np.where(all_names == key)[0]
+            m = np.where(all_names == nm)[0]
             if len(m) == 0:
                 raise FileNotFoundError(f"Calibration star not found: {name}")
             pick = files[m[-1]]
