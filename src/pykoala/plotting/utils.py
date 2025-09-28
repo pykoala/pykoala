@@ -333,17 +333,18 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
         ax.set_title(r"$\lambda@${:.1f}".format(cube.wavelength[wl_idx]),
                      fontdict=dict(color=wl_col[i]))
         data = cube.intensity[wl_idx]
-        if not np.isfinite(data).any():
+        var = cube.variance[wl_idx]
+        if not (np.isfinite(data) & np.isfinite(var)).any():
             continue
+        # Flux map
         ax, cb = plot_image(fig, ax, data=data,
                             cblabel="Intensity", cmap="cividis")
         cb.ax.yaxis.set_label_position("right")
+        # SNR map
         ax = fig.add_subplot(gs[1, i:i+1])
         default_ax_setting(ax)
-        ax, cb = plot_image(fig, ax, 
-                   data=cube.intensity[wl_idx] / cube.variance[wl_idx]**0.5,
-                   cblabel="SNR",
-                   cmap="jet")
+        ax, cb = plot_image(fig, ax, data=data / var**0.5, cblabel="SNR",
+                            cmap="jet")
         cb.ax.yaxis.set_label_position("right")
     
     # Plot the mean intensity
