@@ -671,47 +671,38 @@ class FluxCalibration(CorrectionBase):
         results: Dict[str, dict] = {}
         responses: List[FluxCalibration] = []
 
-        # Loop over all standard stars
-        for i, name in enumerate(fnames):
-            vprint("-" * 40 + "\nAutomatic calibration process for {}\n"
-                       .format(calib_stars[i]) + "-" * 40 + '\n')
-            # Extract flux from std star
+        for obs, star in zip(data, std_stars):
+            vprint(f"Automatic calibration process for {star.name}")
+            # Extract flux from observed std star
             vprint("Extracting stellar flux from data")
-            result = cls.extract_stellar_flux(data[i].copy(), **extract_args)
-            flux_cal_results[name] = dict(extraction=result)
-            # Interpolate to the observed wavelength
-            vprint("Interpolating template to observed wavelength")
+            extract = cls.extract_stellar_flux(obs.copy(), **extract_args)
             mean_wave = np.nanmean(result['wave_edges'], axis=1)
-            result['mean_wave'] = mean_wave
+            extract["mean_wave"] = mean_wave
+            results[star.name] = dict(extraction=ext)
 
-            # Load standard star
-            vprint("Loading template spectra")
-            ref_wave, ref_spectra = FluxCalibration.read_calibration_star(
-                name=calib_stars[i])
-            flux_cal_results[name]['ref_wavelength'] = ref_wave
-            flux_cal_results[name]['ref_spectra'] = ref_spectra
-            # Compute the response curve
-            resp_curve, resp_fig = FluxCalibration.get_response_curve(
-                data[i].wavelength, result['stellar_flux'], ref_wave, ref_spectra,
-                **response_params)
+            # Compute the instrumental response with the StandardStar
+            resp_fn, fig = cls.get_response_curve(
+            obs_wave=obs.wavelength,
+            obs_spectra=ext["stellar_flux"],
+            star=star,
+            **response_params,
+            )
+        
+            results[star.name]["wavelength"] = obs.wavelength.copy()
+            results[star.name]["response"] = resp_fn(obs.wavelength.copy())
+            results[star.name]["response_fig"] = fig
 
-            flux_cal_results[name]['wavelength'] = data[i].wavelength.copy()
-            flux_cal_results[name]['response'] = resp_curve(
-                data[i].wavelength.copy())
-            flux_cal_results[name]['response_fig'] = resp_fig
-            flux_corrections.append(
-                cls(response=resp_curve(data[i].wavelength),
-                    response_wavelength=data[i].wavelength))
+            responses.append(
+                cls(response=resp_fn(obs.wavelength),
+                    response_wavelength=obs.wavelength)
+            )
 
-        if len(flux_corrections) == 0:
+        if not responses:
             vprint("No flux calibration was created", level="warning")
             return None, None, None
 
-        if combine:
-            master_flux_corr = cls.master_flux_auto(flux_corrections)
-        else:
-            master_flux_corr = None
-        return flux_cal_results, flux_corrections, master_flux_corr
+        master = cls.master_flux_auto(responses) if combine else None
+        return results, responses, master
 
     @classmethod
     def master_flux_auto(cls, flux_calibration_corrections: list,
