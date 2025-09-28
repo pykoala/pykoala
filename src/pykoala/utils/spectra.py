@@ -145,7 +145,7 @@ def estimate_continuum_and_mask_absorption(
     2. Equivalent widths are integrated as EW = integral (1 - normalized) d lambda
        between the bases on the native wavelength grid.
     """
-
+    vprint("Estimating spectra continuum and absorption features")
     wave = check_unit(wave, u.AA)
     if isinstance(flux, u.Quantity):
         flux_unit = flux.unit
@@ -179,21 +179,26 @@ def estimate_continuum_and_mask_absorption(
     win_pixel = np.mean(win / dwl).decompose()
     win_pixel = odd_int(int(win_pixel))
 
-    # Upper-percentile envelope and clipping to local maxima to avoid overshoot
+    # Mask emission lines
     f = fvals_f.copy()
     std_vals = generic_filter(f, std_from_mad, size=win_pixel, mode="mirror")
     median_vals = median_filter(f, size=win_pixel, mode="mirror")
-    while True:
-        peaks, _ = find_peaks(f, threshold=std_vals)
+    iteration = 5
+    while iteration:
+        peaks, _ = find_peaks(f, height=median_vals + 2 * std_vals, distance=5)
         if peaks.size > 0:
-            vprint("Peaks found", peaks.size)
-            widths, wheights, (lpts, rpts) = peak_widths(f, peaks)
-            f[int(lpts):int(rpts)] = median_vals[int(lpts):int(rpts)]
+            vprint("Emission lines found", peaks.size)
+            # Mask all peaks with the median value
+            widths, wheights, lpts, rpts = peak_widths(f, peaks)
+            for l, r in zip(lpts, rpts):
+                mask_line = slice(max(0, int(l) - 1), min(f.size, int(r) + 1))
+                f[mask_line] = median_vals[mask_line]
             median_vals = median_filter(f, size=win_pixel, mode="mirror")
+            iteration -= 1
         else:
-            vprint("No peaks found")
+            vprint("No emission lines found")
             break
-
+    # Upper-percentile envelope and clipping to local maxima to avoid overshoot
     cont_vals = percentile_filter(f, percentile=cont_percentile,
                                   size=win_pixel, mode="mirror")
     local_max = maximum_filter(f, size=max(3, win_pixel // 3),
@@ -231,6 +236,7 @@ def estimate_continuum_and_mask_absorption(
     cont_err = sigma_loc / np.sqrt(n_eff)
 
     abs_regions = fvals_f < cont_vals - abs_kappa_sigma * std_vals
-    regions, _ = label(abs_regions)
-
+    regions, n_features = label(abs_regions)
+    vprint(f"No. of absorption features found: {n_features}",
+           f"({np.count_nonzero(regions > 0)} pixels)")
     return cont_vals << flux_unit, cont_err << flux_unit, regions
