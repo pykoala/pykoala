@@ -367,12 +367,6 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
     cb.ax.yaxis.set_label_position("right")
     # ------ Spectra -------
     pos_col = ['purple', 'orange', 'cyan']
-    x_spaxel_idx = np.random.randint(low=0,
-                                     high=cube.intensity.shape[1],
-                                     size=3)
-    y_spaxel_idx = np.random.randint(low=0,
-                                     high=cube.intensity.shape[2],
-                                     size=3)
     spaxel_entries = mean_instensity_pos[
         np.array(mean_instensity_pos.size / 100 * np.array(spax_pct),
                  dtype=int)]
@@ -380,19 +374,19 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
                                                   shape=mean_intensity.shape)
     ax = fig.add_subplot(gs[2:3, :])
     default_ax_setting(ax)
+    ymin, ymax = 1000.0, -1000.0
     for x_idx, y_idx, i in zip(x_spaxel_idx, y_spaxel_idx, range(3)):
         ax.plot(cube.wavelength, cube.intensity[:, x_idx, y_idx], lw=0.8,
                 color=pos_col[i])
         mapax.plot(y_idx, x_idx, marker='+', ms=8, mew=2, lw=2, color=pos_col[i])
+        p5, p95 = np.nanpercentile(cube.intensity[:, x_idx, y_idx].value, [5, 95])
+        ymin = min(p5 * 0.9, ymin)
+        ymax = max(p95 * 1.1, ymax)
+
     for i, wl in enumerate(cube.wavelength[wl_spaxel_idx]):
         ax.axvline(wl, color=wl_col[i], zorder=-1, alpha=0.8)
-    ax.axhline(0, alpha=0.2, color='r')
-    ylim = np.nanpercentile(
-        cube.intensity[np.isfinite(cube.intensity)].value, [40, 95])
-    ylim[1] *= 20
-    ylim[0] *= 0.1
-    np.clip(ylim, a_min=0, a_max=None, out=ylim)
-    ax.set_ylim(ylim)
+
+    ax.set_ylim(ymin, ymax)
     ax.set_yscale('symlog', linthresh=0.1)
     ax.set_ylabel(f"Flux ({cube.intensity.unit})")
 
