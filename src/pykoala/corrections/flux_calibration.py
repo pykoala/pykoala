@@ -308,7 +308,7 @@ class StandardStar:
         f = interp1d(self.wavelength.to_value(new_wave.unit),
                      self.flux.to_value(self.flux.unit),
                      bounds_error=False, fill_value="extrapolate")
-        return f(new_wave.to_value(new_wave.unit)) * self.flux.unit
+        return f(new_wave.to_value(new_wave.unit)) << self.flux.unit
 
     def subset(self, wave_min: u.Quantity, wave_max: u.Quantity) -> "StandardStar":
         """
@@ -413,7 +413,7 @@ def find_standard_star(name=None, path=None):
         nm = name.strip().lower()
         if nm[0] != 'f' or 'feige' in nm:
             nm = 'f' + nm
-        all_names, files = FluxCalibration.list_available_stars(verbose=False)
+        all_names, files = list_available_stars(verbose=False)
         m = np.where(all_names == nm)[0]
         if len(m) == 0:
             raise FileNotFoundError(f"Calibration star not found: {name}")
@@ -422,7 +422,7 @@ def find_standard_star(name=None, path=None):
                         'spectrophotometric_stars', pick)
 
     if os.path.isfile(path):
-        return StandardStar.from_ascii(path)
+        return StandardStar.from_ascii(path, name=name, catalog="N/A")
     else:
         raise FileNotFoundError(f"File not found: {path}")
 
@@ -676,20 +676,19 @@ class FluxCalibration(CorrectionBase):
             # Extract flux from observed std star
             vprint("Extracting stellar flux from data")
             extract = cls.extract_stellar_flux(obs.copy(), **extract_args)
-            mean_wave = np.nanmean(result['wave_edges'], axis=1)
-            extract["mean_wave"] = mean_wave
-            results[star.name] = dict(extraction=ext)
+            results[star.name] = dict(std_star=star, extraction=extract)
 
             # Compute the instrumental response with the StandardStar
-            resp_fn, fig = cls.get_response_curve(
+            resp_fn, resp_err_fn, fig = cls.get_response_curve(
             obs_wave=obs.wavelength,
-            obs_spectra=ext["stellar_flux"],
+            obs_spectra=extract["stellar_flux"],
             star=star,
             **response_params,
             )
         
             results[star.name]["wavelength"] = obs.wavelength.copy()
             results[star.name]["response"] = resp_fn(obs.wavelength.copy())
+            results[star.name]["response_err"] = resp_err_fn(obs.wavelength.copy())
             results[star.name]["response_fig"] = fig
 
             responses.append(
@@ -706,19 +705,21 @@ class FluxCalibration(CorrectionBase):
 
     @classmethod
     def master_flux_auto(cls, flux_calibration_corrections: list,
-                         combine_method="median"):
+                         combine_method: str = "median"):
         """
-        Combine several :class:`FluxCalibration` into a master calibration.
+        Combine multiple response curves into a master response.
 
         Parameters
         ----------
-        flux_calibration_corrections : list
-            List containing the :class:`FluxCalibration` to combine.
+        flux_calibration_corrections : list of FluxCalibration
+            Individual responses to combine.
+        combine_method : {"median", "mean", "wmean"}, optional
+            Combination strategy.
 
         Returns
         -------
-        master_resp : :class:`FluxCalibration`
-            The master response function.
+        master : FluxCalibration
+            Master response with propagated uncertainty.
         """
         vprint("Mastering response function")
         if len(flux_calibration_corrections) == 1:
@@ -1008,54 +1009,82 @@ class FluxCalibration(CorrectionBase):
         return fig
 
     @staticmethod
-    def get_response_curve(obs_wave, obs_spectra, ref_wave, ref_spectra, *,
-                           cont_percentile=80, cont_window=50 << u.AA,
-                           smooth_spline=True, abs_kappa_sigma=3,
-                           pct_filter_n=None, pct=None,
-                           pol_deg=None, spline=False, spline_lam=None,
-                           mask_absorption=True, mask_tellurics=True, mask_zeros=True,
-                           plot=False):
+    def get_response_curve(obs_wave: u.Quantity,
+                           obs_spectra: u.Quantity,
+                           star: StandardStar, *,
+                           cont_percentile: float = 80.0,
+                           cont_window: u.Quantity = 50 << u.AA,
+                           smooth_spline: bool = True,
+                           abs_kappa_sigma: float = 3.0,
+                           pct_filter_n: Optional[int] = None,
+                           pct: Optional[float] = None,
+                           pol_deg: Optional[int] = None,
+                           spline: bool = False,
+                           spline_lam: Optional[float] = None,
+                           mask_absorption: bool = True,
+                           mask_tellurics: bool = True,
+                           mask_zeros: bool = True,
+                           plot: bool = False
+                           ):
         """
-        Computes the response curve from observed and reference spectra.
+        Compute a smooth instrumental response from an observed star and its reference.
 
         Parameters
         ----------
-        wave : array-like
-            Wavelength array.
-        obs_spectra : array-like
-            Observed spectra.
-        ref_spectra : array-like
-            Reference spectra.
-        pol_deg : int, optional
-            Degree of the polynomial fit. If None, no polynomial fit is applied.
+        obs_wave : `astropy.units.Quantity`
+            Observed wavelength grid.
+        obs_spectra : `astropy.units.Quantity`
+            Observed flux density on ``obs_wave``.
+        star : StandardStar
+            Reference standard star.
+        cont_percentile : float, optional
+            Percentile for the continuum upper envelope (typical 85 to 95).
+        cont_window : `astropy.units.Quantity`, optional
+            Continuum window in wavelength units.
+        smooth_spline : bool, optional
+            If True, refine the continuum with a weighted spline.
+        abs_kappa_sigma: float, optional
+            Number of sigmas below the continuum to identify absorption features.
+            Default is 3.0.
+        pct_filter_n : int or None, optional
+            If given, apply a percentile filter of length ``pct_filter_n`` to the
+            response before fitting.
+        pct : float or None, optional
+            Percentile used when ``pct_filter_n`` is set.
+        pol_deg : int or None, optional
+            Polynomial degree for response fitting. If provided, overrides spline/linear.
         spline : bool, optional
-            If True, uses a spline fit.
-        spline_args : dict, optional
-            Additional arguments for the spline fit.
-        gauss_smooth_sigma : float, optional
-            Sigma for Gaussian smoothing.
-        plot : bool, optional
-            If True, plots the response curve.
+            If True, fit a smoothing spline to the response (requires ``spline_lam``).
+        spline_lam : float or None, optional
+            Smoothing parameter for ``make_smoothing_spline`` if ``spline`` is True.
         mask_absorption : bool, optional
-            If True, masks absorption features.
+            If True, downweight canonical stellar absorption features.
+        mask_tellurics : bool, optional
+            If True, downweight telluric bands.
+        mask_zeros : bool, optional
+            If True, downweight nonpositive observed flux pixels.
+        plot : bool, optional
+            If True, return a QA figure.
 
         Returns
         -------
         response_curve : callable
-            Function representing the response curve.
-        response_fig : matplotlib.figure.Figure
-            Figure of the response curve plot, if plot is True.
+            A function ``f(x)`` that evaluates the response at wavelength ``x``.
+            Units follow ``obs_spectra / ref_spectra`` (usually dimensionless).
+        response_fig : `matplotlib.figure.Figure` or None
+            QA figure if ``plot`` is True, else None.
         """
         vprint("Computing spectrophotometric response")
 
-        int_ref_spectra = flux_conserving_interpolation(obs_wave, ref_wave,
-                                                        ref_spectra)
-        raw_response = obs_spectra / int_ref_spectra
+        # Reference on observed grid
+        ref_on_obs = star.resample(obs_wave, conserve_flux=True)
+
         # Remove absorption features from reference spectra
-        res = estimate_continuum_and_mask_absorption(obs_wave, int_ref_spectra,
-        cont_percentile=cont_percentile,
-        cont_window=cont_window, smooth_spline=smooth_spline,
-        abs_kappa_sigma=abs_kappa_sigma)
+        res = estimate_continuum_and_mask_absorption(
+            obs_wave, ref_on_obs,
+            cont_percentile=cont_percentile,
+            cont_window=cont_window, smooth_spline=smooth_spline,
+            abs_kappa_sigma=abs_kappa_sigma)
 
         ref_cont, ref_cont_err, ref_abs_regions = res
 
@@ -1096,7 +1125,7 @@ class FluxCalibration(CorrectionBase):
             vprint("Too few unmasked pixels", level="warning")
 
         # Optional median filtering and reweighting
-        if pct_filter_n is not None and pct_filter_n >= 2:
+        if pct_filter_n is not None and pct_filter_n >= 2 and pct is not None:
             vprint(f"Applying percentile ({pct}) filter to response function")
             filtered_cont_response = percentile_filter(
                 cont_response, pct, size=pct_filter_n,
@@ -1107,10 +1136,10 @@ class FluxCalibration(CorrectionBase):
         # Interpolation (skip pixels with w=0)
         if pol_deg is not None:
             vprint(f"Response smoothing using a polynomial (deg {pol_deg})")
-            p_fit = np.polyfit(obs_wave.to_value("AA")[weights > 0],
+            coeff = np.polyfit(obs_wave.to_value("AA")[weights > 0],
                                filtered_cont_response.value[weights > 0],
                                deg=pol_deg, w=weights[weights > 0])
-            response = np.poly1d(p_fit)
+            response = np.poly1d(coeff)
             fit_label = f"{pol_deg}-deg polynomial"
         elif spline:
             vprint(f"Response smoothing using a spline (lambda {spline_lam:.1f})")
@@ -1128,11 +1157,21 @@ class FluxCalibration(CorrectionBase):
                                 fill_value="extrapolate", bounds_error=False)
             fit_label = "linear interp (fallback)"
 
+        response_err = interp1d(obs_wave.to_value("AA")[weights > 0],
+                                cont_response_err.value[weights > 0],
+                                fill_value="extrapolate", bounds_error=False)
+
         def response_wrapper(x):
             if isinstance(x, u.Quantity):
                 return response(x.to_value("AA")) << filtered_cont_response.unit
             else:
                 return response(x) << filtered_cont_response.unit
+
+        def response_err_wrapper(x):
+            if isinstance(x, u.Quantity):
+                return response_err(x.to_value("AA")) << filtered_cont_response.unit
+            else:
+                return response_err(x) << filtered_cont_response.unit
 
         final_response = check_unit(response(obs_wave.to_value("AA")),
                                     filtered_cont_response.unit)
@@ -1142,7 +1181,7 @@ class FluxCalibration(CorrectionBase):
             fig = FluxCalibration.plot_response(
             wavelength=obs_wave,
             observed=[obs_spectra, obs_cont, obs_cont_err],
-            reference=[int_ref_spectra, ref_cont, ref_cont_err],
+            reference=[ref_on_obs, ref_cont, ref_cont_err],
             cont_response=cont_response,
             filtered_response=filtered_cont_response,
             final_response=final_response,
@@ -1151,9 +1190,10 @@ class FluxCalibration(CorrectionBase):
             fit_label=fit_label,
             pct_filter_n=pct_filter_n,
             )
-            return response_wrapper, fig
         else:
-            return response_wrapper, None
+            fig = None
+
+        return response_wrapper, response_err_wrapper, fig
 
     @suppress_warnings
     def plot_response(
