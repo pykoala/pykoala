@@ -497,21 +497,23 @@ class FluxCalibration(CorrectionBase):
         self.response_file = response_file
 
     @classmethod
-    def from_text_file(cls, path):
-        """Load the resonse function from a text file.
-        
+    def from_text_file(cls, path: str) -> "FluxCalibration":
+        """
+        Load a response function from a text file.
+
+        The file must contain two or three columns: wavelength, response [,
+        response_err]. The first two commented header lines may optionally encode
+        units in parentheses.
+
         Parameters
         ----------
         path : str
-            Path to the text file containing the response as function of
-            wavelength. The text file is assumed to contain only two columns:
-            the first one corresponding the the wavelength array, and the second
-            the array of values associate to the response function.
-        
+            Path to the text file.
+
         Returns
         -------
-        flux_calibration : :class:`FluxCalibration`
-            An instance of ``FluxCalibration``.
+        flux_calibration : FluxCalibration
+            Instance with ``response``, ``response_err`` and ``response_wavelength`` set.
         """
         data = np.loadtxt(path, dtype=float, comments="#")
         if data.ndim != 2 or data.shape[1] not in (2, 3):
@@ -519,25 +521,28 @@ class FluxCalibration(CorrectionBase):
 
         wavelength = data[:, 0]
         response = data[:, 1]
-        response_err = data[:, 2] if data.shape[1] == 3 else np.zeros_like(resp_vals)
+        response_err = data[:, 2] if data.shape[1] == 3 else np.zeros_like(response)  # fixed
 
-        # Default units
         wave_unit = u.AA
         resp_unit = u.dimensionless_unscaled
         with open(path, "r") as f:
             _ = f.readline()
             line = f.readline()
-            if line[0] == "#":
-                wave_header, response_header, response_err_header = line.split(",")
-                wave_idx = wave_header.find("("), wave_header.rfind(")")
-                response_idx = response_header.find("("), response_header.rfind(")")
-                wave_unit = u.Unit(wave_header[wave_idx[0] + 1 : wave_idx[1]])
-                resp_unit = u.Unit(
-                    response_header[response_idx[0] + 1 : response_idx[1]])
-        return cls(response=response << resp_unit,
-                   response_err=response_err << resp_unit,
-                   response_wavelength=wavelength << wave_unit,
-                   response_file=path)
+            if line.startswith("#"):
+                parts = [p.strip() for p in line[1:].split(",")]
+                if len(parts) >= 2:
+                    widx = parts[0].find("("), parts[0].rfind(")")
+                    ridx = parts[1].find("("), parts[1].rfind(")")
+                    if widx[0] != -1 and widx[1] != -1:
+                        wave_unit = u.Unit(parts[0][widx[0] + 1:widx[1]])
+                    if ridx[0] != -1 and ridx[1] != -1:
+                        resp_unit = u.Unit(parts[1][ridx[0] + 1:ridx[1]])
+
+        return cls(response=response * resp_unit,
+                response_err=response_err * resp_unit,
+                response_wavelength=wavelength * wave_unit,
+                response_file=path)
+
 
     @classmethod
     def auto(cls, data, calib_stars, extract_args=None,
