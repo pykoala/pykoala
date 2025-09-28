@@ -1157,45 +1157,46 @@ class FluxCalibration(CorrectionBase):
         pct_filter_n: None,
     ):
         """
-        Generate a three-panel QA plot for the response fit.
+        Build a three-panel QA figure for the response fit.
 
-        Top panel: raw obs/ref, filtered obs/ref (if any), and fitted response.
-        Middle panel: reference spectrum (interpolated) and calibrated observation using
-                    filtered response and final fitted response. Also overlays weights.
-        Bottom panel: ratio of calibrated observation to reference, should be near 1.
+        The top panel shows raw and smoothed responses. The middle panel shows
+        the reference spectrum and calibrated observation with weight mask overlay.
+        The bottom panel shows ratios of calibrated spectra to the reference.
 
         Parameters
         ----------
-        obs_wave : Quantity, 1D
+        wavelength : `astropy.units.Quantity`
             Observed wavelength grid.
-        obs_spectra : Quantity, 1D
-            Observed flux density on obs_wave.
-        ref_interp : Quantity, 1D
-            Reference flux density interpolated onto obs_wave.
-        cont_response : Quantity, 1D
-            Raw response Obs / Ref.
-        filtered_response : Quantity, 1D
-            Median-filtered response if applied, otherwise equal to raw response values.
-        final_response : Quantity, 1D
-            Final fitted response evaluated on obs_wave.
-        weights : ndarray, 1D
-            Relative weights used during fitting, nonnegative.
+        observed : list of `astropy.units.Quantity`
+            ``[obs_spectra, obs_cont, obs_cont_err]``.
+        reference : list of `astropy.units.Quantity`
+            ``[ref_interp, ref_cont, ref_cont_err]``.
+        cont_response : `astropy.units.Quantity`
+            Response from continuum ratio (Obs_cont / Ref_cont).
+        filtered_response : `astropy.units.Quantity`
+            Response after optional percentile prefilter.
+        final_response : `astropy.units.Quantity`
+            Fitted response evaluated on ``wavelength``.
+        final_response_err : `astropy.units.Quantity`
+            1-sigma uncertainty on the fitted response.
+        weights : ndarray
+            Relative weights used in the fit, in [0, 1].
         fit_label : str
-            Description of the fit method for annotation.
+            Label describing the chosen model.
         pct_filter_n : int or None
-            Median filter window size if applied.
+            Window size for percentile prefilter, if applied.
 
         Returns
         -------
-        fig : matplotlib.figure.Figure
+        fig : `matplotlib.figure.Figure`
             The assembled QA figure.
         """
         import matplotlib.pyplot as plt
 
         obs_spectra, obs_cont, obs_cont_err = observed
         ref_spectra, ref_cont, ref_cont_err = reference
-
         raw_response = obs_spectra / ref_spectra
+
         fig, axs = plt.subplots(nrows=3, ncols=1, figsize=(9, 8),
                                 constrained_layout=True, sharex=True,
                                 height_ratios=[3, 3, 1])
@@ -1213,8 +1214,8 @@ class FluxCalibration(CorrectionBase):
                         color="cornflowerblue", label="R(final) 2-sigma error", alpha=0.5)
         ax.plot(wavelength, final_response, color="b", lw=1.2, label=f"R(Final) [Fit: {fit_label}]")
         ax.set_ylabel("R(lambda) [Obs/Ref]")
-        ymin = np.nanmin(final_response.to_value(final_response.unit))
-        ymax = np.nanmax(final_response.to_value(final_response.unit))
+        ymin, ymax = np.nanpercentile(final_response.to_value(final_response.unit),
+                                      [16, 84])
         if np.isfinite(ymin) and np.isfinite(ymax):
             ax.set_ylim(ymin * 0.8, ymax * 1.2)
         ax.legend(loc="best")
@@ -1242,7 +1243,7 @@ class FluxCalibration(CorrectionBase):
         # Plot mask
         tw = ax.twinx()
         tw.fill_between(wavelength, 0, 1 - weights, alpha=0.2, color="grey", label="Weight mask")
-        tw.set_ylabel("Relative weights")
+        tw.set_ylabel("1 - weights")
 
         # Residuals
         ax = axs[2]
