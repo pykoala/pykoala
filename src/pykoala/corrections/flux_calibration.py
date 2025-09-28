@@ -6,9 +6,12 @@ of wavelength.
 # =============================================================================
 # Basics packages
 # =============================================================================
+from dataclasses import dataclass, field
+from typing import Optional, Dict, Tuple, Any
+
 import numpy as np
 from scipy.optimize import curve_fit
-from scipy.ndimage import median_filter
+from scipy.ndimage import median_filter, percentile_filter
 from scipy.interpolate import interp1d, make_smoothing_spline
 
 import matplotlib.pyplot as plt
@@ -16,19 +19,249 @@ import os
 from astropy import units as u
 from astropy.visualization import quantity_support
 from astropy.coordinates import SkyCoord
+from astropy.table import QTable
+from astropy.io import fits
 # =============================================================================
 # KOALA packages
 # =============================================================================
 from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
-from pykoala.data_container import SpectraContainer
-from pykoala.data_container import RSS
-from pykoala.data_container import Cube
+from pykoala.data_container import SpectraContainer, RSS, Cube
+from pykoala.utils.spectra import estimate_continuum_and_mask_absorption
 from pykoala.ancillary import (centre_of_mass, cumulative_1d_moffat,
                                mask_lines, mask_telluric_lines,
                                flux_conserving_interpolation, check_unit)
+from pykoala.plotting import utils as plt_utils
 
 quantity_support()
+
+
+@dataclass
+class StandardStar:
+    """
+    Container for a spectrophotometric standard star used in flux calibration.
+
+    Attributes
+    ----------
+    name
+        Canonical name of the star, for example feige34.
+    catalog
+        Source catalog identifier, for example CALSPEC, Oke1990, ESO.
+    wavelength
+        1D wavelength grid as an astropy Quantity, typically in Angstrom.
+    flux
+        1D reference flux density on the same grid as wavelength.
+    flux_err
+        Optional 1D flux uncertainty on the same grid and unit as flux.
+    file_path
+        Origin file path, if loaded from disk.
+    bibcode
+        Reference code for citation.
+    meta
+        Free form metadata dictionary, for example date, version, link,
+        instrument, notes.
+
+    Notes
+    -----
+    On initialization the arrays are validated, finite samples are required,
+    and the wavelength axis is sorted in ascending order if needed.
+    """
+    name: str
+    catalog: str
+    wavelength: u.Quantity
+    flux: u.Quantity
+    flux_err: Optional[u.Quantity] = None
+    file_path: Optional[str] = None
+    bibcode: Optional[str] = None
+    meta: Dict[str, Any] = field(default_factory=dict)
+
+    # -------------------------
+    # Lifecycle and validation
+    # -------------------------
+    def __post_init__(self):
+        # Enforce Quantity types and compatible shapes
+        self.wavelength = check_unit(self.wavelength, u.AA)
+        if not isinstance(self.flux, u.Quantity):
+            raise TypeError("flux must be an astropy Quantity")
+        if self.flux_err is not None and not isinstance(self.flux_err, u.Quantity):
+            raise TypeError("flux_err must be an astropy Quantity or None")
+
+        if self.wavelength.ndim != 1 or self.flux.ndim != 1:
+            raise ValueError("wavelength and flux must be 1D arrays")
+        if self.wavelength.shape != self.flux.shape:
+            raise ValueError("wavelength and flux must have the same shape")
+        if self.flux_err is not None and self.flux_err.shape != self.flux.shape:
+            raise ValueError("flux_err must match flux shape")
+
+        # Drop non finite samples consistently
+        finite = np.isfinite(self.wavelength.value) & np.isfinite(self.flux.to_value(self.flux.unit))
+        if self.flux_err is not None:
+            finite &= np.isfinite(self.flux_err.to_value(self.flux.unit))
+        if not np.any(finite):
+            raise ValueError("no finite samples in standard star arrays")
+
+        self.wavelength = self.wavelength[finite]
+        self.flux = self.flux[finite]
+        if self.flux_err is not None:
+            self.flux_err = self.flux_err[finite]
+
+    @property
+    def wave_unit(self) -> u.UnitBase:
+        return self.wavelength.unit
+
+    @property
+    def flux_unit(self) -> u.UnitBase:
+        return self.flux.unit
+
+    @property
+    def wave_range(self) -> Tuple[u.Quantity, u.Quantity]:
+        return self.wavelength.min(), self.wavelength.max()
+
+    @classmethod
+    def from_ascii(cls, path: str, name: str, catalog: str,
+                   wave_unit: u.UnitBase = u.AA,
+                   flux_unit: Optional[u.UnitBase] = None,
+                   has_error: bool = False,
+                   header_units: bool = True,
+                   **meta) -> "StandardStar":
+        """
+        Load from a simple ASCII file with 2 or 3 columns:
+        wavelength, flux[, flux_err].
+
+        If header_units is True, the method tries to parse unit strings in the
+        first two commented lines. Otherwise wave_unit and flux_unit are used.
+        """
+        data = np.loadtxt(path, dtype=float, comments="#")
+        if data.ndim != 2 or data.shape[1] not in (2, 3):
+            raise ValueError(f"unrecognized ASCII shape {data.shape}")
+
+        w = data[:, 0]
+        f = data[:, 1]
+        fe = data[:, 2] if (has_error or data.shape[1] == 3) else None
+
+        # Try to parse units from header if requested
+        wunit = wave_unit
+        funit = flux_unit
+        if header_units:
+            try:
+                with open(path, "r") as fh:
+                    lines = [fh.readline() for _ in range(4)]
+                for line in lines:
+                    if "wavelength" in line and "(" in line and ")" in line:
+                        wunit = u.Unit(line.split("(")[1].split(")")[0])
+                    if "flux" in line and "(" in line and ")" in line:
+                        funit = u.Unit(line.split("(")[1].split(")")[0])
+            except Exception:
+                pass
+
+        if funit is None:
+            # A common default for calibration files
+            funit = 1e-16 * u.erg / u.s / u.cm**2 / u.AA
+
+        return cls(
+            name=name,
+            catalog=catalog,
+            wavelength=w * wunit,
+            flux=f * funit,
+            flux_err=(fe * funit if fe is not None else None),
+            file_path=path,
+            meta=meta or {},
+        )
+
+    def to_qtable(self) -> QTable:
+        """Return a QTable with wavelength, flux, and optional flux_err."""
+        tab = QTable()
+        tab["wavelength"] = self.wavelength
+        tab["flux"] = self.flux
+        if self.flux_err is not None:
+            tab["flux_err"] = self.flux_err
+        tab.meta = dict(
+            name=self.name,
+            catalog=self.catalog,
+            file_path=self.file_path,
+            bibcode=self.bibcode,
+            **(self.meta or {}),
+        )
+        return tab
+
+    @classmethod
+    def from_qtable(cls, table: QTable, name: str, catalog: str, **meta) -> "StandardStar":
+        """Build from a QTable. Expects columns wavelength and flux, optional flux_err."""
+        w = table["wavelength"]
+        f = table["flux"]
+        fe = table["flux_err"] if "flux_err" in table.colnames else None
+        return cls(
+            name=name,
+            catalog=catalog,
+            wavelength=w,
+            flux=f,
+            flux_err=fe,
+            meta={**table.meta, **meta},
+        )
+
+    def save_fits(self, path: str) -> None:
+        """Write the star to FITS, preserving units in headers."""
+        tab = self.to_qtable()
+        tab.write(path, format="fits", overwrite=True)
+
+    @classmethod
+    def read_fits(cls, path: str, name: str, catalog: str) -> "StandardStar":
+        """Read a star from a FITS table produced by save_fits."""
+        tab = QTable.read(path, format="fits")
+        meta = dict(tab.meta)
+        meta["file_loaded_from"] = path
+        return cls.from_qtable(tab, name=name, catalog=catalog, **meta)
+
+    def resample(self, new_wave: u.Quantity, conserve_flux: bool = True) -> u.Quantity:
+        """
+        Interpolate the reference flux onto new_wave.
+
+        If conserve_flux is True and flux_conserving_interpolation is available,
+        it will be used. Otherwise linear interpolation is used.
+        """
+        new_wave = check_unit(new_wave, self.wave_unit)
+        if conserve_flux:
+            return flux_conserving_interpolation(new_wave,
+                                                 self.wavelength, self.flux)
+        # linear fallback
+        f = interp1d(self.wavelength.to_value(new_wave.unit),
+                     self.flux.to_value(self.flux.unit),
+                     bounds_error=False, fill_value="extrapolate")
+        return f(new_wave.to_value(new_wave.unit)) * self.flux.unit
+
+    def subset(self, wave_min: u.Quantity, wave_max: u.Quantity) -> "StandardStar":
+        """Return a new StandardStar restricted to wave_min <= lambda <= wave_max."""
+        wave_min = check_unit(wave_min, self.wave_unit)
+        wave_max = check_unit(wave_max, self.wave_unit)
+        m = (self.wavelength >= wave_min) & (self.wavelength <= wave_max)
+        return StandardStar(
+            name=self.name,
+            catalog=self.catalog,
+            wavelength=self.wavelength[m],
+            flux=self.flux[m],
+            flux_err=(self.flux_err[m] if self.flux_err is not None else None),
+            file_path=self.file_path,
+            bibcode=self.bibcode,
+            meta=dict(self.meta),
+        )
+
+    def plot_spectra(self, show=False):
+        """Get a plot of the stellar spectra."""
+        
+        fig, axs = plt_utils.new_figure(self.name)
+        ax = axs[0]
+        ax.plot(self.wavelength, self.flux, label="Flux")
+        if self.flux_err is not None:
+            ax.plot(self.wavelength, self.flux_err, label="Flux err")
+        ax.set_xlabel("Wavelength")
+        ax.set_ylabel("Flux")
+        ax.legend()
+        if show:
+            plt.show()
+        else:
+            plt.close()
+        return fig
+
 
 def curve_of_growth(radii : u.Quantity, data : u.Quantity,
                     ref_radii : u.Quantity, mask=None) -> u.Quantity:
@@ -652,10 +885,13 @@ class FluxCalibration(CorrectionBase):
         return calib_wave << u.AA, calib_spectra << 1e-16 * u.erg / u.s / u.AA / u.cm**2
 
     @staticmethod
-    def get_response_curve(obs_wave, obs_spectra, ref_wave, ref_spectra,
-                           pol_deg=None, spline=False, spline_args={},
-                           median_filter_n=None, plot=False,
-                           mask_absorption=True, mask_tellurics=True, mask_zeros=True):
+    def get_response_curve(obs_wave, obs_spectra, ref_wave, ref_spectra, *,
+                           cont_percentile=80, cont_window=50 << u.AA,
+                           smooth_spline=True, abs_kappa_sigma=3,
+                           pct_filter_n=None, pct=None,
+                           pol_deg=None, spline=False, spline_lam=None,
+                           mask_absorption=True, mask_tellurics=True, mask_zeros=True,
+                           plot=False):
         """
         Computes the response curve from observed and reference spectra.
 
@@ -688,75 +924,105 @@ class FluxCalibration(CorrectionBase):
             Figure of the response curve plot, if plot is True.
         """
         vprint("Computing spectrophotometric response")
-        if spline_args is None:
-            spline_args = {}
-        spline_k = int(spline_args.get("k", 3))
-        spline_s = spline_args.get("s", None)
 
         int_ref_spectra = flux_conserving_interpolation(obs_wave, ref_wave,
                                                         ref_spectra)
         raw_response = obs_spectra / int_ref_spectra
+        # Remove absorption features from reference spectra
+        res = estimate_continuum_and_mask_absorption(obs_wave, int_ref_spectra,
+        cont_percentile=cont_percentile,
+        cont_window=cont_window, smooth_spline=smooth_spline,
+        abs_kappa_sigma=abs_kappa_sigma)
+
+        ref_cont, ref_cont_err, ref_abs_regions = res
+
+        # Remove absorption feature from observed spectra
+        res = estimate_continuum_and_mask_absorption(obs_wave, obs_spectra,
+        cont_percentile=cont_percentile,
+        cont_window=cont_window, smooth_spline=smooth_spline,
+        abs_kappa_sigma=abs_kappa_sigma)
+
+        obs_cont, obs_cont_err, obs_abs_regions = res
+        # Compute raw response
+        cont_response = obs_cont / ref_cont
+        cont_response_err = cont_response * np.sqrt(
+            (obs_cont_err / obs_cont)**2 + (ref_cont_err / ref_cont)**2)
 
         # Build weights
-        weights = np.ones(raw_response.size, dtype=float)
+        weights = np.ones(cont_response.size, dtype=float)
         if mask_absorption:
             vprint("Masking stellar absoprtion lines")
-            weights *= np.asarray(mask_lines(obs_wave), dtype=float)
+            ref_mask = ref_abs_regions > 0
+            n_masked = np.count_nonzero(ref_mask)
+            vprint(f"Fraction of reference pixels masked: {n_masked / ref_mask.size}")
+            weights[ref_mask] = 0.0
+            obs_mask = obs_abs_regions > 0
+            n_masked = np.count_nonzero(obs_mask)
+            vprint(f"Fraction of observed pixels masked: {n_masked / obs_mask.size}")
+            weights[obs_mask] = 0.0
         if mask_tellurics:
             vprint("Masking telluric lines")
             weights *= np.asarray(mask_telluric_lines(obs_wave), dtype=float)
         if mask_zeros:
             vprint("Masking zeros")
-            weights *= (obs_spectra.to_value(obs_spectra.unit) > 0).astype(float)
-
-        # Optional median filtering and robust reweighting
-        if median_filter_n is not None and median_filter_n >= 2:
-            filtered_raw_response = median_filter(
-                raw_response, size=median_filter_n) << raw_response.unit
-            weights *= 1.0 / (
-                1.0 + np.abs(raw_response - filtered_raw_response).value)**2
-        else:
-            filtered_raw_response = raw_response.copy()
+            weights[obs_spectra.to_value(obs_spectra.unit) < 0.0] = 0.0
 
         weights = np.clip(weights, 0.0, None)
-        # Interpolation
+        weights_norm = weights.sum()
+        if weights_norm == 0 or weights_norm < weights.size * 0.1:
+            vprint("Too few unmasked pixels", level="warning")
+
+        # Optional median filtering and reweighting
+        if pct_filter_n is not None and pct_filter_n >= 2:
+            vprint(f"Applying percentile ({pct}) filter to response function")
+            filtered_cont_response = percentile_filter(
+                cont_response, pct, size=pct_filter_n) << cont_response.unit
+        else:
+            filtered_cont_response = cont_response.copy()
+
+        # Interpolation (skip pixels with w=0)
         if pol_deg is not None:
-            p_fit = np.polyfit(obs_wave.to_value("AA"),
-                               filtered_raw_response.value, deg=pol_deg, w=weights)
+            p_fit = np.polyfit(obs_wave.to_value("AA")[weights > 0],
+                               filtered_cont_response.value[weights > 0],
+                               deg=pol_deg, w=weights[weights > 0])
             response = np.poly1d(p_fit)
             fit_label = f"{pol_deg}-deg polynomial"
         elif spline:
             response = make_smoothing_spline(
                 obs_wave.to_value("AA")[weights > 0],
-                filtered_raw_response.value[weights > 0],
-                w=weights[weights > 0])
-            fit_label = f"spline k={spline_k} s={spline_s}"
+                filtered_cont_response.value[weights > 0],
+                w=weights[weights > 0],
+                lam=spline_lam)
+            fit_label = f"spline lam={spline_lam}"
         else:
             # Linear interpolation
             response = interp1d(obs_wave.to_value("AA")[weights > 0],
-                                filtered_raw_response.value[weights > 0],
+                                filtered_cont_response.value[weights > 0],
                                 fill_value="extrapolate", bounds_error=False)
             fit_label = "linear interp (fallback)"
 
         def response_wrapper(x):
             if isinstance(x, u.Quantity):
-                return response(x.to_value("AA")) << filtered_raw_response.unit
+                return response(x.to_value("AA")) << filtered_cont_response.unit
             else:
-                return response(x) << filtered_raw_response.unit
+                return response(x) << filtered_cont_response.unit
 
         final_response = check_unit(response(obs_wave.to_value("AA")),
-                                    filtered_raw_response.unit)
+                                    filtered_cont_response.unit)
+        final_response_err = cont_response_err
+
         if plot:
             fig = FluxCalibration.plot_response(
-            obs_wave=obs_wave,
-            obs_spectra=obs_spectra,
-            ref_interp=int_ref_spectra,
-            raw_response=raw_response,
-            filtered_response=filtered_raw_response,
+            wavelength=obs_wave,
+            observed=[obs_spectra, obs_cont, obs_cont_err],
+            reference=[int_ref_spectra, ref_cont, ref_cont_err],
+            cont_response=cont_response,
+            filtered_response=filtered_cont_response,
             final_response=final_response,
+            final_response_err=final_response_err,
             weights=weights,
             fit_label=fit_label,
-            median_filter_n=median_filter_n,
+            pct_filter_n=pct_filter_n,
             )
             return response_wrapper, fig
         else:
@@ -764,15 +1030,16 @@ class FluxCalibration(CorrectionBase):
 
     def plot_response(
         *,
-        obs_wave,
-        obs_spectra,
-        ref_interp,
-        raw_response,
+        wavelength,
+        observed,
+        reference,
+        cont_response,
         filtered_response,
         final_response,
+        final_response_err,
         weights,
         fit_label,
-        median_filter_n: None,
+        pct_filter_n: None,
     ):
         """
         Generate a three-panel QA plot for the response fit.
@@ -790,7 +1057,7 @@ class FluxCalibration(CorrectionBase):
             Observed flux density on obs_wave.
         ref_interp : Quantity, 1D
             Reference flux density interpolated onto obs_wave.
-        raw_response : Quantity, 1D
+        cont_response : Quantity, 1D
             Raw response Obs / Ref.
         filtered_response : Quantity, 1D
             Median-filtered response if applied, otherwise equal to raw response values.
@@ -800,7 +1067,7 @@ class FluxCalibration(CorrectionBase):
             Relative weights used during fitting, nonnegative.
         fit_label : str
             Description of the fit method for annotation.
-        median_filter_n : int or None
+        pct_filter_n : int or None
             Median filter window size if applied.
 
         Returns
@@ -810,6 +1077,10 @@ class FluxCalibration(CorrectionBase):
         """
         import matplotlib.pyplot as plt
 
+        obs_spectra, obs_cont, obs_cont_err = observed
+        ref_spectra, ref_cont, ref_cont_err = reference
+
+        raw_response = obs_spectra / ref_spectra
         fig, axs = plt.subplots(nrows=3, ncols=1, figsize=(9, 8),
                                 constrained_layout=True, sharex=True,
                                 height_ratios=[3, 3, 1])
@@ -817,11 +1088,16 @@ class FluxCalibration(CorrectionBase):
         # Panel 1: responses
         ax = axs[0]
         ax.set_title("Instrumental response fit")
-        ax.plot(obs_wave, raw_response, lw=0.7, label="Obs/Ref (raw)")
-        if median_filter_n is not None and median_filter_n >= 2:
-            ax.plot(obs_wave, filtered_response, lw=0.8, label=f"Obs/Ref (median {median_filter_n})")
-        ax.plot(obs_wave, final_response, lw=1.2, label=f"Fit: {fit_label}")
-        ax.set_ylabel("R(lambda)")
+        ax.plot(wavelength, raw_response, lw=0.7, label="R(raw)")
+        ax.plot(wavelength, cont_response, lw=0.7, label="R(continuum)")
+        if pct_filter_n is not None and pct_filter_n >= 2:
+            ax.plot(wavelength, filtered_response, lw=0.8, label=f"R(cont filtered {pct_filter_n})")
+        ax.fill_between(wavelength,
+                        final_response - 2 * final_response_err,
+                        final_response + 2 * final_response_err,
+                        color="cornflowerblue", label="R(final) 2-sigma error", alpha=0.5)
+        ax.plot(wavelength, final_response, color="b", lw=1.2, label=f"R(Final) [Fit: {fit_label}]")
+        ax.set_ylabel("R(lambda) [Obs/Ref]")
         ymin = np.nanmin(final_response.to_value(final_response.unit))
         ymax = np.nanmax(final_response.to_value(final_response.unit))
         if np.isfinite(ymin) and np.isfinite(ymax):
@@ -830,24 +1106,47 @@ class FluxCalibration(CorrectionBase):
 
         # Panel 2: calibrated spectra and weights
         ax = axs[1]
-        ax.plot(obs_wave, ref_interp, lw=0.7, label="Reference (interp)")
-        ax.plot(obs_wave, obs_spectra / filtered_response, lw=0.7, label="Calibrated with median")
-        ax.plot(obs_wave, obs_spectra / final_response, lw=1.0, label="Calibrated with fit")
+        ax.plot(wavelength, ref_spectra, lw=0.7, label="Ref",
+                color="r")
+        ax.fill_between(wavelength, ref_cont - ref_cont_err, ref_cont + ref_cont_err,
+        color="orange", alpha=0.5)
+        ax.plot(wavelength, ref_cont, color="orange", label="Ref. continuum")
+
+        # Final response
+        ax.fill_between(wavelength,
+                        (obs_cont - obs_cont_err) / final_response,
+                        (obs_cont + obs_cont_err) / final_response,
+                        color="cornflowerblue", alpha=0.5)
+        ax.plot(wavelength, obs_cont / final_response, color="cornflowerblue", lw=1,
+                label="Obs cont cal")
+        ax.plot(wavelength, obs_spectra / final_response, lw=1.0,
+                color="blue", label="Fit-based calibration")
         ax.set_ylabel("Flux")
         ax.legend(loc="best")
+        ax.set_ylim(ref_cont.min() / 2, ref_cont.max() * 1.5)
+        # Plot mask
         tw = ax.twinx()
-        tw.plot(obs_wave, weights, lw=0.7, alpha=0.6, color="fuchsia", label="weights")
+        tw.fill_between(wavelength, 0, 1 - weights, alpha=0.2, color="grey", label="Weight mask")
         tw.set_ylabel("Relative weights")
 
-        # Panel 3: ratio vs 1
+        # Residuals
         ax = axs[2]
-        ratio = (obs_spectra / final_response) / ref_interp
+        continuum_ratio = (obs_cont / final_response) / ref_cont
+        ratio = (obs_spectra / final_response) / ref_spectra
+        median_ratio = np.nanmedian(ratio)
         ax.axhline(1.00, ls="--", color="r", alpha=0.6)
         ax.axhline(1.10, ls=":", color="r", alpha=0.4)
         ax.axhline(0.90, ls=":", color="r", alpha=0.4)
-        ax.plot(obs_wave, ratio.to_value(ratio.unit), lw=0.8, color="k")
+        ax.plot(wavelength, continuum_ratio.value, lw=0.8, color="grey",
+        label="Cont. ratio")
+        ax.plot(wavelength, ratio.value, lw=0.8, color="k",
+        label="Spec. ratio")
+        ax.annotate(f"Median spec.: {median_ratio:.2f}", xy=(0.05, 0.95),
+                    xycoords="axes fraction", ha="left", va="top",
+                    fontsize="small")
+        ax.legend(loc="best", fontsize="small")
         ax.set_ylim(0.7, 1.3)
-        ax.set_ylabel("Obs_cal / Ref")
+        ax.set_ylabel("Obs cal. / Ref")
         ax.set_xlabel("Wavelength")
         plt.close(fig)
         return fig
