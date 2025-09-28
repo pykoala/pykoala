@@ -28,7 +28,7 @@ def log_into_file(filename, logger_name='pykoala', level='INFO'):
     logger.setLevel(level.upper())
 
 
-def vprint(*mssg, *, level="INFO", verbose=True):
+def vprint(*mssg, level="INFO", verbose=True):
     """Print a message to the logger.
     
     Parameters
