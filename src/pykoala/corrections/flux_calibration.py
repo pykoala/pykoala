@@ -1036,6 +1036,7 @@ class FluxCalibration(CorrectionBase):
         else:
             return response_wrapper, None
 
+    @suppress_warnings
     def plot_response(
         *,
         wavelength,
