@@ -586,6 +586,7 @@ class FluxCalibration(CorrectionBase):
                                response_wavelength=ref_wave)
 
     @staticmethod
+    @suppress_warnings(categories=RuntimeWarning)
     def extract_stellar_flux(data_container,
                              wave_range=None, wave_window=None,
                              profile=cumulative_1d_moffat,
