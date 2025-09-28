@@ -1,8 +1,16 @@
 """
-This module contains the corrections for performing an absolute or relative
-flux calibration by accounting for the spectral sensitivity curve as function
-of wavelength.
+Flux calibration utilities.
+
+This module provides tools to derive and apply an absolute (or relative) flux
+calibration by estimating and fitting an instrumental spectral response curve
+as a function of wavelength.
+
+It includes:
+- StandardStar: a container for spectrophotometric reference stars
+- FluxCalibration: extraction, response fitting, mastering, and application
+- Helper utilities (curve_of_growth, plotting)
 """
+
 # =============================================================================
 # Basics packages
 # =============================================================================
@@ -37,36 +45,34 @@ from pykoala.plotting import utils as plt_utils
 
 quantity_support()
 
-
 @dataclass
 class StandardStar:
     """
-    Container for a spectrophotometric standard star used in flux calibration.
+    Spectrophotometric standard star for flux calibration.
 
-    Attributes
+    Parameters
     ----------
-    name
-        Canonical name of the star, for example feige34.
-    catalog
-        Source catalog identifier, for example CALSPEC, Oke1990, ESO.
-    wavelength
-        1D wavelength grid as an astropy Quantity, typically in Angstrom.
-    flux
-        1D reference flux density on the same grid as wavelength.
-    flux_err
-        Optional 1D flux uncertainty on the same grid and unit as flux.
-    file_path
+    name : str
+        Canonical name of the star, for example ``"feige34"``.
+    catalog : str
+        Source catalog identifier, for example ``"CALSPEC"``, ``"Oke1990"``, ``"ESO"``.
+    wavelength : `astropy.units.Quantity`
+        Wavelength grid, typically in Angstrom.
+    flux : `astropy.units.Quantity`
+        Reference flux density on the same grid as ``wavelength``.
+    flux_err : `astropy.units.Quantity`, optional
+        Flux uncertainty, same unit and length as ``flux``.
+    file_path : str, optional
         Origin file path, if loaded from disk.
-    bibcode
+    bibcode : str, optional
         Reference code for citation.
-    meta
-        Free form metadata dictionary, for example date, version, link,
-        instrument, notes.
+    meta : dict, optional
+        Additional metadata, for example date, version, link, instrument, notes.
 
     Notes
     -----
-    On initialization the arrays are validated, finite samples are required,
-    and the wavelength axis is sorted in ascending order if needed.
+    On initialization, arrays are validated, nonfinite samples are dropped,
+    and the wavelength axis is sorted ascending if needed.
     """
     name: str
     catalog: str
@@ -77,11 +83,7 @@ class StandardStar:
     bibcode: Optional[str] = None
     meta: Dict[str, Any] = field(default_factory=dict)
 
-    # -------------------------
-    # Lifecycle and validation
-    # -------------------------
     def __post_init__(self):
-        # Enforce Quantity types and compatible shapes
         self.wavelength = check_unit(self.wavelength, u.AA)
         if not isinstance(self.flux, u.Quantity):
             raise TypeError("flux must be an astropy Quantity")
@@ -95,7 +97,6 @@ class StandardStar:
         if self.flux_err is not None and self.flux_err.shape != self.flux.shape:
             raise ValueError("flux_err must match flux shape")
 
-        # Drop non finite samples consistently
         finite = np.isfinite(self.wavelength.value) & np.isfinite(self.flux.to_value(self.flux.unit))
         if self.flux_err is not None:
             finite &= np.isfinite(self.flux_err.to_value(self.flux.unit))
@@ -107,16 +108,26 @@ class StandardStar:
         if self.flux_err is not None:
             self.flux_err = self.flux_err[finite]
 
+        # ensure ascending order
+        order = np.argsort(self.wavelength.value)
+        self.wavelength = self.wavelength[order]
+        self.flux = self.flux[order]
+        if self.flux_err is not None:
+            self.flux_err = self.flux_err[order]
+
     @property
     def wave_unit(self) -> u.UnitBase:
+        """Wavelength unit."""
         return self.wavelength.unit
 
     @property
     def flux_unit(self) -> u.UnitBase:
+        """Flux unit."""
         return self.flux.unit
 
     @property
     def wave_range(self) -> Tuple[u.Quantity, u.Quantity]:
+        """Minimum and maximum wavelength."""
         return self.wavelength.min(), self.wavelength.max()
 
     @classmethod
@@ -127,11 +138,30 @@ class StandardStar:
                    header_units: bool = True,
                    **meta) -> "StandardStar":
         """
-        Load from a simple ASCII file with 2 or 3 columns:
-        wavelength, flux[, flux_err].
+        Load a star from a two or three column ASCII file.
 
-        If header_units is True, the method tries to parse unit strings in the
-        first two commented lines. Otherwise wave_unit and flux_unit are used.
+        Parameters
+        ----------
+        path : str
+            File path. Columns must be wavelength, flux [, flux_err].
+        name : str
+            Star name.
+        catalog : str
+            Catalog identifier.
+        wave_unit : `astropy.units.Unit`, optional
+            Wavelength unit if not present in the file header.
+        flux_unit : `astropy.units.Unit`, optional
+            Flux unit if not present in the file header. If None, defaults to
+            ``1e-16 erg s-1 cm-2 AA-1``.
+        has_error : bool, optional
+            Whether the table has a third column with flux errors.
+        header_units : bool, optional
+            If True, attempt to parse units from header comments.
+
+        Returns
+        -------
+        star : StandardStar
+            Loaded standard star.
         """
         data = np.loadtxt(path, dtype=float, comments="#")
         if data.ndim != 2 or data.shape[1] not in (2, 3):
@@ -141,7 +171,6 @@ class StandardStar:
         f = data[:, 1]
         fe = data[:, 2] if (has_error or data.shape[1] == 3) else None
 
-        # Try to parse units from header if requested
         wunit = wave_unit
         funit = flux_unit
         if header_units:
@@ -157,7 +186,6 @@ class StandardStar:
                 pass
 
         if funit is None:
-            # A common default for calibration files
             funit = 1e-16 * u.erg / u.s / u.cm**2 / u.AA
 
         return cls(
@@ -171,7 +199,14 @@ class StandardStar:
         )
 
     def to_qtable(self) -> QTable:
-        """Return a QTable with wavelength, flux, and optional flux_err."""
+        """
+        Convert to a QTable.
+
+        Returns
+        -------
+        table : `astropy.table.QTable`
+            Table with columns ``wavelength``, ``flux``, and optional ``flux_err``.
+        """
         tab = QTable()
         tab["wavelength"] = self.wavelength
         tab["flux"] = self.flux
@@ -188,7 +223,22 @@ class StandardStar:
 
     @classmethod
     def from_qtable(cls, table: QTable, name: str, catalog: str, **meta) -> "StandardStar":
-        """Build from a QTable. Expects columns wavelength and flux, optional flux_err."""
+        """
+        Build from a QTable.
+
+        Parameters
+        ----------
+        table : `astropy.table.QTable`
+            Table with columns ``wavelength`` and ``flux`` (optional ``flux_err``).
+        name : str
+            Star name.
+        catalog : str
+            Catalog identifier.
+
+        Returns
+        -------
+        star : StandardStar
+        """
         w = table["wavelength"]
         f = table["flux"]
         fe = table["flux_err"] if "flux_err" in table.colnames else None
@@ -202,13 +252,34 @@ class StandardStar:
         )
 
     def save_fits(self, path: str) -> None:
-        """Write the star to FITS, preserving units in headers."""
-        tab = self.to_qtable()
-        tab.write(path, format="fits", overwrite=True)
+        """
+        Save to FITS.
+
+        Parameters
+        ----------
+        path : str
+            Output FITS path.
+        """
+        self.to_qtable().write(path, format="fits", overwrite=True)
 
     @classmethod
     def read_fits(cls, path: str, name: str, catalog: str) -> "StandardStar":
-        """Read a star from a FITS table produced by save_fits."""
+        """
+        Read from FITS created by :meth:`save_fits`.
+
+        Parameters
+        ----------
+        path : str
+            FITS path.
+        name : str
+            Star name.
+        catalog : str
+            Catalog identifier.
+
+        Returns
+        -------
+        star : StandardStar
+        """
         tab = QTable.read(path, format="fits")
         meta = dict(tab.meta)
         meta["file_loaded_from"] = path
@@ -216,23 +287,42 @@ class StandardStar:
 
     def resample(self, new_wave: u.Quantity, conserve_flux: bool = True) -> u.Quantity:
         """
-        Interpolate the reference flux onto new_wave.
+        Interpolate the reference flux onto a new wavelength grid.
 
-        If conserve_flux is True and flux_conserving_interpolation is available,
-        it will be used. Otherwise linear interpolation is used.
+        Parameters
+        ----------
+        new_wave : `astropy.units.Quantity`
+            Target wavelength grid.
+        conserve_flux : bool, optional
+            If True, use flux-conserving interpolation when available.
+
+        Returns
+        -------
+        ref_flux_on_new : `astropy.units.Quantity`
+            Interpolated flux density on ``new_wave``.
         """
         new_wave = check_unit(new_wave, self.wave_unit)
         if conserve_flux:
-            return flux_conserving_interpolation(new_wave,
-                                                 self.wavelength, self.flux)
-        # linear fallback
+            return flux_conserving_interpolation(new_wave, self.wavelength, self.flux)
         f = interp1d(self.wavelength.to_value(new_wave.unit),
                      self.flux.to_value(self.flux.unit),
                      bounds_error=False, fill_value="extrapolate")
         return f(new_wave.to_value(new_wave.unit)) * self.flux.unit
 
     def subset(self, wave_min: u.Quantity, wave_max: u.Quantity) -> "StandardStar":
-        """Return a new StandardStar restricted to wave_min <= lambda <= wave_max."""
+        """
+        Return a restricted wavelength slice.
+
+        Parameters
+        ----------
+        wave_min, wave_max : `astropy.units.Quantity`
+            Inclusive wavelength limits.
+
+        Returns
+        -------
+        star : StandardStar
+            New instance restricted to the provided range.
+        """
         wave_min = check_unit(wave_min, self.wave_unit)
         wave_max = check_unit(wave_max, self.wave_unit)
         m = (self.wavelength >= wave_min) & (self.wavelength <= wave_max)
@@ -247,9 +337,19 @@ class StandardStar:
             meta=dict(self.meta),
         )
 
-    def plot_spectra(self, show=False):
-        """Get a plot of the stellar spectra."""
-        
+    def plot_spectra(self, show: bool = False):
+        """
+        Plot the stellar spectrum.
+
+        Parameters
+        ----------
+        show : bool, optional
+            If True, display the figure instead of returning it.
+
+        Returns
+        -------
+        fig : `matplotlib.figure.Figure`
+        """
         fig, axs = plt_utils.new_figure(self.name)
         ax = axs[0]
         ax.plot(self.wavelength, self.flux, label="Flux")
