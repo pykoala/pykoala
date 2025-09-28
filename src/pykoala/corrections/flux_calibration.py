@@ -29,6 +29,7 @@ from pykoala.corrections.correction import CorrectionBase
 from pykoala.data_container import SpectraContainer, RSS, Cube
 from pykoala.utils.spectra import estimate_continuum_and_mask_absorption
 from pykoala.utils.math import std_from_mad
+from pykoala.utils.io import suppress_warnings
 from pykoala.ancillary import (centre_of_mass, cumulative_1d_moffat,
                                mask_lines, mask_telluric_lines,
                                flux_conserving_interpolation, check_unit)
@@ -781,6 +782,7 @@ class FluxCalibration(CorrectionBase):
         return result
 
     @staticmethod
+    @suppress_warnings
     def plot_extraction(x, y, x0, y0, data, rad, cog, wavelength, star_flux,
                         residuals):
         """"""
@@ -790,7 +792,8 @@ class FluxCalibration(CorrectionBase):
         # Plot in the sky
         ax = axs[0, 0]
         ax.set_title("Median intensity")
-        mappable = ax.scatter(x, y, c=np.log10(np.nanmedian(data, axis=0)),
+        mappable = ax.scatter(x, y,
+                              c=np.log10(np.nanmedian(data, axis=0)),
                               cmap='nipy_spectral')
         plt.colorbar(mappable, ax=ax, label=r'$\log_{10}$(intensity)')
         ax.plot(x0, y0, '+', ms=10, color='fuchsia')
