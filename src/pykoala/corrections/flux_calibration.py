@@ -15,7 +15,7 @@ It includes:
 # Basics packages
 # =============================================================================
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Tuple, Any
+from typing import Optional, Dict, Tuple, Any, List, Union
 
 import numpy as np
 from scipy.optimize import curve_fit
@@ -181,7 +181,8 @@ class StandardStar:
                     if "wavelength" in line and "(" in line and ")" in line:
                         wunit = u.Unit(line.split("(")[1].split(")")[0])
                     if "flux" in line and "(" in line and ")" in line:
-                        funit = u.Unit(line.split("(")[1].split(")")[0])
+                        fidx = line.find("flux")
+                        funit = u.Unit(line[fidx:].split("(")[1].split(")")[0])
             except Exception:
                 pass
 
@@ -365,6 +366,66 @@ class StandardStar:
         return fig
 
 
+def list_available_stars(verbose=True):
+    """
+    Lists all available spectrophotometric standard star files.
+
+    Parameters
+    ----------
+    verbose : bool, optional
+        If True, prints the list of available stars.
+
+    Returns
+    -------
+    stars : list
+        List of available spectrophotometric standard stars.
+    """
+    files = os.listdir(os.path.join(os.path.dirname(__file__), '..',
+                                    'input_data', 'spectrophotometric_stars'))
+    files = np.sort(files)
+    names = []
+    for file in files:
+        names.append(file.split('.')[0].split('_')[0])
+        if verbose:
+            vprint(" - Standard star file: {}\n   · Name: {}"
+                    .format(file, names[-1]))
+    return np.array(names), files
+
+def find_standard_star(name=None, path=None):
+    """
+    Find the file associated to a standard star.
+
+    Parameters
+    ----------
+    name : str, optional
+        Name of the calibration star.
+    path : str, optional
+        Path to the file containing the calibration star spectra.
+
+    Returns
+    -------
+    star : StandardStar
+    """
+    if path is None and name is None:
+        raise ValueError("Provide either a star `name` or a file `path`.")
+
+    if path is None:
+        nm = name.strip().lower()
+        if nm[0] != 'f' or 'feige' in nm:
+            nm = 'f' + nm
+        all_names, files = FluxCalibration.list_available_stars(verbose=False)
+        m = np.where(all_names == nm)[0]
+        if len(m) == 0:
+            raise FileNotFoundError(f"Calibration star not found: {name}")
+        pick = files[m[-1]]
+        path = os.path.join(os.path.dirname(__file__), '..', 'input_data',
+                        'spectrophotometric_stars', pick)
+
+    if os.path.isfile(path):
+        return StandardStar.from_ascii(path)
+    else:
+        raise FileNotFoundError(f"File not found: {path}")
+
 def curve_of_growth(radii : u.Quantity, data : u.Quantity,
                     ref_radii : u.Quantity, mask=None) -> u.Quantity:
     """
@@ -454,9 +515,6 @@ def curve_of_growth(radii : u.Quantity, data : u.Quantity,
     )
     return ref_vals * data_unit
 
-#TODO: create a method for extracting stellar spectra outside FluxCalibration
-# extract stellar spectra
-
 
 class FluxCalibration(CorrectionBase):
     """
@@ -543,47 +601,76 @@ class FluxCalibration(CorrectionBase):
                 response_wavelength=wavelength * wave_unit,
                 response_file=path)
 
-
     @classmethod
-    def auto(cls, data, calib_stars, extract_args=None,
-             response_params=None, fnames=None, combine=False):
+    def auto(cls, data: List, standards: List[Union[str, StandardStar]],
+             extract_args: Optional[dict] = None,
+             response_params: Optional[dict] = None,
+             combine: bool = False):
         """
-        Automatic calibration process for extracting the calibration response curve from a set of stars.
+        Build response curves from standard star observations.
+
+        This method accepts either a list of StandardStar instances or a list of
+        star names. When names are provided, the stars are loaded using the
+        internal library via :meth:`read_calibration_star` and wrapped in
+        StandardStar objects.
 
         Parameters
         ----------
-        data : list
-            List of DataContainers corresponding to standard stars.
-        calib_stars : list
-            List of stellar names. These names will be used to read the default files in the spectrophotometric_stars library.
+        data : list of DataContainer
+            Observations of standard stars (RSS or Cube), one per star.
+        standards : list of {str, StandardStar}
+            Either a list of star names (to be loaded from the internal
+            spectrophotometric library) or a list of StandardStar instances.
+            The list length must match ``data``.
         extract_args : dict, optional
-            Dictionary containing the parameters used for extracting the stellar flux from the input data.
-            See the `FluxCalibration.extract_stellar_flux` method.
+            Parameters passed to :meth:`extract_stellar_flux`.
+            Default is ``{"wave_range": None, "wave_window": None, "plot": False}``.
         response_params : dict, optional
-            Dictionary containing the parameters for computing the response curve from the stellar spectra.
-            See the `FluxCalibration.get_response_curve` method.
-        fnames : list or None, optional
-            Filenames corresponding to the calibration stars.
+            Parameters passed to :meth:`get_response_curve`.
+            Default is ``{"pol_deg": 5, "plot": False}``.
         combine : bool, optional
-            If True, combines individual response curves into a master response curve.
+            If True, combine the individual responses into a master response.
 
         Returns
         -------
-        flux_cal_results : dict
-            Dictionary containing the results from the flux calibration process for each of the stars provided.
+        results : dict
+            Per-star results, keyed by star name. Includes extraction output,
+            wavelength grid, response array, and a QA figure.
+        responses : list of FluxCalibration
+            Individual ``FluxCalibration`` instances, one per star.
+        master : FluxCalibration or None
+            Master response if ``combine`` is True, else None.
+
+        Raises
+        ------
+        ValueError
+            If the lengths of ``data`` and ``standards`` disagree.
         """
         if extract_args is None:
             # Default extraction arguments
             extract_args = dict(wave_range=None, wave_window=None, plot=False)
         if response_params is None:
             # Default response curve parameters
-            response_params = dict(pol_deg=5, plot=False)
-        if fnames is None:
-            fnames = calib_stars.copy()
+            response_params = dict(plot=False)
+        
+        if len(data) != len(standards):
+            raise ValueError("data and standards must have the same length")
 
-        # Initialise variables
-        flux_corrections = []
-        flux_cal_results = {}
+        std_stars = []
+        for item in standards:
+            if isinstance(item, StandardStar):
+                std_stars.append(item)
+            elif isinstance(item, str):
+                std_stars.append(find_standard_star(item))
+            else:
+                raise TypeError(
+                    "standards must be a list of StandardStar or str names; "
+                    f"got element of type {type(item)}"
+                )
+
+        results: Dict[str, dict] = {}
+        responses: List[FluxCalibration] = []
+
         # Loop over all standard stars
         for i, name in enumerate(fnames):
             vprint("-" * 40 + "\nAutomatic calibration process for {}\n"
@@ -928,71 +1015,6 @@ class FluxCalibration(CorrectionBase):
         
         plt.close(fig)
         return fig
-    
-    @staticmethod
-    def list_available_stars(verbose=True):
-        """
-        Lists all available spectrophotometric standard star files.
-
-        Parameters
-        ----------
-        verbose : bool, optional
-            If True, prints the list of available stars.
-
-        Returns
-        -------
-        stars : list
-            List of available spectrophotometric standard stars.
-        """
-        files = os.listdir(os.path.join(os.path.dirname(__file__), '..',
-                                        'input_data', 'spectrophotometric_stars'))
-        files = np.sort(files)
-        names = []
-        for file in files:
-            names.append(file.split('.')[0].split('_')[0])
-            if verbose:
-                vprint(" - Standard star file: {}\n   · Name: {}"
-                      .format(file, names[-1]))
-        return np.array(names), files
-
-    @staticmethod
-    def read_calibration_star(name=None, path=None):
-        """
-        Reads the spectra of a calibration star from a file.
-
-        Parameters
-        ----------
-        name : str, optional
-            Name of the calibration star.
-        path : str, optional
-            Path to the file containing the calibration star spectra.
-        flux_units : str, optional
-            Units of the flux.
-
-        Returns
-        -------
-        wave : array-like
-            Wavelength array of the calibration star.
-        flux : array-like
-            Flux array of the calibration star.
-        """
-        if path is None and name is None:
-            raise ValueError("Provide either a star `name` or a file `path`.")
-
-        if path is None:
-            nm = name.strip().lower()
-            if nm[0] != 'f' or 'feige' in nm:
-                nm = 'f' + nm
-            all_names, files = FluxCalibration.list_available_stars(verbose=False)
-            m = np.where(all_names == nm)[0]
-            if len(m) == 0:
-                raise FileNotFoundError(f"Calibration star not found: {name}")
-            pick = files[m[-1]]
-            path = os.path.join(os.path.dirname(__file__), '..', 'input_data',
-                            'spectrophotometric_stars', pick)
-
-        calib_wave, calib_spectra = np.loadtxt(path, unpack=True, usecols=(0, 1))
-        return calib_wave << u.AA, calib_spectra << 1e-16 * u.erg / u.s / u.AA / u.cm**2
 
     @staticmethod
     def get_response_curve(obs_wave, obs_spectra, ref_wave, ref_spectra, *,
