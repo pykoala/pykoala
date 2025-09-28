@@ -1274,9 +1274,9 @@ class FluxCalibration(CorrectionBase):
         ax.set_ylabel(f"R(lambda) [{cont_response.unit}]",
                       fontsize="small")
         ymin, ymax = np.nanpercentile(final_response.to_value(final_response.unit),
-                                      [16, 84])
+                                      [5, 95])
         if np.isfinite(ymin) and np.isfinite(ymax):
-            ax.set_ylim(ymin * 0.5, ymax * 1.5)
+            ax.set_ylim(ymin * 0.8, ymax * 1.2)
         ax.legend(loc="best", fontsize="small")
 
         # Panel 2: calibrated spectra and weights
