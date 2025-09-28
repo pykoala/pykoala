@@ -131,7 +131,7 @@ class StandardStar:
         return self.wavelength.min(), self.wavelength.max()
 
     @classmethod
-    def from_ascii(cls, path: str, name: str, catalog: str,
+    def from_ascii(cls, path: str, name: str, catalog: str = None,
                    wave_unit: u.UnitBase = u.AA,
                    flux_unit: Optional[u.UnitBase] = None,
                    has_error: bool = False,
@@ -178,12 +178,16 @@ class StandardStar:
                 with open(path, "r") as fh:
                     lines = [fh.readline() for _ in range(4)]
                 for line in lines:
-                    if "wavelength" in line and "(" in line and ")" in line:
+                    if "wavelength" in line.lower() and "(" in line and ")" in line:
                         wunit = u.Unit(line.split("(")[1].split(")")[0])
-                    if "flux" in line and "(" in line and ")" in line:
-                        fidx = line.find("flux")
+                    if "flux" in line.lower() and "(" in line and ")" in line:
+                        fidx = line.lower().find("flux")
                         funit = u.Unit(line[fidx:].split("(")[1].split(")")[0])
+                    if "catalog" in line.lower():
+                        catalog = line.strip().split("=")[1]
             except Exception:
+                vprint("Could not read units from header")
+                raise ValueError("Could not read units from header")
                 pass
 
         if funit is None:
@@ -193,7 +197,7 @@ class StandardStar:
             name=name,
             catalog=catalog,
             wavelength=w * wunit,
-            flux=f * funit,
+            flux=(f * funit).to("1e-16 erg / (s * cm^2 * angstrom)"),
             flux_err=(fe * funit if fe is not None else None),
             file_path=path,
             meta=meta or {},
@@ -1142,7 +1146,7 @@ class FluxCalibration(CorrectionBase):
             response = np.poly1d(coeff)
             fit_label = f"{pol_deg}-deg polynomial"
         elif spline:
-            vprint(f"Response smoothing using a spline (lambda {spline_lam:.1f})")
+            vprint(f"Response smoothing using a spline (lambda {spline_lam})")
             response = make_smoothing_spline(
                 obs_wave.to_value("AA")[weights > 0],
                 filtered_cont_response.value[weights > 0],
@@ -1265,13 +1269,15 @@ class FluxCalibration(CorrectionBase):
                         final_response - 2 * final_response_err,
                         final_response + 2 * final_response_err,
                         color="cornflowerblue", label="R(final) 2-sigma error", alpha=0.5)
-        ax.plot(wavelength, final_response, color="b", lw=1.2, label=f"R(Final) [Fit: {fit_label}]")
-        ax.set_ylabel("R(lambda) [Obs/Ref]")
+        ax.plot(wavelength, final_response, color="b", lw=1.2,
+                label=f"R(Final) [Fit: {fit_label}]")
+        ax.set_ylabel(f"R(lambda) [{cont_response.unit}]",
+                      fontsize="small")
         ymin, ymax = np.nanpercentile(final_response.to_value(final_response.unit),
                                       [16, 84])
         if np.isfinite(ymin) and np.isfinite(ymax):
-            ax.set_ylim(ymin * 0.8, ymax * 1.2)
-        ax.legend(loc="best")
+            ax.set_ylim(ymin * 0.5, ymax * 1.5)
+        ax.legend(loc="best", fontsize="small")
 
         # Panel 2: calibrated spectra and weights
         ax = axs[1]
@@ -1290,8 +1296,8 @@ class FluxCalibration(CorrectionBase):
                 label="Obs cont cal")
         ax.plot(wavelength, obs_spectra / final_response, lw=1.0,
                 color="blue", label="Fit-based calibration")
-        ax.set_ylabel("Flux")
-        ax.legend(loc="best")
+        ax.set_ylabel(f"Flux [{ref_spectra.unit}]")
+        ax.legend(loc="best", fontsize="small")
         ax.set_ylim(ref_cont.min() / 2, ref_cont.max() * 1.5)
         # Plot mask
         tw = ax.twinx()
@@ -1312,9 +1318,11 @@ class FluxCalibration(CorrectionBase):
         ax.plot(wavelength, ratio.value, lw=0.8, color="k",
         label="Spec. ratio")
         ax.annotate(f"Median +/- NMAD spec.: {median_ratio:.2f} +/- {nmad_ratio:.2f}",
-                    xy=(0.05, 0.95),
+                    xy=(0.01, 0.92),
                     xycoords="axes fraction", ha="left", va="top",
-                    fontsize="small")
+                    fontsize="small",
+                    bbox=dict(boxstyle="round",
+                    fc="lightblue", ec="steelblue", lw=2))
         ax.legend(loc="best", fontsize="small")
         ax.set_ylim(0.7, 1.3)
         ax.set_ylabel("Obs cal. / Ref")
