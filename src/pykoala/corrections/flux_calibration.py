@@ -28,6 +28,7 @@ from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.data_container import SpectraContainer, RSS, Cube
 from pykoala.utils.spectra import estimate_continuum_and_mask_absorption
+from pykoala.utils.math import std_from_mad
 from pykoala.ancillary import (centre_of_mass, cumulative_1d_moffat,
                                mask_lines, mask_telluric_lines,
                                flux_conserving_interpolation, check_unit)
@@ -976,18 +977,21 @@ class FluxCalibration(CorrectionBase):
         if pct_filter_n is not None and pct_filter_n >= 2:
             vprint(f"Applying percentile ({pct}) filter to response function")
             filtered_cont_response = percentile_filter(
-                cont_response, pct, size=pct_filter_n) << cont_response.unit
+                cont_response, pct, size=pct_filter_n,
+                mode="mirror") << cont_response.unit
         else:
             filtered_cont_response = cont_response.copy()
 
         # Interpolation (skip pixels with w=0)
         if pol_deg is not None:
+            vprint(f"Response smoothing using a polynomial (deg {pol_deg})")
             p_fit = np.polyfit(obs_wave.to_value("AA")[weights > 0],
                                filtered_cont_response.value[weights > 0],
                                deg=pol_deg, w=weights[weights > 0])
             response = np.poly1d(p_fit)
             fit_label = f"{pol_deg}-deg polynomial"
         elif spline:
+            vprint(f"Response smoothing using a spline (lambda {spline_lam:.1f})")
             response = make_smoothing_spline(
                 obs_wave.to_value("AA")[weights > 0],
                 filtered_cont_response.value[weights > 0],
@@ -995,6 +999,7 @@ class FluxCalibration(CorrectionBase):
                 lam=spline_lam)
             fit_label = f"spline lam={spline_lam}"
         else:
+            vprint(f"Response linearly interpolated")
             # Linear interpolation
             response = interp1d(obs_wave.to_value("AA")[weights > 0],
                                 filtered_cont_response.value[weights > 0],
@@ -1134,6 +1139,7 @@ class FluxCalibration(CorrectionBase):
         continuum_ratio = (obs_cont / final_response) / ref_cont
         ratio = (obs_spectra / final_response) / ref_spectra
         median_ratio = np.nanmedian(ratio)
+        nmad_ratio = std_from_mad(ratio)
         ax.axhline(1.00, ls="--", color="r", alpha=0.6)
         ax.axhline(1.10, ls=":", color="r", alpha=0.4)
         ax.axhline(0.90, ls=":", color="r", alpha=0.4)
@@ -1141,7 +1147,8 @@ class FluxCalibration(CorrectionBase):
         label="Cont. ratio")
         ax.plot(wavelength, ratio.value, lw=0.8, color="k",
         label="Spec. ratio")
-        ax.annotate(f"Median spec.: {median_ratio:.2f}", xy=(0.05, 0.95),
+        ax.annotate(f"Median +/- NMAD spec.: {median_ratio:.2f} +/- {nmad_ratio:.2f}",
+                    xy=(0.05, 0.95),
                     xycoords="axes fraction", ha="left", va="top",
                     fontsize="small")
         ax.legend(loc="best", fontsize="small")
