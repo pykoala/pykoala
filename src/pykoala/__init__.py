@@ -77,7 +77,7 @@ class VerboseMixin():
         level : str, optional
             The level at which to log the message (default is 'info').
         """
-        printer = getattr(self.logger, level)
+        printer = getattr(self.logger, level.lower())
         printer(msg)
 
     def log_into_file(self, filename, level="INFO"):
