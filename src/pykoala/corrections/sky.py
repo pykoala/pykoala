@@ -22,7 +22,7 @@ from astropy import units as u
 # =============================================================================
 # PyKOALA
 # =============================================================================
-from pykoala import vprint
+from pykoala import vprint, VerboseMixin
 from pykoala.plotting.utils import new_figure, plot_image, plot_fibres
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.corrections.throughput import Throughput
@@ -207,7 +207,7 @@ def uves_sky_lines():
 
 class SkyModel(object):
     """
-    Abstract class for a sky emission model.
+    Base class for a sky emission model.
 
     Attributes
     ----------
@@ -219,27 +219,13 @@ class SkyModel(object):
         Array representing the variance associated with the sky model.
         It must have the same dimensions as `intensity`.
     continuum : np.ndarray
-        Array representing the continuuum emission of the sky model.
-    sky_lines: np.ndarray
-        1-D array representing the wavelength of a collection of sky emission
-        lines expressed in angstrom. This is used for fitting the emission lines
-        from the (continuum-substracted) intensity.
+        Array representing the continuum emission of the sky model.
+    sky_lines : np.ndarray
+        1-D array of sky-emission line wavelengths (Angstrom).
     verbose : bool, optional
         If True, print messages during execution. Default is True.
-
-    Methods
-    -------
-    subtract(data, variance, axis=-1)
-        Subtracts the sky model from the given data.
-
-    subtract_pca()
-        Placeholder for PCA subtraction method.
-
-    vprint(*messages)
-        Print messages if `verbose` is True.
     """
 
-    verbose = True
     sky_lines = None
 
     def __init__(self, **kwargs):
@@ -249,42 +235,45 @@ class SkyModel(object):
         Parameters
         ----------
         **kwargs : dict, optional
-            Dictionary of parameters to initialize the SkyModel.
-            Accepted keys are:
-
-            - wavelength : np.ndarray
-                1-D array representing the wavelengths of the sky model.
-            - intensity : np.ndarray
-                Array representing the intensity of the sky model.
-            - variance : np.ndarray
-                Array representing the variance associated with the sky model.
-            - verbose : bool
-                If True, print messages during execution. Default is True.
+            Accepted keys:
+            wavelength : np.ndarray
+                Wavelength grid (Angstrom).
+            intensity : np.ndarray
+                Sky intensity model sampled on `wavelength`.
+            variance : np.ndarray
+                Variance of the sky model (same shape as `intensity`).
+            continuum : np.ndarray
+                Continuum component of the sky model (same shape as `intensity`).
+            verbose : bool
+                If True, print messages during execution.
         """
+        self.verbose = kwargs.get('verbose', True)
         self.wavelength = check_unit(kwargs.get('wavelength', None), u.angstrom)
         self.intensity = check_unit(kwargs.get('intensity', None))
         self.variance = check_unit(kwargs.get('variance', None))
         self.continuum = check_unit(kwargs.get('continuum', None))
 
-    def substract(self, data, variance, axis=-1, verbose=False):
+    def substract(self, data, variance, axis=-1):
         """
-        Subtracts the sky model from the given data.
+        Subtract the sky model from the given data.
 
         Parameters
         ----------
         data : np.ndarray
             Data array from which the sky will be subtracted.
         variance : np.ndarray
-            Array of variance data to include errors in determining the sky.
+            Variance array associated with `data`.
         axis : int, optional
-            Spectral direction of the data. Default is -1.
+            Spectral axis of `data`. Default is -1.
+        verbose : bool, optional
+            If True, print progress messages.
 
         Returns
         -------
         data_subs : np.ndarray
-            Data array after the sky model has been subtracted.
+            Data array after subtracting the sky model.
         var_subs : np.ndarray
-            Variance array after including the sky model variance.
+            Variance array after adding the sky-model variance.
         """
         if data.ndim == 3 and self.intensity.ndim == 1:
             skymodel_intensity = self.intensity[:, np.newaxis, np.newaxis]
@@ -297,19 +286,277 @@ class SkyModel(object):
             skymodel_var = self.variance
         else:
             vprint(
-                f"Data dimensions ({data.shape}) cannot be reconciled with "
-                + f"sky mode ({self.intensity.shape})")
+                f"Data dimensions {data.shape} cannot be reconciled with "
+                f"sky model {None if self.intensity is None else self.intensity.shape}"
+            )
+            raise ValueError("Incompatible data/model shapes for subtraction")
+
         data_subs = data - skymodel_intensity
         var_subs = variance + skymodel_var
         return data_subs, var_subs
 
-    def substract_pca():
+    def subtract_pca(self,
+                     data,
+                     variance=None,
+                     axis=-1,
+                     mask=None,
+                     sample_mask=None,
+                     robust_center=True,
+                     standardize=False,
+                     n_components='auto',
+                     explained_variance_thresh=0.995,
+                     max_components=None,
+                     return_model=False):
         """
-        Placeholder for PCA subtraction method.
+        Subtract residual sky using PCA components learned from the exposure.
 
-        This method is not yet implemented.
+        This method first subtracts the provided 1-D/2-D sky model (if present),
+        then learns empirical residual templates via PCA (SVD) from a subset of
+        spectra that are likely sky-dominated (or from `sample_mask` if given).
+        Each spectrum is projected onto these components and the reconstruction
+        is removed, reducing structured sky residuals (e.g., line wings, LSF
+        mismatch, small wavelength-calibration drifts).
+
+        The current implementation supports optional variance weighting and
+        wavelength/object masks.
+
+        Parameters
+        ----------
+        data : np.ndarray
+            Input data cube or slit/RSS with a known spectral axis (see `axis`).
+            Shape can be (..., n_wave) or (n_wave, ...).
+        variance : np.ndarray, optional
+            Variance array, same shape as `data`. If provided, it is used as
+            weights ~ 1/sigma for centering and projection, and returned unchanged.
+            Default is None.
+        axis : int, optional
+            Index of the spectral axis in `data`. Default is -1.
+        mask : np.ndarray of bool, optional
+            Boolean mask with same shape as `data` where True marks pixels to
+            ignore (e.g., strong object features, bad pixels). Default is None.
+        sample_mask : np.ndarray of bool, optional
+            Boolean mask over the non-spectral axes selecting which *spectra*
+            (rows in the unfolded 2D matrix) to use to *train* the PCA.
+            If None, a robust low-flux selection is used automatically.
+        robust_center : bool, optional
+            If True, remove a robust per-wavelength center (biweight location)
+            before PCA. If False, remove the simple mean. Default is True.
+        standardize : bool, optional
+            If True, divide each wavelength channel by its robust scale
+            (biweight scale) before PCA. Default is False.
+        n_components : int or 'auto', optional
+            Number of principal components to keep. If 'auto', the smallest
+            number of components reaching `explained_variance_thresh` is used.
+            Default is 'auto'.
+        explained_variance_thresh : float, optional
+            Cumulative explained-variance threshold when `n_components='auto'`.
+            Default is 0.995 (99.5%).
+        max_components : int, optional
+            Upper bound on components if `n_components='auto'`. Default is None.
+        return_model : bool, optional
+            If True, also return a dict with PCA model elements (mean, scale,
+            components, scores, explained variance, training indices).
+
+        Returns
+        -------
+        data_clean : np.ndarray
+            Data after subtracting the PCA reconstruction of residual sky.
+            Same shape as `data`.
+        variance : np.ndarray or None
+            The input `variance` returned unchanged (placeholder—full
+            propagation of PCA fit uncertainty is non-trivial).
+        model : dict, optional
+            Returned only if `return_model=True`. Contains:
+            - 'mean' : (n_wave,) robust/mean center used
+            - 'scale' : (n_wave,) scale if `standardize=True`, else ones
+            - 'components' : (n_comp, n_wave) PCA eigenvectors
+            - 'explained_variance_ratio' : (n_comp,) variance fractions
+            - 'scores' : (n_spectra, n_comp) projection coefficients
+            - 'train_idx' : indices of spectra used to train PCA
         """
-        pass
+        # Move spectral axis to last and flatten spatial axes
+        data = np.moveaxis(data, axis, -1)
+        shape_spatial = data.shape[:-1]
+        n_spec = int(np.prod(shape_spatial))
+        n_wave = data.shape[-1]
+        X = data.reshape(n_spec, n_wave)
+
+        if variance is not None:
+            variance = np.moveaxis(variance, axis, -1).reshape(n_spec, n_wave)
+            w = 1.0 / np.clip(variance, a_min=np.finfo(float).tiny, a_max=None)
+        else:
+            w = np.ones_like(X)
+
+        if mask is not None:
+            mask = np.moveaxis(mask, axis, -1).reshape(n_spec, n_wave)
+            # zero weight where masked
+            w = np.where(mask, 0.0, w)
+
+
+        # --- Require a 1-D global sky model to build emission weights ------------
+        if self.intensity is None or np.ndim(self.intensity) != 1:
+            raise ValueError("PCA requires a 1-D global sky model in `self.intensity`.")
+
+        sky_model = np.broadcast_to(np.asarray(self.intensity), (n_spec, n_wave))
+        X0 = X - sky_model
+
+        sky_continuum, sky_continuum_offset = ContinuumEstimator.lower_envelope(
+            self.wavelength, self.intensity)
+        sky_elines = self.intensity - sky_continuum
+        low_lim, up_lim = np.nanpercentile(sky_elines, [5, 90])
+        up_lim = up_lim if np.isfinite(up_lim) and up_lim > 0 else (np.nanmax(sky_elines) or 1.0)
+        eline_weights = np.clip(sky_elines - low_lim, 0.0, up_lim) / up_lim
+        eline_weights = np.nan_to_num(eline_weights, nan=0.0, posinf=0.0, neginf=0.0)
+        eline_weights = scipy.ndimage.gaussian_filter(eline_weights, 3)        
+
+        continuum = np.array([ContinuumEstimator.sigma_clipped_mean_continuum(
+            s, weights=1 - eline_weights) for s in X0])
+        
+        # Remove continuum to only account for line residuals
+        X0 -= continuum
+
+        # Select wavelength columns dominated by emission lines
+        eline_weight_threshold = 0.25
+        cols = np.where(eline_weights >= float(eline_weight_threshold))[0]
+        if cols.size < 3:
+            # Nothing meaningful to refine: return only model-subtracted data
+            data_clean = np.moveaxis(X0.reshape((*shape_spatial, n_wave)), -1, axis)
+            return (data_clean, variance) if not return_model else (
+                data_clean, variance, dict(columns=cols, eline_weights=eline_weights)
+            )
+        
+        # Restrict matrices to emission-line columns
+        X0lines = X0[:, cols]
+        wlines = w[:, cols]
+        if variance is not None:
+            variance_lines = variance[:, cols]
+
+        # Choose training spectra for PCA
+        if sample_mask is None:
+            # Use low-total-flux spectra as "sky-like": 25% faintest by robust sum
+            with np.errstate(invalid='ignore'):
+                robust_sum = np.nanmedian(np.where(wlines > 0, X0lines, np.nan), axis=1)
+            q25 = np.nanpercentile(robust_sum, 25)
+            train_idx = np.where(robust_sum <= q25)[0]
+        else:
+            # sample_mask is over spatial axes, reshape into 1D index
+            sm = np.asarray(sample_mask).reshape(-1)
+            train_idx = np.where(sm)[0]
+
+        if train_idx.size < 5:
+            vprint("PCA training set too small; skipping PCA subtraction.")
+            data_clean = np.moveaxis(X0.reshape((*shape_spatial, n_wave)), -1, axis)
+            return data_clean, variance if variance is not None else None
+
+        Xt = X0lines[train_idx]
+        wt = wlines[train_idx]
+
+        # Robust per-wavelength centering (and optional scaling)
+        if robust_center:
+            # Biweight location/scale; fall back to median/MAD if not available
+            try:
+                mu = stats.biweight.biweight_location(np.where(wt > 0, Xt, np.nan), axis=0)
+                if standardize:
+                    sigma = stats.biweight.biweight_scale(np.where(wt > 0, Xt, np.nan), axis=0)
+                else:
+                    sigma = np.ones(Xt.shape[1], dtype=float)
+            except Exception:
+                mu = np.nanmedian(np.where(wt > 0, Xt, np.nan), axis=0)
+                if standardize:
+                    mad = 1.4826 * np.nanmedian(np.abs(Xt - mu), axis=0)
+                    sigma = np.where(mad > 0, mad, 1.0)
+                else:
+                    sigma = np.ones(Xt.shape[1], dtype=float)
+        else:
+            # Weighted mean
+            denom = np.sum(wt, axis=0)
+            mu = np.where(denom > 0, np.sum(wt * Xt, axis=0) / denom, 0.0)
+            sigma = np.ones(n_wave, dtype=float) if not standardize else np.sqrt(
+                np.where(denom > 0, np.sum(wt * (Xt - mu) ** 2, axis=0) / denom, 1.0)
+            )
+            sigma = np.where(sigma > 0, sigma, 1.0)
+
+        def center_scale(Z):
+            return (Z - mu) / sigma
+
+        Zt = center_scale(Xt)
+
+        # Replace NaNs (masked/zero-weight columns) with 0 before SVD
+        Zt = np.where(np.isfinite(Zt), Zt, 0.0)
+
+        # PCA via SVD on training set (rows: spectra, cols: wavelength)
+        # Zt = U S Vt  -> components (eigenvectors in wavelength space) are rows of Vt
+        U, S, Vt = np.linalg.svd(Zt, full_matrices=False)
+        components = Vt  # (n_comp_max, n_wave)
+
+        # Explained variance ratio from S
+        # Var explained by k-th component = S[k]^2 / (n_samples - 1)
+        eigvals = (S ** 2) / max(Zt.shape[0] - 1, 1)
+        total_var = np.sum(np.var(Zt, axis=0, ddof=1))
+        evr = np.where(total_var > 0, eigvals / total_var, 0.0)
+        cum = np.cumsum(evr)
+
+        if n_components == 'auto':
+            n_comp = int(np.searchsorted(cum, explained_variance_thresh) + 1)
+        else:
+            n_comp = int(n_components)
+
+        if max_components is not None:
+            n_comp = min(n_comp, int(max_components))
+        n_comp = max(0, min(n_comp, components.shape[0]))
+
+        components = components[:n_comp]  # (n_comp, n_wave)
+        evr = evr[:n_comp]
+
+        # Project ALL spectra and reconstruct PCA residuals
+        Z = center_scale(X0lines)
+        Z = np.where(np.isfinite(Z), Z, 0.0)
+
+        # Weighted least squares projection if variance provided:
+        # For diagonal W, solve C (Z^T W) approximately via normal equations per spectrum.
+        if variance is None:
+            # simple dot: scores = Z @ components.T
+            scores = Z @ components.T
+        else:
+            # weights per spectrum per wavelength
+            scores = np.empty((n_spec, n_comp), dtype=float)
+            for i in range(n_spec):
+                Wi = np.diag(wlines[i])  # small n_wave may make this ok; for large, optimize
+                Ci = components  # (n_comp, n_wave)
+                # Solve (C W C^T) a = C W z
+                A = Ci @ Wi @ Ci.T
+                b = Ci @ Wi @ Z[i]
+                # regularize slightly for numerical stability
+                A.flat[::A.shape[0]+1] += 1e-8
+                ai = np.linalg.solve(A, b)
+                scores[i] = ai
+
+        Zrec = scores @ components  # (n_spec, n_wave)
+        Xreclines = Zrec * sigma + mu    # undo centering/scaling
+
+        # Embed into full wavelength grid and subtract
+        Xrec = np.zeros_like(X0)
+        Xrec[:, cols] = Xreclines
+        X_clean = X0 - Xrec + continuum
+
+        # Reshape back to input shape and axis
+        data_clean = X_clean.reshape((*shape_spatial, n_wave))
+        data_clean = np.moveaxis(data_clean, -1, axis)
+
+        model = None
+        if return_model:
+            model = dict(
+            columns=cols,
+            eline_weights=eline_weights,
+            mean=mu,
+            scale=sigma,
+            components=components,
+            explained_variance_ratio=evr,
+            scores=scores,
+            train_idx=train_idx,
+        )
+
+        return (data_clean, variance, model) if return_model else (data_clean, variance)
 
     def remove_continuum(self, cont_estimator="median", cont_estimator_args=None):
         """
