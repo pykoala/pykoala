@@ -23,7 +23,7 @@ class TestSkyCorrections(unittest.TestCase):
         model = SkyModel(wavelength=wavelength, intensity=np.random.normal(size=wavelength.size) << u.adu)
         model.load_sky_lines()
         fig = model.plot_sky_model()
-        # TODO: Are we going to use substract, substract_pca, remove_continuum, fit_emission_lines?
+        # TODO: Are we going to use subtract, subtract_pca, remove_continuum, fit_emission_lines?
 
     def test_sky_from_object(self):
         sky_model = SkyFromObject(mock_rss())
