@@ -8,21 +8,17 @@ the contribution of the sky emission in DataContainers.
 import numpy as np
 import copy
 import os
-from time import time
 import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm, Normalize
+from matplotlib.colors import Normalize
 import scipy
+import scipy.signal
 # =============================================================================
 # Astropy and associated packages
 # =============================================================================
 from astropy.io import fits
 from astropy.modeling import models, fitting
-from astropy.table import QTable
 from astropy import stats
 from astropy import units as u
-import scipy.ndimage
-import scipy.signal
-
 # =============================================================================
 # PyKOALA
 # =============================================================================
@@ -31,297 +27,67 @@ from pykoala.plotting.utils import new_figure, plot_image, plot_fibres
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.corrections.throughput import Throughput
 from pykoala.corrections.wavelength import WavelengthOffset
-from pykoala.data_container import DataContainer, RSS
-from pykoala.ancillary import check_unit, symmetric_background
-
-
-#TODO: Move to a math module
-class BackgroundEstimator(object):
-    """
-    Class for estimating background and its dispersion using different statistical methods.
-    """
-
-    @staticmethod
-    def mean(rss_intensity):
-        """
-        Compute the mean and standard deviation of the spectra.
-
-        Parameters
-        ----------
-        rss_intensity : np.ndarray
-            Input array (n_fibres x n_wavelength).
-
-        Returns
-        -------
-        background : np.ndarray
-            The computed background (mean) of the data.
-        background_sigma : np.ndarray
-            The dispersion (standard deviation) of the data.
-        """
-        background = np.nanmean(rss_intensity, axis=0)
-        background_sigma = np.nanstd(rss_intensity, axis=0)
-        return background, background_sigma
-
-    @staticmethod
-    def percentile(rss_intensity, percentiles=[16, 50, 84]):
-        """
-        Compute the background and dispersion from specified percentiles.
-
-        Parameters
-        ----------
-        rss_intensity : np.ndarray
-            Input array (n_fibres x n_wavelength).
-        percentiles : list of float, optional
-            The percentiles to use for computation. Default is [16, 50, 84].
-
-        Returns
-        -------
-        background : np.ndarray
-            The computed background (median) of the data.
-        background_sigma : np.ndarray
-            The dispersion (half the interpercentile range) of the data.
-        """
-        plow, background, pup = np.nanpercentile(
-            rss_intensity, percentiles, axis=0)
-        background_sigma = (pup - plow) / 2
-        return background, background_sigma
-
-    @staticmethod
-    def mad(rss_intensity):
-        """
-        Estimate the background from the median and the dispersion from
-        the Median Absolute Deviation (MAD) along the given axis.
-
-        Parameters
-        ----------
-        rss_intensity : np.ndarray
-            Input array (n_fibres x n_wavelength).
-
-        Returns
-        -------
-        background : np.ndarray
-            The computed background (median) of the data.
-        background_sigma : np.ndarray
-            The dispersion (scaled MAD) of the data.
-        """
-        background = np.nanmedian(rss_intensity, axis=0)
-        mad = np.nanmedian(np.abs(rss_intensity - background[np.newaxis:]),
-                           axis=0)
-        background_sigma = 1.4826 * mad
-        return background, background_sigma
-
-    @staticmethod
-    def biweight(rss_intensity):
-        """
-        Estimate the background and dispersion using the biweight method.
-
-        Parameters
-        ----------
-        rss_intensity : np.ndarray
-            Input array (n_fibres x n_wavelength).
-
-        Returns
-        -------
-        background : np.ndarray
-            Computed background (location) of the data.
-        background_sigma : np.ndarray
-            Dispersion (scale) of the data.
-        """
-        background = stats.biweight_location(rss_intensity, axis=0)
-        background_sigma = stats.biweight_scale(rss_intensity, axis=0)
-        return background, background_sigma
-
-    @staticmethod
-    def mode(rss_intensity):
-        """
-        Estimate the background and dispersion using the mode.
-
-        Parameters
-        ----------
-        rss_intensity : np.ndarray
-            Input array (n_fibres x n_wavelength).
-
-        Returns
-        -------
-        background : np.ndarray
-            The computed background sky.
-        background_sigma : np.ndarray
-            Scaled MAD of the data behind the mode.
-        """
-        mode = np.empty_like(rss_intensity[0])
-        sigma = np.empty_like(mode)
-        for wavelength_index in range(mode.size):
-            fibre_flux = rss_intensity[:, wavelength_index]
-            mode[wavelength_index], dummy = symmetric_background(fibre_flux)
-            below_mode = fibre_flux < mode[wavelength_index]
-            sigma[wavelength_index] = 1.4826 * np.nanmedian(
-                mode[wavelength_index] - fibre_flux[below_mode])
-
-        return mode, sigma
-
-#TODO : Move to a math module
-# =============================================================================
-# Continuum estimators
-# =============================================================================
-class ContinuumEstimator:
-    """
-    Class for estimating the continuum of spectral data using different methods.
-
-    Methods
-    -------
-    medfilt_continuum(data, window_size=5)
-        Estimate the continuum using a median filter.
-
-    pol_continuum(data, wavelength, pol_order=3, **polfit_kwargs)
-        Estimate the continuum using polynomial fitting.
-    """
-
-    @staticmethod
-    def medfilt_continuum(data, window_size=5):
-        """
-        Estimate the continuum using a median filter.
-
-        Parameters
-        ----------
-        data : np.ndarray
-            The input data array for which to compute the continuum.
-        window_size : int, optional
-            The size of the window over which to compute the median filter. Default is 5.
-
-        Returns
-        -------
-        continuum : np.ndarray
-            The estimated continuum of the input data.
-        """
-        continuum = scipy.signal.medfilt(data, window_size)
-        return continuum
-
-    @staticmethod
-    def percentile_continuum(data, percentile, window_size=5):
-        """
-        Estimate the continuum using a percentile filter.
-
-        Parameters
-        ----------
-        data : np.ndarray
-            The input data array for which to compute the continuum.
-        percentile : list or tuple
-            The percentiles (0-100) to use for the continuum estimation.
-        window_size : int, optional
-            The size of the window over which to compute the percentile filter. Default is 5.
-
-        Returns
-        -------
-        continuum : np.ndarray
-            The estimated continuum of the input data.
-        """
-        continuum = scipy.ndimage.percentile_filter(data, percentile,
-                                                    window_size)
-        return continuum
-
-    @staticmethod
-    def pol_continuum(data, wavelength, pol_order=3, **polfit_kwargs):
-        """
-        Estimate the continuum using polynomial fitting.
-
-        Parameters
-        ----------
-        data : np.ndarray
-            The input data array for which to compute the continuum.
-        wavelength : np.ndarray
-            The wavelength array corresponding to the data.
-        pol_order : int, optional
-            The order of the polynomial to fit. Default is 3.
-        **polfit_kwargs : dict, optional
-            Additional keyword arguments to pass to `np.polyfit`.
-
-        Returns
-        -------
-        continuum : np.ndarray
-            The estimated continuum of the input data.
-        """
-        fit = np.polyfit(wavelength, data, pol_order, **polfit_kwargs)
-        polynomial = np.poly1d(fit)
-        return polynomial(wavelength)
-
-    default_min_separation = 10
-
-    @classmethod
-    def lower_envelope(self, x, y, min_separation=None):
-        '''
-        #TODO --> Refactor
-        Fit lower envelope of a single spectrum:
-        1) Find local minima, with a minimum separation `min_separation`.
-        2) Interpolate linearly between them.
-        3) Add "typical" (~median) offset.
-        '''
-        if min_separation is None:
-            min_separation = self.default_min_separation
-        valleys = []
-        y[np.isnan(y)] = np.inf
-        for i in range(min_separation, y.size-min_separation-1):
-            if np.argmin(y[i-min_separation:i+min_separation+1]) == min_separation:
-                valleys.append(i)
-        y[~np.isfinite(y)] = np.nan
-
-        continuum = np.fmin(y, np.interp(x, x[valleys], y[valleys]))
-
-        offset = y - continuum
-        offset = np.nanpercentile(offset[offset > 0], np.linspace(1, 50, 51))
-        density = (np.arange(offset.size) + 1) / offset
-        offset = np.median(offset[density > np.max(density)/2])
-
-        return continuum+offset, offset
-
-#TODO: Documentation
-class ContinuumModel:
-
-    def __init__(self, dc: DataContainer, min_separation=None):
-        self.update(dc, min_separation)
-
-    # TODO: Don't assume RSS format (intensity[spec_id, wavelength])
-    #       def update(self, dc:DataContainer, min_separation=None):
-    def update(self, dc: RSS, min_separation=None):
-        n_spectra = dc.intensity.shape[0]
-        self.intensity = np.zeros_like(dc.intensity)
-        self.scale = np.zeros(n_spectra)
-
-        print(f"> Find continuum for {n_spectra} spectra:")
-        t0 = time()
-
-        for i in range(n_spectra):
-            self.intensity[i], self.scale[i] = ContinuumEstimator.lower_envelope(
-                dc.wavelength, dc.intensity[i], min_separation)
-
-        print(f"  Done ({time()-t0:.3g} s)")
-        self.strong_sky_lines = self.detect_lines(dc)
-
-    def detect_lines(self, dc: DataContainer, n_sigmas=3):
-        SN = (dc.intensity - self.intensity) / self.scale[:, np.newaxis]
-        SN_p16, SN_p50, SN_p84 = np.nanpercentile(SN, [16, 50, 84], axis=0)
-
-        line_mask = SN_p16 - (n_sigmas-1)*(SN_p84-SN_p16)/2 > 0
-        line_mask[0] = False
-        line_mask[-1] = False
-
-        line_left = np.where(~line_mask[:-1] & line_mask[1:])[0]
-        line_right = np.where(line_mask[:-1] & ~line_mask[1:])[0]
-        line_right += 1
-        print(f'  {line_left.size} strong sky lines ({np.count_nonzero(line_mask)} out of {dc.wavelength.size} wavelengths)')
-        return QTable((line_left, line_right), names=('left', 'right'))
+from pykoala.data_container import RSS
+from pykoala.utils.signal import BackgroundEstimator, ContinuumEstimator
+from pykoala.ancillary import check_unit
 
 
 # =============================================================================
 # Line Spread Function
 # =============================================================================
-#TODO: Documenation and move to spectra module
-class LSF_estimator:
+
+class SkyLineLSFestimator:
+    """
+    Estimate the Line Spread Function (LSF) of a spectrum from sky emission lines.
+
+    This class uses interpolation of known sky emission line wavelengths 
+    over an observed spectrum to construct an average line profile (LSF).
+    The LSF can then be characterised by its shape and full width at half maximum (FWHM).
+
+    Parameters
+    ----------
+    wavelength_range : float
+        Half-width of the wavelength window (in the same units as the input spectrum)
+        around each sky line to extract the line profile.
+    resolution : float
+        Sampling step in wavelength used to build the line profile grid.
+        Defines the resolution of the estimated LSF.
+
+    Attributes
+    ----------
+    delta_lambda : ndarray of shape (n,)
+        Array of relative wavelength offsets centred at 0, 
+        covering the interval ``[-wavelength_range, wavelength_range]`` 
+        with step size defined by `resolution`.
+    """
 
     def __init__(self, wavelength_range, resolution):
         self.delta_lambda = np.linspace(-wavelength_range, wavelength_range, int(
             np.ceil(2 * wavelength_range / resolution)) + 1)
 
     def find_LSF(self, line_wavelengths, wavelength, intensity):
+        """
+        Estimate the median line spread function (LSF) from a set of sky emission lines.
+
+        For each input line, the method interpolates the observed spectrum
+        around the line wavelength, normalises it, and then stacks all
+        line profiles. The median across all stacked profiles is taken
+        as the final LSF estimate.
+
+        Parameters
+        ----------
+        line_wavelengths : array_like of shape (m,)
+            Central wavelengths of the sky emission lines used for LSF estimation.
+        wavelength : array_like of shape (n,)
+            Wavelength grid of the observed spectrum.
+        intensity : array_like of shape (n,)
+            Intensity values of the observed spectrum at the given `wavelength`.
+
+        Returns
+        -------
+        lsf : ndarray of shape (k,)
+            Normalised median LSF profile as a function of `delta_lambda`.
+        """
         line_spectra = np.zeros(
             (len(line_wavelengths), self.delta_lambda.size))
         for i, line_wavelength in enumerate(line_wavelengths):
@@ -331,9 +97,25 @@ class LSF_estimator:
         return self.normalise(np.nanmedian(line_spectra, axis=0))
 
     def normalise(self, x):
+        """
+        Normalise a line profile to its central value after continuum subtraction.
+
+        The continuum is estimated using the biweight location and subtracted 
+        from the profile. The profile is then normalised by its central value.
+
+        Parameters
+        ----------
+        x : ndarray of shape (n,)
+            Input spectrum or line profile.
+
+        Returns
+        -------
+        normed_x : ndarray of shape (n,)
+            Normalised profile. If the central value is non-positive,
+            the profile is set to NaN.
+        """
         x -= stats.biweight.biweight_location(x)  # subtract continuum
-        # x -= np.median(x)
-        norm = x[x.size//2]  # normalise at centre
+        norm = x[x.size // 2]  # normalise at centre
         if norm > 0:
             x /= norm
         else:
@@ -341,18 +123,34 @@ class LSF_estimator:
         return x
 
     def find_FWHM(self, profile):
-        threshold = np.max(profile)/2
+        """
+        Compute the full width at half maximum (FWHM) of a line profile.
+
+        The FWHM is estimated as the distance in `delta_lambda` between
+        the left and right half-maximum points.
+
+        Parameters
+        ----------
+        profile : ndarray of shape (n,)
+            Input line profile as a function of `delta_lambda`.
+
+        Returns
+        -------
+        fwhm : float
+            Estimated FWHM of the input profile in wavelength units.
+        """
+        threshold = np.max(profile) / 2
         left = np.max(
             self.delta_lambda[(self.delta_lambda < 0) & (profile < threshold)])
         right = np.min(
             self.delta_lambda[(self.delta_lambda > 0) & (profile < threshold)])
-        return right-left
+        return right - left
 
 
 # =============================================================================
 # Sky lines library
 # =============================================================================
-# TODO : this should be an instance of EMission lines in the spectra module
+
 def uves_sky_lines():
     """
     Library of sky emission lines measured with UVES@VLT.
