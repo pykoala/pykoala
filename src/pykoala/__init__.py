@@ -28,13 +28,31 @@ def log_into_file(filename, logger_name='pykoala', level='INFO'):
     logger.setLevel(level.upper())
 
 
-def vprint(msg, *args, **kwargs):
+def vprint(*mssg, level="INFO", verbose=True):
+    """Print a message to the logger.
+    
+    Parameters
+    ----------
+    mssg : str or any
+        The message to log. Can be a string or any object that can be converted to a string.
+    level : int or str, optional
+        The logging level to use. Can be an integer (e.g., logging.INFO) or
+        a string (e.g., 'INFO', 'DEBUG'). Default is "INFO".
+    verbose : bool, optional
+        If True, the message will be logged. If False, it will not log anything.
+        Default is True.
     """
-    Convenience function for using with the pykoala generic logger.
-    """
-    logger = logging.getLogger('pykoala')
-    print_method = getattr(logger, kwargs.get('level', 'info').lower())
-    print_method(msg, *args, **kwargs)
+    if verbose:
+        if isinstance(level, str): 
+            level = getattr(logging, level.upper())
+            if level is None:
+                raise ValueError(f"Unrecognized log level: {level}")
+            # Get the numeric value of the level
+            level = level.numerator
+        if isinstance(mssg, str):
+            pykoala_logger.log(level, mssg)
+        else:
+            pykoala_logger.log(level, " ".join(map(str, mssg)))
 
 
 class VerboseMixin():
