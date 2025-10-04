@@ -285,10 +285,16 @@ class ContinuumEstimator:
     medfilt_continuum(data, window_size=5)
         Estimate the continuum using a median filter.
 
+    percentile_continuum(data, percentile, window_size=5)
+        Estimate the continuum using a percentile filter.
+
     pol_continuum(data, wavelength, pol_order=3, **polfit_kwargs)
         Estimate the continuum using polynomial fitting.
-    """
 
+    sigma_clipped_mean_continuum(data, window_size=51, sigma=3.0, max_iters=3,
+                                 weights=None, min_valid=3, boundary='reflect')
+        Estimate the continuum with a sliding-window sigma-clipped (weighted) mean.
+    """
     @staticmethod
     def medfilt_continuum(data, window_size=5):
         """
@@ -387,3 +393,147 @@ class ContinuumEstimator:
         offset = np.median(offset[density > np.max(density) / 2])
 
         return continuum + offset, offset
+
+    @staticmethod
+    def sigma_clipped_mean_continuum(
+        data,
+        window_size=11,
+        kappa_sigma=3.0,
+        max_iters=3,
+        weights=None,
+        min_valid=3,
+        boundary="reflect",
+    ):
+        """
+        Estimate the continuum using a sliding-window sigma-clipped (weighted) mean.
+
+        For each wavelength pixel, this method takes a local window centered on
+        that pixel, performs iterative sigma clipping (with optional weights),
+        and returns the weighted mean of the surviving samples. Windows with
+        fewer than `min_valid` surviving samples after clipping are set to NaN
+        and later filled by linear interpolation along the spectrum.
+
+        Parameters
+        ----------
+        data : np.ndarray, shape (n,)
+            1-D array with the input spectrum. NaNs are ignored.
+        window_size : int, optional
+            Size of the sliding window (in pixels). If even, it is increased by 1
+            to make it odd so it can be centered. Default is 11.
+        kappa_sigma : float, optional
+            Clipping threshold in units of the (weighted) standard deviation.
+            Default is 3.0.
+        max_iters : int, optional
+            Maximum number of sigma-clipping iterations per window. Default is 3.
+        weights : np.ndarray or None, shape (n,), optional
+            Per-sample non-negative weights (e.g., inverse variance). Zeros or
+            non-finite values exclude samples. If None, all valid samples are
+            equally weighted. Default is None.
+        min_valid : int, optional
+            Minimum number of valid (unclipped) samples required to compute the
+            window mean. Windows that fail this criterion yield NaN (later
+            interpolated). Default is 3.
+        boundary : {'reflect', 'nearest', 'wrap', 'edge', 'constant'}, optional
+            Padding mode used at the edges before forming windows. 'nearest' is
+            treated as an alias of 'edge'. If 'constant' is used, constant values
+            of NaN are padded and thus ignored. Default is 'reflect'.
+
+        Returns
+        -------
+        continuum : np.ndarray, shape (n,)
+            Estimated continuum array. Any NaNs arising from insufficient valid
+            samples are linearly interpolated; if all values are NaN, the output
+            is all-NaN.
+
+        Notes
+        -----
+        The weighted mean and standard deviation for samples x with weights w are:
+        - mean = sum(w * x) / sum(w)
+        - std  = sqrt( sum(w * (x - mean)^2) / sum(w) )
+        """
+
+        x = np.asarray(data, dtype=float)
+        n = x.size
+        if n == 0:
+            return np.asarray([], dtype=float)
+
+        if weights is None:
+            w = np.ones_like(x, dtype=float)
+        else:
+            w = np.asarray(weights, dtype=float)
+            if w.shape != x.shape:
+                raise ValueError("`weights` must have the same shape as `data`.")
+            # negative/NaN/inf weights are set to 0 (ignored)
+            w = np.where(np.isfinite(w) & (w > 0), w, 0.0)
+
+        # ensure odd window size >= 3
+        win = int(window_size)
+        if win < 3:
+            raise ValueError("`window_size` must be >= 3.")
+        if win % 2 == 0:
+            win += 1
+        half = win // 2
+
+        # map boundary alias
+        pad_mode = "edge" if boundary == "nearest" else boundary
+        if pad_mode not in {"reflect", "edge", "wrap", "constant"}:
+            raise ValueError("Unsupported `boundary` mode: %r" % boundary)
+
+        # pad data and weights
+        if pad_mode == "constant":
+            xp = np.pad(x, (half, half), mode=pad_mode, constant_values=np.nan)
+            wp = np.pad(w, (half, half), mode=pad_mode, constant_values=0.0)
+        else:
+            xp = np.pad(x, (half, half), mode=pad_mode)
+            wp = np.pad(w, (half, half), mode=pad_mode)
+
+        cont = np.full(n, np.nan, dtype=float)
+
+        def wmean_wstd(vals, ww):
+            denom = np.sum(ww)
+            if denom <= 0:
+                return np.nan, np.nan
+            mu = np.sum(ww * vals) / denom
+            var = np.sum(ww * (vals - mu) ** 2) / denom
+            return mu, np.sqrt(var)
+
+        # main sliding window loop
+        for i in range(n):
+            xi = xp[i : i + win]
+            wi = wp[i : i + win]
+
+            # initial mask: finite values with positive weight
+            m = np.isfinite(xi) & (wi > 0)
+
+            if np.count_nonzero(m) < min_valid:
+                cont[i] = np.nan
+                continue
+
+            # iterative sigma clipping
+            for _ in range(int(max_iters)):
+                mu, sd = wmean_wstd(xi[m], wi[m])
+                if not np.isfinite(mu) or not np.isfinite(sd) or sd == 0.0:
+                    break
+                new_m = m & (np.abs(xi - mu) <= kappa_sigma * sd)
+                if new_m.sum() == m.sum():
+                    # converged
+                    break
+                m = new_m
+                if m.sum() < min_valid:
+                    break
+
+            # final mean
+            if m.sum() >= min_valid:
+                mu, _ = wmean_wstd(xi[m], wi[m])
+                cont[i] = mu
+            else:
+                cont[i] = np.nan
+
+        # fill remaining NaNs by linear interpolation along the spectrum
+        idx = np.isfinite(cont)
+        if np.any(idx):
+            if not np.all(idx):
+                cont = np.interp(np.arange(n), np.nonzero(idx)[0], cont[idx])
+        # else: all NaN -> return as-is
+
+        return cont
