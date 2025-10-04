@@ -253,7 +253,7 @@ class SkyModel(object):
         self.variance = check_unit(kwargs.get('variance', None))
         self.continuum = check_unit(kwargs.get('continuum', None))
 
-    def substract(self, data, variance, axis=-1):
+    def subtract(self, data, variance, axis=-1):
         """
         Subtract the sky model from the given data.
 
@@ -1118,7 +1118,7 @@ class SkyFromObject(SkyModel):
         return fig
 
 # =============================================================================
-# Sky Substraction Correction
+# Sky subtraction Correction
 # =============================================================================
 
 
@@ -1231,10 +1231,10 @@ class SkySubsCorrection(CorrectionBase):
         self.vprint("Applying sky subtraction")
 
         if pca:
-            dc_out.intensity, dc_out.variance = self.skymodel.substract_pca(
+            dc_out.intensity, dc_out.variance = self.skymodel.subtract_pca(
                 dc_out.intensity, dc_out.variance)
         else:
-            dc_out.intensity, dc_out.variance = self.skymodel.substract(
+            dc_out.intensity, dc_out.variance = self.skymodel.subtract(
                 dc_out.intensity, dc_out.variance)
 
         self.record_correction(dc_out, status='applied')
