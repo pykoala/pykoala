@@ -9,14 +9,14 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
-import scipy
-import scipy.signal
+from scipy.signal import correlate, fftconvolve
+from scipy.ndimage import gaussian_filter
 # =============================================================================
 # Astropy and associated packages
 # =============================================================================
 from astropy.io import fits
 from astropy.modeling import models, fitting
-from astropy import stats
+from astropy.stats.biweight import biweight_location, biweight_scale
 from astropy import units as u
 # =============================================================================
 # PyKOALA
@@ -29,6 +29,7 @@ from pykoala.corrections.wavelength import WavelengthOffset
 from pykoala.data_container import RSS
 from pykoala.utils.signal import BackgroundEstimator, ContinuumEstimator
 from pykoala.utils.math import std_from_mad
+from pykoala.utils.spectra import mask_lines
 from pykoala.ancillary import check_unit
 
 
@@ -114,7 +115,7 @@ class SkyLineLSFestimator:
             Normalised profile. If the central value is non-positive,
             the profile is set to NaN.
         """
-        x -= stats.biweight.biweight_location(x)  # subtract continuum
+        x -= biweight_location(x)  # subtract continuum
         norm = x[x.size // 2]  # normalise at centre
         if norm > 0:
             x /= norm
@@ -250,28 +251,27 @@ class SkyModel(VerboseMixin):
         if "logger" in kwargs:
             self.logger = kwargs["logger"]
 
-    def subtract(self, data, variance, axis=-1):
+    def subtract(self, data, variance):
         """
-        Subtract the sky model from the given data.
+        Subtract the sky model from an array.
 
         Parameters
         ----------
-        data : np.ndarray
-            Data array from which the sky will be subtracted.
-        variance : np.ndarray
-            Variance array associated with `data`.
-        axis : int, optional
-            Spectral axis of `data`. Default is -1.
-        verbose : bool, optional
-            If True, print progress messages.
+        data : ndarray
+            Input array containing spectra. The spectral dimension is given by `axis`.
+        variance : ndarray
+            Variance associated with `data` (same shape).
 
         Returns
         -------
-        data_subs : np.ndarray
-            Data array after subtracting the sky model.
-        var_subs : np.ndarray
-            Variance array after adding the sky-model variance.
+        data_subs : ndarray
+            Sky-subtracted data.
+        var_subs : ndarray
+            Variance after adding the sky-model variance.
         """
+        if self.intensity is None or self.variance is None:
+            raise ValueError("Sky model `intensity` and `variance` must be set.")
+
         if data.ndim == 3 and self.intensity.ndim == 1:
             skymodel_intensity = self.intensity[:, np.newaxis, np.newaxis]
             skymodel_var = self.variance[:, np.newaxis, np.newaxis]
@@ -298,6 +298,8 @@ class SkyModel(VerboseMixin):
                      axis=-1,
                      mask=None,
                      sample_mask=None,
+                     use_line_atlas=True,
+                     eline_weight_threshold=0.25,
                      robust_center=True,
                      standardize=False,
                      n_components='auto',
@@ -380,7 +382,8 @@ class SkyModel(VerboseMixin):
 
         if variance is not None:
             variance = np.moveaxis(variance, axis, -1).reshape(n_spec, n_wave)
-            w = 1.0 / np.clip(variance, a_min=np.finfo(float).tiny, a_max=None)
+            w = np.where(np.isfinite(variance) & (variance > 0),
+                         1.0 / variance, 0.0)
         else:
             w = np.ones_like(X)
 
@@ -389,22 +392,31 @@ class SkyModel(VerboseMixin):
             # zero weight where masked
             w = np.where(mask, 0.0, w)
 
-
         # --- Require a 1-D global sky model to build emission weights ------------
         if self.intensity is None or np.ndim(self.intensity) != 1:
             raise ValueError("PCA requires a 1-D global sky model in `self.intensity`.")
 
         sky_model = np.broadcast_to(np.asarray(self.intensity), (n_spec, n_wave))
+        # Residuals
         X0 = X - sky_model
 
-        sky_continuum, sky_continuum_offset = ContinuumEstimator.lower_envelope(
-            self.wavelength, self.intensity)
-        sky_elines = self.intensity - sky_continuum
-        low_lim, up_lim = np.nanpercentile(sky_elines, [5, 90])
-        up_lim = up_lim if np.isfinite(up_lim) and up_lim > 0 else (np.nanmax(sky_elines) or 1.0)
-        eline_weights = np.clip(sky_elines - low_lim, 0.0, up_lim) / up_lim
-        eline_weights = np.nan_to_num(eline_weights, nan=0.0, posinf=0.0, neginf=0.0)
-        eline_weights = scipy.ndimage.gaussian_filter(eline_weights, 3)        
+        ## Sky line identification
+        if use_line_atlas:
+            self.load_sky_lines()
+            self.sky_lines, self.sky_lines_fwhm
+            skyline_mask = mask_lines(
+                self.wavelength, lines=self.sky_lines,
+                width= 2 * self.sky_lines_fwhm)
+            eline_weights = np.asarray(skyline_mask, dtype=float)
+        else:
+            sky_continuum, _ = ContinuumEstimator.lower_envelope(
+                self.wavelength, self.intensity)
+            sky_elines = self.intensity - sky_continuum
+            low_lim, up_lim = np.nanpercentile(sky_elines, [5, 90])
+            up_lim = up_lim if np.isfinite(up_lim) and up_lim > 0 else (np.nanmax(sky_elines) or 1.0)
+            eline_weights = np.clip(sky_elines - low_lim, 0.0, up_lim) / up_lim
+            eline_weights = np.nan_to_num(eline_weights, nan=0.0, posinf=0.0, neginf=0.0)
+            eline_weights = gaussian_filter(eline_weights, 3)        
 
         continuum = np.array([ContinuumEstimator.sigma_clipped_mean_continuum(
             s, weights=1 - eline_weights) for s in X0])
@@ -413,7 +425,6 @@ class SkyModel(VerboseMixin):
         X0 -= continuum
 
         # Select wavelength columns dominated by emission lines
-        eline_weight_threshold = 0.25
         cols = np.where(eline_weights >= float(eline_weight_threshold))[0]
         if cols.size < 3:
             # Nothing meaningful to refine: return only model-subtracted data
@@ -421,13 +432,10 @@ class SkyModel(VerboseMixin):
             return (data_clean, variance) if not return_model else (
                 data_clean, variance, dict(columns=cols, eline_weights=eline_weights)
             )
-        
+
         # Restrict matrices to emission-line columns
         X0lines = X0[:, cols]
         wlines = w[:, cols]
-        if variance is not None:
-            variance_lines = variance[:, cols]
-
         # Choose training spectra for PCA
         if sample_mask is None:
             # Use low-total-flux spectra as "sky-like": 25% faintest by robust sum
@@ -448,30 +456,11 @@ class SkyModel(VerboseMixin):
         Xt = X0lines[train_idx]
         wt = wlines[train_idx]
 
-        # Robust per-wavelength centering (and optional scaling)
-        if robust_center:
-            # Biweight location/scale; fall back to median/MAD if not available
-            try:
-                mu = stats.biweight.biweight_location(np.where(wt > 0, Xt, np.nan), axis=0)
-                if standardize:
-                    sigma = stats.biweight.biweight_scale(np.where(wt > 0, Xt, np.nan), axis=0)
-                else:
-                    sigma = np.ones(Xt.shape[1], dtype=float)
-            except Exception:
-                mu = np.nanmedian(np.where(wt > 0, Xt, np.nan), axis=0)
-                if standardize:
-                    mad = 1.4826 * np.nanmedian(np.abs(Xt - mu), axis=0)
-                    sigma = np.where(mad > 0, mad, 1.0)
-                else:
-                    sigma = np.ones(Xt.shape[1], dtype=float)
+        mu = biweight_location(np.where(wt > 0, Xt, np.nan), axis=0)
+        if standardize:
+            sigma = biweight_scale(np.where(wt > 0, Xt, np.nan), axis=0)
         else:
-            # Weighted mean
-            denom = np.sum(wt, axis=0)
-            mu = np.where(denom > 0, np.sum(wt * Xt, axis=0) / denom, 0.0)
-            sigma = np.ones(n_wave, dtype=float) if not standardize else np.sqrt(
-                np.where(denom > 0, np.sum(wt * (Xt - mu) ** 2, axis=0) / denom, 1.0)
-            )
-            sigma = np.where(sigma > 0, sigma, 1.0)
+            sigma = np.ones(Xt.shape[1], dtype=float)
 
         def center_scale(Z):
             return (Z - mu) / sigma
@@ -494,7 +483,7 @@ class SkyModel(VerboseMixin):
         cum = np.cumsum(evr)
 
         if n_components == 'auto':
-            n_comp = int(np.searchsorted(cum, explained_variance_thresh) + 1)
+            n_comp = np.searchsorted(cum, explained_variance_thresh) + 1
         else:
             n_comp = int(n_components)
 
@@ -505,20 +494,18 @@ class SkyModel(VerboseMixin):
         components = components[:n_comp]  # (n_comp, n_wave)
         evr = evr[:n_comp]
 
-        # Project ALL spectra and reconstruct PCA residuals
+        # Project all spectra and reconstruct PCA residuals
         Z = center_scale(X0lines)
         Z = np.where(np.isfinite(Z), Z, 0.0)
 
         # Weighted least squares projection if variance provided:
-        # For diagonal W, solve C (Z^T W) approximately via normal equations per spectrum.
         if variance is None:
-            # simple dot: scores = Z @ components.T
             scores = Z @ components.T
         else:
             # weights per spectrum per wavelength
             scores = np.empty((n_spec, n_comp), dtype=float)
             for i in range(n_spec):
-                Wi = np.diag(wlines[i])  # small n_wave may make this ok; for large, optimize
+                Wi = np.diag(wlines[i])
                 Ci = components  # (n_comp, n_wave)
                 # Solve (C W C^T) a = C W z
                 A = Ci @ Wi @ Ci.T
@@ -533,7 +520,7 @@ class SkyModel(VerboseMixin):
 
         # Embed into full wavelength grid and subtract
         Xrec = np.zeros_like(X0)
-        Xrec[:, cols] = Xreclines
+        Xrec[:, cols] = np.nan_to_num(Xreclines, nan=0.0)
         X_clean = X0 - Xrec + continuum
 
         # Reshape back to input shape and axis
@@ -769,11 +756,8 @@ class SkyModel(VerboseMixin):
             mappable = ax.imshow(self.variance**0.5, **im_args)
             plt.colorbar(mappable, ax=ax)
 
-        #if show:
-        #    plt.show(fig_name)
-        #else:
         if not show:
-            plt.close(fig_name)
+            plt.close(fig)
         return fig
 
 
@@ -804,7 +788,7 @@ class SkyFromObject(SkyModel):
                  sky_fibres=None, source_mask_kappa_sigma=None,
                  remove_cont=False,
                  cont_estimator='median', cont_estimator_args=None,
-                 qc_plots={'show': True}):
+                 qc_plots={'show': True}, **kwargs):
         """
         Initialize the SkyFromObject model.
 
@@ -836,11 +820,10 @@ class SkyFromObject(SkyModel):
         qc_plots: dict
             Dictionary to control QC plots.
         """
+        self.verbose = kwargs.get("verbose", True)
         self.vprint("Creating SkyModel from input Data Container")
-        self.dc = dc
-        # self.exptime = dc.info['exptime']
-        #vprint(f"Estimating sky background contribution from the {bckgr_estimator}...")
-        
+
+        self.dc = dc        
         self.qc_plots = {}
 
         bckg, bckg_sigma = self._estimate_background(
@@ -877,7 +860,7 @@ class SkyFromObject(SkyModel):
     def _estimate_background(self, bckgr_estimator, bckgr_params=None,
                             sky_fibres=None, source_mask_kappa_sigma=None,
                             sigma_clip=True, kappa_sigma=3, max_n_fibres=None,
-                            qc_plots={}):
+                            qc_plots=None):
         """
         Estimate the background.
 
@@ -942,7 +925,9 @@ class SkyFromObject(SkyModel):
         self.sky_fibres = sky_fibres
         #bckgr_params["axis"] = bckgr_params.get("axis", 0)
         #data = np.take(self.dc.rss_intensity, self.sky_fibres, bckgr_params["axis"])
-        data = self.dc.rss_intensity[self.sky_fibres]
+        data = self.dc.rss_intensity[self.sky_fibres].copy()
+
+        qc_plots = {} if qc_plots is None else dict(qc_plots)
 
         if (len(qc_plots) > 0) and (self.dc.intensity.ndim == 2):
             show_plot = qc_plots.get('show', True)
@@ -1037,6 +1022,8 @@ class SkyFromObject(SkyModel):
             2 * np.searchsorted(total_flux[sorted_by_flux], sky_flux))
         if max_n_fibres is not None:
             n_sky = min(max_n_fibres, n_sky)
+        if n_sky < 1:
+            raise ValueError("Not enough sky fibres")
 
         flux_threshold = total_flux[sorted_by_flux[n_sky-1]]
         sky_fibres = sorted_by_flux[:n_sky]
@@ -1786,7 +1773,7 @@ class WaveletFilter(object):
 
         x = np.nanmedian(rss.intensity, axis=0)  # median ~ sky spectrum
         x -= np.nanmean(x)
-        x = scipy.signal.correlate(x, x, mode='same')
+        x = correlate(x, x, mode='same')
         h = (np.count_nonzero(x > 0.5*np.nanmax(x)) + 1) // 2
         # h = 0
         self.scale = 2*h + 1
@@ -1852,7 +1839,7 @@ class WaveletFilter(object):
         s = self.scale
         x = np.nanmedian(self.filtered, axis=0)
         x[~ np.isfinite(x)] = 0
-        x = scipy.signal.fftconvolve(
+        x = fftconvolve(
             self.filtered, x[np.newaxis, ::-1], mode='same', axes=1)[:, mid-s:mid+s+1]
         idx = np.arange(x.shape[1])
         weight = np.where(x > 0, x, 0)
