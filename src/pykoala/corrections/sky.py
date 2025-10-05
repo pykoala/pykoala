@@ -1052,7 +1052,7 @@ class SkyFromObject(SkyModel):
         
         # Determine sky-dominated fibres
         if sky_fibres is None:
-            sky_fibres = self.dc.sky_fibres
+            sky_fibres = getattr(self.dc, "sky_fibres", None)
             if sky_fibres is None or len(sky_fibres) == 0:
                 sky_fibres = "auto"
         if isinstance(sky_fibres, str):
