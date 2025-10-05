@@ -243,13 +243,14 @@ class SkyModel(VerboseMixin):
             verbose : bool
                 If True, print messages during execution.
         """
+        if "logger" in kwargs:
+            self.logger = kwargs["logger"]
         self.verbose = kwargs.get('verbose', True)
+
         self.wavelength = check_unit(kwargs.get('wavelength', None), u.angstrom)
         self.intensity = check_unit(kwargs.get('intensity', None))
         self.variance = check_unit(kwargs.get('variance', None))
         self.continuum = check_unit(kwargs.get('continuum', None))
-        if "logger" in kwargs:
-            self.logger = kwargs["logger"]
 
     def subtract(self, data, variance):
         """
@@ -501,30 +502,51 @@ class SkyModel(VerboseMixin):
             scores = Z @ components.T
         else:
             # weights per spectrum per wavelength
-            scores = np.empty((n_spec, n_comp), dtype=float)
+            k = components.shape[0]
+            scores = np.empty((n_spec, k), dtype=float)
+            var_model_lines = np.zeros((n_spec, cols.size), dtype=float)
             for i in range(n_spec):
-                Wi = np.diag(wlines[i])
+                wi = wlines[i]
                 Ci = components  # (n_comp, n_wave)
+                Cw = Ci * wi
                 # Solve (C W C^T) a = C W z
-                A = Ci @ Wi @ Ci.T
-                b = Ci @ Wi @ Z[i]
+                A = Cw @ Ci.T
+                b = Cw @ Z[i]
                 # regularize slightly for numerical stability
                 A.flat[::A.shape[0]+1] += 1e-8
                 ai = np.linalg.solve(A, b)
                 scores[i] = ai
+                # Coeff covariance: (C W C^T)^{-1}
+                try:
+                    G = np.linalg.inv(A)
+                except np.linalg.LinAlgError:
+                    G = np.linalg.pinv(A)
+                # Predicted Z variance per wavelength: diag(C^T G C)
+                varZ = np.einsum('km,kl,lm->m', Ci, G, Ci, optimize=True)  # (M,)
+                var_model_lines[i] = varZ
 
         Zrec = scores @ components  # (n_spec, n_wave)
         Xreclines = Zrec * sigma + mu    # undo centering/scaling
-
+        var_model_lines *= (sigma**2)
         # Embed into full wavelength grid and subtract
         Xrec = np.zeros_like(X0)
         Xrec[:, cols] = np.nan_to_num(Xreclines, nan=0.0)
         X_clean = X0 - Xrec + continuum
 
+        if variance is not None:
+            var_add = np.zeros_like(variance)
+            var_add[:, cols] = var_model_lines
+            variance_out = variance + var_add
+        else:
+            variance_out = None
+
         # Reshape back to input shape and axis
         data_clean = X_clean.reshape((*shape_spatial, n_wave))
         data_clean = np.moveaxis(data_clean, -1, axis)
+        if variance_out is not None:
+            variance_out = np.moveaxis(variance_out.reshape((*shape_spatial, n_wave)), -1, axis)
 
+        # Store the PCA model information
         model = None
         if return_model:
             model = dict(
@@ -538,7 +560,7 @@ class SkyModel(VerboseMixin):
             train_idx=train_idx,
         )
 
-        return (data_clean, variance, model) if return_model else (data_clean, variance)
+        return (data_clean, variance_out, model) if return_model else (data_clean, variance_out)
 
     def remove_continuum(self, cont_estimator="median", cont_estimator_args=None):
         """
@@ -640,23 +662,23 @@ class SkyModel(VerboseMixin):
                 emission_model += g
         return emission_model, emission_spectra
 
-    # TODO: This should create an instance of EmissionLines
     def load_sky_line_atlas(self, path_to_table=None, lines_pct=50., **kwargs):
         """
-        Load sky lines from a file.
+        Load and optionally prune sky lines.
 
         Parameters
         ----------
         path_to_table : str, optional
-            Path to the table containing sky lines. Default is None.
+            Filename under ``input_data/sky_lines``. If None, UVES atlas is used.
         lines_pct : float, optional
-            Percentile for selecting faint lines. Default is 84.
-        kwargs : dict, optional
-            Additional arguments for `np.loadtxt`.
+            Keep lines with flux >= percentile(`lines_pct`). Default is 50.0.
+        **kwargs
+            Passed to :func:`numpy.loadtxt` when a custom table is provided.
 
         Returns
         -------
-
+        None
+            Populates attributes: ``sky_lines``, ``sky_lines_fwhm``, ``sky_lines_f``.
         """
         if path_to_table is not None:
             self.vprint(f"Loading input sky line table {path_to_table}")
@@ -830,7 +852,7 @@ class SkyFromObject(SkyModel):
                          intensity=bckg,
                          variance=bckg_sigma**2)
         if remove_cont:
-            vprint("Removing background continuum")
+            self.vprint("Removing background continuum")
             self.remove_continuum(cont_estimator, cont_estimator_args)
         
         if len(qc_plots) > 0:
@@ -1021,7 +1043,7 @@ class SkyFromObject(SkyModel):
         if max_n_fibres is not None:
             n_sky = min(max_n_fibres, n_sky)
         if n_sky < 1:
-            raise ValueError("Not enough sky fibres")
+            raise ValueError("Automatic selection failed to find any sky-dominated fibres.")
 
         flux_threshold = total_flux[sorted_by_flux[n_sky-1]]
         sky_fibres = sorted_by_flux[:n_sky]
