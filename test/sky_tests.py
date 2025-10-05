@@ -21,7 +21,7 @@ class TestSkyCorrections(unittest.TestCase):
     def test_sky_model(self):
         wavelength=np.arange(6000., 9000., 1.) << u.Angstrom
         model = SkyModel(wavelength=wavelength, intensity=np.random.normal(size=wavelength.size) << u.adu)
-        model.load_sky_lines()
+        model.load_sky_line_atlas()
         fig = model.plot_sky_model()
         # TODO: Are we going to use subtract, subtract_pca, remove_continuum, fit_emission_lines?
 
