@@ -5,9 +5,8 @@ the contribution of the sky emission in DataContainers.
 # =============================================================================
 # Basics packages
 # =============================================================================
-import numpy as np
-import copy
 import os
+import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 import scipy
@@ -151,55 +150,49 @@ class SkyLineLSFestimator:
 # =============================================================================
 # Sky lines library
 # =============================================================================
-
 def uves_sky_lines():
     """
     Library of sky emission lines measured with UVES@VLT.
 
-    For more details, see the `UVES Sky Spectrum <https://www.eso.org/observing/dfo/quality/UVES/pipeline/sky_spectrum.html>`_.
+    Notes
+    -----
+    Files are expected under ``input_data/sky_lines/ESO-UVES`` next to this module.
 
     Returns
     -------
     line_wavelength : np.ndarray
-        Array containing the wavelength positions of each emission line centroid in Angstroms.
+        Emission-line centroid wavelengths (Å), shape (N,).
     line_fwhm : np.ndarray
-        Array containing the FWHM values of each line expressed in Angstroms.
+        Line FWHM values (Å), shape (N,).
     line_flux : np.ndarray
-        Array containing the flux of each line expressed in 1e-16 ergs/s/A/cm^2/arcsec^2.
+        Line fluxes (1e-16 erg s^-1 Å^-1 cm^-2 arcsec^-2), shape (N,).
     """
-    # Prefix of each table
-    prefix = ["346", "437", "580L", "580U", "800U", "860L", "860U"]
-    # Path to tables
-    data_path = os.path.join(
-        os.path.dirname(__file__), "..", "input_data", "sky_lines", "ESO-UVES")
+    prefixes = ["346", "437", "580L", "580U", "800U", "860L", "860U"]
+    root = os.path.dirname(__file__)
+    data_path = os.path.join(root, "..", "input_data", "sky_lines", "ESO-UVES")
+
     if not os.path.isdir(data_path):
-        raise FileNotFoundError(f'Directory {data_path} not in {os.listdir(os.path.join(os.path.dirname(__file__), "..", "input_data", "sky_lines"))}')
-    
-    # Initialize arrays to store line properties
-    line_wavelength = np.empty(0)
-    line_fwhm = np.empty(0)
-    line_flux = np.empty(0)
+        parent = os.path.join(root, "..", "input_data", "sky_lines")
+        raise FileNotFoundError(f"Missing directory: {data_path!r}. "
+                                f"Parent listing: {os.listdir(parent) if os.path.isdir(parent) else 'N/A'}")
 
-    # Read data from each file
-    for p in prefix:
-        file = os.path.join(data_path, f"gident_{p}.tfits")
-        if not os.path.isfile(file):
-            raise FileNotFoundError(f"File '{file}' could not be found in {os.listdir(data_path)}")
+    waves, fwhms, fluxes = [], [], []
+    for p in prefixes:
+        fp = os.path.join(data_path, f"gident_{p}.tfits")
+        if not os.path.isfile(fp):
+            raise FileNotFoundError(f"Missing file: {fp!r}. Available: {sorted(os.listdir(data_path))}")
+        with fits.open(fp) as hdul:
+            tab = hdul[1].data
+            waves.append(np.asarray(tab['LAMBDA_AIR']))
+            fwhms.append(np.asarray(tab['FWHM']))
+            fluxes.append(np.asarray(tab['FLUX']))
 
-        with fits.open(file) as f:
-            wave = f[1].data['LAMBDA_AIR']
-            fwhm = f[1].data['FWHM']
-            flux = f[1].data['FLUX']
+    line_wavelength = np.concatenate(waves)
+    line_fwhm = np.concatenate(fwhms)
+    line_flux = np.concatenate(fluxes)
 
-            line_wavelength = np.hstack((line_wavelength, wave))
-            line_fwhm = np.hstack((line_fwhm, fwhm))
-            line_flux = np.hstack((line_flux, flux))
-
-    line_fwhm = line_fwhm << u.angstrom
-    line_wavelength = line_wavelength << u.angstrom
-    # Sort lines by wavelength
-    sort_pos = np.argsort(line_wavelength)
-    return line_wavelength[sort_pos], line_fwhm[sort_pos], line_flux[sort_pos]
+    order = np.argsort(line_wavelength)
+    return line_wavelength[order], line_fwhm[order], line_flux[order]
 
 # =============================================================================
 # Sky models
@@ -1167,7 +1160,6 @@ class SkySubsCorrection(CorrectionBase):
             corr_image = data_cont_corrected.intensity
         elif data_cont.intensity.ndim == 3:
             original_image = data_cont.get_white_image()
-            data_unit = str(original_image.unit)
             original_image = original_image
             corr_image = data_cont_corrected.get_white_image()
 
@@ -1177,8 +1169,8 @@ class SkySubsCorrection(CorrectionBase):
                                 constrained_layout=True,
                                 sharex=True, sharey=True)
 
-        plot_image(fig, axs[0], data=original_image, norm=norm)
-        plot_image(fig, axs[1], data=corr_image, norm=norm)
+        _, _ = plot_image(fig, axs[0], data=original_image, norm=norm)
+        _, _ = plot_image(fig, axs[1], data=corr_image, norm=norm)
         axs[0].set_title("Original")
         axs[1].set_title("Sky emission subtracted")
 
@@ -1214,7 +1206,7 @@ class SkySubsCorrection(CorrectionBase):
         """
         # Set verbosity
         # Copy input datacube to store the changes
-        dc_out = copy.deepcopy(dc)
+        dc_out = dc.copy()
 
         self.vprint("Applying sky subtraction")
 
