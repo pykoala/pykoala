@@ -205,7 +205,7 @@ def uves_sky_lines():
 # =============================================================================
 
 
-class SkyModel(object):
+class SkyModel(VerboseMixin):
     """
     Base class for a sky emission model.
 
@@ -252,6 +252,7 @@ class SkyModel(object):
         self.intensity = check_unit(kwargs.get('intensity', None))
         self.variance = check_unit(kwargs.get('variance', None))
         self.continuum = check_unit(kwargs.get('continuum', None))
+        self.logger = kwargs.get("logger", "SkyModel")
 
     def subtract(self, data, variance, axis=-1):
         """
@@ -285,7 +286,7 @@ class SkyModel(object):
             skymodel_intensity = self.intensity
             skymodel_var = self.variance
         else:
-            vprint(
+            self.vprint(
                 f"Data dimensions {data.shape} cannot be reconciled with "
                 f"sky model {None if self.intensity is None else self.intensity.shape}"
             )
@@ -444,7 +445,7 @@ class SkyModel(object):
             train_idx = np.where(sm)[0]
 
         if train_idx.size < 5:
-            vprint("PCA training set too small; skipping PCA subtraction.")
+            self.vprint("PCA training set too small; skipping PCA subtraction.")
             data_clean = np.moveaxis(X0.reshape((*shape_spatial, n_wave)), -1, axis)
             return data_clean, variance if variance is not None else None
 
@@ -605,7 +606,7 @@ class SkyModel(object):
         assert self.intensity is not None, "Sky Model intensity is None"
 
         if self.continuum is None:
-            vprint("Sky Model intensity might contain continuum emission"
+            self.vprint("Sky Model intensity might contain continuum emission"
                    " leading to unsuccessful emission line fit")
         if self.variance is None:
             errors = np.ones_like(self.intensity, dtype=float)
@@ -620,11 +621,11 @@ class SkyModel(object):
         wavelength_windows = np.arange(self.wavelength.min(),
                                        self.wavelength.max(), window_size)
         wavelength_windows[-1] = self.wavelength.max()
-        vprint(f"Fitting all emission lines ({self.sky_lines.size})"
+        self.vprint(f"Fitting all emission lines ({self.sky_lines.size})"
                     + " to continuum-subtracted sky spectra")
         for wl_min, wl_max in zip(wavelength_windows[:-1], wavelength_windows[1:]):
-            vprint(f"Starting fit in the wavelength range [{wl_min:.1f}, "
-                   + f"{wl_max:.1f}]")
+            self.vprint(f"Starting fit in the wavelength range [{wl_min:.1f}, "
+                        + f"{wl_max:.1f}]")
             mask_lines = (self.sky_lines >= wl_min) & (self.sky_lines < wl_max)
             mask = (self.wavelength >= wl_min) & (
                 self.wavelength < wl_max) & finite_mask
@@ -633,7 +634,7 @@ class SkyModel(object):
             obs = np.interp(wave, self.wavelength[mask], self.intensity[mask])
             err = np.interp(wave, self.wavelength[mask], errors[mask])
             if mask_lines.any():
-                vprint(f"> Line to Fit {self.sky_lines[mask_lines][0]:.1f}")
+                self.vprint(f"> Line to Fit {self.sky_lines[mask_lines][0]:.1f}")
                 window_model = models.Gaussian1D(
                     amplitude=p0_amplitude[mask_lines][0],
                     mean=self.sky_lines[mask_lines][0],
@@ -645,7 +646,7 @@ class SkyModel(object):
                 for line, p0, sigma in zip(
                         self.sky_lines[mask_lines][1:], p0_amplitude[mask_lines][1:],
                         self.sky_lines_fwhm[mask_lines][1:]):
-                    vprint(f"Line to Fit {line:.1f}")
+                    self.vprint(f"Line to Fit {line:.1f}")
                     model = models.Gaussian1D(
                         amplitude=p0, mean=line, stddev=sigma,
                         bounds={'amplitude': (p0 * 0.5, p0 * 10), 'mean': (line - 5, line + 5),
@@ -677,14 +678,14 @@ class SkyModel(object):
 
         """
         if path_to_table is not None:
-            vprint(f"Loading input sky line table {path_to_table}")
+            self.vprint(f"Loading input sky line table {path_to_table}")
             path_to_table = os.path.join(os.path.dirname(__file__),
                                          'input_data', 'sky_lines',
                                          path_to_table)
             self.sky_lines, self.sky_lines_fwhm, self.sky_lines_f = np.loadtxt(
                 path_to_table, usecols=(0, 1, 2), unpack=True, **kwargs)
         else:
-            vprint("Loading UVES sky line table")
+            self.vprint("Loading UVES sky line table")
             self.sky_lines, self.sky_lines_fwhm, self.sky_lines_f = uves_sky_lines()
         # Select only those lines within the wavelength range of the model
         common_lines = (self.sky_lines >= self.wavelength[0]) & (
@@ -692,10 +693,10 @@ class SkyModel(object):
         self.sky_lines = self.sky_lines[common_lines]
         self.sky_lines_fwhm = self.sky_lines_fwhm[common_lines]
         self.sky_lines_f = self.sky_lines_f[common_lines]
-        vprint(f"Total number of sky lines: {self.sky_lines.size}")
+        self.vprint(f"Total number of sky lines: {self.sky_lines.size}")
         # Blend sky emission lines
         delta_lambda = self.wavelength[1] - self.wavelength[0]
-        vprint("Blending sky emission lines according to"
+        self.vprint("Blending sky emission lines according to"
                 + f"wavelength resolution ({delta_lambda} AA)")
         unresolved_lines = np.where(np.diff(self.sky_lines) <= delta_lambda)[0]
         while len(unresolved_lines) > 0:
@@ -715,9 +716,9 @@ class SkyModel(object):
             self.sky_lines_f = np.delete(self.sky_lines_f, unresolved_lines)
             unresolved_lines = np.where(
                 np.diff(self.sky_lines) <= delta_lambda)[0]
-        vprint(f"Total number of sky lines after blending: {self.sky_lines.size}")
+        self.vprint(f"Total number of sky lines after blending: {self.sky_lines.size}")
         # Remove faint lines
-        # self.vprint(f"Selecting the  sky lines after blending: {self.sky_lines.size}")
+        # self.self.vprint(f"Selecting the  sky lines after blending: {self.sky_lines.size}")
         faint = np.where(self.sky_lines_f < np.nanpercentile(
             self.sky_lines_f, lines_pct))[0]
         self.sky_lines = np.delete(self.sky_lines, faint)
@@ -963,20 +964,20 @@ class SkyFromObject(SkyModel):
                 f"Input background estimator {bckgr_estimator} does not exist")
         
         # Determine sky fibres:
-        
-        self.sky_fibres = sky_fibres
         if sky_fibres is None:
-            self.sky_fibres = self.dc.info.get('sky_fibres', None)
-            if self.sky_fibres is None or len(self.sky_fibres) == 0:
-                sky_fibres = 'auto'
+            sky_fibres = self.dc.sky_fibres
+            if sky_fibres is None or len(sky_fibres) == 0:
+                sky_fibres = "auto"
         if sky_fibres == "auto":
-            self.sky_fibres = self._estimate_sky_fibres()
+            sky_fibres = self._estimate_sky_fibres()
         elif sky_fibres == "all":
-            self.sky_fibres = np.arange(int(self.dc.n_spectra))
+            sky_fibres = np.arange(int(self.dc.n_spectra), dtype=int)
+        # Store sky fibre metadata
+        self.sky_fibres = sky_fibres
         #bckgr_params["axis"] = bckgr_params.get("axis", 0)
         #data = np.take(self.dc.rss_intensity, self.sky_fibres, bckgr_params["axis"])
         data = self.dc.rss_intensity[self.sky_fibres]
-        
+
         if (len(qc_plots) > 0) and (self.dc.intensity.ndim == 2):
             show_plot = qc_plots.get('show', True)
             plot_filename = qc_plots.get('filename_base', None)
@@ -984,7 +985,7 @@ class SkyFromObject(SkyModel):
             fig, axes = new_figure(fig_name, figsize=(8, 6))
             fig.suptitle(f"{self.dc.info['name']} {fig_name}")
             total_flux = np.nanmean(self.dc.rss_intensity.value, axis=1)
-            ax, patch_collection, cb = plot_fibres(
+            ax, _, _ = plot_fibres(
                 fig, axes[0, 0], self.dc, data=total_flux,
                 cblabel=f'mean intensity [{self.dc.rss_intensity.unit}]',
                 cmap='Spectral_r',
