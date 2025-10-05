@@ -1055,16 +1055,6 @@ lines = {
     'CaII3': 8664.52,
 }
 
-def mask_telluric_lines(wave_array, width_clip=3 << u.AA):
-    model_file = os.path.join(os.path.dirname(__file__),
-                                      'input_data', 'sky_lines',
-                                      'telluric_lines.txt')
-    w_l_1, w_l_2 = np.loadtxt(model_file, unpack=True, usecols=(0, 1))
-    w_l_1 = w_l_1 << u.angstrom
-    w_l_2 = w_l_2 << u.angstrom
-    return mask_lines(wave_array, width= np.clip(w_l_2 - w_l_1, a_min=width_clip, a_max=None),
-                      lines=(w_l_1 + w_l_2) / 2)
-
 # =============================================================================
 # Mr Krtxo \(ﾟ▽ﾟ)/
 #                                                       ... Paranoy@ Rulz! ;^D
