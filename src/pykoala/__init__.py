@@ -59,7 +59,12 @@ class VerboseMixin():
 
     @property
     def logger(self):
-        return self._logger
+        if isinstance(self._logger, str):
+            return logging.getLogger(self._logger)
+        elif isinstance(self._logger, logging.Logger):
+            return self._logger
+        else:
+            raise ValueError(f"Unrecognised logger: {self._logger}")
 
     @logger.setter
     def logger(self, logger):
