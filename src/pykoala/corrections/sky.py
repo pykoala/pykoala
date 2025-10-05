@@ -1032,21 +1032,28 @@ class SkyFromObject(SkyModel):
         bckgr, bckgr_sigma = estimator(data, **bckgr_params)
         return bckgr, bckgr_sigma
 
-    def _estimate_sky_fibres(self):
+    def _estimate_sky_fibres(self, sigma_clip=True, kappa_sigma=3, max_n_fibres=None):
         """
         Identify sky fibres by imposing a mean intensity threshold, based on
         the shape of the normalised spectra.
         """
         # Use sigma-clipping to prevent outliers
-        fibre_nmad = std_from_mad(self.dc.rss_intensity, axis=1)
-        fibre_median = np.nanmedian(self.dc.rss_intensity, axis=1)
-        mask = np.abs(self.dc.rss_intensity - fibre_median[:, np.newaxis]) < 3 * fibre_nmad[:, np.newaxis]
-        nan_flux = np.where(mask, self.dc.rss_intensity, np.nan)
-        total_flux = np.nanmean(nan_flux, axis=1).value
+        if sigma_clip:
+            fibre_nmad = std_from_mad(self.dc.rss_intensity, axis=1)
+            fibre_median = np.nanmedian(self.dc.rss_intensity, axis=1)
+            mask = np.abs(self.dc.rss_intensity - fibre_median[:, np.newaxis]
+                          ) < kappa_sigma * fibre_nmad[:, np.newaxis]
+            flux = np.where(mask, self.dc.rss_intensity, np.nan)
+        else:
+            flux = self.dc.rss_intensity
+        # Integrate flux over wavelength
+        total_flux = np.nanmean(flux, axis=1).value
+        # Sort fibres
         sorted_by_flux = np.argsort(total_flux)
         n = np.arange(1, sorted_by_flux.size + 1)
         half_sample = sorted_by_flux.size // 2
 
+        # Mean integrated flux as function of number of selected fibres
         flux_mean = np.nancumsum(total_flux[sorted_by_flux]) / n
 
         norm_fibre = self.dc.rss_intensity.value[sorted_by_flux, :] / total_flux[sorted_by_flux][:, np.newaxis]
@@ -1075,9 +1082,13 @@ class SkyFromObject(SkyModel):
         n_sky = min(
             np.searchsorted(flux_mean, sky_flux),
             2 * np.searchsorted(total_flux[sorted_by_flux], sky_flux))
+        if max_n_fibres is not None:
+            n_sky = min(max_n_fibres, n_sky)
+
         flux_threshold = total_flux[sorted_by_flux[n_sky-1]]
         sky_fibres = sorted_by_flux[:n_sky]
-        vprint(f'{n_sky} sky fibres found below {flux_threshold:.5g} (sky flux = {sky_flux:.5g}) {self.dc.rss_intensity.unit}')
+        self.vprint(f"{n_sky} sky fibres found below {flux_threshold:.5g} (sky flux = {sky_flux:.5g}) "
+                    + f"{self.dc.rss_intensity.unit}")
 
         return sky_fibres
 
