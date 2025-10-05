@@ -227,6 +227,7 @@ class SkyModel(VerboseMixin):
     """
 
     sky_lines = None
+    _logger = "pykoala.SkyModel"
 
     def __init__(self, **kwargs):
         """
@@ -252,7 +253,8 @@ class SkyModel(VerboseMixin):
         self.intensity = check_unit(kwargs.get('intensity', None))
         self.variance = check_unit(kwargs.get('variance', None))
         self.continuum = check_unit(kwargs.get('continuum', None))
-        self.logger = kwargs.get("logger", "SkyModel")
+        if "logger" in kwargs:
+            self.logger = kwargs["logger"]
 
     def subtract(self, data, variance, axis=-1):
         """
@@ -883,7 +885,7 @@ class SkyFromObject(SkyModel):
         qc_plots: dict
             Dictionary to control QC plots.
         """
-        vprint("Creating SkyModel from input Data Container")
+        self.vprint("Creating SkyModel from input Data Container")
         self.dc = dc
         # self.exptime = dc.info['exptime']
         #vprint(f"Estimating sky background contribution from the {bckgr_estimator}...")
@@ -954,24 +956,34 @@ class SkyFromObject(SkyModel):
         np.ndarray
             Estimated background standard deviation.
         """
+        # Set up background (sky) estimator
         if bckgr_params is None:
             bckgr_params = {}
 
-        if hasattr(BackgroundEstimator, bckgr_estimator):
-            estimator = getattr(BackgroundEstimator, bckgr_estimator)
-        else:
-            raise NameError(
-                f"Input background estimator {bckgr_estimator} does not exist")
+        estimator = getattr(BackgroundEstimator, bckgr_estimator, None)
+        if estimator is None or not callable(estimator):
+            raise ValueError(
+            f"Unknown background estimator '{bckgr_estimator}'. "
+            f"Available: {', '.join(k for k, v in BackgroundEstimator.__dict__.items() if callable(v) and not k.startswith('_'))}"
+        )
         
-        # Determine sky fibres:
+        # Determine sky-dominated fibres
         if sky_fibres is None:
             sky_fibres = self.dc.sky_fibres
             if sky_fibres is None or len(sky_fibres) == 0:
                 sky_fibres = "auto"
-        if sky_fibres == "auto":
-            sky_fibres = self._estimate_sky_fibres()
-        elif sky_fibres == "all":
-            sky_fibres = np.arange(int(self.dc.n_spectra), dtype=int)
+        if isinstance(sky_fibres, str):
+            if sky_fibres == "all":
+                self.vprint("Selecting all fibres")
+                sky_fibres = np.arange(int(self.dc.n_spectra), dtype=int)
+            elif sky_fibres == "auto":
+                self.vprint("Automatic sky fibre selection")
+                sky_fibres = self._estimate_sky_fibres()
+            else:
+                raise ValueError("sky_fibres must be None, 'auto', 'all', or a sequence of integers.")
+        else:
+            sky_fibres = np.asarray(sky_fibres, dtype=int)
+
         # Store sky fibre metadata
         self.sky_fibres = sky_fibres
         #bckgr_params["axis"] = bckgr_params.get("axis", 0)
@@ -1006,14 +1018,13 @@ class SkyFromObject(SkyModel):
         # Estimate sky spectrum:
         
         if source_mask_nsigma is not None:
-            vprint("Pre-estimating background using all data")
+            self.vprint("Pre-estimating background using all data")
             bckgr, bckgr_sigma = estimator(data, **bckgr_params)
-            vprint(
+            self.vprint(
                 f"Applying sigma-clipping mask (n-sigma={source_mask_nsigma})")
-            dims_to_expand = (0)
-            source_mask = (data > np.expand_dims(bckgr, dims_to_expand) +
-                           source_mask_nsigma
-                           * np.expand_dims(bckgr_sigma, dims_to_expand))
+            mu = np.expand_dims(bckgr, axis=0)
+            sigma = np.expand_dims(bckgr_sigma, axis=0)
+            source_mask = (data > (mu + source_mask_nsigma * sigma))
             data[source_mask] = np.nan
 
         vprint(f"Applying the {bckgr_estimator} estimator to {data.shape[0]} sky fibres")
