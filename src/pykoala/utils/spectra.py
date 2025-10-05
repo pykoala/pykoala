@@ -265,9 +265,12 @@ def mask_lines(wave_array, width=30, lines=LINES.values()):
     if width.size == 1:
         width = width * np.ones(len(lines))
     mask = np.ones(wave_array.size, dtype=bool)
-    for line, w in zip(lines, width):
-        line = check_unit(line, u.AA)
-        mask[(wave_array < line + w) & (wave_array > line - w)] = False
+    lines_l = lines - width
+    lines_r = lines + width
+    left_idx = np.searchsorted(wave_array, lines_l).clip(0, wave_array.size)
+    right_idx = np.searchsorted(wave_array, lines_r).clip(0, wave_array.size)
+    for l, r in zip(left_idx, right_idx):
+        mask[l:r+1] = False
     return mask
 
 def mask_telluric_lines(wave_array, width_clip=3 << u.AA):
