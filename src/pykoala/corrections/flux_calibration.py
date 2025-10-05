@@ -35,11 +35,10 @@ from astropy.io import fits
 from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.data_container import SpectraContainer, RSS, Cube
-from pykoala.utils.spectra import estimate_continuum_and_mask_absorption
+from pykoala.utils.spectra import estimate_continuum_and_mask_absorption, mask_telluric_lines
 from pykoala.utils.math import std_from_mad
 from pykoala.utils.io import suppress_warnings
 from pykoala.ancillary import (centre_of_mass, cumulative_1d_moffat,
-                               mask_lines, mask_telluric_lines,
                                flux_conserving_interpolation, check_unit)
 from pykoala.plotting import utils as plt_utils
 
