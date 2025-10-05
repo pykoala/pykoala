@@ -188,9 +188,9 @@ def uves_sky_lines():
             fwhms.append(np.asarray(tab['FWHM']))
             fluxes.append(np.asarray(tab['FLUX']))
 
-    line_wavelength = np.concatenate(waves)
-    line_fwhm = np.concatenate(fwhms)
-    line_flux = np.concatenate(fluxes)
+    line_wavelength = np.concatenate(waves) << u.angstrom
+    line_fwhm = np.concatenate(fwhms) << u.angstrom
+    line_flux = np.concatenate(fluxes) << u.Unit("1e-16 erg / (s*AA*cm^2*arcsec^2) ")
 
     order = np.argsort(line_wavelength)
     return line_wavelength[order], line_fwhm[order], line_flux[order]
@@ -668,7 +668,7 @@ class SkyModel(VerboseMixin):
             self.sky_lines, self.sky_lines_fwhm, self.sky_lines_f = np.loadtxt(
                 path_to_table, usecols=(0, 1, 2), unpack=True, **kwargs)
         else:
-            self.vprint("Loading UVES sky line table")
+            self.vprint("Loading UVES sky line atlas")
             self.sky_lines, self.sky_lines_fwhm, self.sky_lines_f = uves_sky_lines()
         # Select only those lines within the wavelength range of the model
         common_lines = (self.sky_lines >= self.wavelength[0]) & (
