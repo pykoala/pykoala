@@ -297,13 +297,12 @@ class SkyModel(VerboseMixin):
                      variance=None,
                      axis=-1,
                      mask=None,
-                     sample_mask=None,
+                     training_spectra_idx=None,
                      use_line_atlas=True,
                      eline_weight_threshold=0.25,
-                     robust_center=True,
                      standardize=False,
                      n_components='auto',
-                     explained_variance_thresh=0.995,
+                     explained_variance_thresh=0.90,
                      max_components=None,
                      return_model=False):
         """
@@ -311,7 +310,7 @@ class SkyModel(VerboseMixin):
 
         This method first subtracts the provided 1-D/2-D sky model (if present),
         then learns empirical residual templates via PCA (SVD) from a subset of
-        spectra that are likely sky-dominated (or from `sample_mask` if given).
+        spectra that are likely sky-dominated (or from `training_spectra_idx` if given).
         Each spectrum is projected onto these components and the reconstruction
         is removed, reducing structured sky residuals (e.g., line wings, LSF
         mismatch, small wavelength-calibration drifts).
@@ -333,13 +332,10 @@ class SkyModel(VerboseMixin):
         mask : np.ndarray of bool, optional
             Boolean mask with same shape as `data` where True marks pixels to
             ignore (e.g., strong object features, bad pixels). Default is None.
-        sample_mask : np.ndarray of bool, optional
-            Boolean mask over the non-spectral axes selecting which *spectra*
+        training_spectra_idx : np.ndarray of bool, optional
+            Array of indices over the non-spectral axes selecting which *spectra*
             (rows in the unfolded 2D matrix) to use to *train* the PCA.
             If None, a robust low-flux selection is used automatically.
-        robust_center : bool, optional
-            If True, remove a robust per-wavelength center (biweight location)
-            before PCA. If False, remove the simple mean. Default is True.
         standardize : bool, optional
             If True, divide each wavelength channel by its robust scale
             (biweight scale) before PCA. Default is False.
@@ -403,10 +399,11 @@ class SkyModel(VerboseMixin):
         ## Sky line identification
         if use_line_atlas:
             self.load_sky_lines()
-            self.sky_lines, self.sky_lines_fwhm
-            skyline_mask = mask_lines(
-                self.wavelength, lines=self.sky_lines,
-                width= 2 * self.sky_lines_fwhm)
+            skyline_mask = np.logical_not(
+                mask_lines(self.wavelength, lines=self.sky_lines,
+                           width=np.maximum(2 * self.sky_lines_fwhm,
+                                            np.full_like(self.sky_lines, 3 << u.AA)))
+                                  )            
             eline_weights = np.asarray(skyline_mask, dtype=float)
         else:
             sky_continuum, _ = ContinuumEstimator.lower_envelope(
@@ -418,17 +415,17 @@ class SkyModel(VerboseMixin):
             eline_weights = np.nan_to_num(eline_weights, nan=0.0, posinf=0.0, neginf=0.0)
             eline_weights = gaussian_filter(eline_weights, 3)        
 
+        # Remove continuum to only account for line residuals
+        self.vprint("Estimating fibre continuum")
         continuum = np.array([ContinuumEstimator.sigma_clipped_mean_continuum(
             s, weights=1 - eline_weights) for s in X0])
-        
-        # Remove continuum to only account for line residuals
         X0 -= continuum
 
-        # Select wavelength columns dominated by emission lines
+        # Select wavelength columns dominated by sky emission lines
         cols = np.where(eline_weights >= float(eline_weight_threshold))[0]
         if cols.size < 3:
             # Nothing meaningful to refine: return only model-subtracted data
-            data_clean = np.moveaxis(X0.reshape((*shape_spatial, n_wave)), -1, axis)
+            data_clean = np.moveaxis((X0 + continuum).reshape((*shape_spatial, n_wave)), -1, axis)
             return (data_clean, variance) if not return_model else (
                 data_clean, variance, dict(columns=cols, eline_weights=eline_weights)
             )
@@ -437,48 +434,47 @@ class SkyModel(VerboseMixin):
         X0lines = X0[:, cols]
         wlines = w[:, cols]
         # Choose training spectra for PCA
-        if sample_mask is None:
+        if training_spectra_idx is None:
             # Use low-total-flux spectra as "sky-like": 25% faintest by robust sum
             with np.errstate(invalid='ignore'):
                 robust_sum = np.nanmedian(np.where(wlines > 0, X0lines, np.nan), axis=1)
             q25 = np.nanpercentile(robust_sum, 25)
             train_idx = np.where(robust_sum <= q25)[0]
         else:
-            # sample_mask is over spatial axes, reshape into 1D index
-            sm = np.asarray(sample_mask).reshape(-1)
-            train_idx = np.where(sm)[0]
+            self.vprint("Using user-provided list of training spectra")
+            train_idx = training_spectra_idx
 
         if train_idx.size < 5:
             self.vprint("PCA training set too small; skipping PCA subtraction.")
             data_clean = np.moveaxis(X0.reshape((*shape_spatial, n_wave)), -1, axis)
             return data_clean, variance if variance is not None else None
 
-        Xt = X0lines[train_idx]
-        wt = wlines[train_idx]
+        Xtrain = X0lines[train_idx]
+        wtrain = wlines[train_idx]
 
-        mu = biweight_location(np.where(wt > 0, Xt, np.nan), axis=0)
+        mu = biweight_location(np.where(wtrain > 0, Xtrain, np.nan), axis=0)
         if standardize:
-            sigma = biweight_scale(np.where(wt > 0, Xt, np.nan), axis=0)
+            sigma = biweight_scale(np.where(wtrain > 0, Xtrain, np.nan), axis=0)
         else:
-            sigma = np.ones(Xt.shape[1], dtype=float)
+            sigma = np.ones(Xtrain.shape[1], dtype=float)
 
         def center_scale(Z):
             return (Z - mu) / sigma
 
-        Zt = center_scale(Xt)
-
+        Ztrain = center_scale(Xtrain)
         # Replace NaNs (masked/zero-weight columns) with 0 before SVD
-        Zt = np.where(np.isfinite(Zt), Zt, 0.0)
+        Ztrain = np.where(np.isfinite(Ztrain), Ztrain, 0.0)
 
         # PCA via SVD on training set (rows: spectra, cols: wavelength)
-        # Zt = U S Vt  -> components (eigenvectors in wavelength space) are rows of Vt
-        U, S, Vt = np.linalg.svd(Zt, full_matrices=False)
+        # Ztrain = U S Vt  -> components (eigenvectors in wavelength space) are rows of Vt
+        U, S, Vt = np.linalg.svd(Ztrain, full_matrices=False)
         components = Vt  # (n_comp_max, n_wave)
 
         # Explained variance ratio from S
         # Var explained by k-th component = S[k]^2 / (n_samples - 1)
-        eigvals = (S ** 2) / max(Zt.shape[0] - 1, 1)
-        total_var = np.sum(np.var(Zt, axis=0, ddof=1))
+        eigvals = (S ** 2) / max(Ztrain.shape[0] - 1, 1)
+        total_var = np.sum(np.var(Ztrain, axis=0, ddof=1))
+        # Explained variance ratio
         evr = np.where(total_var > 0, eigvals / total_var, 0.0)
         cum = np.cumsum(evr)
 
@@ -491,6 +487,7 @@ class SkyModel(VerboseMixin):
             n_comp = min(n_comp, int(max_components))
         n_comp = max(0, min(n_comp, components.shape[0]))
 
+        self.vprint(f"Selecting {n_comp} components")
         components = components[:n_comp]  # (n_comp, n_wave)
         evr = evr[:n_comp]
 
@@ -643,7 +640,7 @@ class SkyModel(VerboseMixin):
         return emission_model, emission_spectra
 
     # TODO: This should create an instance of EmissionLines
-    def load_sky_lines(self, path_to_table=None, lines_pct=84., **kwargs):
+    def load_sky_lines(self, path_to_table=None, lines_pct=50., **kwargs):
         """
         Load sky lines from a file.
 
@@ -679,8 +676,8 @@ class SkyModel(VerboseMixin):
         self.vprint(f"Total number of sky lines: {self.sky_lines.size}")
         # Blend sky emission lines
         delta_lambda = self.wavelength[1] - self.wavelength[0]
-        self.vprint("Blending sky emission lines according to"
-                + f"wavelength resolution ({delta_lambda} AA)")
+        self.vprint("Blending sky emission lines according to "
+                    + f"wavelength resolution ({delta_lambda} AA)")
         unresolved_lines = np.where(np.diff(self.sky_lines) <= delta_lambda)[0]
         while len(unresolved_lines) > 0:
             self.sky_lines[unresolved_lines] = (
@@ -701,9 +698,9 @@ class SkyModel(VerboseMixin):
                 np.diff(self.sky_lines) <= delta_lambda)[0]
         self.vprint(f"Total number of sky lines after blending: {self.sky_lines.size}")
         # Remove faint lines
-        # self.self.vprint(f"Selecting the  sky lines after blending: {self.sky_lines.size}")
         faint = np.where(self.sky_lines_f < np.nanpercentile(
             self.sky_lines_f, lines_pct))[0]
+        self.vprint(f"Removing {faint.size} faint lines out of {self.sky_lines.size}")
         self.sky_lines = np.delete(self.sky_lines, faint)
         self.sky_lines_fwhm = np.delete(self.sky_lines_fwhm, faint)
         self.sky_lines_f = np.delete(self.sky_lines_f, faint)
