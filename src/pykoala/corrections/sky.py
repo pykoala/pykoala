@@ -784,49 +784,6 @@ class SkyModel(VerboseMixin):
         return fig
 
 
-class SkyOffset(SkyModel):
-    """
-    Sky model based on a single RSS offset sky exposure.
-
-    This class builds a sky emission model from individual sky exposures.
-
-    Attributes
-    ----------
-    dc : DataContainer
-        Data container used to estimate the sky.
-    exptime : float
-        Net exposure time from the data container.
-    """
-
-    def __init__(self, dc):
-        """
-        Initialize the SkyOffset model with a data container.
-
-        Parameters
-        ----------
-        dc : DataContainer
-            Data container used to estimate the sky.
-        """
-        self.dc = dc
-        self.exptime = dc.info['exptime']
-        super().__init__()
-
-    def estimate_sky(self):
-        """
-        Estimate the sky emission model.
-
-        This method calculates the intensity and variance of the sky model using
-        percentiles, then normalizes them by the exposure time.
-        """
-        #TODO: This should create a 2D model that uses the median sky
-        # but shifts it to the posiotoin given on each individual fibre
-        self.intensity, self.variance = BackgroundEstimator.percentile(
-            self.dc.rss_intensity, percentiles=[16, 50, 84])
-        self.intensity, self.variance = (
-            self.intensity / self.exptime,
-            self.variance / self.exptime)
-
-
 class SkyFromObject(SkyModel):
     """
     Sky model based on a single Data Container.
@@ -851,7 +808,7 @@ class SkyFromObject(SkyModel):
 
     def __init__(self, dc,
                  bckgr_estimator='mad', bckgr_params=None,
-                 sky_fibres=None, source_mask_nsigma=None,
+                 sky_fibres=None, source_mask_kappa_sigma=None,
                  remove_cont=False,
                  cont_estimator='median', cont_estimator_args=None,
                  qc_plots={'show': True}):
@@ -875,7 +832,7 @@ class SkyFromObject(SkyModel):
             Selecting `all` will use every spectrum in the `DataContainer`.
             Othrwise, this argument will be interpreted as a list of
             integer indices identifying sky spectra, assuming 1D RSS order.
-        source_mask_nsigma : float, optional
+        source_mask_kappa_sigma : float, optional
             Sigma level for masking sources. Default is None.
         remove_cont : bool, optional
             If True, the continuum will be removed. Default is False.
@@ -894,7 +851,7 @@ class SkyFromObject(SkyModel):
         self.qc_plots = {}
 
         bckg, bckg_sigma = self._estimate_background(
-            bckgr_estimator, bckgr_params, sky_fibres, source_mask_nsigma, qc_plots)
+            bckgr_estimator, bckgr_params, sky_fibres, source_mask_kappa_sigma, qc_plots)
         super().__init__(wavelength=self.dc.wavelength,
                          intensity=bckg,
                          variance=bckg_sigma**2)
@@ -925,7 +882,8 @@ class SkyFromObject(SkyModel):
                 plt.close(fig_name)
 
     def _estimate_background(self, bckgr_estimator, bckgr_params=None,
-                            sky_fibres=None, source_mask_nsigma=None,
+                            sky_fibres=None, source_mask_kappa_sigma=None,
+                            sigma_clip=True, kappa_sigma=3, max_n_fibres=None,
                             qc_plots={}):
         """
         Estimate the background.
@@ -945,7 +903,7 @@ class SkyFromObject(SkyModel):
             Selecting `all` will use every spectrum in the `DataContainer`.
             Othrwise, this argument will be interpreted as a list of
             integer indices identifying sky spectra, assuming 1D RSS order.
-        source_mask_nsigma : float, optional
+        source_mask_kappa_sigma : float, optional
             Sigma level for masking sources. Default is None.
         qc_plots: dict
             Dictionary to control QC plots.
@@ -979,7 +937,9 @@ class SkyFromObject(SkyModel):
                 sky_fibres = np.arange(int(self.dc.n_spectra), dtype=int)
             elif sky_fibres == "auto":
                 self.vprint("Automatic sky fibre selection")
-                sky_fibres = self._estimate_sky_fibres()
+                sky_fibres = self._estimate_sky_fibres(
+                    sigma_clip=sigma_clip, kappa_sigma=kappa_sigma,
+                    max_n_fibres=max_n_fibres)
             else:
                 raise ValueError("sky_fibres must be None, 'auto', 'all', or a sequence of integers.")
         else:
@@ -1018,17 +978,17 @@ class SkyFromObject(SkyModel):
 
         # Estimate sky spectrum:
         
-        if source_mask_nsigma is not None:
+        if source_mask_kappa_sigma is not None:
             self.vprint("Pre-estimating background using all data")
             bckgr, bckgr_sigma = estimator(data, **bckgr_params)
             self.vprint(
-                f"Applying sigma-clipping mask (n-sigma={source_mask_nsigma})")
+                f"Applying sigma-clipping mask (n-sigma={source_mask_kappa_sigma})")
             mu = np.expand_dims(bckgr, axis=0)
             sigma = np.expand_dims(bckgr_sigma, axis=0)
-            source_mask = (data > (mu + source_mask_nsigma * sigma))
+            source_mask = (data > (mu + source_mask_kappa_sigma * sigma))
             data[source_mask] = np.nan
 
-        vprint(f"Applying the {bckgr_estimator} estimator to {data.shape[0]} sky fibres")
+        self.vprint(f"Applying the {bckgr_estimator} estimator to {data.shape[0]} sky fibres")
         bckgr, bckgr_sigma = estimator(data, **bckgr_params)
         return bckgr, bckgr_sigma
 
