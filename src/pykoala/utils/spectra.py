@@ -241,7 +241,25 @@ def estimate_continuum_and_mask_absorption(
            f"({np.count_nonzero(regions > 0)} pixels)")
     return cont_vals << flux_unit, cont_err << flux_unit, regions
 
-def mask_lines(wave_array, width=30, lines=lines.values()):
+LINES = {
+    # Balmer
+    'hepsilon': 3970.1,
+    'hdelta': 4101.7,
+    'hgamma': 4340.4,
+    'hbeta': 4861.3,
+    'halpha': 6562.79,
+    # K
+    'K': 3934.777,
+    'H': 3969.588,
+    'Mg': 5176.7,
+    'Na': 5895.6,
+    'CaII1': 8500.36,
+    'CaII2': 8544.44,
+    'CaII3': 8664.52,
+}
+
+
+def mask_lines(wave_array, width=30, lines=LINES.values()):
     wave_array = check_unit(wave_array, u.AA)
     width = check_unit(width, wave_array.unit)
     if width.size == 1:
