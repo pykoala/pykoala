@@ -1055,18 +1055,6 @@ lines = {
     'CaII3': 8664.52,
 }
 
-
-def mask_lines(wave_array, width=30, lines=lines.values()):
-    wave_array = check_unit(wave_array, u.AA)
-    width = check_unit(width, wave_array.unit)
-    if width.size == 1:
-        width = width * np.ones(len(lines))
-    mask = np.ones(wave_array.size, dtype=bool)
-    for line, w in zip(lines, width):
-        line = check_unit(line, u.AA)
-        mask[(wave_array < line + w) & (wave_array > line - w)] = False
-    return mask
-
 def mask_telluric_lines(wave_array, width_clip=3 << u.AA):
     model_file = os.path.join(os.path.dirname(__file__),
                                       'input_data', 'sky_lines',
