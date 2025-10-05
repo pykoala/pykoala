@@ -17,8 +17,9 @@ from scipy.signal import correlate, correlation_lags
 from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.data_container import RSS, SpectraContainer
-from pykoala.ancillary import flux_conserving_interpolation, vac_to_air, check_unit
+from pykoala.ancillary import vac_to_air, check_unit
 from pykoala import ancillary
+from pykoala.utils.spectra import flux_conserving_interpolation, mask_telluric_lines
 from pykoala.plotting.utils import plot_image
 
 
@@ -1213,7 +1214,7 @@ class SolarCrossCorrOffset(WavelengthCorrection):
 
         if mask_tellurics:
             self.vprint("Masking telluric lines.")
-            telluric_mask = self._mask_telluric_lines(wave)
+            telluric_mask = mask_telluric_lines(wave)
             normalized_rss.value[:, ~telluric_mask] = np.nan
             normalized_rss_var.value[:, ~telluric_mask] = np.nan
 
