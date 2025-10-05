@@ -18,6 +18,7 @@ from astropy.io import fits
 from astropy.modeling import models, fitting
 from astropy.stats.biweight import biweight_location, biweight_scale
 from astropy import units as u
+from astropy.table import QTable
 # =============================================================================
 # PyKOALA
 # =============================================================================
@@ -257,6 +258,88 @@ class SkyModel(VerboseMixin):
         self.intensity = check_unit(kwargs.get('intensity', None))
         self.variance = check_unit(kwargs.get('variance', None))
         self.continuum = check_unit(kwargs.get('continuum', None))
+
+    def to_fits(self, filename, *, overwrite=True, extname="SKYMODEL", meta=None):
+        """
+        Save the (1-D) sky model to a FITS binary table using `astropy.table.QTable`.
+
+        The table contains columns:
+        - 'wavelength' (required)
+        - 'intensity'  (required)
+        - 'variance'   (optional)
+        - 'continuum'  (optional)
+
+        Parameters
+        ----------
+        filename : str or path-like
+            Output FITS file path.
+        overwrite : bool, optional
+            Overwrite existing file. Default True.
+        extname : str, optional
+            FITS extension name to use for the table. Default 'SKYMODEL'.
+        meta : dict, optional
+            Extra key/value pairs to store in the table metadata.
+        """
+        if self.wavelength is None or self.intensity is None:
+            raise ValueError("`wavelength` and `intensity` must be set before saving.")
+        if getattr(self.intensity, "ndim", 1) != 1:
+            raise NotImplementedError("`to_fits` currently supports 1-D models (intensity.ndim == 1).")
+
+        t = QTable()
+        t["wavelength"] = self.wavelength
+        t["intensity"]  = self.intensity
+        if self.variance is not None:
+            t["variance"] = self.variance
+        if self.continuum is not None:
+            t["continuum"] = self.continuum
+
+        # minimal metadata
+        t.meta["CLASS"] = "SkyModel"
+        t.meta["EXTNAME"] = extname
+        if meta:
+            for k, v in dict(meta).items():
+                t.meta[str(k)] = v
+
+        t.write(filename, format="fits", overwrite=overwrite)
+
+    @classmethod
+    def from_fits(cls, filename, *, hdu="SKYMODEL", **kwargs):
+        """
+        Factory method to create a `SkyModel` from a FITS table written by `to_fits`.
+
+        Parameters
+        ----------
+        filename : str or path-like
+            Input FITS file path.
+        hdu : int or str, optional
+            HDU index or EXTNAME of the table to read. Default 'SKYMODEL'.
+        **kwargs
+            Forwarded to `SkyModel` constructor (e.g., verbose=True).
+
+        Returns
+        -------
+        SkyModel
+            A new instance populated from the FITS table.
+
+        Raises
+        ------
+        KeyError
+            If required columns are missing.
+        """
+        # read the table; if 'hdu' doesn't exist, this will raise
+        tab = QTable.read(filename, format="fits", hdu=hdu)
+
+        for col in ("wavelength", "intensity"):
+            if col not in tab.colnames:
+                raise KeyError(f"Required column '{col}' not found in HDU {hdu!r}.")
+
+        wavelength = tab["wavelength"]
+        intensity  = tab["intensity"]
+        variance   = tab["variance"]  if "variance"  in tab.colnames else None
+        continuum  = tab["continuum"] if "continuum" in tab.colnames else None
+
+        return cls(wavelength=wavelength, intensity=intensity,
+                variance=variance, continuum=continuum, **kwargs)
 
     def subtract(self, data, variance):
         """
