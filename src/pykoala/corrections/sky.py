@@ -294,6 +294,7 @@ class SkyModel(VerboseMixin):
 
     def subtract_pca(self,
                      data,
+                     *,
                      variance=None,
                      axis=-1,
                      mask=None,
@@ -398,7 +399,7 @@ class SkyModel(VerboseMixin):
 
         ## Sky line identification
         if use_line_atlas:
-            self.load_sky_lines()
+            self.load_sky_line_atlas()
             skyline_mask = np.logical_not(
                 mask_lines(self.wavelength, lines=self.sky_lines,
                            width=np.maximum(2 * self.sky_lines_fwhm,
@@ -640,7 +641,7 @@ class SkyModel(VerboseMixin):
         return emission_model, emission_spectra
 
     # TODO: This should create an instance of EmissionLines
-    def load_sky_lines(self, path_to_table=None, lines_pct=50., **kwargs):
+    def load_sky_line_atlas(self, path_to_table=None, lines_pct=50., **kwargs):
         """
         Load sky lines from a file.
 
