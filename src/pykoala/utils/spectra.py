@@ -265,8 +265,8 @@ def mask_lines(wave_array, width=30, lines=LINES.values()):
     if width.size == 1:
         width = width * np.ones(len(lines))
     mask = np.ones(wave_array.size, dtype=bool)
-    lines_l = lines - width
-    lines_r = lines + width
+    lines_l = lines - width / 2
+    lines_r = lines + width / 2
     left_idx = np.searchsorted(wave_array, lines_l).clip(0, wave_array.size)
     right_idx = np.searchsorted(wave_array, lines_r).clip(0, wave_array.size)
     for l, r in zip(left_idx, right_idx):
