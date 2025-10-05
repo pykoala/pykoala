@@ -479,6 +479,17 @@ class SkyModel(VerboseMixin):
         data space (accounting for standardisation).
         """
         # Move spectral axis to last and flatten spatial axes
+        if isinstance(data, u.Quantity):
+            data_u = data.unit
+            data = data.to_value(data_u)
+        else:
+            data_u = 1.0
+        if isinstance(variance, u.Quantity):
+            var_u = variance.unit
+            variance = variance.to_value(var_u)
+        else:
+            var_u = 1.0
+
         data = np.moveaxis(data, axis, -1)
         shape_spatial = data.shape[:-1]
         n_spec = int(np.prod(shape_spatial))
@@ -585,6 +596,7 @@ class SkyModel(VerboseMixin):
         total_var = np.sum(np.var(Ztrain, axis=0, ddof=1))
         # Explained variance ratio
         evr = np.where(total_var > 0, eigvals / total_var, 0.0)
+        evr /= np.nansum(evr)
         cum = np.cumsum(evr)
 
         if n_components == 'auto':
@@ -667,7 +679,7 @@ class SkyModel(VerboseMixin):
             train_idx=train_idx,
         )
 
-        return (data_clean, variance_out, model) if return_model else (data_clean, variance_out)
+        return (data_clean * data_u, variance_out * var_u, model) if return_model else (data_clean, variance_out)
 
     def remove_continuum(self, cont_estimator="median", cont_estimator_args=None):
         """
