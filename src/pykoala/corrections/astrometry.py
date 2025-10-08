@@ -10,11 +10,10 @@ import numpy as np
 # Astropy and associated packages
 # =============================================================================
 from astropy import units as u
-from astropy import constants
 from astropy.coordinates import SkyCoord
 from photutils.centroids import centroid_2dg, centroid_com
-from astropy import units as u
 
+from scipy.ndimage import median_filter
 # =============================================================================
 # KOALA packages
 # =============================================================================
@@ -25,6 +24,8 @@ from pykoala.cubing import make_dummy_cube_from_rss
 from pykoala.ancillary import interpolate_image_nonfinite
 from pykoala.plotting.utils import qc_registration_centroids
 from pykoala import photometry
+
+from pykoala.utils.math import odd_int, robust_standarisation, std_from_mad
 
 
 class AstrometryOffsetCorrection(CorrectionBase):
@@ -281,7 +282,7 @@ class AstrometryCorrection(CorrectionBase):
             images.append(image)
             wcs.append(cube.wcs.celestial)
         # Perform the cross-correlation
-        results = cross_correlate_images(images, oversample=oversample)
+        results, ancillary_info = cross_correlate_images(images, oversample=oversample)
         for i in range(len(results)):
             pixels_shift = results[i][0]
             moving_origin = wcs[i + 1].pixel_to_world(0, 0)
@@ -290,9 +291,10 @@ class AstrometryCorrection(CorrectionBase):
             offsets.append([moving_origin.ra - reference_origin.ra,
                             moving_origin.dec - reference_origin.dec])
         if qc_plot:
-            fig = qc_registration_centroids(images, wcs, offsets,
-                                            ref_pos=wcs[i + 1].pixel_to_world(
-                                                images[0].shape[1] / 2, images[0].shape[0] / 2))
+            fig = qc_registration_centroids(images, wcs, offsets, 
+                                            ref_pos=wcs[0].pixel_to_world(
+                                                images[0].shape[1] / 2, images[0].shape[0] / 2),
+                                            ancillary_info=ancillary_info)
             return offsets, fig
         else:
             return offsets, None
@@ -326,6 +328,8 @@ class AstrometryCorrection(CorrectionBase):
 
 
 def find_centroid_in_dc(data_container, wave_range=None,
+                        median_filter_s=None,
+                        bckgr_kappa_sigma=None,
                         centroider='com', com_power=1.0,
                         quick_cube_pix_size=0.5, subbox=None,
                         full_output=False):
@@ -386,9 +390,20 @@ def find_centroid_in_dc(data_container, wave_range=None,
     # Select a subbox
     image = image[subbox[0][0]:subbox[0][1],
                   subbox[1][0]: subbox[1][1]]
+    
+    if median_filter_s is not None:
+        median_filter_s = odd_int(median_filter_s)
+        image = median_filter(image, size=median_filter_s)
     # Mask bad values
     # image = interpolate_image_nonfinite(image)
     centroider_mask = ~ np.isfinite(image)
+
+    if bckgr_kappa_sigma is not None:
+        median = np.nanmedian(image)
+        std = std_from_mad(image, axis=None)
+        background = image - median < bckgr_kappa_sigma * std
+        ref_mask &= not background
+
     # Find centroid
     centroid_pixel  = np.array(centroider(image.value**com_power, centroider_mask))
     centroid_world = cube.wcs.celestial.pixel_to_world(*centroid_pixel)
@@ -398,7 +413,8 @@ def find_centroid_in_dc(data_container, wave_range=None,
         return cube, image, centroid_pixel, centroid_world 
 
 
-def cross_correlate_images(list_of_images, oversample=100):
+def cross_correlate_images(list_of_images, oversample=100, median_filter_s=None,
+                           bckgr_kappa_sigma=None):
     """Compute a shift between several images using cross-correlation.
     
     Description
@@ -425,14 +441,60 @@ def cross_correlate_images(list_of_images, oversample=100):
     except Exception:
         raise ImportError("For using the image crosscorrelation function you have to install scikit-image library")
 
+    ancillary_info = {}
+    # Pre-processing
+    ref = list_of_images[0]
+
+    if median_filter_s is not None:
+        median_filter_s = odd_int(median_filter_s)
+        ancillary_info["median_filter_s"] = median_filter_s
+        ref = median_filter(ref, size=median_filter_s)
+    # Standarise
+    ref = robust_standarisation(ref, axis=None)
+
+    ref_mask = np.isfinite(ref)
+    # Add background clipping
+    if bckgr_kappa_sigma is not None:
+        std = std_from_mad(ref, axis=None)
+        background = ref < bckgr_kappa_sigma * std
+        ref_mask &= not background
+    # Set to none is all pixels are valid for performance
+    if ref_mask.all():
+        ref_mask = None
+    # Store the information
+    ancillary_info["standarised_ref"] = ref
+    ancillary_info["ref_mask"] = ref_mask
+    ancillary_info["standarised_mov"] = []
+    ancillary_info["mov_mask"] = []
+
     results = []
     for i in range(len(list_of_images) - 1):
+        # Preprocessing
+        moving = list_of_images[i+1]
+        if median_filter_s is not None:
+            moving = median_filter(moving, size=median_filter_s)
+        moving = robust_standarisation(moving, axis=None)
+        # Masking
+        mov_mask = np.isfinite(moving)
+
+        if bckgr_kappa_sigma is not None:
+            std = std_from_mad(moving, axis=None)
+            background = moving < bckgr_kappa_sigma * std
+            mov_mask &= not background
+
+        if mov_mask.all():
+            mov_mask = None
+
+        ancillary_info["standarised_mov"].append(moving)
+        ancillary_info["mov_mask"].append(mov_mask)
         # The shift ordering is consistent with the input image shape
         shift, error, diffphase = phase_cross_correlation(
-            list_of_images[0], list_of_images[i+1],
-            upsample_factor=oversample)
+            ref, moving,
+            upsample_factor=oversample,
+            space="real",
+            reference_mask=ref_mask, moving_mask=mov_mask)
         results.append([shift, error, diffphase])
-    return results
+    return results, ancillary_info
 
 # TODO: implement this method in the correction class
 # def register_interactive(data_set, quick_cube_pix_size=0.2, wave_range=None):
