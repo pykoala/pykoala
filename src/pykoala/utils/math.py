@@ -22,9 +22,12 @@ def med_abs_dev(x, axis=0):
     mad : np.ndarray
         Associated MAD to x along the chosen axes.
     """
-    mad = np.nanmedian(
-        np.abs(x - np.expand_dims(np.nanmedian(x, axis=axis), axis=axis)),
-        axis=axis)
+    if axis is not None:
+        mad = np.nanmedian(
+            np.abs(x - np.expand_dims(np.nanmedian(x, axis=axis), axis=axis)),
+            axis=axis)
+    else:
+        mad = np.nanmedian(np.abs(x - np.nanmedian(x)))
     return mad
 
 def std_from_mad(x, axis=0):
@@ -47,6 +50,23 @@ def std_from_mad(x, axis=0):
     :func:`med_abs_dev`
     """
     return 1.4826 * med_abs_dev(x, axis=axis)
+
+def robust_standarisation(x, axis=None):
+    """Standarise an input array using the median and NMAD.
+    
+    Parameters
+    ----------
+    x : np.ndarray
+        Input array.
+
+    Returns
+    -------
+    standarised : np.ndarray
+        The standarised array ``(x - median) / NMAD``
+    """
+    median = np.nanmedian(x, axis=axis)
+    nmad = std_from_mad(x, axis=axis)
+    return (x - median) / nmad
 
 def integrated_autocorr_time(x: np.ndarray, max_lag: Optional[int] = None) -> float:
     """Crude integrated autocorrelation time tau for 1D series x."""
