@@ -32,327 +32,307 @@ from pykoala import photometry
 from pykoala.utils.math import odd_int, robust_standarisation, std_from_mad
 
 
-class AstrometryOffsetCorrection(CorrectionBase):
-    """Astrometry Offset correction class.
-
-    This class accounts for relative astrometric offsets.
+class AstrometryCorrection(CorrectionBase):
+    """
+    Apply an astrometric offset to a data container.
 
     Attributes
     ----------
-    offset : AstrometryOffset
-        Fibre astrometric offset.
-    verbose: bool
-        False by default.
-    
-    See also
-    --------
-    :class:`CorrectionBase`
+    offset : CorrectionOffset or None
+        (dRA, dDEC) in angular units.
+    path : str or None
+        Optional path where the offset was loaded from.
+    verbose : bool
+        If True, prints progress messages (inherited).
 
+    Notes
+    -----
+    This class does not measure offsets. Use the standalone registration
+    functions in this module to obtain :class:`CorrectionOffset` instances.
     """
-    name = "AstrometryOffsetCorrection"
+
+    name = "AstrometryCorrection"
+    verbose = True
     offset = None
-    verbose = False
+    path = None
 
-    def __init__(self, offset_path=None, offset=None, **correction_kwargs):
+    def __init__(self, offset=None, offset_path=None, **correction_kwargs):
+        """
+        Parameters
+        ----------
+        offset : CorrectionOffset, optional
+            The offset to apply (dRA, dDEC).
+        offset_path : str, optional
+            Path used to initialise the offset (metadata only).
+        **correction_kwargs
+            Forwarded to :class:`CorrectionBase`.
+        """
         super().__init__(**correction_kwargs)
-
-        self.path = offset_path
         self.offset = offset
+        self.path = offset_path
 
     @classmethod
     def from_fits(cls, path):
-        """Initialise a AstrometryOffsetCorrection from an input FITS file.
-        
+        """
+        Create an instance from a FITS file containing an offset table.
+
         Parameters
         ----------
         path : str
-            Path to the FITS file containing the offset data.
+            Path to a FITS file readable by :class:`CorrectionOffset`.
 
         Returns
         -------
-        offset_correction : :class:`WavelengthCorrection`
-            A :class:`WavelengthCorrection` initialised with the input data.
+        AstrometryCorrection
         """
-        return cls(offset=CorrectionOffset.from_fits(path=path),
-                   offset_path=path)
-
-    @classmethod
-    def from_external_image(cls, data_container, external_image, filter_name,
-                            **crosscorr_kwargs):
-        """Use a reference external image to compute the offset.
-        
-        Description
-        -----------
-        Estimate an astrometric offsets by cross-correlating a reference image with
-        the DataContainer using mulitple aperture photometry.
-
-        Parameters
-        ----------
-        data_container : :class:`pykoala.data_container.DataContainer`
-            Target DataContainer.
-        external_image : dict
-            A dictionary containing the ``ccd`` of a reference image,
-            corresponding to an instance of astropy.nddata.CCDData, and the
-            pixels size ("pix_size") expressed in arcseconds.
-        filter_name : str
-            Name of the filter passband associated to the external image.
-        crosscorr_kwargs : 
-            Additional arguments to be passed to :func:`crosscorrelate_im_apertures`.
-
-        Returns
-        -------
-        astrometry_offset_correction : class:`AstrometryOffsetCorrection`
-            The resulting correction.
-        results : dict
-            Dictionary containing the results of the cross-correlation.
-        """
-        # Compute the synthetic photometry associated to the DataContainer
-        dc_photometry = photometry.get_dc_aperture_flux(
-            data_container, filter_name)
-        # Only include valid (finite-valued) apertures
-        vprint("Computing astrometric offsets")
-        results = photometry.crosscorrelate_im_apertures(
-            dc_photometry['aperture_flux'][dc_photometry['aperture_mask']],
-            dc_photometry['coordinates'][dc_photometry['aperture_mask']],
-            external_image, **crosscorr_kwargs)
-        # Make a QC plot with the resulting solution
-        fig = photometry.make_plot_astrometry_offset(
-            data_container, dc_photometry['synth_photo'],
-            external_image, results)
-        results['offset_fig'] = fig
-
-        return cls(offset=CorrectionOffset(offset_data=results['offset_min'],
-                   offset_error=np.full_like(results['offset_min'],
-                                             fill_value=np.nan))), results
+        return cls(offset=CorrectionOffset.from_fits(path=path), offset_path=path)
 
     def apply(self, data_container):
-        """Apply an astrometric offset correction to a DataContainer.
+        """
+        Apply the stored offset to a data container.
 
         Parameters
         ----------
-        data_container : :class:`pykoala.data_container.DataContainer`
-            DataContainer to be corrected.
+        data_container : RSS or Cube
+            Target container.
 
         Returns
         -------
-        dc_corrected : :class:`pykoala.data_container.DataContainer`
-            Corrected copy of the input DC.
+        dc_corrected : same type as input
+            Shallow copy with updated coordinates/WCS.
+
+        Raises
+        ------
+        ValueError
+            If no offset is set.
         """
-        self.vprint(
-            f"Applying astrometry offset correction to DC (RA, DEC): {self.offset.offset_data}")
+        if self.offset is None or self.offset.offset_data is None:
+            raise ValueError("No offset set. Provide a CorrectionOffset first.")
+
+        d_ra, d_dec = self.offset.offset_data
+        self.vprint(f"Applying offset (dRA, dDEC): {d_ra}, {d_dec}")
+
         dc_out = data_container.copy()
-        dc_out.update_coordinates(offset=self.offset.offset_data)
-        self.record_correction(dc_out, status='applied')
+        dc_out.update_coordinates(offset=[d_ra, d_dec])
+        self.record_correction(
+            dc_out, status="applied",
+            offset=f"{d_ra.to('arcsec')}, {d_dec.to('arcsec')}"
+        )
         return dc_out
 
 
-# TODO: Turn into a child of AstrometryOffsetCorrection
-class AstrometryCorrection(CorrectionBase):
-    """Perform astrometry-related corrections on DataContainers
-    
-    This class applies astrometry corrections to input DataContainers based
-    on different kind of quantities.
-
-    -   RSS offset correction
-        Corrects the positions of all fibres using an offset (fib_ra = fib_ra + offset)
-    -   Cube offset correction:
-        Update the WCS central value according to a new pixel mapping.
+def compute_offset_from_external_image(data_container, external_image, filter_name,
+                                       **crosscorr_kwargs):
     """
-    name = 'Astrometry'
-    verbose = True
+    Measure (dRA, dDEC) against an external reference image.
 
-    def __init__(self, **correction_args) -> None:
-        super().__init__(**correction_args)
+    Parameters
+    ----------
+    data_container : RSS or Cube
+        Target dataset.
+    external_image : dict
+        Keys:
+          - "ccd": astropy.nddata.CCDData
+          - "pix_size": float (arcsec per pixel)
+    filter_name : str
+        Passband name for synthetic aperture photometry.
+    **crosscorr_kwargs
+        Passed to :func:`pykoala.photometry.crosscorrelate_im_apertures`.
 
-    def register_centroids(self, data_set, object_name=None, qc_plot=False, **centroid_args):
-        """Register a collection of DataContainers.
+    Returns
+    -------
+    offset : CorrectionOffset
+        Measured (dRA, dDEC).
+    results : dict
+        Cross-correlation results. Includes a QC figure at key "offset_fig".
+    """
+    vprint("Computing astrometric offset via external reference")
+    dc_phot = photometry.get_dc_aperture_flux(data_container, filter_name)
+    mask = dc_phot['aperture_mask']
+    results = photometry.crosscorrelate_im_apertures(
+        dc_phot['aperture_flux'][mask],
+        dc_phot['coordinates'][mask],
+        external_image,
+        **crosscorr_kwargs
+    )
+    fig = photometry.make_plot_astrometry_offset(
+        data_container, dc_phot['synth_photo'], external_image, results
+    )
+    results['offset_fig'] = fig
 
-        Description
-        -----------
-        The registration is performed by means of the function
-        ``pykoala.corrections.astrometry.find_centroid_in_dc``. The first DataContainer
-        will be used as reference, and the offset position of the star will be computed
-        in the rest of DataContainers.
+    off = CorrectionOffset(
+        offset_data=results['offset_min'],
+        offset_error=np.full_like(results['offset_min'], np.nan)
+    )
+    return off, results
 
-        Parameters
-        ----------
-        data_set: list
-            Collection of DataContainers.
-        object_name: str, default=None
-            Database querable name for absolute astrometry calibration.
-        qc_plot: bool, default=False
-            If true, a QC plot will be generated by calling
-            ``pykoala.plotting.utils.qc_registration_centroids``.
-        **centroid_args:
-            Extra arguments passed to the `pykoala.corrections.astrometry.find_centroid_in_dc` function.
-        
-        Returns
-        -------
-        - offsets: list
-            A list containing the offsets for each input DataContainer.
-        - fig: matplotlib.pyplot.Figure
-            If `qc_plot=True`, it returns a quality control plot. `None` otherwise.
-        """
-        if len(data_set) <= 1:
-            raise ArithmeticError("Input number of sources must be larger than 1")
+def register_dataset_centroids(data_set, object_name=None, qc_plot=False, **centroid_args):
+    """
+    Register a sequence of DataContainers via centroiding.
 
-        if object_name is not None:
-            try:
-                reference_pos = SkyCoord.from_name(object_name)
-            except Exception as e:
-                self.vprint(e)
-                reference_pos = find_centroid_in_dc(data_set[0], **centroid_args)
-        else:
+    The first element is the reference. For each subsequent DC, returns the
+    offset required to align it to the reference.
+
+    Parameters
+    ----------
+    data_set : list of RSS or Cube
+        Sequence to register (len >= 2).
+    object_name : str, optional
+        If provided, absolute reference position resolved by
+        :meth:`astropy.coordinates.SkyCoord.from_name`. Otherwise, the centroid
+        of the first DC defines the reference.
+    qc_plot : bool, default: False
+        If True, also returns a QC figure.
+    **centroid_args
+        Forwarded to :func:`find_centroid_in_dc`.
+
+    Returns
+    -------
+    offsets : list of CorrectionOffset
+        One per input DC. The first one is zero by construction.
+    fig : matplotlib.figure.Figure or None
+        QC figure if requested.
+
+    Notes
+    -----
+    Offsets are defined as (dRA, dDEC) to move each DC onto the reference.
+    """
+    if len(data_set) <= 1:
+        raise ArithmeticError("`data_set` must contain at least two elements.")
+
+    # Reference sky position
+    if object_name is not None:
+        try:
+            ref_pos = SkyCoord.from_name(object_name)
+        except Exception as e:
+            vprint(e)
             centroid_args['full_output'] = False
-            reference_pos = find_centroid_in_dc(data_set[0], **centroid_args)
-        if qc_plot:
-            centroid_args['full_output'] = True
-            images_list = []
-            wcs_list = []
-            centroid_list = []
+            ref_pos = find_centroid_in_dc(data_set[0], **centroid_args)
+    else:
+        centroid_args['full_output'] = False
+        ref_pos = find_centroid_in_dc(data_set[0], **centroid_args)
 
-        self.vprint(f"Reference position: RA={reference_pos.ra}, "
-                    + f"DEC={reference_pos.dec})")
-        offsets = []
-        for data in data_set:
-            if qc_plot:
-                cube, image, _, centroid_world = find_centroid_in_dc(
-                    data, **centroid_args)
-                images_list.append(image)
-                wcs_list.append(cube.wcs.celestial)
-                centroid_list.append(centroid_world)                
-            else:
-                centroid_world = find_centroid_in_dc(data, **centroid_args)
+    if qc_plot:
+        centroid_args['full_output'] = True
+        images_list, wcs_list = [], []
 
-            offset = [reference_pos.ra - centroid_world.ra, reference_pos.dec - centroid_world.dec]
-            offsets.append(offset)
-            self.vprint("Offset found (ra, dec): {:.2f}, {:.2f} (arcsec)"
-                        .format(offset[0].to_value('arcsec'),
-                                offset[1].to_value('arcsec'))
-                        )
+    vprint(f"[Centroids] Reference: RA={ref_pos.ra}, DEC={ref_pos.dec}")
+
+    offsets = [CorrectionOffset(offset_data=[0.0 * u.deg, 0.0 * u.deg],
+                                offset_error=[np.nan * u.deg, np.nan * u.deg])]
+
+    for dc in data_set[1:]:
         if qc_plot:
-            fig = qc_registration_centroids(images_list, wcs_list,
-                                            offsets, reference_pos)
-            fig.suptitle(f"Centroiding-based ({centroid_args.get('centroider')})"
-                         + " registration")
-            return offsets, fig
+            cube, image, _, cen_world = find_centroid_in_dc(dc, **centroid_args)
+            images_list.append(image)
+            wcs_list.append(cube.wcs.celestial)
         else:
-            return offsets, None
+            cen_world = find_centroid_in_dc(dc, **centroid_args)
 
-    def register_crosscorr(self, data_set, *, wave_range=None,
-                           quick_cube_pix_size=0.5,
-                           qc_plot=False, **crosscorr_kwargs):
-        """Register a set of DataContainers using image cross-correlation.
+        dra, ddec = ref_pos.spherical_offsets_to(cen_world)
+        # Move dc onto reference
+        off = CorrectionOffset(offset_data=[-dra, -ddec],
+                               offset_error=[np.nan * u.deg, np.nan * u.deg])
+        vprint("[Centroids] (dRA, dDEC): "
+               f"{off.offset_data[0].to_value('arcsec'):.2f}, "
+               f"{off.offset_data[1].to_value('arcsec'):.2f} arcsec")
+        offsets.append(off)
 
-        Parameters
-        ----------
-        data_set : :class:`pykoala.data_container.SpectraContainer`
-            Set of SpectraContainers to cross-correlate.
-        wave_range : list or tupla, default=None
-            If provided, use the input wavelength range to create a white image.
-        oversample: int, default=100
-            Oversampling factor used during cross-correlation.
-            See :func:`cross_correlate_images`.
-        quick_cube_pix_size: float, default=0.3
-            Pixels size of the data cube built to create the white image. This is
-            only relevant when the SpectraContainer corresponds to a :class:`pykoala.rss.RSS`.
-        qc_plot : bool, default=False
-            If true, creates a quality control plot with the results of the
-            cross-correlation match. Otherwise ``fig`` will be ``None``.
+    fig = None
+    if qc_plot:
+        # Use measured offsets + reference position for the panel
+        offs_arr = [[off.offset_data[0], off.offset_data[1]] for off in offsets]
+        fig = qc_registration_centroids(images_list, wcs_list, offs_arr, ref_pos=ref_pos)
+        fig.suptitle(f"Centroid-based registration ({centroid_args.get('centroider', 'com')})")
 
-        Returns
-        -------
-        offsets: list of tuplas
-            List of offsets in RA/DEC for every input SpectraContainer with respect
-            to the first element of ``data_set``.
-        fig: matplotlib.pyplot.Figure or None
-            If ``qc_plot=True``, corresponds to a quality control figure containing
-            the results of the cross-correlation. Otherwise is ``None``.
-        """
-        self.vprint("Performing image cross-correlation")
-        images = []
-        wcs = []
-        offsets = [[0 * u.deg, 0 * u.deg]]
+    return offsets, fig
 
-        for data_container in data_set:
-            if data_container.__class__ is RSS:
-                self.vprint("Creating cube from individual RSS")
-                cube = make_dummy_cube_from_rss(data_container,
-                                                spa_pix_arcsec=quick_cube_pix_size,
-                                                kernel_pix_arcsec=quick_cube_pix_size)
-                image = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
-            elif data_container.__class__ is Cube:
-                cube = data_container
-                image = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
-                image /= np.nansum(image)
-            # Remove NaN values using N-Neighbours interpolation
-            image = interpolate_image_nonfinite(image)
-            # Convert the quantity into an array
-            images.append(image)
-            wcs.append(cube.wcs.celestial)
-        # Perform the cross-correlation
-        results, ancillary_info = cross_correlate_images(images,
-                                                         **crosscorr_kwargs)
-        reference_origin = wcs[0].pixel_to_world(0, 0)
-        for i in range(len(results)):
-            pixels_shift = results[i][0]
-            self.vprint("Cross-corr image offset pixels: {:.2f}, {:.2f} (pix)"
-                        .format(pixels_shift[1],
-                                pixels_shift[0])
-                        )
-            # Compute the coordinates wrt the reference origin
-            # (x, y) = (col, row)
-            moving_origin = wcs[i + 1].pixel_to_world(-pixels_shift[1],
-                                                      -pixels_shift[0])
-            
-            ra_offset, dec_offset = reference_origin.spherical_offsets_to(
-                moving_origin)
-            self.vprint("Net offset (ra, dec): {:.2f}, {:.2f} (arcsec)"
-                        .format(ra_offset.to_value('arcsec'),
-                                dec_offset.to_value('arcsec'))
-                        )
-            offsets.append([-ra_offset, -dec_offset])
-            # Correct the WCS (plotting purposes)
-            wcs[i + 1] = update_wcs_coords(
-                wcs[i + 1], ra_dec_offset=[-ra_offset, -dec_offset])
+def register_dataset_crosscorr(data_set, *, wave_range=None,
+                               quick_cube_pix_size=0.5, qc_plot=False, **crosscorr_kwargs):
+    """
+    Register a sequence via white-image cross-correlation.
 
-        if qc_plot:
-            fig = qc_registration_centroids(images, wcs, offsets, 
-                                            ref_pos=wcs[0].pixel_to_world(
-                                                images[0].shape[1] / 2, images[0].shape[0] / 2),
-                                            ancillary_info=ancillary_info)
-            fig.suptitle("Cross-correlation registration")
-            return offsets, fig
+    Parameters
+    ----------
+    data_set : list of RSS or Cube
+        Sequence to register (len >= 2).
+    wave_range : (float, float), optional
+        Wavelength range for the white image.
+    quick_cube_pix_size : float, default: 0.5
+        Pixel size (arcsec) for temporary cubes built from RSS.
+    qc_plot : bool, default: False
+        If True, also returns a QC figure.
+    **crosscorr_kwargs
+        Forwarded to :func:`cross_correlate_images`
+        (e.g. oversample, median_filter_s, bckgr_kappa_sigma).
+
+    Returns
+    -------
+    offsets : list of CorrectionOffset
+        One per input DC (first one is zero).
+    fig : matplotlib.figure.Figure or None
+        QC figure if requested.
+
+    Notes
+    -----
+    Non-finite pixels are inpainted; images are robustly standardised before
+    cross-correlation. Offsets move each DC onto the *first* element.
+    """
+    if len(data_set) <= 1:
+        raise ArithmeticError("`data_set` must contain at least two elements.")
+
+    vprint("[Xcorr] Building white images")
+    images, wcs_list = [], []
+    for dc in data_set:
+        if isinstance(dc, RSS):
+            cube = make_dummy_cube_from_rss(
+                dc, spa_pix_arcsec=quick_cube_pix_size,
+                kernel_pix_arcsec=quick_cube_pix_size
+            )
+            img = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
+        elif isinstance(dc, Cube):
+            cube = dc
+            img = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
         else:
-            return offsets, None
+            raise TypeError("Elements of `data_set` must be RSS or Cube")
 
-    def apply(self, data_container, offset):
-        """Apply an astrometrical offset to a data container.
-        
-        Parameters
-        ----------
-        data_container : :class:`DataContainer`
-            DataContainer to be corrected.
-        offset : tuple
+        if np.isfinite(img).any():
+            img = img / np.nansum(img)
+        img = interpolate_image_nonfinite(img)
 
-        Returns
-        -------
-        corrected_data_container : :class:`DataContainer`
-            Copy of the input DataContainer including the astrometric correction.
-        """
-        if data_container.__class__ is RSS:
-            self.vprint("Applying correction to RSS")
+        images.append(img)
+        wcs_list.append(cube.wcs.celestial)
 
-            data_container.info['fib_ra'] += offset[0]
-            data_container.info['fib_dec'] += offset[1]
+    results, ancillary = cross_correlate_images(images, **crosscorr_kwargs)
+    ref_origin = wcs_list[0].pixel_to_world(0, 0)
 
-            self.record_correction(
-                data_container, status='applied',
-                offset=f"{offset[0].to('arcsec')}, {offset[1].to('arcsec')} arcsec")
-        elif data_container.__class__ is Cube:
-            # TODO: modify the WCS
-            pass
+    offsets = [CorrectionOffset(offset_data=[0.0 * u.deg, 0.0 * u.deg],
+                                offset_error=[np.nan * u.deg, np.nan * u.deg])]
+    for i, (shift, _, _) in enumerate(results, start=1):
+        drow, dcol = shift  # (row, col) to align moving -> ref
+        vprint(f"[Xcorr] Pixel shift DC#{i}: drow={drow:.2f}, dcol={dcol:.2f}")
+        moving_origin = wcs_list[i].pixel_to_world(-dcol, -drow)
+        dra, ddec = ref_origin.spherical_offsets_to(moving_origin)
+        off = CorrectionOffset(offset_data=[-dra, -ddec],
+                               offset_error=[np.nan * u.deg, np.nan * u.deg])
+        vprint("[Xcorr] (dRA, dDEC): "
+               f"{off.offset_data[0].to_value('arcsec'):.2f}, "
+               f"{off.offset_data[1].to_value('arcsec'):.2f} arcsec")
+        offsets.append(off)
 
+    fig = None
+    if qc_plot:
+        # Update WCS copies for visualisation (do not mutate originals)
+        wcs_vis = [update_wcs_coords(w, ra_dec_offset=[off.offset_data[0], off.offset_data[1]])
+                   if idx > 0 else w
+                   for idx, (w, off) in enumerate(zip(wcs_list, offsets))]
+        ref_pos = wcs_list[0].pixel_to_world(images[0].shape[1] / 2, images[0].shape[0] / 2)
+        offs_arr = [[off.offset_data[0], off.offset_data[1]] for off in offsets]
+        fig = qc_registration_centroids(images, wcs_vis, offs_arr,
+                                        ref_pos=ref_pos, ancillary_info=ancillary)
+        fig.suptitle("Cross-correlation registration")
+
+    return offsets, fig
 
 def find_centroid_in_dc(data_container, wave_range=None,
                         median_filter_s=None,
@@ -360,41 +340,28 @@ def find_centroid_in_dc(data_container, wave_range=None,
                         centroider='com', com_power=1.0,
                         quick_cube_pix_size=0.5, subbox=None,
                         full_output=False):
-    """Find the the centre of light in a DataContainer.
-
-    Description
-    -----------
-
-    This method finds the centre of light on an image created from a
-    DataContainer (RSS or Cube). The position is computed either by using
-    the first moment or a gaussian kernel of some power of the light distribution.
-    For RSS data, a previous step consists of building a new Cube.
+    """
+    Find the centre of light in a DataContainer.
 
     Parameters
     ----------
-    data_container: DataContainer
-        Data to extract the centroid.
-    wave_range: list, default=None
-        Wavelength range to be used to make the white image defined by the
-        initial and final wavelengths.
-    centroider: string, default='com'
-        Keyword describing the centroider method to use. 'com' corresponds to
-        the first moment of the light distribution, while 'gauss' uses a 2D gaussian
-        kernel.
-    com_power: float, default=1.0
-        Power of the light distribution to weight the centroid position. The centroider
-        function will compute the position of ``intensity**com_power``.
-    quick_cube_pix_size: float, default=0.3 arcsec
-        Only used when the DataContainer is an RSS. Pixel size in arcsec used to interpolate
-        the RSS into a Cube.
-    subbox: list, default=None
-        Subbox containing the array indices of the image to select in the form:
-        [[row_in, row_end], [col_in, col_end]].
+    data_container : RSS or Cube
+    wave_range : (float, float), optional
+    median_filter_s : int, optional
+    bckgr_kappa_sigma : float, optional
+        Clip threshold; pixels (image - median) < kappa*sigma are masked.
+    centroider : {'com','gauss'}, default: 'com'
+    com_power : float, default: 1.0
+        Power applied to intensities before centroiding (for 'com').
+    quick_cube_pix_size : float, default: 0.5
+    subbox : [[int, int],[int, int]], optional
+    full_output : bool, default: False
 
     Returns
     -------
-    centroid_world: astropy.coordinates.SkyCoord)
-        Sky position of the centroid.
+    SkyCoord or tuple
+        If `full_output=False`, returns only the sky coordinate of the centroid.
+        Otherwise, returns `(cube, image, centroid_pixel, centroid_world)`.
     """
     if centroider == 'com':
         centroider = centroid_com
@@ -442,26 +409,31 @@ def find_centroid_in_dc(data_container, wave_range=None,
 
 def cross_correlate_images(list_of_images, oversample=100, median_filter_s=None,
                            bckgr_kappa_sigma=None):
-    """Compute a shift between several images using cross-correlation.
-    
-    Description
-    -----------
-
-    Apply the :func:`skimage.registration.phase_cross_correlation` method to find 
-    the shift of a list of images with respect to the first one.
+    """
+    Compute relative shifts via phase cross-correlation.
 
     Parameters
     ----------
-    list_of_images : iterable
-        Collection of images with same dimensions.
-    oversample: int, default=100
-        Oversampling factor used for the cross-correlation.
-        See :func:`skimage.registration.phase_cross_correlation`.
+    list_of_images : sequence of ndarray or Quantity
+        First image is reference; shapes must match.
+    oversample : int, default: 100
+        Upsampling factor for subpixel accuracy.
+    median_filter_s : int, optional
+        Median filter size (converted to odd) applied to both reference and moving.
+    bckgr_kappa_sigma : float, optional
+        Background clipping threshold (sigma) for correlation masks.
 
     Returns
     -------
-    results : list
-        List containing the results of the cross correlation (shift, error, diffphase).
+    results : list of [ndarray, float, float]
+        Per moving image: [shift (drow, dcol), error, diffphase].
+    ancillary_info : dict
+        Standardised images and masks.
+
+    Raises
+    ------
+    ImportError
+        If scikit-image is not available.
     """
     try:
         from skimage.registration import phase_cross_correlation
@@ -528,72 +500,5 @@ def cross_correlate_images(list_of_images, oversample=100, median_filter_s=None,
         results.append([shift, error, diffphase])
     return results, ancillary_info
 
-# TODO: implement this method in the correction class
-# def register_interactive(data_set, quick_cube_pix_size=0.2, wave_range=None):
-#     """
-#     Fully manual registration via interactive plot
-#     """
-#     import matplotlib
-#     from matplotlib import pyplot as plt
-
-#     images = []
-
-#     for data in data_set:
-#         if type(data) is RSS:
-#             vprint(
-#                 "[Registration]  Data provided in RSS format --> creating a dummy datacube")
-#             cube_size_arcsec = (
-#                 data.info['fib_ra'].max(
-#                 ) - data.info['fib_ra'].min(),
-#                 data.info['fib_dec'].max()
-#                 - data.info['fib_dec'].min())
-#             x, y = np.meshgrid(
-#                 np.arange(- cube_size_arcsec[1] / 2 + quick_cube_pix_size / 2,
-#                           cube_size_arcsec[1] / 2 + quick_cube_pix_size / 2,
-#                           quick_cube_pix_size),
-#                 np.arange(- cube_size_arcsec[0] / 2 + quick_cube_pix_size / 2,
-#                           cube_size_arcsec[0] / 2 + quick_cube_pix_size / 2,
-#                           quick_cube_pix_size))
-#             datacube = np.zeros((data.wavelength.size, *x.shape))
-    
-#             # Interpolate RSS to a datacube
-#             datacube, _, _ = interpolate_rss(
-#                 data, pixel_size_arcsec=quick_cube_pix_size,
-#                 kernel_scale=1.,
-#                 datacube=datacube)
-#             image = make_white_image_from_array(datacube, data.wavelength,
-#                                                 wave_range=wave_range, s_clip=3.0)
-#             image_pix_size = quick_cube_pix_size
-
-#         elif type(data) is Cube:
-#             image = data.get_white_image(wave_range=wave_range, s_clip=3.0)
-#             image_pix_size = data.info['pixel_size_arcsec']
-
-#         # Mask NaN values
-#         image = interpolate_image_nonfinite(image)
-#         images.append(image)
-
-#     ### Start the interactive GUI ###
-#     # Close previus figures
-#     plt.close()
-#     plt.ion()
-#     centres = []
-
-#     def mouse_event(event):
-#         """..."""
-#         centres.append([event.xdata / 3600, event.ydata / 3600])
-#         vprint('x: {} and y: {}'.format(event.xdata, event.ydata))
-
-#     n_rss = len(data_set)
-
-#     fig = plt.figure()
-#     cid = fig.canvas.mpl_connect('button_press_event', mouse_event)
-#     for i in range(n_rss):
-#         ax = fig.add_subplot(1, n_rss, i + 1)
-#         ax.scatter(data_set[0].info["fib_ra"], data_set[0].info["fib_dec"],
-#                    c=np.nanmedian(data_set[0].intensity_corrected, axis=1))
-#     plt.show()
-#     plt.ioff()
-#     return centres
 
 # Mr Krtxo \(ﾟ▽ﾟ)/
