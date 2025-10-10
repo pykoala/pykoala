@@ -1,5 +1,10 @@
 """
 Astrometry-related corrections.
+
+This module provides tools to measure and apply relative astrometric offsets to
+data containers (RSS and Cube). It supports centroid-based and
+cross-correlation registration, as well as creating corrections from external
+reference images or FITS files.
 """
 
 # =============================================================================
@@ -24,7 +29,6 @@ from pykoala.cubing import make_dummy_cube_from_rss
 from pykoala.ancillary import interpolate_image_nonfinite, update_wcs_coords
 from pykoala.plotting.utils import qc_registration_centroids
 from pykoala import photometry
-
 from pykoala.utils.math import odd_int, robust_standarisation, std_from_mad
 
 
