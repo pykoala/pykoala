@@ -30,7 +30,7 @@ from pykoala.data_container import RSS, Cube
 from pykoala.cubing import make_dummy_cube_from_rss
 from pykoala.ancillary import interpolate_image_nonfinite, update_wcs_coords
 from pykoala.plotting.utils import qc_registration_centroids
-from pykoala import photometry
+from pykoala.utils import photometry
 from pykoala.utils.math import odd_int, robust_standarisation, std_from_mad
 
 
