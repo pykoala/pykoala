@@ -229,7 +229,7 @@ class AstrometryCorrection(CorrectionBase):
         if qc_plot:
             fig = qc_registration_centroids(images_list, wcs_list,
                                             offsets, reference_pos)
-            fig.suptitle(f"Centroiding-based ({centroider.get('centroider')})"
+            fig.suptitle(f"Centroiding-based ({centroid_args.get('centroider')})"
                          + " registration")
             return offsets, fig
         else:
