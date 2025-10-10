@@ -21,7 +21,7 @@ from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase, CorrectionOffset
 from pykoala.data_container import RSS, Cube
 from pykoala.cubing import make_dummy_cube_from_rss
-from pykoala.ancillary import interpolate_image_nonfinite
+from pykoala.ancillary import interpolate_image_nonfinite, update_wcs_coords
 from pykoala.plotting.utils import qc_registration_centroids
 from pykoala import photometry
 
@@ -222,20 +222,22 @@ class AstrometryCorrection(CorrectionBase):
 
             offset = [reference_pos.ra - centroid_world.ra, reference_pos.dec - centroid_world.dec]
             offsets.append(offset)
-            self.vprint("Offset found (ra, dec): {}{} (arcsec)"
+            self.vprint("Offset found (ra, dec): {:.2f}, {:.2f} (arcsec)"
                         .format(offset[0].to_value('arcsec'),
                                 offset[1].to_value('arcsec'))
                         )
         if qc_plot:
             fig = qc_registration_centroids(images_list, wcs_list,
                                             offsets, reference_pos)
+            fig.suptitle(f"Centroiding-based ({centroider.get('centroider')})"
+                         + " registration")
             return offsets, fig
         else:
             return offsets, None
 
-    def register_crosscorr(self, data_set, wave_range=None,
-                           oversample=100, quick_cube_pix_size=0.3,
-                           qc_plot=False):
+    def register_crosscorr(self, data_set, *, wave_range=None,
+                           quick_cube_pix_size=0.5,
+                           qc_plot=False, **crosscorr_kwargs):
         """Register a set of DataContainers using image cross-correlation.
 
         Parameters
@@ -270,7 +272,10 @@ class AstrometryCorrection(CorrectionBase):
 
         for data_container in data_set:
             if data_container.__class__ is RSS:
-                cube = make_dummy_cube_from_rss(data_container, quick_cube_pix_size)
+                self.vprint("Creating cube from individual RSS")
+                cube = make_dummy_cube_from_rss(data_container,
+                                                spa_pix_arcsec=quick_cube_pix_size,
+                                                kernel_pix_arcsec=quick_cube_pix_size)
                 image = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
             elif data_container.__class__ is Cube:
                 cube = data_container
@@ -282,23 +287,41 @@ class AstrometryCorrection(CorrectionBase):
             images.append(image)
             wcs.append(cube.wcs.celestial)
         # Perform the cross-correlation
-        results, ancillary_info = cross_correlate_images(images, oversample=oversample)
+        results, ancillary_info = cross_correlate_images(images,
+                                                         **crosscorr_kwargs)
+        reference_origin = wcs[0].pixel_to_world(0, 0)
         for i in range(len(results)):
             pixels_shift = results[i][0]
-            moving_origin = wcs[i + 1].pixel_to_world(0, 0)
-            # TODO: check axis consistency
-            reference_origin = wcs[0].pixel_to_world(0 - pixels_shift[1], 0 - pixels_shift[0])
-            offsets.append([moving_origin.ra - reference_origin.ra,
-                            moving_origin.dec - reference_origin.dec])
+            self.vprint("Cross-corr image offset pixels: {:.2f}, {:.2f} (pix)"
+                        .format(pixels_shift[1],
+                                pixels_shift[0])
+                        )
+            # Compute the coordinates wrt the reference origin
+            # (x, y) = (col, row)
+            moving_origin = wcs[i + 1].pixel_to_world(-pixels_shift[1],
+                                                      -pixels_shift[0])
+            
+            ra_offset, dec_offset = reference_origin.spherical_offsets_to(
+                moving_origin)
+            self.vprint("Net offset (ra, dec): {:.2f}, {:.2f} (arcsec)"
+                        .format(ra_offset.to_value('arcsec'),
+                                dec_offset.to_value('arcsec'))
+                        )
+            offsets.append([-ra_offset, -dec_offset])
+            # Correct the WCS (plotting purposes)
+            wcs[i + 1] = update_wcs_coords(
+                wcs[i + 1], ra_dec_offset=[-ra_offset, -dec_offset])
+
         if qc_plot:
             fig = qc_registration_centroids(images, wcs, offsets, 
                                             ref_pos=wcs[0].pixel_to_world(
                                                 images[0].shape[1] / 2, images[0].shape[0] / 2),
                                             ancillary_info=ancillary_info)
+            fig.suptitle("Cross-correlation registration")
             return offsets, fig
         else:
             return offsets, None
-    
+
     def apply(self, data_container, offset):
         """Apply an astrometrical offset to a data container.
         
@@ -448,7 +471,8 @@ def cross_correlate_images(list_of_images, oversample=100, median_filter_s=None,
     if median_filter_s is not None:
         median_filter_s = odd_int(median_filter_s)
         ancillary_info["median_filter_s"] = median_filter_s
-        ref = median_filter(ref, size=median_filter_s)
+        unit = ref.unit
+        ref = median_filter(ref, size=median_filter_s) << unit
     # Standarise
     ref = robust_standarisation(ref, axis=None)
 
@@ -457,7 +481,7 @@ def cross_correlate_images(list_of_images, oversample=100, median_filter_s=None,
     if bckgr_kappa_sigma is not None:
         std = std_from_mad(ref, axis=None)
         background = ref < bckgr_kappa_sigma * std
-        ref_mask &= not background
+        ref_mask &= ~background
     # Set to none is all pixels are valid for performance
     if ref_mask.all():
         ref_mask = None
@@ -472,7 +496,9 @@ def cross_correlate_images(list_of_images, oversample=100, median_filter_s=None,
         # Preprocessing
         moving = list_of_images[i+1]
         if median_filter_s is not None:
-            moving = median_filter(moving, size=median_filter_s)
+            unit = moving.unit
+            moving = median_filter(
+                moving, size=median_filter_s) << unit
         moving = robust_standarisation(moving, axis=None)
         # Masking
         mov_mask = np.isfinite(moving)
@@ -480,7 +506,7 @@ def cross_correlate_images(list_of_images, oversample=100, median_filter_s=None,
         if bckgr_kappa_sigma is not None:
             std = std_from_mad(moving, axis=None)
             background = moving < bckgr_kappa_sigma * std
-            mov_mask &= not background
+            mov_mask &= ~background
 
         if mov_mask.all():
             mov_mask = None
@@ -488,11 +514,13 @@ def cross_correlate_images(list_of_images, oversample=100, median_filter_s=None,
         ancillary_info["standarised_mov"].append(moving)
         ancillary_info["mov_mask"].append(mov_mask)
         # The shift ordering is consistent with the input image shape
+        # Shift (in pixels): register moving_image with reference_image.
         shift, error, diffphase = phase_cross_correlation(
             ref, moving,
             upsample_factor=oversample,
             space="real",
-            reference_mask=ref_mask, moving_mask=mov_mask)
+            reference_mask=ref_mask, moving_mask=mov_mask,
+            disambiguate=False)
         results.append([shift, error, diffphase])
     return results, ancillary_info
 
