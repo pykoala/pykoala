@@ -166,7 +166,7 @@ def compute_offset_from_external_image(
 
     off = CorrectionOffset(
         offset_data=results["offset_min"],
-        offset_error=np.full_like(results["offset_min"], np.nan),
+        offset_error=[np.nan << u.deg, np.nan << u.deg],
     )
     return off, results
 
