@@ -23,6 +23,7 @@ from pykoala import vprint
 from pykoala.data_container import Cube, RSS
 from pykoala.ancillary import update_wcs_coords
 from pykoala.plotting import utils
+from pykoala.ancillary import check_unit
 
 class QueryMixin:
     """Mixin with common methods for image queries to external databases."""
@@ -331,7 +332,7 @@ def query_image(data_containers, query=PSQuery, filters='r',
         and pixel size (``pix_size``) of each queried filter.
     """
     vprint("Querying image to external database")
-
+    im_extra_size_arcsec = check_unit(im_extra_size_arcsec, u.arcsec)
     # Compute the effective footprint of all DC and use that as input for
     # the query
     im_coords, im_fov = get_effective_sky_footprint(data_containers)
@@ -519,7 +520,7 @@ def make_plot_apertures(dc, synth_phot, synth_phot_err, ap_coords,
         fig, axs = plt.subplots(ncols=1, nrows=2, sharex=True, sharey=True,
                                 constrained_layout=True)
         mappable = axs[0].scatter(dc.info['fib_ra'], dc.info['fib_dec'],
-                                    c=synth_phot)
+                                    c=synth_phot.value)
         plt.colorbar(mappable, label="Flux")
         mappable = axs[1].scatter(dc.info['fib_ra'], dc.info['fib_dec'],
                                     c=synth_phot / synth_phot_err, label="SNR")
