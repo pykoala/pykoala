@@ -11,6 +11,7 @@ reference images or FITS files.
 # Basics packages
 # =============================================================================
 import numpy as np
+
 # =============================================================================
 # Astropy and associated packages
 # =============================================================================
@@ -19,6 +20,7 @@ from astropy.coordinates import SkyCoord
 from photutils.centroids import centroid_2dg, centroid_com
 
 from scipy.ndimage import median_filter
+
 # =============================================================================
 # KOALA packages
 # =============================================================================
@@ -115,14 +117,16 @@ class AstrometryCorrection(CorrectionBase):
         dc_out = data_container.copy()
         dc_out.update_coordinates(offset=[d_ra, d_dec])
         self.record_correction(
-            dc_out, status="applied",
-            offset=f"{d_ra.to('arcsec')}, {d_dec.to('arcsec')}"
+            dc_out,
+            status="applied",
+            offset=f"{d_ra.to('arcsec')}, {d_dec.to('arcsec')}",
         )
         return dc_out
 
 
-def compute_offset_from_external_image(data_container, external_image, filter_name,
-                                       **crosscorr_kwargs):
+def compute_offset_from_external_image(
+    data_container, external_image, filter_name, **crosscorr_kwargs
+):
     """
     Measure (dRA, dDEC) against an external reference image.
 
@@ -148,25 +152,28 @@ def compute_offset_from_external_image(data_container, external_image, filter_na
     """
     vprint("Computing astrometric offset via external reference")
     dc_phot = photometry.get_dc_aperture_flux(data_container, filter_name)
-    mask = dc_phot['aperture_mask']
+    mask = dc_phot["aperture_mask"]
     results = photometry.crosscorrelate_im_apertures(
-        dc_phot['aperture_flux'][mask],
-        dc_phot['coordinates'][mask],
+        dc_phot["aperture_flux"][mask],
+        dc_phot["coordinates"][mask],
         external_image,
-        **crosscorr_kwargs
+        **crosscorr_kwargs,
     )
     fig = photometry.make_plot_astrometry_offset(
-        data_container, dc_phot['synth_photo'], external_image, results
+        data_container, dc_phot["synth_photo"], external_image, results
     )
-    results['offset_fig'] = fig
+    results["offset_fig"] = fig
 
     off = CorrectionOffset(
-        offset_data=results['offset_min'],
-        offset_error=np.full_like(results['offset_min'], np.nan)
+        offset_data=results["offset_min"],
+        offset_error=np.full_like(results["offset_min"], np.nan),
     )
     return off, results
 
-def register_dataset_centroids(data_set, object_name=None, qc_plot=False, **centroid_args):
+
+def register_dataset_centroids(
+    data_set, object_name=None, qc_plot=False, **centroid_args
+):
     """
     Register a sequence of DataContainers via centroiding.
 
@@ -206,20 +213,24 @@ def register_dataset_centroids(data_set, object_name=None, qc_plot=False, **cent
             ref_pos = SkyCoord.from_name(object_name)
         except Exception as e:
             vprint(e)
-            centroid_args['full_output'] = False
+            centroid_args["full_output"] = False
             ref_pos = find_centroid_in_dc(data_set[0], **centroid_args)
     else:
-        centroid_args['full_output'] = False
+        centroid_args["full_output"] = False
         ref_pos = find_centroid_in_dc(data_set[0], **centroid_args)
 
     if qc_plot:
-        centroid_args['full_output'] = True
+        centroid_args["full_output"] = True
         images_list, wcs_list = [], []
 
     vprint(f"[Centroids] Reference: RA={ref_pos.ra}, DEC={ref_pos.dec}")
 
-    offsets = [CorrectionOffset(offset_data=[0.0 * u.deg, 0.0 * u.deg],
-                                offset_error=[np.nan * u.deg, np.nan * u.deg])]
+    offsets = [
+        CorrectionOffset(
+            offset_data=[0.0 * u.deg, 0.0 * u.deg],
+            offset_error=[np.nan * u.deg, np.nan * u.deg],
+        )
+    ]
 
     for dc in data_set[1:]:
         if qc_plot:
@@ -231,24 +242,38 @@ def register_dataset_centroids(data_set, object_name=None, qc_plot=False, **cent
 
         dra, ddec = ref_pos.spherical_offsets_to(cen_world)
         # Move dc onto reference
-        off = CorrectionOffset(offset_data=[-dra, -ddec],
-                               offset_error=[np.nan * u.deg, np.nan * u.deg])
-        vprint("[Centroids] (dRA, dDEC): "
-               f"{off.offset_data[0].to_value('arcsec'):.2f}, "
-               f"{off.offset_data[1].to_value('arcsec'):.2f} arcsec")
+        off = CorrectionOffset(
+            offset_data=[-dra, -ddec], offset_error=[np.nan * u.deg, np.nan * u.deg]
+        )
+        vprint(
+            "[Centroids] (dRA, dDEC): "
+            f"{off.offset_data[0].to_value('arcsec'):.2f}, "
+            f"{off.offset_data[1].to_value('arcsec'):.2f} arcsec"
+        )
         offsets.append(off)
 
     fig = None
     if qc_plot:
         # Use measured offsets + reference position for the panel
         offs_arr = [[off.offset_data[0], off.offset_data[1]] for off in offsets]
-        fig = qc_registration_centroids(images_list, wcs_list, offs_arr, ref_pos=ref_pos)
-        fig.suptitle(f"Centroid-based registration ({centroid_args.get('centroider', 'com')})")
+        fig = qc_registration_centroids(
+            images_list, wcs_list, offs_arr, ref_pos=ref_pos
+        )
+        fig.suptitle(
+            f"Centroid-based registration ({centroid_args.get('centroider', 'com')})"
+        )
 
     return offsets, fig
 
-def register_dataset_crosscorr(data_set, *, wave_range=None,
-                               quick_cube_pix_size=0.5, qc_plot=False, **crosscorr_kwargs):
+
+def register_dataset_crosscorr(
+    data_set,
+    *,
+    wave_range=None,
+    quick_cube_pix_size=0.5,
+    qc_plot=False,
+    **crosscorr_kwargs,
+):
     """
     Register a sequence via white-image cross-correlation.
 
@@ -286,8 +311,9 @@ def register_dataset_crosscorr(data_set, *, wave_range=None,
     for dc in data_set:
         if isinstance(dc, RSS):
             cube = make_dummy_cube_from_rss(
-                dc, spa_pix_arcsec=quick_cube_pix_size,
-                kernel_pix_arcsec=quick_cube_pix_size
+                dc,
+                spa_pix_arcsec=quick_cube_pix_size,
+                kernel_pix_arcsec=quick_cube_pix_size,
             )
             img = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
         elif isinstance(dc, Cube):
@@ -306,40 +332,63 @@ def register_dataset_crosscorr(data_set, *, wave_range=None,
     results, ancillary = cross_correlate_images(images, **crosscorr_kwargs)
     ref_origin = wcs_list[0].pixel_to_world(0, 0)
 
-    offsets = [CorrectionOffset(offset_data=[0.0 * u.deg, 0.0 * u.deg],
-                                offset_error=[np.nan * u.deg, np.nan * u.deg])]
+    offsets = [
+        CorrectionOffset(
+            offset_data=[0.0 * u.deg, 0.0 * u.deg],
+            offset_error=[np.nan * u.deg, np.nan * u.deg],
+        )
+    ]
     for i, (shift, _, _) in enumerate(results, start=1):
         drow, dcol = shift  # (row, col) to align moving -> ref
         vprint(f"[Xcorr] Pixel shift DC#{i}: drow={drow:.2f}, dcol={dcol:.2f}")
         moving_origin = wcs_list[i].pixel_to_world(-dcol, -drow)
         dra, ddec = ref_origin.spherical_offsets_to(moving_origin)
-        off = CorrectionOffset(offset_data=[-dra, -ddec],
-                               offset_error=[np.nan * u.deg, np.nan * u.deg])
-        vprint("[Xcorr] (dRA, dDEC): "
-               f"{off.offset_data[0].to_value('arcsec'):.2f}, "
-               f"{off.offset_data[1].to_value('arcsec'):.2f} arcsec")
+        off = CorrectionOffset(
+            offset_data=[-dra, -ddec], offset_error=[np.nan * u.deg, np.nan * u.deg]
+        )
+        vprint(
+            "[Xcorr] (dRA, dDEC): "
+            f"{off.offset_data[0].to_value('arcsec'):.2f}, "
+            f"{off.offset_data[1].to_value('arcsec'):.2f} arcsec"
+        )
         offsets.append(off)
 
     fig = None
     if qc_plot:
         # Update WCS copies for visualisation (do not mutate originals)
-        wcs_vis = [update_wcs_coords(w, ra_dec_offset=[off.offset_data[0], off.offset_data[1]])
-                   if idx > 0 else w
-                   for idx, (w, off) in enumerate(zip(wcs_list, offsets))]
-        ref_pos = wcs_list[0].pixel_to_world(images[0].shape[1] / 2, images[0].shape[0] / 2)
+        wcs_vis = [
+            (
+                update_wcs_coords(
+                    w, ra_dec_offset=[off.offset_data[0], off.offset_data[1]]
+                )
+                if idx > 0
+                else w
+            )
+            for idx, (w, off) in enumerate(zip(wcs_list, offsets))
+        ]
+        ref_pos = wcs_list[0].pixel_to_world(
+            images[0].shape[1] / 2, images[0].shape[0] / 2
+        )
         offs_arr = [[off.offset_data[0], off.offset_data[1]] for off in offsets]
-        fig = qc_registration_centroids(images, wcs_vis, offs_arr,
-                                        ref_pos=ref_pos, ancillary_info=ancillary)
+        fig = qc_registration_centroids(
+            images, wcs_vis, offs_arr, ref_pos=ref_pos, ancillary_info=ancillary
+        )
         fig.suptitle("Cross-correlation registration")
 
     return offsets, fig
 
-def find_centroid_in_dc(data_container, wave_range=None,
-                        median_filter_s=None,
-                        bckgr_kappa_sigma=None,
-                        centroider='com', com_power=1.0,
-                        quick_cube_pix_size=0.5, subbox=None,
-                        full_output=False):
+
+def find_centroid_in_dc(
+    data_container,
+    wave_range=None,
+    median_filter_s=None,
+    bckgr_kappa_sigma=None,
+    centroider="com",
+    com_power=1.0,
+    quick_cube_pix_size=0.5,
+    subbox=None,
+    full_output=False,
+):
     """
     Find the centre of light in a DataContainer.
 
@@ -363,16 +412,17 @@ def find_centroid_in_dc(data_container, wave_range=None,
         If `full_output=False`, returns only the sky coordinate of the centroid.
         Otherwise, returns `(cube, image, centroid_pixel, centroid_world)`.
     """
-    if centroider == 'com':
+    if centroider == "com":
         centroider = centroid_com
-    elif centroider == 'gauss':
+    elif centroider == "gauss":
         centroider = centroid_2dg
 
     if subbox is None:
         subbox = [[None, None], [None, None]]
     if isinstance(data_container, RSS):
         vprint(
-            "[Registration]  Data provided in RSS format --> creating a dummy datacube")
+            "[Registration]  Data provided in RSS format --> creating a dummy datacube"
+        )
         cube = make_dummy_cube_from_rss(data_container, quick_cube_pix_size)
         image = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
     elif isinstance(data_container, Cube):
@@ -382,15 +432,14 @@ def find_centroid_in_dc(data_container, wave_range=None,
     else:
         raise TypeError("Input DC must be an instance of Cube or RSS")
     # Select a subbox
-    image = image[subbox[0][0]:subbox[0][1],
-                  subbox[1][0]: subbox[1][1]]
-    
+    image = image[subbox[0][0] : subbox[0][1], subbox[1][0] : subbox[1][1]]
+
     if median_filter_s is not None:
         median_filter_s = odd_int(median_filter_s)
         image = median_filter(image, size=median_filter_s)
     # Mask bad values
     # image = interpolate_image_nonfinite(image)
-    centroider_mask = ~ np.isfinite(image)
+    centroider_mask = ~np.isfinite(image)
 
     if bckgr_kappa_sigma is not None:
         median = np.nanmedian(image)
@@ -399,16 +448,17 @@ def find_centroid_in_dc(data_container, wave_range=None,
         ref_mask &= not background
 
     # Find centroid
-    centroid_pixel  = np.array(centroider(image.value**com_power, centroider_mask))
+    centroid_pixel = np.array(centroider(image.value**com_power, centroider_mask))
     centroid_world = cube.wcs.celestial.pixel_to_world(*centroid_pixel)
     if not full_output:
         return centroid_world
     else:
-        return cube, image, centroid_pixel, centroid_world 
+        return cube, image, centroid_pixel, centroid_world
 
 
-def cross_correlate_images(list_of_images, oversample=100, median_filter_s=None,
-                           bckgr_kappa_sigma=None):
+def cross_correlate_images(
+    list_of_images, oversample=100, median_filter_s=None, bckgr_kappa_sigma=None
+):
     """
     Compute relative shifts via phase cross-correlation.
 
@@ -438,7 +488,9 @@ def cross_correlate_images(list_of_images, oversample=100, median_filter_s=None,
     try:
         from skimage.registration import phase_cross_correlation
     except Exception:
-        raise ImportError("For using the image crosscorrelation function you have to install scikit-image library")
+        raise ImportError(
+            "For using the image crosscorrelation function you have to install scikit-image library"
+        )
 
     ancillary_info = {}
     # Pre-processing
@@ -470,11 +522,10 @@ def cross_correlate_images(list_of_images, oversample=100, median_filter_s=None,
     results = []
     for i in range(len(list_of_images) - 1):
         # Preprocessing
-        moving = list_of_images[i+1]
+        moving = list_of_images[i + 1]
         if median_filter_s is not None:
             unit = moving.unit
-            moving = median_filter(
-                moving, size=median_filter_s) << unit
+            moving = median_filter(moving, size=median_filter_s) << unit
         moving = robust_standarisation(moving, axis=None)
         # Masking
         mov_mask = np.isfinite(moving)
@@ -492,11 +543,14 @@ def cross_correlate_images(list_of_images, oversample=100, median_filter_s=None,
         # The shift ordering is consistent with the input image shape
         # Shift (in pixels): register moving_image with reference_image.
         shift, error, diffphase = phase_cross_correlation(
-            ref, moving,
+            ref,
+            moving,
             upsample_factor=oversample,
             space="real",
-            reference_mask=ref_mask, moving_mask=mov_mask,
-            disambiguate=False)
+            reference_mask=ref_mask,
+            moving_mask=mov_mask,
+            disambiguate=False,
+        )
         results.append([shift, error, diffphase])
     return results, ancillary_info
 
