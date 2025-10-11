@@ -50,6 +50,28 @@ def pressure_from_altitude_std_atm(
     return pressure << u.hPa
 
 
+def airmass_plane_parallel(*,
+                 zd: Optional[Union[float, u.Quantity]] = None,
+                 alt: Optional[Union[float, u.Quantity]] = None):
+    """
+    Compute the optical airmass assuming a plane-parallel atmosphere.
+    
+    Parameters
+    ----------
+    zd
+        Apparent zenith distance. Degrees if unitless.
+    alt
+        Apparent altitude above horizon. Degrees if unitless. If provided,
+        ``zd`` is ignored and computed as ``90° - alt``.
+    """
+    zd = check_unit(zd, u.deg)
+    alt = check_unit(alt, u.deg)
+    if alt is not None:
+        zd = (90.0 << u.deg) - alt
+
+    x_secz = 1 / np.cos(np.radians(zd))
+    return x_secz
+
 def airmass_kasten_young89(
     *,
     zd: Optional[Union[float, u.Quantity]] = None,
@@ -105,15 +127,17 @@ def airmass_kasten_young89(
     5.6...
     """
     # Resolve zd (deg)
+    
     if alt is not None:
-        alt_q = alt * u.deg if not hasattr(alt, "unit") else alt.to(u.deg)
-        zd_q = (90.0 * u.deg) - alt_q
+        alt = check_unit(alt, u.deg)
+        zd = (90.0 << u.deg) - alt
     elif zd is not None:
-        zd_q = zd * u.deg if not hasattr(zd, "unit") else zd.to(u.deg)
+        zd = check_unit(zd, u.deg)
     else:
         raise ValueError("Provide either 'zd' (zenith distance) or 'alt' (altitude).")
 
-    zdeg = float(zd_q.value)
+    zdeg = zd.to_value("deg")
+
     if not np.isfinite(zdeg):
         raise ValueError(f"Invalid zenith distance: {zdeg!r}")
 
@@ -125,19 +149,19 @@ def airmass_kasten_young89(
     X_geo = 1.0 / (cz + 0.50572 * (96.07995 - zdeg) ** (-1.6364))
 
     if not apply_pressure_scaling:
-        return float(X_geo)
+        return X_geo
 
     # Determine pressure (hPa) to scale optical depth
     if pressure is not None:
-        P = pressure * u.hPa if not hasattr(pressure, "unit") else pressure.to(u.hPa)
+        pressure = check_unit(pressure, u.hPa)
     elif altitude is not None:
-        P = pressure_from_altitude_std_atm(altitude)
+        pressure = pressure_from_altitude_std_atm(altitude)
     else:
-        P = 1013.25 * u.hPa  # default sea-level standard pressure
+        pressure = 1013.25 * u.hPa  # default sea-level standard pressure
 
-    p_hpa = float(P.to_value(u.hPa))
+    p_hpa = float(pressure.to_value(u.hPa))
     # Sanity guard (avoid pathologies)
     if not (100.0 <= p_hpa <= 1050.0):
         p_hpa = 1013.25
 
-    return float(X_geo * (p_hpa / 1013.25))
+    return X_geo * (p_hpa / 1013.25)
