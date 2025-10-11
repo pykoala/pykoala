@@ -187,7 +187,7 @@ def _ensure_wcs_for_koala(header: fits.Header) -> WCS:
     return w
 
 
-def _safe_delete_rows(arr: np.ndarray, bad_rows: Optional[Sequence[int]]) -> np.ndarray:
+def _delete_rows(arr: np.ndarray, bad_rows: Optional[Sequence[int]]) -> np.ndarray:
     """Delete rows by index if provided; otherwise return `arr` unchanged."""
     if not bad_rows:
         return arr
@@ -233,21 +233,21 @@ def _read_rss(
         header = fits.Header()
 
     fname = os.path.basename(file_path)
-    vprint(f"\n> Reading KOALA RSS file {fname}")
+    vprint(f"Reading KOALA RSS file {fname}")
 
     with fits.open(file_path) as hdul:
         all_int = np.asarray(hdul[intensity_axis].data, dtype=np.float32)
-        intensity = _safe_delete_rows(all_int, bad_fibres_list)
+        intensity = _delete_rows(all_int, bad_fibres_list)
 
         if variance_axis is not None and variance_axis < len(hdul):
             all_var = np.asarray(hdul[variance_axis].data, dtype=np.float32)
-            variance = _safe_delete_rows(all_var, bad_fibres_list)
+            variance = _delete_rows(all_var, bad_fibres_list)
         else:
             vprint("WARNING! Variance extension not found in FITS file; filling with NaN.")
             variance = np.full_like(intensity, fill_value=np.nan, dtype=np.float32)
 
     # Build wavelength from WCS; size must match data's spectral length.
-    nfibres, nwave = intensity.shape
+    _, nwave = intensity.shape
     wl_idx = np.arange(nwave)
     wavelength = wcs.spectral.array_index_to_world(wl_idx).to_value("angstrom")
 
