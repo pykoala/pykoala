@@ -1,5 +1,5 @@
 """This module contains basic tools for manipulating spectra"""
-
+import os
 import numpy as np
 from typing import Dict, Optional, Tuple, List
 import astropy.units as u
@@ -240,3 +240,45 @@ def estimate_continuum_and_mask_absorption(
     vprint(f"No. of absorption features found: {n_features}",
            f"({np.count_nonzero(regions > 0)} pixels)")
     return cont_vals << flux_unit, cont_err << flux_unit, regions
+
+LINES = {
+    # Balmer
+    'hepsilon': 3970.1,
+    'hdelta': 4101.7,
+    'hgamma': 4340.4,
+    'hbeta': 4861.3,
+    'halpha': 6562.79,
+    # K
+    'K': 3934.777,
+    'H': 3969.588,
+    'Mg': 5176.7,
+    'Na': 5895.6,
+    'CaII1': 8500.36,
+    'CaII2': 8544.44,
+    'CaII3': 8664.52,
+}
+
+
+def mask_lines(wave_array, width=30, lines=LINES.values()):
+    wave_array = check_unit(wave_array, u.AA)
+    width = check_unit(width, wave_array.unit)
+    if width.size == 1:
+        width = width * np.ones(len(lines))
+    mask = np.ones(wave_array.size, dtype=bool)
+    lines_l = lines - width / 2
+    lines_r = lines + width / 2
+    left_idx = np.searchsorted(wave_array, lines_l).clip(0, wave_array.size)
+    right_idx = np.searchsorted(wave_array, lines_r).clip(0, wave_array.size)
+    for l, r in zip(left_idx, right_idx):
+        mask[l:r+1] = False
+    return mask
+
+def mask_telluric_lines(wave_array, width_clip=3 << u.AA):
+    model_file = os.path.join(os.path.dirname(__file__), "..",
+                              'input_data', 'sky_lines',
+                              'telluric_lines.txt')
+    w_l_1, w_l_2 = np.loadtxt(model_file, unpack=True, usecols=(0, 1))
+    w_l_1 = w_l_1 << u.angstrom
+    w_l_2 = w_l_2 << u.angstrom
+    return mask_lines(wave_array, width= np.clip(w_l_2 - w_l_1, a_min=width_clip, a_max=None),
+                      lines=(w_l_1 + w_l_2) / 2)
