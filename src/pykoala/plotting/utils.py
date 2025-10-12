@@ -3,6 +3,8 @@ from matplotlib import colors
 from matplotlib.ticker import AutoMinorLocator
 from matplotlib.collections import PatchCollection
 from matplotlib.cm import ScalarMappable
+from matplotlib.colors import ListedColormap
+from matplotlib.patches import Polygon
 
 import numpy as np
 
@@ -20,6 +22,8 @@ SYMMETRIC_CMAP.set_extremes(bad='gray', under='cyan', over='fuchsia')
 
 DEFAULT_CMAP = plt.get_cmap("gist_earth").copy()
 DEFAULT_CMAP.set_bad('gray')
+
+BINARY_ALPHA_CMAP = ListedColormap([(0, 0, 0, 0.5), (1, 1, 1, 0)])
 
 def local_quantity_support(func):
     """Allow astropy Quantities support locally."""
@@ -581,29 +585,60 @@ def qc_registration_crosscorr(images_list, cross_corr_results):
     plt.close(fig)
     return fig
 
-def qc_registration_centroids(images_list, wcs_list, offsets, ref_pos):
+def qc_registration_centroids(images_list, wcs_list, offsets, ref_pos, ancillary_info=None):
     """TODO..."""
+
+    if ancillary_info is not None:
+        images_list = [ancillary_info["standarised_ref"]] + ancillary_info["standarised_mov"]
+        masks = [ancillary_info["ref_mask"]] + ancillary_info["mov_mask"]
+    else:
+        masks = [None] * len(images_list)
+
     # Account for images with different sizes
     vmin, vmax = np.nanpercentile(
         np.hstack([im.flatten().value for im in images_list]), [5, 95])
     imargs = dict(vmin=vmin, vmax=vmax, cmap='viridis', interpolation='none')
 
     ncols=len(images_list)
-    fig = plt.Figure(figsize=(4 * ncols, 4))
+    fig = plt.Figure(figsize=(4 * ncols, 4),
+                     constrained_layout=True)
     plt.suptitle("QC centroid-based image registration")
-    for i in range(ncols):
-        ax = fig.add_subplot(1, ncols, i + 1 , projection=wcs_list[i])
-    
-        mappable = ax.imshow(images_list[i].value, **imargs)
-        ax.scatter(ref_pos.ra, ref_pos.dec, marker='*',
-                   ec='r', label='Reference', transform=ax.get_transform('world'))
-        ax.scatter(ref_pos.ra - offsets[i][0], ref_pos.dec - offsets[i][1], marker='o',
-                   ec='k', label='Centroid', transform=ax.get_transform('world'))
 
-        ax.annotate(f"Offset (ra, dec):\n {offsets[i][0].to('arcsec').value:.2f}, {offsets[i][1].to('arcsec').value:.2f} arcsec",
-                    xy=(0.05, 0.95),
-                    color='red',
-                    xycoords='axes fraction', va='top', ha='left')
+    reference_footprint = wcs_list[0].calc_footprint(center=False)
+    # Plot reference
+    ax = fig.add_subplot(1, ncols, 1, projection=wcs_list[0])
+    ax.set_title("Reference frame")
+    mappable = ax.imshow(images_list[0].value, **imargs)
+    if masks[0] is not None:
+        ax.imshow(masks[0], vmin=0, vmax=1,
+                  cmap=BINARY_ALPHA_CMAP, interpolation="none")
+    ax.scatter(ref_pos.ra, ref_pos.dec, marker='*',
+                   ec='r', label='Reference',
+                   transform=ax.get_transform('world'))
+    # Plot moving frames
+    for i in range(1, ncols):
+        ax = fig.add_subplot(1, ncols, i + 1, projection=wcs_list[i])
+
+        mappable = ax.imshow(images_list[i].value, **imargs)
+        if masks[i] is not None:
+            ax.imshow(masks[i], vmin=0, vmax=1,
+                      cmap=BINARY_ALPHA_CMAP, interpolation="none")
+
+        ref_polygon = Polygon(reference_footprint, closed=True,
+                          facecolor="none", edgecolor="r", linestyle="--",
+                          transform=ax.get_transform('world'))
+        ax.add_patch(ref_polygon)
+        ax.scatter(ref_pos.ra, ref_pos.dec, marker='*',
+                   ec='r', label='Reference',
+                   transform=ax.get_transform('world'))
+        ax.contour(images_list[0].value, linewidthds=0.6, colors="r",
+                   transform=ax.get_transform(wcs_list[0]), levels=5)
+        if i > 0:
+            ax.annotate(f"Offset (ra, dec):\n {offsets[i][0].to('arcsec').value:.2f}, {offsets[i][1].to('arcsec').value:.2f} arcsec",
+                        xy=(0.05, 0.95),
+                        color='lime',
+                        xycoords='axes fraction', va='top', ha='left')
+
     ax.legend(bbox_to_anchor=(0.5, 1.1), loc='lower center')
     cax = ax.inset_axes((1.05, 0, 0.05, 1))
     plt.colorbar(mappable, cax=cax)
