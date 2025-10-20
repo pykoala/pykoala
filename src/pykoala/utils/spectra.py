@@ -7,12 +7,13 @@ import astropy.units as u
 from scipy.signal import find_peaks, peak_widths
 from scipy.ndimage import (percentile_filter, median_filter, maximum_filter,
                            gaussian_filter1d, generic_filter, label)
-
+from scipy import sparse
+from scipy.sparse.linalg import spsolve
 from scipy.interpolate import interp1d, make_smoothing_spline
 
 from pykoala import vprint
 from pykoala.ancillary import check_unit
-from pykoala.utils.math import odd_int, integrated_autocorr_time, std_from_mad
+from pykoala.utils.math import odd_int, integrated_autocorr_time, std_from_mad, poly_extrapolate_wrapper
 
 
 def flux_conserving_interpolation(new_wave : u.Quantity, wave : u.Quantity,
@@ -154,6 +155,12 @@ def estimate_continuum_and_mask_absorption(
         flux_unit = 1.0 * u.one  # unitless placeholder
         fvals = np.asarray(flux, dtype=float)
 
+    if variance is not None:
+        variance = check_unit(variance, flux_unit**2)
+        var = variance.to_value(flux_unit**2).copy()
+    else:
+        var = np.ones_like(fvals)
+
     if wave.ndim != 1 or fvals.ndim != 1 or wave.size != fvals.size:
         raise ValueError("wave and flux must be 1D arrays of the same length")
 
@@ -167,11 +174,7 @@ def estimate_continuum_and_mask_absorption(
         absorption_mask = np.zeros(n, dtype=bool)
         return continuum, absorption_mask, {}
 
-    idx_all = np.arange(n)
-    wave_f = wave[finite]
     fvals_f = fvals[finite]
-    idx_f = idx_all[finite]
-
     # Percentile continuum (upper envelope)
     cont_window = check_unit(cont_window, u.AA)
     win = cont_window if cont_window is not None else 20 << u.AA
@@ -180,9 +183,23 @@ def estimate_continuum_and_mask_absorption(
     win_pixel = odd_int(int(win_pixel))
 
     # Mask emission lines
+    def _nmad_filter(x, size, mode="nearest"):
+        return generic_filter(x, std_from_mad, size=size, mode=mode)
+
+    median_filter_extrap = poly_extrapolate_wrapper(
+        median_filter, axis=-1, polyorder=1, pad_strategy="size"
+    )
+
+    perc_extrap = poly_extrapolate_wrapper(percentile_filter, axis=-1,
+        polyorder=1, pad_strategy="size")
+
+    nmad_extrap_filter = poly_extrapolate_wrapper(
+        _nmad_filter, axis=-1, polyorder=1, pad_strategy="size"
+    )
+
     f = fvals_f.copy()
-    std_vals = generic_filter(f, std_from_mad, size=win_pixel, mode="mirror")
-    median_vals = median_filter(f, size=win_pixel, mode="mirror")
+    std_vals   = nmad_extrap_filter(f, size=win_pixel)
+    median_vals = median_filter_extrap(f, size=win_pixel)
     iteration = 5
     while iteration:
         peaks, _ = find_peaks(f, height=median_vals + 2 * std_vals, distance=5)
@@ -193,17 +210,19 @@ def estimate_continuum_and_mask_absorption(
             for l, r in zip(lpts, rpts):
                 mask_line = slice(max(0, int(l) - 1), min(f.size, int(r) + 1))
                 f[mask_line] = median_vals[mask_line]
-            median_vals = median_filter(f, size=win_pixel, mode="mirror")
+                var[mask_line] = std_vals[mask_line]**2
+            median_vals = median_filter_extrap(f, size=win_pixel)
             iteration -= 1
         else:
             vprint("No emission lines found")
             break
     # Upper-percentile envelope and clipping to local maxima to avoid overshoot
-    cont_vals = percentile_filter(f, percentile=cont_percentile,
-                                  size=win_pixel, mode="mirror")
-    local_max = maximum_filter(f, size=max(3, win_pixel // 3),
-                               mode="mirror")
-    cont_vals = np.minimum(cont_vals, local_max)
+    vprint("Computing continuum via asymmetric least squares")
+    # cont_vals = asls_baseline(f, w=1/var)
+
+    cont_vals = perc_extrap(f, percentile=cont_percentile,
+                            size=win_pixel, mode="nearest")
+
     # Optional Gaussian smoothing
     if cont_smooth_sigma is not None:
         cont_smooth_sigma = check_unit(cont_smooth_sigma, u.AA)
@@ -212,8 +231,7 @@ def estimate_continuum_and_mask_absorption(
 
     # Robust local noise from positive residuals
     resid = fvals_f - cont_vals
-    sigma_loc = generic_filter(resid, std_from_mad, size=win_pixel,
-                               mode="mirror")
+    sigma_loc = nmad_extrap_filter(resid, size=win_pixel)
 
     # Prevent division by zero
     small = max(1e-12, np.nanpercentile(cont_vals, 5) * 1e-6)
@@ -230,7 +248,7 @@ def estimate_continuum_and_mask_absorption(
         cont_vals = np.maximum(cont_vals, spline(wave))
 
     # More realistic continuum uncertainty:
-    # statistical error ~ sigma_loc / sqrt(N_eff), with N_eff from autocorrelation
+    # statistical error ~ sigma_loc / sqrt(n_eff), with n_eff from autocorrelation
     tau = integrated_autocorr_time(resid)
     n_eff = max(1.0, win_pixel / tau)
     cont_err = sigma_loc / np.sqrt(n_eff)
