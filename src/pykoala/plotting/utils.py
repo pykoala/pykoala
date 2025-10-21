@@ -603,7 +603,7 @@ def qc_registration_centroids(images_list, wcs_list, offsets, ref_pos, ancillary
     imargs = dict(vmin=vmin, vmax=vmax, cmap='viridis', interpolation='none')
 
     ncols=len(images_list)
-    fig = plt.Figure(figsize=(4 * ncols, 4),
+    fig = plt.figure(figsize=(4 * ncols, 4),
                      constrained_layout=True)
     plt.suptitle("QC centroid-based image registration")
 
