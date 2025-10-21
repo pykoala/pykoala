@@ -1,5 +1,5 @@
 #catalog=https://snfactory.lbl.gov/snf/snf-specstars.html
-# Wavelength (Angstrom), Flux (1e-16 erg/s/cm2/AA)
+# Wavelength (Angstrom), Flux (1e-16 erg s**-1 cm**-2 AA**-1)
 3.000000000000000000e+03 3.795760003683832906e+02
 3.004199999999999818e+03 4.592313955736944990e+02
 3.008400000000000091e+03 5.227789530919201297e+02
