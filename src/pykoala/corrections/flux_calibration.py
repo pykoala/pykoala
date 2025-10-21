@@ -1266,9 +1266,7 @@ class FluxCalibration(CorrectionBase):
                     chi = ((cont_response - r) / cont_response_err)**2
                     # Smoothing factor to prevent excessive downweighting
                     kappa = np.nanpercentile(chi[weights > 0], 84).clip(3, None)
-                    vprint(f"kappa = {kappa}")
                     down_weights = 1.0 - erf(0.5 * chi / kappa)
-                    low_weigth = np.count_nonzero(down_weights < 0.1)
                     # Break if relative change is smaller than 10 percent
                     if (down_weights > 0.90).all():
                         vprint("  -> Converged")
@@ -1276,8 +1274,6 @@ class FluxCalibration(CorrectionBase):
                     weights *= down_weights
                     # Break if no change in low-weight pixel count
                     nn_low = np.count_nonzero(weights < weight_p10)
-                    vprint(f"  -> Low weight pixels: {nn_low} "
-                           + f"({nn_low / down_weights.size:.2%})")
                     if nn_low == n_low:
                         vprint("  -> No change in low-weight pixel count, stopping")
                         break
@@ -1558,6 +1554,31 @@ class FluxCalibration(CorrectionBase):
                     + f" R ({self.response.unit}), Rerr ({self.response_err.unit})" 
                    )
 
+    def response_to_throughput(self, lam, area_tel, gain=1.0 << u.electron / u.adu):
+        """
+        Convert spectrograph response [cm2 * A * ADU / erg]
+        to throughput efficiency (electrons per incident photon).
+
+        Parameters
+        ----------
+        lam : array_like
+            Wavelength in Angstroms.
+        area_tel : float
+            Telescope collecting area in cm^2.
+        gain : float
+            Detector gain in e-/ADU.
+
+        Returns
+        -------
+        eta : array_like
+            Dimensionless throughput efficiency.
+        """
+        area_tel = check_unit(area_tel, u.cm**2)
+        h = 6.626e-27 << u.Unit("erg s")
+        c = 2.998e18 << u.Unit("Angstrom / s")
+        r, _ = self.interpolate_response(lam, update=False)
+        return (r * (h * c * gain) / (area_tel * lam**2)).decompose()
+
     def apply(self, spectra_container : SpectraContainer) -> SpectraContainer:
         """
         Applies the response curve to a given SpectraContainer.
@@ -1604,3 +1625,4 @@ class FluxCalibration(CorrectionBase):
         return sc_out
 
 # Mr Krtxo \(ﾟ▽ﾟ)/
+
