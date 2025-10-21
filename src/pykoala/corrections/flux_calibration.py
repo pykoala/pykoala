@@ -25,6 +25,7 @@ from scipy.interpolate import interp1d, make_smoothing_spline
 from scipy.special import erf
 
 from astropy import units as u
+from astropy import constants as const
 from astropy.visualization import quantity_support
 from astropy.coordinates import SkyCoord
 from astropy.table import QTable
@@ -1574,10 +1575,9 @@ class FluxCalibration(CorrectionBase):
             Dimensionless throughput efficiency.
         """
         area_tel = check_unit(area_tel, u.cm**2)
-        h = 6.626e-27 << u.Unit("erg s")
-        c = 2.998e18 << u.Unit("Angstrom / s")
         r, _ = self.interpolate_response(lam, update=False)
-        return (r * (h * c * gain) / (area_tel * lam**2)).decompose()
+        delta_lam = np.gradient(lam)
+        return (r * (const.h * const.c * gain) / (area_tel * lam * delta_lam)).decompose()
 
     def apply(self, spectra_container : SpectraContainer) -> SpectraContainer:
         """
