@@ -16,19 +16,19 @@ It includes:
 # =============================================================================
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Tuple, Any, List, Union
-
-import numpy as np
-from scipy.optimize import curve_fit
-from scipy.ndimage import median_filter, percentile_filter
-from scipy.interpolate import interp1d, make_smoothing_spline
-
-import matplotlib.pyplot as plt
 import os
+import matplotlib.pyplot as plt
+import numpy as np
+
+from scipy.optimize import curve_fit
+from scipy.interpolate import interp1d, make_smoothing_spline
+from scipy.special import erf
+
 from astropy import units as u
+from astropy import constants as const
 from astropy.visualization import quantity_support
 from astropy.coordinates import SkyCoord
 from astropy.table import QTable
-from astropy.io import fits
 # =============================================================================
 # KOALA packages
 # =============================================================================
@@ -36,10 +36,10 @@ from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.data_container import SpectraContainer, RSS, Cube
 from pykoala.utils.spectra import estimate_continuum_and_mask_absorption
-from pykoala.utils.math import std_from_mad
+from pykoala.utils.math import std_from_mad, odd_int, savgol_filter_weighted
 from pykoala.utils.io import suppress_warnings
 from pykoala.ancillary import (centre_of_mass, cumulative_1d_moffat,
-                               mask_lines, mask_telluric_lines,
+                               mask_telluric_lines,
                                flux_conserving_interpolation, check_unit)
 from pykoala.plotting import utils as plt_utils
 
@@ -686,6 +686,7 @@ class FluxCalibration(CorrectionBase):
             resp_fn, resp_err_fn, fig = cls.get_response_curve(
             obs_wave=obs.wavelength,
             obs_spectra=extract["stellar_flux"],
+            obs_variance=extract["stellar_var"],
             star=star,
             **response_params,
             )
@@ -737,7 +738,7 @@ class FluxCalibration(CorrectionBase):
                                          ref_wave.size), fill_value=np.nan,
                                          dtype=float)
         spectral_response_err = np.full_like(spectral_response,
-                                        fill_value=np.nan)
+                                             fill_value=np.nan)
 
         spectral_response[0] = flux_calibration_corrections[0].response.to_value(ref_resp_unit)
         spectral_response_err[1] = flux_calibration_corrections[0].response_err.to_value(ref_resp_unit)
@@ -870,6 +871,7 @@ class FluxCalibration(CorrectionBase):
         # Declare variables
         mean_residuals = np.full(wavelength.size, fill_value=np.nan) << data.unit
         star_flux = np.full_like(mean_residuals, fill_value=np.nan)
+        star_var = np.full(star_flux.size, fill_value=np.nan) << star_flux.unit**2
         profile_popt = []
         profile_var = []
         running_wavelength = []
@@ -892,9 +894,17 @@ class FluxCalibration(CorrectionBase):
             slice_data = data[wave_slice]
             slice_var = variance[wave_slice]
             # Compute the median value only considering good values (i.e. excluding NaN)
-            slice_data = np.nanmedian(slice_data, axis=0)
-            slice_var = np.nanmedian(slice_var, axis=0) / np.sqrt(slice_var.shape[0])
-            slice_var[slice_var <= 0] = np.inf << slice_var.unit
+            weights = np.where(np.isfinite(slice_var) & (slice_var > 0),
+                               1.0 / slice_var.to_value(slice_data.unit**2), 0.0)
+            # slice_data = np.nanmedian(slice_data, axis=0)
+            # slice_var = np.nanmedian(slice_var, axis=0) / np.sqrt(slice_var.shape[0])
+            num = np.nansum(weights * slice_data, axis=0)
+            den = np.nansum(weights, axis=0)                                       # [P]
+            slice_data = np.where(den > 0, num / den, np.nan)
+            slice_var = np.where(den > 0, 1.0 / den, np.inf
+            ) * (slice_var.unit if hasattr(slice_var, "unit") else 1.0)
+
+            #slice_var[slice_var <= 0] = np.inf << slice_var.unit
 
             mask = np.isfinite(slice_data) & np.isfinite(slice_var) & (slice_data > 0)
             if not mask.any():
@@ -911,6 +921,10 @@ class FluxCalibration(CorrectionBase):
             growth_c_var = curve_of_growth(distance, slice_var, r_dummy, mask)
 
             cog_mask = np.isfinite(growth_c) & (growth_c > 0)
+
+            sigma = np.sqrt(growth_c_var[cog_mask].to_value(growth_c.unit**2))
+            sigma = np.where(sigma > 0, sigma, np.inf)
+
             if not cog_mask.any():
                 vprint("Chunk between {} to {} AA contains no useful data"
                         .format(wave_edges[0], wave_edges[1]))
@@ -930,7 +944,10 @@ class FluxCalibration(CorrectionBase):
                 popt, pcov = curve_fit(
                     profile, r_dummy[cog_mask].to_value("arcsec"),
                     growth_c[cog_mask].value, bounds=p_bounds,
-                    p0=p0, **fitter_args)
+                    p0=p0, 
+                    sigma=sigma,
+                    absolute_sigma=True,
+                    **fitter_args)
                 model_growth_c = profile(
                     r_dummy[cog_mask].to_value("arcsec"), *popt) << growth_c.unit
             except Exception as e:
@@ -945,11 +962,20 @@ class FluxCalibration(CorrectionBase):
                 res = growth_c[cog_mask] - model_growth_c
                 mean_residuals[wave_slice] = np.nanmean(res)
                 star_flux[wave_slice] = popt[0] << growth_c.unit
+                star_var[wave_slice] = pcov[0, 0] << growth_c.unit**2
 
-        star_good = np.isfinite(star_flux)
+        model_optimal = np.array(profile_popt)
+        model_variance = np.array(profile_var)
+        star_good = np.isfinite(star_flux) & np.isfinite(star_var)
         star_flux = np.interp(
             data_container.wavelength, wavelength[star_good],
             star_flux[star_good])
+        star_var = np.interp(
+            data_container.wavelength.value, wavelength[star_good].value,
+            star_var[star_good].value,
+            left=np.nanmax(star_var[star_good].value) * 10,
+            right=np.nanmax(star_var[star_good].value) * 10) << star_flux.unit**2
+
         final_residuals = np.full(data_container.wavelength.size,
                                   fill_value=np.nan) << data.unit
         final_residuals[wave_mask] = mean_residuals
@@ -958,14 +984,15 @@ class FluxCalibration(CorrectionBase):
             fig = FluxCalibration.plot_extraction(
                 x.value, y.value, x0.value, y0.value,
                 data.value, r_dummy.value**0.5, cog,
-                data_container.wavelength, star_flux, final_residuals)
+                data_container.wavelength, star_flux, star_var, final_residuals)
         else:
             fig = None
 
         result = dict(wave_edges=np.array(running_wavelength) << u.AA,
-                      optimal=np.array(profile_popt),
-                      variance=np.array(profile_var),
+                      optimal=model_optimal,
+                      variance=model_variance,
                       stellar_flux=star_flux,
+                      stellar_var=star_var,
                       residuals=final_residuals,
                       figure=fig)
         return result
@@ -973,7 +1000,7 @@ class FluxCalibration(CorrectionBase):
     @staticmethod
     @suppress_warnings
     def plot_extraction(x, y, x0, y0, data, rad, cog, wavelength, star_flux,
-                        residuals):
+                        star_var, residuals):
         """"""
         vprint("Making stellar flux extraction plot")
         fig, axs = plt.subplots(ncols=2, nrows=2, figsize=(8, 8),
@@ -983,6 +1010,8 @@ class FluxCalibration(CorrectionBase):
         ax.set_title("Median intensity")
         mappable = ax.scatter(x, y,
                               c=np.log10(np.nanmedian(data, axis=0)),
+                              vmin=np.nanpercentile(np.log10(data), 5),
+                              vmax=np.nanpercentile(np.log10(data), 99.5),
                               cmap='nipy_spectral')
         plt.colorbar(mappable, ax=ax, label=r'$\log_{10}$(intensity)')
         ax.plot(x0, y0, '+', ms=10, color='fuchsia')
@@ -1001,11 +1030,16 @@ class FluxCalibration(CorrectionBase):
         ax.grid(visible=True, which='both')
         ax.legend()
         ax = axs[0, 1]
-        ax.plot(wavelength, star_flux, '-', lw=0.7, label=f'Extracted stellar flux ')
-        ax.plot(wavelength, residuals, '-', lw=0.7, label=f'Mean model residuals')
+        ax.plot(wavelength, star_flux.value, '-', lw=0.7,
+                label=f'Extracted stellar flux ')
+        ax.plot(wavelength, np.sqrt(star_var.to_value(star_flux.unit**2)), '-',
+                lw=0.7, label=f'Extracted stellar flux err')
+        ax.plot(wavelength, residuals.value, '-', lw=0.7,
+                label=f'Mean model residuals')
         ax.legend()
         ax.set_ylabel(f'Flux ({star_flux.unit})')
         ax.set_xlabel('Wavelength')
+        ax.set_yscale('symlog', linthresh=np.nanpercentile(residuals.value, 90))
 
         axs[1, 1].axis("off")
         
@@ -1016,12 +1050,14 @@ class FluxCalibration(CorrectionBase):
     def get_response_curve(obs_wave: u.Quantity,
                            obs_spectra: u.Quantity,
                            star: StandardStar, *,
-                           cont_percentile: float = 80.0,
+                           obs_variance: Optional[u.Quantity] = None,
+                           use_continuum: Optional[bool] = False,
                            cont_window: u.Quantity = 50 << u.AA,
+                           cont_kappa_sigma: float = 3.0,
+                           savgol_scale: Optional[u.Quantity] = 50 << u.AA,
+                           savgol_degree: Optional[int] = 3,
+                           iter_smooth: Optional[int] = None,
                            smooth_spline: bool = True,
-                           abs_kappa_sigma: float = 3.0,
-                           pct_filter_n: Optional[int] = None,
-                           pct: Optional[float] = None,
                            pol_deg: Optional[int] = None,
                            spline: bool = False,
                            spline_lam: Optional[float] = None,
@@ -1031,117 +1067,228 @@ class FluxCalibration(CorrectionBase):
                            plot: bool = False
                            ):
         """
-        Compute a smooth instrumental response from an observed star and its reference.
+        Compute a smooth instrumental response from an observed standard star and its reference.
 
         Parameters
         ----------
-        obs_wave : `astropy.units.Quantity`
-            Observed wavelength grid.
-        obs_spectra : `astropy.units.Quantity`
-            Observed flux density on ``obs_wave``.
+        obs_wave : astropy.units.Quantity
+            One dimensional array with observed wavelengths. Must be strictly increasing.
+        obs_spectra : astropy.units.Quantity
+            One dimensional array with observed flux density sampled on obs_wave.
         star : StandardStar
-            Reference standard star.
-        cont_percentile : float, optional
-            Percentile for the continuum upper envelope (typical 85 to 95).
-        cont_window : `astropy.units.Quantity`, optional
-            Continuum window in wavelength units.
+            Reference standard star object providing a resample method onto obs_wave.
+        obs_variance : astropy.units.Quantity, optional
+            Per pixel variance of obs_spectra. Used to derive inverse variance weights.
+            If None, unit weights are used except where masks set weights to zero.
+        use_continuum : bool, optional
+            If True, estimate continua for both observed and reference spectra and build
+            the response from the continuum ratio. If False, use the raw ratio.
+        cont_window : astropy.units.Quantity, optional
+            Window size in wavelength used by the internal continuum estimator.
+        savgol_scale : astropy.units.Quantity, optional
+            Physical scale in wavelength that sets the Savitzky Golay window length in
+            pixels. If None, Savitzky Golay smoothing is skipped.
+        savgol_degree : int, optional
+            Polynomial order used by the Savitzky Golay filter. Must be less than the
+            derived window length.
+        iter_smooth : int, optional
+            If set to an integer greater than 1, perform that many robust reweighting
+            iterations around the Savitzky Golay smoothing to downweight outliers.
         smooth_spline : bool, optional
-            If True, refine the continuum with a weighted spline.
-        abs_kappa_sigma: float, optional
-            Number of sigmas below the continuum to identify absorption features.
-            Default is 3.0.
-        pct_filter_n : int or None, optional
-            If given, apply a percentile filter of length ``pct_filter_n`` to the
-            response before fitting.
-        pct : float or None, optional
-            Percentile used when ``pct_filter_n`` is set.
-        pol_deg : int or None, optional
-            Polynomial degree for response fitting. If provided, overrides spline/linear.
+            If True, allow the internal continuum estimator to refine its envelope with
+            a weighted spline. Has effect only when use_continuum is True.
+        cont_kappa_sigma : float, optional
+            Robust scale threshold used during iterative downweighting. Larger values
+            make the method less aggressive against outliers. Default is 3.0.
+        pol_deg : int, optional
+            If provided, fit and use a polynomial of this degree to model the response
+            after smoothing and masking. Overrides spline and linear interpolation.
         spline : bool, optional
-            If True, fit a smoothing spline to the response (requires ``spline_lam``).
-        spline_lam : float or None, optional
-            Smoothing parameter for ``make_smoothing_spline`` if ``spline`` is True.
+            If True, fit a smoothing spline to the response after masking.
+        spline_lam : float, optional
+            Smoothing parameter for the spline fit. Used only when spline is True.
         mask_absorption : bool, optional
-            If True, downweight canonical stellar absorption features.
+            If True, downweight pixels flagged as stellar absorption in either the
+            observed or the reference spectrum.
         mask_tellurics : bool, optional
-            If True, downweight telluric bands.
+            If True, downweight pixels affected by telluric absorption using an
+            internal telluric mask on obs_wave.
         mask_zeros : bool, optional
-            If True, downweight nonpositive observed flux pixels.
+            If True, downweight pixels where the observed flux is non positive.
         plot : bool, optional
-            If True, return a QA figure.
+            If True, also generate and return a QA figure with key intermediate
+            products and the final response.
 
         Returns
         -------
         response_curve : callable
-            A function ``f(x)`` that evaluates the response at wavelength ``x``.
-            Units follow ``obs_spectra / ref_spectra`` (usually dimensionless).
-        response_fig : `matplotlib.figure.Figure` or None
-            QA figure if ``plot`` is True, else None.
+            Function f(x) that evaluates the response on wavelength x. The input x may
+            be a float array in Angstrom or an astropy Quantity; the output carries the
+            same unit as obs_spectra divided by the reference spectrum, typically
+            dimensionless.
+        response_err_curve : callable
+            Function g(x) that evaluates an approximate response uncertainty on
+            wavelength x. The input handling is the same as for response_curve.
+        figure : matplotlib.figure.Figure or None
+            QA figure if plot is True, otherwise None.
+
+        Notes
+        -----
+        1. Weights
+        If obs_variance is provided, inverse variance weights are used. Additional
+        multiplicative downweighting is applied by masks and by the iterative
+        Savitzky Golay procedure when iter_smooth is greater than 1.
+
+        2. Savitzky Golay window
+        The effective window length in pixels is derived from savgol_scale and the
+        median wavelength step of obs_wave. The window length is forced to be odd
+        and at least savgol_degree + 1.
+
+        3. Masking
+        When mask_absorption is True, pixels flagged by the continuum based
+        absorption detector are set to zero weight. When mask_tellurics is True,
+        pixels outside a telluric pass mask are set to zero weight. When mask_zeros
+        is True, non positive observed flux pixels are set to zero weight.
+
+        4. Final modeling
+        If pol_deg is set, a polynomial is fit to the smoothed response at the
+        positions with positive weight. If spline is True, a smoothing spline is
+        used instead. Otherwise, a linear interpolator over the positive weight
+        pixels is returned.
+
+        Raises
+        ------
+        ValueError
+            If input arrays have incompatible shapes or if obs_wave is not strictly
+            increasing. If the derived Savitzky Golay window length is smaller than
+            savgol_degree + 1 when smoothing is requested.
         """
+
         vprint("Computing spectrophotometric response")
 
         # Reference on observed grid
         ref_on_obs = star.resample(obs_wave, conserve_flux=True)
+        raw_response = obs_spectra / ref_on_obs
+        # Estimate raw response uncertainty
+        if obs_variance is not None:
+            raw_response_err = raw_response * np.sqrt(obs_variance / obs_spectra**2)
+        else:
+            raw_response_err = np.zeros_like(raw_response.value) << raw_response.unit**2
 
-        # Remove absorption features from reference spectra
-        res = estimate_continuum_and_mask_absorption(
+        if use_continuum:
+            # Remove absorption features from reference spectra
+            res = estimate_continuum_and_mask_absorption(
             obs_wave, ref_on_obs,
             cont_percentile=cont_percentile,
             cont_window=cont_window, smooth_spline=smooth_spline,
-            abs_kappa_sigma=abs_kappa_sigma)
+            abs_kappa_sigma=cont_kappa_sigma)
 
-        ref_cont, ref_cont_err, ref_abs_regions = res
+            ref_cont, ref_cont_err, ref_abs_regions = res
 
-        # Remove absorption feature from observed spectra
-        res = estimate_continuum_and_mask_absorption(obs_wave, obs_spectra,
-        cont_percentile=cont_percentile,
-        cont_window=cont_window, smooth_spline=smooth_spline,
-        abs_kappa_sigma=abs_kappa_sigma)
+            # Remove absorption feature from observed spectra
+            res = estimate_continuum_and_mask_absorption(obs_wave, obs_spectra,
+            variance=obs_variance,
+            cont_percentile=cont_percentile,
+            cont_window=cont_window,
+            # smooth_spline=smooth_spline,
+            cont_smooth_sigma=None,
+            smooth_spline=False,
+            abs_kappa_sigma=cont_kappa_sigma)
 
-        obs_cont, obs_cont_err, obs_abs_regions = res
-        # Compute raw response
-        cont_response = obs_cont / ref_cont
-        cont_response_err = cont_response * np.sqrt(
+            obs_cont, obs_cont_err, obs_abs_regions = res
+            
+            vprint("Using continuum only for response function")
+            cont_response = obs_cont / ref_cont
+            cont_response_err = cont_response * np.sqrt(
             (obs_cont_err / obs_cont)**2 + (ref_cont_err / ref_cont)**2)
+            cont_response_err = np.sqrt(cont_response_err**2 + raw_response_err**2)
+
+        else:
+            cont_response = raw_response
+            cont_response_err = raw_response_err
+            ref_cont = obs_cont = None
+            ref_cont_err = obs_cont_err = None
+            ref_abs_regions = obs_abs_regions = None
 
         # Build weights
-        weights = np.ones(cont_response.size, dtype=float)
+        weights = 1.0 / np.where(np.isfinite(cont_response_err)
+                    & (cont_response_err > 0),
+                    cont_response_err.to_value(cont_response.unit), np.inf)
+        bin_mask = np.zeros(cont_response.size, dtype=int)
+
         if mask_absorption:
-            vprint("Masking stellar absoprtion lines")
-            ref_mask = ref_abs_regions > 0
-            n_masked = np.count_nonzero(ref_mask)
-            vprint(f"Fraction of reference pixels masked: {n_masked / ref_mask.size}")
-            weights[ref_mask] = 0.0
-            obs_mask = obs_abs_regions > 0
-            n_masked = np.count_nonzero(obs_mask)
-            vprint(f"Fraction of observed pixels masked: {n_masked / obs_mask.size}")
-            weights[obs_mask] = 0.0
+            vprint("Masking stellar absorption lines")
+            if ref_abs_regions is not None:
+                ref_mask = ref_abs_regions > 0
+                n_masked = np.count_nonzero(ref_mask)
+                vprint(f"Fraction of reference pixels masked: {n_masked / ref_mask.size}")
+                weights[ref_mask] = 0.0
+                bin_mask[ref_mask] += 1
+            if obs_abs_regions is not None:
+                obs_mask = obs_abs_regions > 0
+                n_masked = np.count_nonzero(obs_mask)
+                vprint(f"Fraction of observed pixels masked: {n_masked / obs_mask.size}")
+                weights[obs_mask] = 0.0
+                bin_mask[obs_mask] += 2
         if mask_tellurics:
             vprint("Masking telluric lines")
-            weights *= np.asarray(mask_telluric_lines(obs_wave), dtype=float)
+            mask_telluric = mask_telluric_lines(obs_wave)
+            weights[~mask_telluric] = 0.0
+            bin_mask[~mask_telluric] += 4
         if mask_zeros:
             vprint("Masking zeros")
-            weights[obs_spectra.to_value(obs_spectra.unit) < 0.0] = 0.0
+            negative = obs_spectra.to_value(obs_spectra.unit) <= 0.0
+            weights[negative] = 0.0
+            bin_mask[negative] += 8
 
         weights = np.clip(weights, 0.0, None)
         weights_norm = weights.sum()
         if weights_norm == 0 or weights_norm < weights.size * 0.1:
             vprint("Too few unmasked pixels", level="warning")
 
-        # Optional median filtering and reweighting
-        if pct_filter_n is not None and pct_filter_n >= 2 and pct is not None:
-            vprint(f"Applying percentile ({pct}) filter to response function")
-            filtered_cont_response = percentile_filter(
-                cont_response, pct, size=pct_filter_n,
-                mode="mirror") << cont_response.unit
-        else:
-            filtered_cont_response = cont_response.copy()
+        # Smooth the response with Savitzky-Golay filter
+        if savgol_scale is not None:
+            savgol_window_pix = savgol_scale.to_value(obs_wave.unit) / np.median(
+                np.diff(obs_wave.to_value(obs_wave.unit)))
+            savgol_window_pix = int(np.clip(
+                np.round(savgol_window_pix), 3, None))
+            savgol_window_pix = odd_int(savgol_window_pix)
+            vprint("Savitzky-Golay filtering of response with scale"
+                   + f" {savgol_scale} ({savgol_window_pix} pixels)")
+            # Iterative smoothing and reweighting
+            if iter_smooth is not None and iter_smooth > 1:
+                vprint(f"Iterative Savitzky-Golay smoothing ({iter_smooth} iterations)")
+                weight_p10 = np.nanpercentile(weights[weights > 0], 10)
+                n_low = np.count_nonzero(weights < weight_p10)
+                for _ in range(iter_smooth):
+                    r = savgol_filter_weighted(
+                        cont_response, savgol_window_pix, savgol_degree,
+                        mode="interp", w=weights) << cont_response.unit
+                    chi = ((cont_response - r) / cont_response_err)**2
+                    # Smoothing factor to prevent excessive downweighting
+                    kappa = np.nanpercentile(chi[weights > 0], 84).clip(3, None)
+                    down_weights = 1.0 - erf(0.5 * chi / kappa)
+                    # Break if relative change is smaller than 10 percent
+                    if (down_weights > 0.90).all():
+                        vprint("  -> Converged")
+                        break
+                    weights *= down_weights
+                    # Break if no change in low-weight pixel count
+                    nn_low = np.count_nonzero(weights < weight_p10)
+                    if nn_low == n_low:
+                        vprint("  -> No change in low-weight pixel count, stopping")
+                        break
+                    n_low = nn_low
+            # Final smooth
+            cont_response = savgol_filter_weighted(raw_response,
+                savgol_window_pix, savgol_degree, mode="interp",
+                w=weights) << raw_response.unit
 
         # Interpolation (skip pixels with w=0)
         if pol_deg is not None:
             vprint(f"Response smoothing using a polynomial (deg {pol_deg})")
             coeff = np.polyfit(obs_wave.to_value("AA")[weights > 0],
-                               filtered_cont_response.value[weights > 0],
+                               cont_response.value[weights > 0],
                                deg=pol_deg, w=weights[weights > 0])
             response = np.poly1d(coeff)
             fit_label = f"{pol_deg}-deg polynomial"
@@ -1149,15 +1296,14 @@ class FluxCalibration(CorrectionBase):
             vprint(f"Response smoothing using a spline (lambda {spline_lam})")
             response = make_smoothing_spline(
                 obs_wave.to_value("AA")[weights > 0],
-                filtered_cont_response.value[weights > 0],
+                cont_response.value[weights > 0],
                 w=weights[weights > 0],
                 lam=spline_lam)
             fit_label = f"spline lam={spline_lam}"
         else:
             vprint(f"Response linearly interpolated")
-            # Linear interpolation
             response = interp1d(obs_wave.to_value("AA")[weights > 0],
-                                filtered_cont_response.value[weights > 0],
+                                cont_response.value[weights > 0],
                                 fill_value="extrapolate", bounds_error=False)
             fit_label = "linear interp (fallback)"
 
@@ -1167,18 +1313,18 @@ class FluxCalibration(CorrectionBase):
 
         def response_wrapper(x):
             if isinstance(x, u.Quantity):
-                return response(x.to_value("AA")) << filtered_cont_response.unit
+                return response(x.to_value("AA")) << cont_response.unit
             else:
-                return response(x) << filtered_cont_response.unit
+                return response(x) << cont_response.unit
 
         def response_err_wrapper(x):
             if isinstance(x, u.Quantity):
-                return response_err(x.to_value("AA")) << filtered_cont_response.unit
+                return response_err(x.to_value("AA")) << cont_response.unit
             else:
-                return response_err(x) << filtered_cont_response.unit
+                return response_err(x) << cont_response.unit
 
         final_response = check_unit(response(obs_wave.to_value("AA")),
-                                    filtered_cont_response.unit)
+                                    cont_response.unit)
         final_response_err = cont_response_err
 
         if plot:
@@ -1187,12 +1333,11 @@ class FluxCalibration(CorrectionBase):
             observed=[obs_spectra, obs_cont, obs_cont_err],
             reference=[ref_on_obs, ref_cont, ref_cont_err],
             cont_response=cont_response,
-            filtered_response=filtered_cont_response,
             final_response=final_response,
             final_response_err=final_response_err,
             weights=weights,
+            bin_mask=bin_mask,
             fit_label=fit_label,
-            pct_filter_n=pct_filter_n,
             )
         else:
             fig = None
@@ -1206,12 +1351,11 @@ class FluxCalibration(CorrectionBase):
         observed,
         reference,
         cont_response,
-        filtered_response,
         final_response,
         final_response_err,
         weights,
+        bin_mask,
         fit_label,
-        pct_filter_n: None,
     ):
         """
         Build a three-panel QA figure for the response fit.
@@ -1230,8 +1374,6 @@ class FluxCalibration(CorrectionBase):
             ``[ref_interp, ref_cont, ref_cont_err]``.
         cont_response : `astropy.units.Quantity`
             Response from continuum ratio (Obs_cont / Ref_cont).
-        filtered_response : `astropy.units.Quantity`
-            Response after optional percentile prefilter.
         final_response : `astropy.units.Quantity`
             Fitted response evaluated on ``wavelength``.
         final_response_err : `astropy.units.Quantity`
@@ -1240,15 +1382,12 @@ class FluxCalibration(CorrectionBase):
             Relative weights used in the fit, in [0, 1].
         fit_label : str
             Label describing the chosen model.
-        pct_filter_n : int or None
-            Window size for percentile prefilter, if applied.
 
         Returns
         -------
         fig : `matplotlib.figure.Figure`
             The assembled QA figure.
         """
-        import matplotlib.pyplot as plt
 
         obs_spectra, obs_cont, obs_cont_err = observed
         ref_spectra, ref_cont, ref_cont_err = reference
@@ -1263,8 +1402,6 @@ class FluxCalibration(CorrectionBase):
         ax.set_title("Instrumental response fit")
         ax.plot(wavelength, raw_response, lw=0.7, label="R(raw)")
         ax.plot(wavelength, cont_response, lw=0.7, label="R(continuum)")
-        if pct_filter_n is not None and pct_filter_n >= 2:
-            ax.plot(wavelength, filtered_response, lw=0.8, label=f"R(cont filtered {pct_filter_n})")
         ax.fill_between(wavelength,
                         final_response - 2 * final_response_err,
                         final_response + 2 * final_response_err,
@@ -1276,45 +1413,76 @@ class FluxCalibration(CorrectionBase):
         ymin, ymax = np.nanpercentile(final_response.to_value(final_response.unit),
                                       [5, 95])
         if np.isfinite(ymin) and np.isfinite(ymax):
-            ax.set_ylim(ymin * 0.8, ymax * 1.2)
+            ax.set_ylim(0, ymax * 1.2)
         ax.legend(loc="best", fontsize="small")
-
+        # Plot weight mask
+        tw = ax.twinx()
+        tw.fill_between(wavelength, 0, weights / np.nanmax(weights),
+                        alpha=0.2, color="grey")
+        tw.set_ylabel("Relative weights", fontsize="small")
         # Panel 2: calibrated spectra and weights
         ax = axs[1]
         ax.plot(wavelength, ref_spectra, lw=0.7, label="Ref",
                 color="r")
-        ax.fill_between(wavelength, ref_cont - ref_cont_err, ref_cont + ref_cont_err,
-        color="orange", alpha=0.5)
-        ax.plot(wavelength, ref_cont, color="orange", label="Ref. continuum")
-
+        if ref_cont is not None and ref_cont_err is not None:
+            ax.fill_between(wavelength, ref_cont - ref_cont_err, ref_cont + ref_cont_err,
+                            color="orange", alpha=0.5)
+            ax.plot(wavelength, ref_cont, color="orange", label="Ref. continuum")
+            ylims = ref_cont.min() / 2, ref_cont.max() * 1.5
+        else:
+            ylims = ref_spectra.min() / 2, ref_spectra.max() * 1.5
         # Final response
-        ax.fill_between(wavelength,
-                        (obs_cont - obs_cont_err) / final_response,
-                        (obs_cont + obs_cont_err) / final_response,
-                        color="cornflowerblue", alpha=0.5)
-        ax.plot(wavelength, obs_cont / final_response, color="cornflowerblue", lw=1,
-                label="Obs cont cal")
+        if obs_cont is not None and obs_cont_err is not None:
+            ax.fill_between(wavelength,
+                            (obs_cont - obs_cont_err) / final_response,
+                            (obs_cont + obs_cont_err) / final_response,
+                            color="cornflowerblue", alpha=0.5)
+            ax.plot(wavelength, obs_cont / final_response, color="cornflowerblue", lw=1,
+                    label="Obs cont cal")
+
         ax.plot(wavelength, obs_spectra / final_response, lw=1.0,
                 color="blue", label="Fit-based calibration")
         ax.set_ylabel(f"Flux [{ref_spectra.unit}]")
-        ax.legend(loc="best", fontsize="small")
-        ax.set_ylim(ref_cont.min() / 2, ref_cont.max() * 1.5)
+        ax.legend(loc="upper left", fontsize="small", ncol=2)
+        ax.set_ylim(ylims)
+
         # Plot mask
         tw = ax.twinx()
-        tw.fill_between(wavelength, 0, 1 - weights, alpha=0.2, color="grey", label="Weight mask")
-        tw.set_ylabel("1 - weights")
+        # tw.fill_between(wavelength, 0, 1 - weights, alpha=0.2, color="grey", label="Weight mask")
+        # Plot masks
+        any_mask = False
+        for mask_val, desc, hatch in zip([1, 2, 4, 8],
+                                    ["Ref. abs", "Obs. abs", "Tellurics", "Zeros"],
+                                   ["////", "\\\\\\\\", "xxxx", "...."]):
+            mask_region = bin_mask & mask_val == mask_val
+            if np.any(mask_region):
+                tw.fill_between(wavelength, 0, 1,
+                                where=mask_region,
+                                alpha=0.3,
+                                label=desc, hatch=hatch,
+                                # hatch_linewidth=0.5,
+                                edgecolor="k",
+                                zorder=-10)
+                any_mask = True
+        if any_mask:
+            tw.set_ylim(0, 1)
+            tw.set_ylabel("Masks")
+            tw.legend(fontsize="x-small", ncol=4, loc="upper right")
+        else:
+            tw.axis("off")
 
         # Residuals
         ax = axs[2]
-        continuum_ratio = (obs_cont / final_response) / ref_cont
         ratio = (obs_spectra / final_response) / ref_spectra
         median_ratio = np.nanmedian(ratio)
         nmad_ratio = std_from_mad(ratio)
         ax.axhline(1.00, ls="--", color="r", alpha=0.6)
         ax.axhline(1.10, ls=":", color="r", alpha=0.4)
         ax.axhline(0.90, ls=":", color="r", alpha=0.4)
-        ax.plot(wavelength, continuum_ratio.value, lw=0.8, color="grey",
-        label="Cont. ratio")
+        if obs_cont is not None:
+            continuum_ratio = (obs_cont / final_response) / ref_cont
+            ax.plot(wavelength, continuum_ratio.value, lw=0.8, color="grey",
+                    label="Cont. ratio")
         ax.plot(wavelength, ratio.value, lw=0.8, color="k",
         label="Spec. ratio")
         ax.annotate(f"Median +/- NMAD spec.: {median_ratio:.2f} +/- {nmad_ratio:.2f}",
@@ -1387,6 +1555,30 @@ class FluxCalibration(CorrectionBase):
                     + f" R ({self.response.unit}), Rerr ({self.response_err.unit})" 
                    )
 
+    def response_to_throughput(self, lam, area_tel, gain=1.0 << u.electron / u.adu):
+        """
+        Convert spectrograph response [cm2 * A * ADU / erg]
+        to throughput efficiency (electrons per incident photon).
+
+        Parameters
+        ----------
+        lam : array_like
+            Wavelength in Angstroms.
+        area_tel : float
+            Telescope collecting area in cm^2.
+        gain : float
+            Detector gain in e-/ADU.
+
+        Returns
+        -------
+        eta : array_like
+            Dimensionless throughput efficiency.
+        """
+        area_tel = check_unit(area_tel, u.cm**2)
+        r, _ = self.interpolate_response(lam, update=False)
+        delta_lam = np.gradient(lam)
+        return (r * (const.h * const.c * gain) / (area_tel * lam * delta_lam)).decompose()
+
     def apply(self, spectra_container : SpectraContainer) -> SpectraContainer:
         """
         Applies the response curve to a given SpectraContainer.
@@ -1433,3 +1625,4 @@ class FluxCalibration(CorrectionBase):
         return sc_out
 
 # Mr Krtxo \(ﾟ▽ﾟ)/
+

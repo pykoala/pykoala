@@ -152,10 +152,12 @@ def plot_image(fig, ax, data,
         unit = None
 
     if norm is None:
+        if not np.isfinite(value).any():
+            raise ValueError("Data contains no finite values for normalization")
         interval = norm_interval(**interval_args)
         norm = visualization.ImageNormalize(value, interval=interval,
                               stretch=stretch(**stretch_args),
-                              clip=False, invalid=0)
+                              clip=False, invalid=np.nanmin(value) - 1.0)
     elif isinstance(norm, str):
         norm = getattr(colors, norm)()
 
@@ -306,7 +308,7 @@ def plot_fibres(fig, ax, rss=None, x=None, y=None,
     ax.add_collection(patch_collection)
     return ax, patch_collection, cb
 
-def qc_cube(cube, spax_pct=[75, 90, 99]):
+def qc_cube(cube, spax_pct=[75, 90, 99], rng_seed=42):
     """Create a quality control (QC) plot for a Cube.
 
     Parameters
@@ -321,6 +323,7 @@ def qc_cube(cube, spax_pct=[75, 90, 99]):
     -------
     figure: matplotlib.Figure
     """
+    np.random.seed(rng_seed)
 
     fig = plt.figure(figsize=(12, 12))
     vprint(f"[QCPLOT] Cube QC plot for: {cube.info['name']}")
@@ -600,7 +603,7 @@ def qc_registration_centroids(images_list, wcs_list, offsets, ref_pos, ancillary
     imargs = dict(vmin=vmin, vmax=vmax, cmap='viridis', interpolation='none')
 
     ncols=len(images_list)
-    fig = plt.Figure(figsize=(4 * ncols, 4),
+    fig = plt.figure(figsize=(4 * ncols, 4),
                      constrained_layout=True)
     plt.suptitle("QC centroid-based image registration")
 
