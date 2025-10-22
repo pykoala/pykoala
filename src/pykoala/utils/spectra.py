@@ -4,19 +4,30 @@ import numpy as np
 import astropy.units as u
 
 from scipy.signal import find_peaks, peak_widths
-from scipy.ndimage import (percentile_filter, median_filter,
-                           gaussian_filter1d, generic_filter, label)
+from scipy.ndimage import (
+    percentile_filter,
+    median_filter,
+    gaussian_filter1d,
+    generic_filter,
+    label,
+)
 from scipy.interpolate import make_smoothing_spline
 
 from pykoala import vprint
 from pykoala.ancillary import check_unit
-from pykoala.utils.math import odd_int, integrated_autocorr_time, std_from_mad, poly_extrapolate_wrapper
+from pykoala.utils.math import (
+    odd_int,
+    integrated_autocorr_time,
+    std_from_mad,
+    poly_extrapolate_wrapper,
+)
 
 
-def flux_conserving_interpolation(new_wave : u.Quantity, wave : u.Quantity,
-                                  spectra : u.Quantity) -> u.Quantity:
+def flux_conserving_interpolation(
+    new_wave: u.Quantity, wave: u.Quantity, spectra: u.Quantity
+) -> u.Quantity:
     """Interpolate a spectra to a new grid of wavelengths preserving the flux density.
-    
+
     Parameters
     ----------
     new_wave : :class:`np.ndarray` or :class:`astropy.units.Quantiy`
@@ -25,7 +36,7 @@ def flux_conserving_interpolation(new_wave : u.Quantity, wave : u.Quantity,
         Original grid of wavelengths
     spectra : :class:`astropy.units.Quantity`
         Spectra associated to `wave`.
-    
+
     Returns
     -------
     interp_spectra : np.ndarray
@@ -41,22 +52,19 @@ def flux_conserving_interpolation(new_wave : u.Quantity, wave : u.Quantity,
 
     wave_limits = 1.5 * masked_wave[[0, -1]] - 0.5 * masked_wave[[1, -2]]
     wave_edges = np.hstack(
-        [wave_limits[0],
-         (masked_wave[1:] + masked_wave[:-1])/2,
-         wave_limits[1]])
+        [wave_limits[0], (masked_wave[1:] + masked_wave[:-1]) / 2, wave_limits[1]]
+    )
 
     new_wave_limits = 1.5 * new_wave[[0, -1]] - 0.5 * new_wave[[1, -2]]
     new_wave_edges = np.hstack(
-        [new_wave_limits[0],
-         (new_wave[1:] + new_wave[:-1])/2,
-         new_wave_limits[1]])
+        [new_wave_limits[0], (new_wave[1:] + new_wave[:-1]) / 2, new_wave_limits[1]]
+    )
     cumulative_spectra = np.cumsum(spectra[mask] * np.diff(wave_edges))
-    cumulative_spectra = np.insert(cumulative_spectra, 0,
-                                   0 << cumulative_spectra.unit)
-    new_cumulative_spectra = np.interp(new_wave_edges, wave_edges,
-                                       cumulative_spectra)
+    cumulative_spectra = np.insert(cumulative_spectra, 0, 0 << cumulative_spectra.unit)
+    new_cumulative_spectra = np.interp(new_wave_edges, wave_edges, cumulative_spectra)
     interp_spectra = np.diff(new_cumulative_spectra) / np.diff(new_wave_edges)
     return interp_spectra
+
 
 def local_sigma_from_residuals(residuals: np.ndarray, win_pix: int) -> np.ndarray:
     """Robust local noise estimator using the positive side of residuals.
@@ -67,6 +75,7 @@ def local_sigma_from_residuals(residuals: np.ndarray, win_pix: int) -> np.ndarra
     sig = percentile_filter(pos, percentile=84, size=win_pix, mode="mirror")
     return sig
 
+
 def estimate_continuum_and_mask_absorption(
     wave,
     flux,
@@ -75,9 +84,9 @@ def estimate_continuum_and_mask_absorption(
     cont_window: u.Quantity = 50 << u.AA,
     cont_percentile: float = 90.0,
     cont_smooth_sigma: u.Quantity = 25.0 << u.AA,
-    smooth_spline : bool = False,
-    abs_kappa_sigma : int = 2,
-    ):
+    smooth_spline: bool = False,
+    abs_kappa_sigma: int = 2,
+):
     """
     Estimate a smooth continuum, identify absorption dominated regions, and
     summarize each absorption feature with pixel ids and equivalent width.
@@ -187,15 +196,16 @@ def estimate_continuum_and_mask_absorption(
         median_filter, axis=-1, polyorder=1, pad_strategy="size"
     )
 
-    perc_extrap = poly_extrapolate_wrapper(percentile_filter, axis=-1,
-        polyorder=1, pad_strategy="size")
+    perc_extrap = poly_extrapolate_wrapper(
+        percentile_filter, axis=-1, polyorder=1, pad_strategy="size"
+    )
 
     nmad_extrap_filter = poly_extrapolate_wrapper(
         _nmad_filter, axis=-1, polyorder=1, pad_strategy="size"
     )
 
     f = fvals_f.copy()
-    std_vals   = nmad_extrap_filter(f, size=win_pixel)
+    std_vals = nmad_extrap_filter(f, size=win_pixel)
     median_vals = median_filter_extrap(f, size=win_pixel)
     iteration = 5
     while iteration:
@@ -207,7 +217,7 @@ def estimate_continuum_and_mask_absorption(
             for l, r in zip(lpts, rpts):
                 mask_line = slice(max(0, int(l) - 1), min(f.size, int(r) + 1))
                 f[mask_line] = median_vals[mask_line]
-                var[mask_line] = std_vals[mask_line]**2
+                var[mask_line] = std_vals[mask_line] ** 2
             median_vals = median_filter_extrap(f, size=win_pixel)
             iteration -= 1
         else:
@@ -217,8 +227,9 @@ def estimate_continuum_and_mask_absorption(
     vprint("Computing continuum via asymmetric least squares")
     # cont_vals = asls_baseline(f, w=1/var)
 
-    cont_vals = perc_extrap(f, percentile=cont_percentile,
-                            size=win_pixel, mode="nearest")
+    cont_vals = perc_extrap(
+        f, percentile=cont_percentile, size=win_pixel, mode="nearest"
+    )
 
     # Optional Gaussian smoothing
     if cont_smooth_sigma is not None:
@@ -237,11 +248,10 @@ def estimate_continuum_and_mask_absorption(
     if smooth_spline:
         weights = 1 / np.clip(sigma_loc, small * 1e-2, None)
         try:
-            spline = make_smoothing_spline(wave.to_value("AA"), cont_vals,
-                                           w=weights)
+            spline = make_smoothing_spline(wave.to_value("AA"), cont_vals, w=weights)
         except Exception as e:
-            vprint(f"Smoothing spline failed with err: {e}", level="warning")    
-        #cont_vals = spline(wave)
+            vprint(f"Smoothing spline failed with err: {e}", level="warning")
+        # cont_vals = spline(wave)
         cont_vals = np.maximum(cont_vals, spline(wave))
 
     # More realistic continuum uncertainty:
@@ -252,6 +262,8 @@ def estimate_continuum_and_mask_absorption(
 
     abs_regions = fvals_f < cont_vals - abs_kappa_sigma * std_vals
     regions, n_features = label(abs_regions)
-    vprint(f"No. of absorption features found: {n_features}",
-           f"({np.count_nonzero(regions > 0)} pixels)")
+    vprint(
+        f"No. of absorption features found: {n_features}",
+        f"({np.count_nonzero(regions > 0)} pixels)",
+    )
     return cont_vals << flux_unit, cont_err << flux_unit, regions

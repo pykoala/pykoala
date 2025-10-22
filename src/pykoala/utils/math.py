@@ -4,20 +4,22 @@ import astropy.units as u
 from typing import Dict, Tuple, Optional
 from scipy.ndimage import percentile_filter, gaussian_filter1d, maximum_filter, label
 
+
 def odd_int(n: int) -> int:
     n = int(max(1, round(n)))
     return n if n % 2 == 1 else n + 1
 
+
 def med_abs_dev(x, axis=0):
     """Compute the Median Absolute Deviation (MAD) from an input array.
-    
+
     Parameters
     ----------
     x : :class:`np.ndarray`
         Input data.
     axis : int of tupla, optional
         Array axis along with the MAD will be computed
-    
+
     Returns
     -------
     mad : np.ndarray
@@ -25,11 +27,12 @@ def med_abs_dev(x, axis=0):
     """
     if axis is not None:
         mad = np.nanmedian(
-            np.abs(x - np.expand_dims(np.nanmedian(x, axis=axis), axis=axis)),
-            axis=axis)
+            np.abs(x - np.expand_dims(np.nanmedian(x, axis=axis), axis=axis)), axis=axis
+        )
     else:
         mad = np.nanmedian(np.abs(x - np.nanmedian(x)))
     return mad
+
 
 def std_from_mad(x, axis=0):
     """Estimate the estandard deviation from the MAD.
@@ -45,16 +48,17 @@ def std_from_mad(x, axis=0):
     -------
     mad : np.ndarray
         Associated MAD to x along the chosen axes.
-    
+
     See also
     --------
     :func:`med_abs_dev`
     """
     return 1.4826 * med_abs_dev(x, axis=axis)
 
+
 def robust_standarisation(x, axis=None):
     """Standarise an input array using the median and NMAD.
-    
+
     Parameters
     ----------
     x : np.ndarray
@@ -68,6 +72,7 @@ def robust_standarisation(x, axis=None):
     median = np.nanmedian(x, axis=axis)
     nmad = std_from_mad(x, axis=axis)
     return (x - median) / nmad
+
 
 def integrated_autocorr_time(x: np.ndarray, max_lag: Optional[int] = None) -> float:
     """Crude integrated autocorrelation time tau for 1D series x."""
@@ -90,9 +95,11 @@ def integrated_autocorr_time(x: np.ndarray, max_lag: Optional[int] = None) -> fl
         tau += 2.0 * rho
     return max(1.0, tau)
 
+
 ############################ Customised Filters ###############################
 
 # ------------------------- filter polynomial extrapolation --------------------
+
 
 def _poly_extrap_pad_1d(y, pad, polyorder=1):
     """
@@ -189,6 +196,7 @@ def poly_extrapolate_pad(a, pad, axis=-1, polyorder=1):
 
     return np.moveaxis(out, -1, axis)
 
+
 def _pad_from_size_argument(size, axis, ndim):
     """
     Compute half-window pad from a `size` argument that may be:
@@ -204,6 +212,7 @@ def _pad_from_size_argument(size, axis, ndim):
         s = int(size[ax])
     # For odd/even sizes, define half-width as floor(size/2)
     return max(0, s // 2)
+
 
 def poly_extrapolate_wrapper(
     filter_func,
@@ -247,6 +256,7 @@ def poly_extrapolate_wrapper(
     - For 'gaussian1d', the input must be 1D along `axis` or separable
       along other axes as per the original function's contract.
     """
+
     def _pad_resolver(a, args, kwargs):
         # Custom callable
         if callable(pad_strategy):
@@ -302,8 +312,18 @@ def poly_extrapolate_wrapper(
     )
     return wrapped
 
-def savgol_filter_weighted(y, window_length, polyorder, deriv=0, delta=1.0,
-                           axis=-1, mode="interp", cval=0.0, w=None):
+
+def savgol_filter_weighted(
+    y,
+    window_length,
+    polyorder,
+    deriv=0,
+    delta=1.0,
+    axis=-1,
+    mode="interp",
+    cval=0.0,
+    w=None,
+):
     """
     Weighted Savitzky–Golay filter with optional derivatives.
 
@@ -382,8 +402,8 @@ def savgol_filter_weighted(y, window_length, polyorder, deriv=0, delta=1.0,
     deg = polyorder
 
     # Factorials for derivative scaling: y^(d)(0) = d! * coeff[d]
-    
-    deriv_factor = factorial(deriv) / (delta ** deriv)
+
+    deriv_factor = factorial(deriv) / (delta**deriv)
 
     # Helper to do one weighted LS fit on a 1D window and return value/deriv at x=0
     def _fit_eval(yw, ww, x):
@@ -433,7 +453,7 @@ def savgol_filter_weighted(y, window_length, polyorder, deriv=0, delta=1.0,
                 start = 0
             if end > n:
                 # shift left
-                start -= (end - n)
+                start -= end - n
                 end = n
             # Window data
             yw = yi[start:end]
