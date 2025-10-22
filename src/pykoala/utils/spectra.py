@@ -1,15 +1,12 @@
 """This module contains basic tools for manipulating spectra"""
 
 import numpy as np
-from typing import Dict, Optional, Tuple, List
 import astropy.units as u
 
 from scipy.signal import find_peaks, peak_widths
-from scipy.ndimage import (percentile_filter, median_filter, maximum_filter,
+from scipy.ndimage import (percentile_filter, median_filter,
                            gaussian_filter1d, generic_filter, label)
-from scipy import sparse
-from scipy.sparse.linalg import spsolve
-from scipy.interpolate import interp1d, make_smoothing_spline
+from scipy.interpolate import make_smoothing_spline
 
 from pykoala import vprint
 from pykoala.ancillary import check_unit
