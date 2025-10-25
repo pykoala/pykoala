@@ -420,8 +420,15 @@ def parabolic_maximum(x, f):
     x_max = x[1] - 0.5 * (x21**2 * f23 - x23**2 * f21) / (x21 * f23 - x23 * f21)
     return x_max
 
+def _wave_edges_from_centers(wave):
+    wlim = 1.5 * wave[[0, -1]] - 0.5 * wave[[1, -2]]
+    return np.hstack([wlim[0], 0.5 * (wave[1:] + wave[:-1]), wlim[1]])
+
 def flux_conserving_interpolation(new_wave : u.Quantity, wave : u.Quantity,
-                                  spectra : u.Quantity) -> u.Quantity:
+                                  spectra : u.Quantity,
+                                  mask_nonfinite=True,
+                                  return_nan_flag=False,
+                                  extrapolation="edges") -> u.Quantity:
     """Interpolate a spectra to a new grid of wavelengths preserving the flux density.
     
     Parameters
@@ -432,7 +439,7 @@ def flux_conserving_interpolation(new_wave : u.Quantity, wave : u.Quantity,
         Original grid of wavelengths
     spectra : :class:`astropy.units.Quantity`
         Spectra associated to `wave`.
-    
+
     Returns
     -------
     interp_spectra : np.ndarray
@@ -440,31 +447,46 @@ def flux_conserving_interpolation(new_wave : u.Quantity, wave : u.Quantity,
     """
     wave = check_unit(wave)
     new_wave = check_unit(new_wave, wave.unit)
-    # Strict check
-    # Spectra can have different, non-compatible units, such as ADU or flam
     spectra = check_unit(spectra)
-    mask = np.isfinite(spectra)
-    masked_wave = wave[mask]
+    
+    if mask_nonfinite:
+        mask = np.isfinite(spectra)
+    else:
+        mask = np.ones(spectra.size, dtype=bool)
+    
+    edges_masked = _wave_edges_from_centers(wave[mask])
+    new_edges = _wave_edges_from_centers(new_wave)
 
-    wave_limits = 1.5 * masked_wave[[0, -1]] - 0.5 * masked_wave[[1, -2]]
-    wave_edges = np.hstack(
-        [wave_limits[0],
-         (masked_wave[1:] + masked_wave[:-1])/2,
-         wave_limits[1]])
+    dlam_masked = np.diff(edges_masked)
+    dlam_new = np.diff(new_edges)
+    cum = np.cumsum(spectra[mask] * dlam_masked)
+    cum = np.insert(cum, 0, 0 * cum.unit)
+    if isinstance(extrapolation, float):
+        cum_interp = np.interp(new_edges, edges_masked, cum,
+        left=extrapolation, right=extrapolation)
+    elif extrapolation == "edges":
+        cum_interp = np.interp(new_edges, edges_masked, cum)
+    else:
+        raise ValueError(f"Unrecognised extrapolation method {extrapolation}")
 
-    new_wave_limits = 1.5 * new_wave[[0, -1]] - 0.5 * new_wave[[1, -2]]
-    new_wave_edges = np.hstack(
-        [new_wave_limits[0],
-         (new_wave[1:] + new_wave[:-1])/2,
-         new_wave_limits[1]])
-    cumulative_spectra = np.cumsum(spectra[mask] * np.diff(wave_edges))
-    cumulative_spectra = np.insert(cumulative_spectra, 0,
-                                   0 << cumulative_spectra.unit)
-    new_cumulative_spectra = np.interp(new_wave_edges, wave_edges,
-                                       cumulative_spectra)
-    interp_spectra = np.diff(new_cumulative_spectra) / np.diff(new_wave_edges)
-    return interp_spectra
+    interp_spectra = np.diff(cum_interp) / dlam_new
 
+    if return_nan_flag:
+        edges_full = _wave_edges_from_centers(wave)
+        bad = np.array(~mask, dtype=int)
+        bad_cumulative = np.zeros(wave.size + 1, dtype=np.int64)
+        bad_cumulative[1:] = np.cumsum(bad)
+        i_start = np.searchsorted(edges_full, new_edges[:-1], side='right') - 1
+        i_start = np.clip(i_start, 0, wave.size - 1)
+        i_end = np.searchsorted(edges_full, new_edges[1:], side='left') - 1
+        i_end = np.clip(i_start, 0, wave.size - 1)
+        # Number of bad pixels per wavelength bin
+        bad_count = bad_cumulative[i_end + 1] - bad_cumulative[i_start]
+        # Flag those containing at least one bad pixel
+        flag = bad_count > 0
+        return interp_spectra, flag
+    else:
+        return interp_spectra
 
 def centre_of_mass(w, x, y):
     """Compute the centre of mass from a distribution of points and weights.
