@@ -9,6 +9,7 @@ A specialized subclass of :class:`DataContainer` is the :class:`SpectraContainer
 """
 
 from abc import ABC, abstractmethod
+from matplotlib import pyplot as plt
 import numpy as np
 import copy
 from datetime import datetime
@@ -392,6 +393,147 @@ class DataMask(object):
         self.flag_map[name] = (value, desc)
         self.masks[name] = np.zeros(self.bitmask.shape, dtype=bool)
 
+    def plot(self, fig=None, ax=None, show=False,
+             vmax=None, vmin=None, title=None,
+             max_colorbar_ticks=10):
+        """
+        Plot the integer bitmask map and a per-bit description table.
+        If the bitmask is N-D (N>2), collapse all leading axes via bitwise OR,
+        preserving the last two axes as the image plane.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes, optional
+            Axes to draw the image on. If None, a new figure is created with
+            two columns (image + table).
+        cmap : str or Colormap, default='tab20'
+            Colormap for the integer bitmask image.
+        show : bool, default True
+            Call plt.show() at the end if True.
+        table_loc : {'right', 'bottom'}, default 'right'
+            Where to place the bit description table relative to the image.
+        vmax, vmin : float, optional
+            Image limits. By default inferred from data.
+        title : str, optional
+            Title for the image panel. If None, a sensible default is used.
+        max_colorbar_ticks : int, default=20
+            If the number of unique integer values is <= this threshold,
+            colorbar ticks are set exactly on those unique values for readability.
+
+        Returns
+        -------
+        fig, ax_img, ax_tbl : (Figure, Axes, Axes or None)
+            The created figure and axes. ax_tbl can be None if an external `ax`
+            is provided and there is no room for a table.
+        """
+
+        if self.bitmask is None:
+            raise ValueError("DataMask.bitmask is None.")
+
+        data = self.bitmask
+
+        # Determine collapse axes: collapse all leading axes, keep the final two as image
+        if data.ndim < 2:
+            raise ValueError(f"plot() expects at least 2D bitmask, got shape {data.shape}")
+
+        if data.ndim > 2:
+            axes_to_collapse = tuple(range(0, data.ndim - 2))
+            # Collapse by bitwise OR across leading axes
+            data2d = np.bitwise_or.reduce(data, axis=axes_to_collapse)
+        else:
+            axes_to_collapse = ()
+            data2d = data
+
+        if fig is None and ax is None:
+            aspect = data2d.shape[1] / data2d.shape[0]
+            fig = plt.figure(constrained_layout=True,
+                             figsize=(8, 8 / aspect * 5 / 3))
+            gs = fig.add_gridspec(nrows=2, ncols=1, height_ratios=[2, 3],
+                                  hspace=0.15)
+            ax_img = fig.add_subplot(gs[1, 0])
+            ax_tbl = fig.add_subplot(gs[0, 0])
+            ax_tbl.axis("off")
+        elif ax is not None:
+            fig = ax.figure
+            ax_img = ax
+            ax_tbl = None
+
+        # Build the image
+        unique_vals = np.unique(data2d)
+        cm = plt.get_cmap("tab20")
+        cm.set_under("white")
+        cm.set_over("black")
+        if vmin is None:
+            vmin = 2
+        if vmax is None:
+            vmax = unique_vals.max()
+
+        im = ax_img.imshow(data2d, origin="lower", interpolation="none",
+                           aspect="auto", cmap=cm, vmin=vmin, vmax=vmax)
+        ax_img.set_xlabel("x [pix]")
+        ax_img.set_ylabel("y [pix]")
+        if title is None:
+            title = "Bitmask"
+        ax_img.set_title(title)
+
+        cbar = fig.colorbar(im, ax=ax_img, fraction=0.05, pad=0.04,
+                            orientation="horizontal", extend='both')
+        if unique_vals.size <= max_colorbar_ticks:
+            cbar.set_ticks(unique_vals[unique_vals > 0].astype(int))
+        cbar.set_label("Bitmask value")
+
+        # Build the per-flag table (collapse each flag's boolean mask over the same axes)
+        rows = []
+        total_px = data2d.size
+        sorted_flags = sorted(self.flag_map.items(), key=lambda kv: kv[1][0])
+
+        for name, (val, desc) in sorted_flags:
+            mask_nd = self.get_flag_map_from_bitmask(name)  # same shape as bitmask
+            if mask_nd.ndim > 2 and axes_to_collapse:
+                mask_2d = np.any(mask_nd, axis=axes_to_collapse)
+            else:
+                mask_2d = mask_nd
+
+            count = np.count_nonzero(mask_2d)
+            frac = 100.0 * count / total_px if total_px > 0 else 0.0
+            rows.append([
+                name,
+                str(val),
+                f"{val:#0{10}b}",
+                f"{count}",
+                f"{frac:.2f}%",
+                (desc or "")
+            ])
+
+        any_count = np.count_nonzero(data2d)
+        any_frac = 100.0 * any_count / total_px if total_px > 0 else 0.0
+        rows.append(["ANY", "--", "--", f"{any_count}", f"{any_frac:.2f}%", "Pixels with one or more flags set"])
+
+        # Render the table
+        if ax_tbl is None:
+            text_lines = [
+                "Bit descriptions:\n",
+                "Name | Value | Binary | Count | Frac | Description"
+            ]
+            for r in rows:
+                text_lines.append(f"{r[0]} | {r[1]} | {r[2]} | {r[3]} | {r[4]} | {r[5]}")
+            ax_img.text(
+                1.02, 0.5, "\n".join(text_lines), transform=ax_img.transAxes,
+                va="center", ha="left", family="monospace",
+                fontsize="x-small")
+        else:
+            col_labels = ["Flag", "Value", "Binary", "Count", "Frac", "Description"]
+            table = ax_tbl.table(cellText=rows, colLabels=col_labels, loc="center")
+            table.auto_set_font_size(True)
+            # table.scale(1.0, 1.2)
+            ax_tbl.set_title("Bit definitions and pixel stats", fontsize=11, pad=6)
+
+        if show:
+            plt.show()
+        else:
+            plt.close(fig)
+        return fig, ax_img, ax_tbl
+
     def dump_to_hdu(self):
         """Return a ImageHDU containig the mask information.
 
@@ -745,15 +887,165 @@ class SpectraContainer(DataContainer):
         """
         if wave_range is None:
             wave_mask = np.ones_like(self.wavelength, dtype=bool)
-            wave_mask[:100] = 0
-            wave_mask[-100:] = 0
         else:
             wave_mask = (self.wavelength >= wave_range[0]) & (
                 self.wavelength <= wave_range[1])
         median_intensity = np.nanmedian(self.rss_intensity[:, wave_mask], axis=1)
-        median_intensity = np.nan_to_num(median_intensity)
+        # Put bad fibres at the bottom
+        median_intensity = np.nan_to_num(median_intensity, nan=0.0)
         return np.argsort(median_intensity)
 
+    def plot_spectra(
+        self,
+        indices,
+        ax=None,
+        *,
+        wave_range=None,
+        show_variance=False,
+        variance_alpha=0.2,
+        labels=None,
+        colors=None,
+        normalize=None,
+        drawstyle="default",
+        mask_invalid=True,
+        flux_scale=None,
+        **plot_kwargs,
+    ) -> plt.Axes:
+        """
+        Plot one or multiple spectra (RSS-like order) as a function of wavelength.
+
+        Parameters
+        ----------
+        indices
+            Integer index or iterable of indices into `rss_intensity` (axis=0).
+        ax
+            Matplotlib Axes to draw on; if None, a new one is created.
+        wave_range
+            Optional 2-element (min, max) wavelength range. Elements can be floats
+            (assumed same unit as `self.wavelength`) or `Quantity`.
+        show_variance
+            If True, shade +/-1 sigma using `rss_variance` when available.
+        variance_alpha
+            Alpha for the variance shading.
+        labels
+            Optional iterable of labels, one per spectrum. Defaults to `idx {i}`.
+        colors
+            Optional iterable of colors, one per spectrum. Falls back to cycle.
+        normalize
+            Optional normalization applied per spectrum *before* adding offsets.
+            Allowed values:
+                - None: no normalization
+                - "median": divide by median over the plotted wavelength mask
+                - "max": divide by max over the plotted wavelength mask
+        drawstyle
+            Matplotlib drawstyle, e.g., "default", "steps-mid".
+        mask_invalid
+            If True, mask NaNs in intensity/variance before plotting.
+        **plot_kwargs
+            Passed to `ax.plot` (e.g., linewidth=1).
+
+        Returns
+        -------
+        ax : matplotlib.axes.Axes
+            The axes with the drawn spectra.
+        """
+        # ---- prepare inputs
+        if isinstance(indices, int):
+            idx = self.get_spectra_sorted()[-indices:]
+        else:
+            idx = np.atleast_1d(indices).astype(int)
+
+        if idx.ndim != 1:
+            raise ValueError("`indices` must be an int or 1D iterable of ints.")
+        n = idx.size
+
+        if labels is None:
+            labels = [f"idx {i}" for i in idx]
+        else:
+            labels = list(labels)
+            if len(labels) != n:
+                raise ValueError("`labels` length must match number of indices.")
+
+        # Axes
+        if ax is None:
+            fig, ax = plt.subplots()
+
+        if wave_range is None:
+            wave_mask = np.ones(self.wavelength.size, dtype=bool)
+            wl = self.wavelength
+        else:
+            wmin, wmax = wave_range
+            wmin = ancillary.check_unit(wmin, self.wavelength.unit)
+            wmax = ancillary.check_unit(wmax, self.wavelength.unit)
+            wave_mask = (self.wavelength.unit >= wmin) & (
+                self.wavelength.unit <= wmax)
+            wl = self.wavelength[wave_mask]
+
+        # ---- intensity (and variance) slices
+        intensities = self.rss_intensity[idx][:, wave_mask]
+
+        if show_variance:
+            variances = self.rss_variance[idx][:, wave_mask]
+            if variances is None:
+                raise AttributeError("`rss_variance` is not available.")
+
+        # ---- masking invalids
+        if mask_invalid:
+            mask_good = np.isfinite(intensities)
+            if show_variance:
+                mask_good &= np.isfinite(variances)
+            # keep only wavelengths that are valid in any spectrum, but also honor wave_range
+            wave_mask = wave_mask & np.any(mask_good, axis=0)
+
+            intensities = intensities[:, wave_mask]
+            if show_variance:
+                variances = variances[:, wave_mask]
+
+        # ---- normalization
+        def _norm_factor(f):
+            if normalize is None:
+                return 1.0
+            if normalize == "median":
+                m = np.nanmedian(f)
+                return m if np.isfinite(m) and m != 0 else 1.0
+            if normalize == "max":
+                m = np.nanmax(f)
+                return m if np.isfinite(m) and m != 0 else 1.0
+            raise ValueError("`normalize` must be None, 'median', or 'max'.")
+
+        low, up = np.nanpercentile(intensities.value, [50, 95])
+        # ---- plotting fibres
+        for k, (ik, lab) in enumerate(zip(idx, labels)):
+            flux = intensities[k]
+            norm = _norm_factor(flux)
+
+            color = None if colors is None else colors[k % len(colors)]
+            line = ax.plot(
+                wl, flux / norm,
+                label=lab,
+                color=color,
+                drawstyle=drawstyle,
+                **plot_kwargs,
+            )
+            if show_variance:
+                sigma = variances[k]**0.5
+                ax.fill_between(
+                    wl,
+                    (flux - sigma) / norm,
+                    (flux + sigma) / norm,
+                    alpha=variance_alpha,
+                    color=line[0].get_color() if color is None else color,
+                    linewidth=0
+                )
+
+        if flux_scale is not None:
+            ax.set_yscale(flux_scale)
+        ax.set_ylim(low / 10, up * 1.5)
+        ax.set_xlabel(f"Wavelength [{wl.unit}]")
+        ax.set_ylabel(f"Intensity [{flux.unit}]")
+        ax.legend(loc="best", frameon=False)
+        ax.grid(True, alpha=0.3)
+        return fig, ax
 
 class RSS(SpectraContainer):
     """Data Container class for row-stacked spectra (RSS)."""
