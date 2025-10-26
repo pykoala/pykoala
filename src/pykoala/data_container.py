@@ -13,6 +13,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import copy
 from datetime import datetime
+
 from astropy.io import fits
 from astropy.table import Table
 from astropy.wcs import WCS
@@ -378,7 +379,7 @@ class DataMask(object):
         """
         if flag_name is not None:
             if type(flag_name) is str:
-                return self.masks[flag_name]
+                return self.masks.get(flag_name, np.zeros_like(self.bitmask, dtype=bool))
             else:
                 mask = np.zeros_like(self.bitmask, dtype=bool)
                 for flag in flag_name:
@@ -823,7 +824,7 @@ class SpectraContainer(DataContainer):
     @property
     def n_spectra(self):
         """Number of spectra in the `intensity` array."""
-        return self._intensity.size / self._wavelength.size
+        return int(self._intensity.size / self._wavelength.size)
 
     @property
     @abstractmethod
@@ -859,6 +860,11 @@ class SpectraContainer(DataContainer):
         """Reshape an RSS-like array into the original ``intensity`` shape."""
         pass
 
+    @abstractmethod
+    def original_to_rss(self, rss_shape_data):
+        """Reshape the original ``intensity`` shape into an RSS-like array."""
+        pass
+
     def __init__(self, **kwargs):
 
         super().__init__(**kwargs)
@@ -871,6 +877,76 @@ class SpectraContainer(DataContainer):
             np.arange(kwargs["wcs"].spectral.array_shape[0])).to('angstrom')
         else:
             raise AttributeError("Either a wavelength or wcs must be provided")
+
+    def resample_wavelength_grid(self, wavelength, **interp_kwargs):
+        """
+        Resample all spectra to a new wavelength grid using flux-conserving interpolation.
+
+        This method resamples both intensity and variance. If a :class:`DataMask`
+        exists on the object, it will be propagated by interpolating each named
+        bit-mask using :func:`ancillary.bool_mask_interpolation`.
+
+        Parameters
+        ----------
+        wavelength : astropy.units.Quantity,
+            Target wavelength grid.
+        **interp_kwargs
+            Keyword arguments forwarded to
+            :func:`ancillary.flux_conserving_interpolation`. If
+            ``return_nan_flag=True`` is provided, NaN-affected output pixels are
+            tracked and combined into/with a mask named ``"interpolated_nans"``.
+
+        Notes
+        -----
+        - Intensity and variance are treated independently with the same interpolator.
+        - If ``return_nan_flag`` is used, this method expects
+          ``flux_conserving_interpolation`` to return a tuple
+          ``(values, nan_flag)`` per spectrum.
+        """
+        self.vprint("Resampling RSS")
+        intensity = self.rss_intensity
+        variance = self.rss_variance
+
+        new_intensity = np.zeros((intensity.shape[0], wavelength.size)) << intensity.unit
+        new_variance = np.zeros((variance.shape[0], wavelength.size)) << variance.unit
+        # --- propagate mask (bit-flags) if present
+        mask = getattr(self, "mask", None)
+        if mask is not None:
+            self.vprint("Resampling RSS mask")
+            new_mask = DataMask(shape=self.rss_to_original(new_intensity).shape,
+                                flag_map=mask.flag_map)
+            for k in mask.flag_map.keys():
+                # TODO: the mask is interpolated assuming a threshold of 0.0
+                m = ancillary.bool_mask_interpolation(
+                    wavelength, self.wavelength, mask.masks[k], threshold=0.0)
+                new_mask.flag_pixels(m, flag_name=k)
+
+            self.mask = new_mask
+
+        # Propagate nans
+        if "return_nan_flag" in interp_kwargs and interp_kwargs["return_nan_flag"]:
+            interp_nans_mask = np.zeros(new_intensity.shape, dtype=bool)
+            propagate_nans = True
+            self.vprint("NaNs will be propagated")
+        else:
+            propagate_nans = False
+
+        for fibre_idx in range(intensity.shape[0]):
+            int_out = ancillary.flux_conserving_interpolation(
+                wavelength, self.wavelength, intensity[fibre_idx], **interp_kwargs)
+            var_out = ancillary.flux_conserving_interpolation(
+                wavelength, self.wavelength, variance[fibre_idx], **interp_kwargs)
+            if propagate_nans:
+                new_intensity[fibre_idx] = int_out[0]
+                new_variance[fibre_idx] = var_out[0]
+                interp_nans_mask[fibre_idx] = int_out[1] | var_out[1]
+            else:
+                new_intensity[fibre_idx] = int_out
+                new_variance[fibre_idx] = var_out
+
+        if propagate_nans:
+            new_mask = self.mask.get_flag_map("interpolated_nans") | interp_nans_mask
+            self.mask.flag_pixels(new_mask, flag_name="interpolated_nans")
 
     def get_spectra_sorted(self, wave_range=None):
         """Get the RSS-wise sorted order of the intensity.
@@ -977,8 +1053,7 @@ class SpectraContainer(DataContainer):
             wmin, wmax = wave_range
             wmin = ancillary.check_unit(wmin, self.wavelength.unit)
             wmax = ancillary.check_unit(wmax, self.wavelength.unit)
-            wave_mask = (self.wavelength.unit >= wmin) & (
-                self.wavelength.unit <= wmax)
+            wave_mask = (self.wavelength >= wmin) & (self.wavelength <= wmax)
             wl = self.wavelength[wave_mask]
 
         # ---- intensity (and variance) slices
@@ -1068,6 +1143,9 @@ class RSS(SpectraContainer):
 
     def rss_to_original(self, rss_shape_data):
         return rss_shape_data
+
+    def original_to_rss(self, original_data):
+        return original_data
 
     @property
     def fibre_diameter(self):
@@ -1534,9 +1612,7 @@ class Cube(SpectraContainer):
 
     @property
     def rss_intensity(self):
-        return np.reshape(self.intensity, (
-            self.intensity.shape[0],
-            self.intensity.shape[1] * self.intensity.shape[2])).T
+        return self.original_to_rss(self.intensity)
 
     @rss_intensity.setter   
     def rss_intensity(self, value):
@@ -1544,9 +1620,7 @@ class Cube(SpectraContainer):
 
     @property
     def rss_variance(self):
-        return np.reshape(self.variance, (
-            self.variance.shape[0],
-            self.variance.shape[1] * self.variance.shape[2])).T
+        return self.original_to_rss(self.variance)
 
     @rss_variance.setter   
     def rss_variance(self, value):
@@ -1571,6 +1645,11 @@ class Cube(SpectraContainer):
         return np.reshape(rss_shape_data.T, (rss_shape_data.shape[1],
                                              self.intensity.shape[1],
                                              self.intensity.shape[2]))
+
+    def original_to_rss(self, original_data):
+        return np.reshape(original_data, (
+            original_data.shape[0],
+            original_data.shape[1] * original_data.shape[2])).T
 
     def get_centre_of_mass(self, wavelength_step=1, stat=np.median, power=1.0):
         """Compute the center of mass of the data cube."""
