@@ -810,7 +810,7 @@ class SpectraContainer(DataContainer):
 
     @wavelength.setter
     def wavelength(self, value):
-        self._wavelength = value
+        self._wavelength = ancillary.check_unit(value)
 
     @wavelength.deleter
     def wavelength(self):
@@ -870,10 +870,10 @@ class SpectraContainer(DataContainer):
         super().__init__(**kwargs)
 
         if "wavelength" in kwargs:
-            self._wavelength = ancillary.check_unit(kwargs["wavelength"],
-                                                    u.angstrom)
+            self.wavelength = ancillary.check_unit(kwargs["wavelength"],
+                                                   u.angstrom)
         elif "wcs" in kwargs:
-            self._wavelength = kwargs["wcs"].spectral.array_index_to_world(
+            self.wavelength = kwargs["wcs"].spectral.array_index_to_world(
             np.arange(kwargs["wcs"].spectral.array_shape[0])).to('angstrom')
         else:
             raise AttributeError("Either a wavelength or wcs must be provided")
