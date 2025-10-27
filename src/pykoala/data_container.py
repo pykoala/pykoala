@@ -878,7 +878,8 @@ class SpectraContainer(DataContainer):
         else:
             raise AttributeError("Either a wavelength or wcs must be provided")
 
-    def resample_wavelength_grid(self, wavelength, **interp_kwargs):
+    def resample_wavelength_grid(self, wavelength, reference_wl=None, mask_threshold=0.0,
+                                **interp_kwargs):
         """
         Resample all spectra to a new wavelength grid using flux-conserving interpolation.
 
@@ -903,9 +904,17 @@ class SpectraContainer(DataContainer):
           ``flux_conserving_interpolation`` to return a tuple
           ``(values, nan_flag)`` per spectrum.
         """
-        self.vprint("Resampling RSS")
+        self.vprint(f"Resampling spectral axis")
         intensity = self.rss_intensity
         variance = self.rss_variance
+
+        if reference_wl is None:
+            reference_wl = self.wavelength.copy()
+        else:
+            if reference_wl.size != self.wavelength:
+                raise ValueError(
+                    "Reference wavelength dimensions do not match"
+                    + "SpectraContainer wavelength attribute")
 
         new_intensity = np.zeros((intensity.shape[0], wavelength.size)) << intensity.unit
         new_variance = np.zeros((variance.shape[0], wavelength.size)) << variance.unit
@@ -913,12 +922,13 @@ class SpectraContainer(DataContainer):
         mask = getattr(self, "mask", None)
         if mask is not None:
             self.vprint("Resampling RSS mask")
-            new_mask = DataMask(shape=self.rss_to_original(new_intensity).shape,
-                                flag_map=mask.flag_map)
+            # Create the new mask
+            new_mask = DataMask(
+                shape=self.rss_to_original(new_intensity).shape,
+                flag_map=mask.flag_map)
             for k in mask.flag_map.keys():
-                # TODO: the mask is interpolated assuming a threshold of 0.0
                 m = ancillary.bool_mask_interpolation(
-                    wavelength, self.wavelength, mask.masks[k], threshold=0.0)
+                    wavelength, reference_wl, mask.masks[k], threshold=mask_threshold)
                 new_mask.flag_pixels(m, flag_name=k)
 
             self.mask = new_mask
@@ -931,22 +941,24 @@ class SpectraContainer(DataContainer):
         else:
             propagate_nans = False
 
-        for fibre_idx in range(intensity.shape[0]):
-            int_out = ancillary.flux_conserving_interpolation(
-                wavelength, self.wavelength, intensity[fibre_idx], **interp_kwargs)
-            var_out = ancillary.flux_conserving_interpolation(
-                wavelength, self.wavelength, variance[fibre_idx], **interp_kwargs)
-            if propagate_nans:
-                new_intensity[fibre_idx] = int_out[0]
-                new_variance[fibre_idx] = var_out[0]
-                interp_nans_mask[fibre_idx] = int_out[1] | var_out[1]
-            else:
-                new_intensity[fibre_idx] = int_out
-                new_variance[fibre_idx] = var_out
-
         if propagate_nans:
+            new_intensity, int_nans = ancillary.flux_conserving_interpolation_nd(
+                wavelength, reference_wl, intensity, **interp_kwargs)
+            new_variance, var_nans = ancillary.flux_conserving_interpolation_nd(
+                wavelength, reference_wl, variance, **interp_kwargs)
+            interp_nans_mask = int_nans | var_nans
             new_mask = self.mask.get_flag_map("interpolated_nans") | interp_nans_mask
             self.mask.flag_pixels(new_mask, flag_name="interpolated_nans")
+        else:
+            new_intensity = ancillary.flux_conserving_interpolation_nd(
+                wavelength, reference_wl, intensity, **interp_kwargs)
+            new_variance = ancillary.flux_conserving_interpolation_nd(
+                wavelength, reference_wl, variance, **interp_kwargs)
+
+        self.wavelength = wavelength
+        self.rss_intensity = new_intensity
+        self.rss_variance = new_variance
+    
 
     def get_spectra_sorted(self, wave_range=None):
         """Get the RSS-wise sorted order of the intensity.
