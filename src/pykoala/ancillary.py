@@ -13,6 +13,7 @@ import os
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy import interpolate
+from scipy.sparse import csr_matrix
 from scipy.ndimage import gaussian_filter1d
 from scipy.optimize import least_squares
 from shapely import geometry
@@ -423,6 +424,144 @@ def parabolic_maximum(x, f):
 def _wave_edges_from_centers(wave):
     wlim = 1.5 * wave[[0, -1]] - 0.5 * wave[[1, -2]]
     return np.hstack([wlim[0], 0.5 * (wave[1:] + wave[:-1]), wlim[1]])
+
+def bool_mask_interpolation(new_wave, wave, mask, threshold=0.0):
+    edges = _wave_edges_from_centers(wave)
+    new_edges = _wave_edges_from_centers(new_wave)
+
+    cum = np.cumsum(mask.astype(float), axis=-1)
+    cum = np.concatenate([np.zeros_like(cum[..., :1]), cum], axis=-1)
+    interpolator = interpolate.interp1d(edges, cum, axis=-1, bounds_error=False,
+                                        fill_value=(0.0, cum[..., -1]))
+    interp_cum = interpolator(new_edges)
+    return np.diff(interp_cum, axis=-1) > threshold
+
+def flux_conserving_interpolation_nd(
+    new_wave: u.Quantity,
+    wave: u.Quantity,
+    spectra: u.Quantity,
+    mask_nonfinite: bool = True,
+    return_nan_flag: bool = False,
+    extrapolation: str | float = "edges",
+):
+    """
+    Flux-conserving interpolation for n-D arrays with wavelength as the last axis.
+
+    Piecewise-constant within each original bin: the flux density in each new bin
+    is the overlap-weighted average of original bins. This is equivalent to building
+    an (N_new x N_old) overlap-length matrix L and computing:
+
+        f_new[..., j] = sum_i f_old[..., i] * L[j, i] / dlam_new[j]
+
+    Parameters
+    ----------
+    new_wave : Quantity (N_new,)
+        Target wavelength centers.
+    wave : Quantity (N_old,)
+        Original wavelength centers (shared by all spectra).
+    spectra : Quantity (..., N_old)
+        Flux density samples. The last axis MUST be wavelength.
+    mask_nonfinite : bool, default True
+        If True, treat non-finite inputs as zero contribution (but optionally flag them).
+        If False, NaNs propagate through the matrix multiply.
+    return_nan_flag : bool, default False
+        If True, also return a boolean array flagging new bins that received any
+        contribution from non-finite input pixels (per-spectrum, per-new-bin).
+    extrapolation : "edges" or float, default "edges"
+        - "edges": no extrapolation (i.e., zero contribution outside the old range),
+          which matches the usual cumulative/edge behavior.
+        - float: use this constant flux density outside the old range; the
+          contribution equals `value * outside_length`.
+
+    Returns
+    -------
+    interp : Quantity (..., N_new)
+        Interpolated spectra on `new_wave`.
+    flag  : ndarray (..., N_new), optional
+        Only if `return_nan_flag=True`. True where at least one contributing
+        original bin was non-finite for that output bin.
+    """
+    # ---- Units & shapes
+    wave = check_unit(wave)
+    new_wave = check_unit(new_wave, wave.unit)
+    spectra = check_unit(spectra)
+
+    # Reshape to 2D
+    orig_shape = spectra.shape
+    batch = int(np.prod(orig_shape[:-1]))
+    spec2d = spectra.reshape(batch, orig_shape[-1])
+
+    # ---- Build overlap-length matrix
+    edges_old = _wave_edges_from_centers(wave)
+    edges_new = _wave_edges_from_centers(new_wave)
+    dlam_new = np.diff(edges_new)
+
+    old_lo = edges_old[:-1].value[None, :]
+    old_hi = edges_old[1:].value[None, :]
+    new_lo = edges_new[:-1].value[:, None]
+    new_hi = edges_new[1:].value[:, None]
+
+    # overlap lengths, clipped at 0
+    overlap = np.maximum(0.0,
+    np.minimum(old_hi, new_hi) - np.maximum(old_lo, new_lo))  # (N_new, N_old)
+    overlap = overlap << wave.unit
+
+    # ---- Handle extrapolation outside old range
+    if isinstance(extrapolation, (int, float)):
+        # constant flux density outside old coverage
+        ext_val = check_unit(extrapolation, spec2d.unit)
+        # left outside part where new bin is fully/partially below edges_old[0]
+        left_len = np.maximum(0.0,
+            np.minimum(new_hi[:, 0],
+            edges_old[0].value) - new_lo[:, 0]) << wave.unit  # (N_new,)
+        # right outside part where new bin is above edges_old[-1]
+        right_len = np.maximum(0.0,
+            new_hi[:, 0] - np.maximum(new_lo[:, 0],
+            edges_old[-1].value)) << wave.unit  # (N_new,)
+        outside_len = left_len + right_len  # (N_new,)
+    elif extrapolation == "edges":
+        outside_len = None
+    else:
+        raise ValueError(f"Unrecognized extrapolation: {extrapolation!r}")
+
+    # ---- Assemble numerator via batched matrix multiply
+    # Optionally mask non-finite as zero contribution (but we can still flag them)
+    if mask_nonfinite:
+        good = np.isfinite(spec2d)
+        spec_good = np.where(good, spec2d, 0.0)
+    else:
+        spec_good = spec2d
+
+    # (B, N_old) @ (N_old, N_new) -> (B, N_new); transpose overlap for matmul
+    numerator = spec_good @ overlap.T  # pure numbers in "length" units
+
+    # add constant extrapolation contribution if requested
+    if isinstance(extrapolation, (int, float)) and np.any(outside_len > 0 * wave.unit):
+        # outside_len is (N_new,), broadcast to (B, N_new)
+        numerator = numerator + np.where(outside_len > 0,
+                                         ext_val * outside_len[None, :], 0)
+
+    # divide by new bin widths to get flux density again
+    interp = (numerator / dlam_new[None, :]).to(spectra.unit)  # (B, N_new)
+
+    # reshape back to (..., N_new)
+    interp = interp.reshape(orig_shape[:-1] + (dlam_new.size,))
+
+    if not return_nan_flag:
+        return interp
+
+    # ---- Build per-bin flags: did any non-finite input contribute?
+    # A contribution happens where overlap > 0.
+    # Compute (B, N_old_bad) @ (N_old_bad, N_new) logically.
+    bad = ~np.isfinite(spec2d.value)  # (B, N_old)
+    # Logical "any overlap with a bad contributor"
+    contributes = (overlap.value > 0).T  # (N_old, N_new)
+    # Using matrix multiply on booleans via dot of ints:
+    bad_count = bad.astype(np.int64) @ contributes.astype(np.int64)  # (B, N_new)
+    flag = bad_count > 0
+    flag = flag.reshape(orig_shape[:-1] + (dlam_new.size,))
+
+    return interp, flag
 
 def flux_conserving_interpolation(new_wave : u.Quantity, wave : u.Quantity,
                                   spectra : u.Quantity,
