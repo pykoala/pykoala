@@ -95,8 +95,15 @@ class TestRSS(unittest.TestCase):
             offset=(1 << u.arcsec, 1 << u.deg))
         print("All good!")
 
+    def test_rss_resampling(self):
+        print("Testing RSS resampling")
+        new_wl = self.rss.wavelength.copy()
+        new_wl = new_wl[1:-1]
+        self.rss.resample_wavelength_grid(new_wl,
+                                          mask_nonfinite=True, return_nan_flag=True)
+
     def test_plotting_methods(self):
-        print("Testint plotting methods")
+        print("Testing plotting methods")
         fig = self.rss.plot_rss_image()
         fig = self.rss.plot_mask()
         fig = self.rss.plot_fibres()
