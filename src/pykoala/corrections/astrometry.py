@@ -310,9 +310,11 @@ def register_dataset_crosscorr(
     images, wcs_list = [], []
     for dc in data_set:
         if isinstance(dc, RSS):
+            delta_wl = dc.wavelength[1] - dc.wavelength[0]
             cube = make_dummy_cube_from_rss(
                 dc,
                 spa_pix_arcsec=quick_cube_pix_size,
+                spe_pix_angstrom=min(delta_wl * 5, 5 << dc.wavelength.unit),
                 kernel_pix_arcsec=quick_cube_pix_size,
             )
             img = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
