@@ -422,10 +422,78 @@ def parabolic_maximum(x, f):
     return x_max
 
 def _wave_edges_from_centers(wave):
+    """Compute bin edges from wavelength bin centers.
+
+    Given a strictly (or non-strictly) monotonic 1D array of wavelength
+    centers, this function returns a 1D array of bin edges with length
+    ``wave.size + 1``. Interior edges are midpoints of adjacent centers.
+    The two outer edges are extrapolated linearly from the first/last two
+    centers via
+
+    ``w0_edge = 1.5 * wave[0] - 0.5 * wave[1]`` and
+    ``wn_edge = 1.5 * wave[-1] - 0.5 * wave[-2]``.
+
+    Parameters
+    ----------
+    wave : array-like or :class:`astropy.units.Quantity`, shape (N,)
+        Wavelength bin centers. Can be unitless or a quantity; units are
+        preserved in the output.
+
+    Returns
+    -------
+    edges : same type as ``wave``, shape (N + 1,)
+        Bin edges corresponding to the input centers.
+    """
     wlim = 1.5 * wave[[0, -1]] - 0.5 * wave[[1, -2]]
     return np.hstack([wlim[0], 0.5 * (wave[1:] + wave[:-1]), wlim[1]])
 
 def bool_mask_interpolation(new_wave, wave, mask, threshold=0.0):
+    """Resample a boolean mask onto a new wavelength grid via cumulative overlap.
+
+    The input mask is assumed to live along the last axis and to mark bins
+    (at ``wave`` centers) as ``True``/``False``. The method converts the mask
+    to a cumulative count over bin edges (using
+    :func:`_wave_edges_from_centers`), interpolates that cumulative count to
+    the ``new_wave`` edges, and then differences it to obtain, for each
+    new bin, the *fraction* of the bin covered by ``True`` input bins.
+    The output is ``True`` when that fraction exceeds ``threshold``.
+
+    Parameters
+    ----------
+    new_wave : array-like or :class:`astropy.units.Quantity`, shape (N_new,)
+        Target wavelength centers.
+    wave : array-like or :class:`astropy.units.Quantity`, shape (N_old,)
+        Original wavelength centers.
+    mask : array-like of bool, shape (..., N_old)
+        Boolean mask aligned with ``wave`` along the last axis. Any leading
+        batch dimensions are preserved.
+    threshold : float, default 0.0
+        Fractional coverage threshold in ``[0, 1]``. A new bin is flagged
+        ``True`` if the overlap fraction with ``True`` input bins is
+        strictly greater than this value. For example:
+        - ``0.0``: propagate any overlap (maximally permissive).
+        - ``1.0``: require full coverage.
+
+    Returns
+    -------
+    new_mask : ndarray of bool, shape (..., N_new)
+        Resampled boolean mask at ``new_wave`` centers.
+
+    Raises
+    ------
+    ValueError
+        If the last dimension of ``mask`` does not match ``wave.size``.
+
+    Notes
+    -----
+    - Out-of-range bins contribute zero because the cumulative function is
+      clamped at the boundaries (no extrapolated ``True`` coverage).
+
+    See Also
+    --------
+    :func:`_wave_edges_from_centers`
+    :func:`flux_conserving_interpolation_nd`
+    """
     edges = _wave_edges_from_centers(wave)
     new_edges = _wave_edges_from_centers(new_wave)
 
@@ -444,42 +512,74 @@ def flux_conserving_interpolation_nd(
     return_nan_flag: bool = False,
     extrapolation: str | float = "edges",
 ):
-    """
-    Flux-conserving interpolation for n-D arrays with wavelength as the last axis.
+    """Flux-conserving spectral interpolation for n-D arrays (wavelength last).
 
-    Piecewise-constant within each original bin: the flux density in each new bin
-    is the overlap-weighted average of original bins. This is equivalent to building
-    an (N_new x N_old) overlap-length matrix L and computing:
+    Performs piecewise-constant, bin-overlap interpolation from an original grid
+    of wavelength centers (``wave``) to a target grid (``new_wave``) while
+    preserving *integrated flux* within each new bin. Conceptually, it forms an
+    overlap-length matrix :math:`L \\in \\mathbb{R}^{N_{\\text{new}} \\times N_{\\text{old}}}`
+    and computes
 
-        f_new[..., j] = sum_i f_old[..., i] * L[j, i] / dlam_new[j]
+    ``f_new[..., j] = sum_i f_old[..., i] * L[j, i] / dlam_new[j]``
+
+    so that ``f_new[..., j] * dlam_new[j]`` equals the integral of the original
+    flux density over the portion of new bin ``j`` that overlaps old bins.
 
     Parameters
     ----------
-    new_wave : Quantity (N_new,)
-        Target wavelength centers.
-    wave : Quantity (N_old,)
-        Original wavelength centers (shared by all spectra).
-    spectra : Quantity (..., N_old)
-        Flux density samples. The last axis MUST be wavelength.
+    new_wave : :class:`astropy.units.Quantity`, shape (N_new,)
+        Target wavelength centers. Must be 1D and monotonic.
+    wave : :class:`astropy.units.Quantity`, shape (N_old,)
+        Original wavelength centers (shared by all spectra). Must be 1D and
+        monotonic.
+    spectra : :class:`astropy.units.Quantity`, shape (..., N_old)
+        Flux density samples. The last axis MUST correspond to ``wave``.
+        Leading batch dimensions (possibly empty) are preserved.
     mask_nonfinite : bool, default True
-        If True, treat non-finite inputs as zero contribution (but optionally flag them).
-        If False, NaNs propagate through the matrix multiply.
+        If ``True``, treat non-finite inputs as zero contribution during the
+        overlap sum (numerically stable). If ``False``, non-finite values
+        propagate through the computation.
     return_nan_flag : bool, default False
-        If True, also return a boolean array flagging new bins that received any
-        contribution from non-finite input pixels (per-spectrum, per-new-bin).
-    extrapolation : "edges" or float, default "edges"
-        - "edges": no extrapolation (i.e., zero contribution outside the old range),
-          which matches the usual cumulative/edge behavior.
-        - float: use this constant flux density outside the old range; the
-          contribution equals `value * outside_length`.
+        If ``True``, also return a boolean flag of shape ``(..., N_new)``
+        indicating whether a new bin received any contribution from non-finite
+        input samples.
+    extrapolation : {``"edges"``, float}, default ``"edges"``
+        Extrapolation behavior outside the original coverage:
+        - ``"edges"``: no extrapolation; contributions outside are zero.
+        - ``float``: treat the flux density outside the original range as the
+          given constant value (with the units of ``spectra``), contributing
+          ``value * outside_length`` to the bin integral.
 
     Returns
     -------
-    interp : Quantity (..., N_new)
-        Interpolated spectra on `new_wave`.
-    flag  : ndarray (..., N_new), optional
-        Only if `return_nan_flag=True`. True where at least one contributing
-        original bin was non-finite for that output bin.
+    interp : :class:`astropy.units.Quantity`, shape (..., N_new)
+        Interpolated flux density samples on ``new_wave``.
+    flag : numpy.ndarray of bool, shape (..., N_new), optional
+        Only returned if ``return_nan_flag=True``. ``True`` where at least one
+        non-finite input pixel overlapped the corresponding output bin.
+
+    Raises
+    ------
+    ValueError
+        If ``new_wave`` or ``wave`` are not 1D, or if ``spectra`` does not have
+        ``wave.size`` as its last dimension, or if ``extrapolation`` is neither
+        ``"edges"`` nor a scalar number.
+
+    Notes
+    -----
+    - Units are respected: inputs are converted with
+      :func:`~pykoala.ancillary.check_unit`, overlap lengths are computed in the
+      unit of ``wave``, and the output is returned in ``spectra.unit``.
+    - Complexity is :math:`\\mathcal{O}(N_{\\text{new}} N_{\\text{old}})` per
+      batch element due to the dense overlap matrix.
+    - For piecewise-linear flux density, consider precomputing edge values and
+      using a linear-within-bin integrator; this routine assumes constant
+      density within each original bin (top-hat model).
+
+    See Also
+    --------
+    :func:`_wave_edges_from_centers`
+    :func:`bool_mask_interpolation`
     """
     # ---- Units & shapes
     wave = check_unit(wave)
@@ -651,41 +751,6 @@ def centre_of_mass(w, x, y):
     x_com, y_com = np.nansum(w * x) / norm, np.nansum(w * y) / norm
     return x_com, y_com
 
-# TODO: Stale method
-def growth_curve_1d(f, x, y):
-    """TODO"""
-    r2 = x**2 + y**2
-    idx_sorted = np.argsort(r2)
-    growth_c = np.nancumsum(f[idx_sorted])
-    return r2[idx_sorted], growth_c
-
-# TODO: Stale method
-def growth_curve_2d(image, x0=None, y0=None):
-    """Compute the curve of growth of an array f with respect to a given point (x0, y0).
-
-    Parameters
-    ----------
-    image: np.ndarray
-        2D array
-    x0: float
-        Origin of coordinates in pixels along the x-axis (columns).
-    y0: float
-        Origin of coordinates in pixels along the y-axis (rows).
-
-    Returns
-    -------
-    r2: np.ndarray
-        Vector containing the square radius with respect to (x0, y0).
-    growth_curve: np.ndarray
-        Curve of growth centered at (x0, y0).
-    """
-    xx, yy = np.meshgrid(np.arange(0, image.shape[1]),
-                         np.arange(0, image.shape[1]))
-    r2 = (xx - x0) ** 2 + (yy - y0) ** 2
-    idx_sorted = np.argsort(r2)
-    growth_c = np.cumsum(image.flatten()[idx_sorted])
-    return r2[idx_sorted], growth_c
-
 @preserve_units_dec
 def interpolate_image_nonfinite(image):
     """Use :class:`scipy.interpolate.NearestNDInterpolator` to replace NaN values.
@@ -731,115 +796,6 @@ def vac_to_air(vac_wl: u.Quantity):
                     + 1.74557e-4 / (39.32957 - sigma**2)
                     ) << u.dimensionless_unscaled
     return vac_wl / vac_over_air
-
-# TODO: stale
-def smooth_spectrum(wlm, s, wave_min=0, wave_max=0, step=50, exclude_wlm=[[0, 0]], order=7,
-                    weight_fit_median=0.5, plot=False, verbose=False, fig_size=12):
-    """
-    THIS IS NOT EXACTLY THE SAME THING THAT applying signal.medfilter()
-
-    This needs to be checked, updated, and combine (if needed) with task fit_smooth_spectrum.
-    The task gets the median value in steps of "step", gets an interpolated spectrum, 
-    and fits a 7-order polynomy.
-
-    It returns fit_median + fit_median_interpolated (each multiplied by their weights).
-
-    Tasks that use this:  get_telluric_correction
-    """
-
-    if verbose:
-        vprint("\n> Computing smooth spectrum...")
-
-    if wave_min == 0:
-        wave_min = wlm[0]
-    if wave_max == 0:
-        wave_max = wlm[-1]
-
-    running_wave = []
-    running_step_median = []
-    cuts = np.int((wave_max - wave_min) / step)
-
-    exclude = 0
-    corte_index = -1
-    for corte in range(cuts+1):
-        next_wave = wave_min+step*corte
-        if next_wave < wave_max:
-            if next_wave > exclude_wlm[exclude][0] and next_wave < exclude_wlm[exclude][1]:
-                if verbose:
-                    vprint(f"  Skipping {next_wave}"
-                           + f" as it is in the exclusion range [{exclude_wlm[exclude][0]}, {exclude_wlm[exclude][1]}]")
-
-            else:
-                corte_index = corte_index+1
-                running_wave.append(next_wave)
-                region = np.where(
-                    (wlm > running_wave[corte_index]-step/2) & (wlm < running_wave[corte_index]+step/2))
-                running_step_median.append(np.nanmedian(s[region]))
-                if next_wave > exclude_wlm[exclude][1]:
-                    exclude = exclude + 1
-                    # if verbose and exclude_wlm[0] != [0,0] : print "--- End exclusion range ",exclude
-                    if exclude == len(exclude_wlm):
-                        exclude = len(exclude_wlm)-1
-
-    running_wave.append(wave_max)
-    region = np.where((wlm > wave_max-step) & (wlm < wave_max+0.1))
-    running_step_median.append(np.nanmedian(s[region]))
-
-    # Check not nan
-    _running_wave_ = []
-    _running_step_median_ = []
-    for i in range(len(running_wave)):
-        if np.isnan(running_step_median[i]):
-            if verbose:
-                vprint(f"There is a nan in {running_wave[i]}")
-        else:
-            _running_wave_.append(running_wave[i])
-            _running_step_median_.append(running_step_median[i])
-
-    fit = np.polyfit(_running_wave_, _running_step_median_, order)
-    pfit = np.poly1d(fit)
-    fit_median = pfit(wlm)
-
-    interpolated_continuum_smooth = interpolate.splrep(
-        _running_wave_, _running_step_median_, s=0.02)
-    fit_median_interpolated = interpolate.splev(
-        wlm, interpolated_continuum_smooth, der=0)
-
-    if plot:
-        plt.figure(figsize=(fig_size, fig_size/2.5))
-        plt.plot(wlm, s, alpha=0.5)
-        plt.plot(running_wave, running_step_median, "+", ms=15, mew=3)
-        plt.plot(wlm, fit_median, label="fit median")
-        plt.plot(wlm, fit_median_interpolated, label="fit median_interp")
-        plt.plot(wlm, weight_fit_median*fit_median + (1-weight_fit_median)
-                 * fit_median_interpolated, label="weighted")
-        # extra_display = (np.nanmax(fit_median)-np.nanmin(fit_median)) / 10
-        # plt.ylim(np.nanmin(fit_median)-extra_display, np.nanmax(fit_median)+extra_display)
-        ymin = np.nanpercentile(s, 1)
-        ymax = np.nanpercentile(s, 99)
-        rango = (ymax-ymin)
-        ymin = ymin - rango/10.
-        ymax = ymax + rango/10.
-        plt.ylim(ymin, ymax)
-        plt.xlim(wlm[0]-10, wlm[-1]+10)
-        plt.minorticks_on()
-        plt.legend(frameon=False, loc=1, ncol=1)
-
-        plt.axvline(x=wave_min, color='k', linestyle='--')
-        plt.axvline(x=wave_max, color='k', linestyle='--')
-
-        plt.xlabel(r"Wavelength [$\mathrm{\AA}$]")
-
-        if exclude_wlm[0][0] != 0:
-            for i in range(len(exclude_wlm)):
-                plt.axvspan(exclude_wlm[i][0],
-                            exclude_wlm[i][1], color='r', alpha=0.1)
-        plt.close()
-        vprint(f"Weights for getting smooth spectrum:\n fit_median ={weight_fit_median}"
-               + f"\n Fit_median_interpolated = {(1-weight_fit_median)}")
-
-    # (fit_median+fit_median_interpolated)/2      # Decide if fit_median or fit_median_interpolated
-    return weight_fit_median*fit_median + (1-weight_fit_median)*fit_median_interpolated
 
 def fit_reference_spectra(
     wave_obs,
