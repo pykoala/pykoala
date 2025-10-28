@@ -1,12 +1,23 @@
 """
-This module defines the base classes that represent the core data structures used during the reduction of Integral Field Spectroscopy (IFS) data in `pykoala`.
+Core data structures for PyKOALA.
 
-At its core, pykoala models all sources of data -- such as images, raw stacked spectra, and data cubes -- as instances of the :class:`DataContainer` (DC). This is a unified, homogeneous structure that provides a consistent way to organize, access, and manipulate various data types.
+This module defines the base classes that represent the core data structures
+used during the reduction of Integral Field Spectroscopy (IFS) data in
+:mod:`pykoala`.
 
-Each :class:`DataContainer` includes a set of common attributes (e.g., ``intensity``, ``variance``) and methods for tasks such as input/output (I/O) operations, tracking data reduction history, and applying data masks.
+At its core, PyKOALA models all sources of data (for example, images,
+row-stacked spectra, and data cubes) as instances of :class:`DataContainer`,
+a unified structure that standardizes how data and metadata are organized,
+accessed, and manipulated.
 
-A specialized subclass of :class:`DataContainer` is the :class:`SpectraContainer`, designed to represent spectroscopic data. In addition to the intensity attribute, these containers include a wavelength array that defines the spectral coordinate for each pixel. :class:`SpectraContainer` can be used to represent row-stacked spectra (RSS), as well as 3D data cubes (commonly used in IFS).
+A specialized subclass, :class:`SpectraContainer`, represents spectroscopic
+data, adding a spectral coordinate (:attr:`~SpectraContainer.wavelength`) to
+the common attributes (for example, :attr:`~DataContainer.intensity`,
+:attr:`~DataContainer.variance`, and :attr:`~DataContainer.mask`). Concrete
+implementations include :class:`RSS` for row-stacked spectra and
+:class:`Cube` for 3D IFS datacubes.
 """
+
 
 from abc import ABC, abstractmethod
 from matplotlib import pyplot as plt
@@ -27,24 +38,37 @@ from pykoala.plotting.utils import plot_image, new_figure, plot_fibres
 
 
 class HistoryRecord(object):
-    """Log information unit.
+    """Atomic log entry used by :class:`DataContainerHistory`.
 
-    This class represents a unit of information stored in a log.
+    Parameters
+    ----------
+    title : str
+        Short title summarizing the record.
+    comments : str or list of str
+        Comment lines. If a single string is provided, it will be split on
+        newline characters into multiple lines.
+    tag : str, optional
+        Optional free-form tag to categorize the record.
 
     Attributes
     ----------
-    - title: (str)
-        Title of the record.
-    - comments: (str)
-        List of strings the information to be stored.
+    title : str
+        Record title.
+    comments : list of str
+        Comment lines associated with the record.
+    tag : str or None
+        Optional category/tag.
 
     Methods
     -------
-    - to_str:
-        Return a string containing the information of
-        the record.
-    """
+    to_str(title=True)
+        Return a string representation of the entry.
 
+    Notes
+    -----
+    This class does not enforce any semantics on the content other than basic
+    typing. Higher-level consistency is handled by :class:`DataContainerHistory`.
+    """
     def __init__(self, title, comments, tag=None) -> None:
         self.title = title
         self.comments = comments
@@ -67,7 +91,18 @@ class HistoryRecord(object):
             )
 
     def to_str(self, title=True):
-        """Convert the record into a string."""
+        """Return a string representation of the record.
+
+        Parameters
+        ----------
+        title : bool, default=True
+            If ``True``, prefix the comments with the record title.
+
+        Returns
+        -------
+        str
+            A single newline-joined string for the record.
+        """
         comments = "\n".join(self.comments)
         if title:
             comments = f"{self.title}: " + comments
@@ -78,18 +113,29 @@ class HistoryRecord(object):
 
 
 class DataContainerHistory(VerboseMixin):
-    """Data reduction history logger class.
+    """History/log of data-reduction actions on a :class:`DataContainer`.
 
-    This class stores the data reduction history of a DataContainer by creating
-    consecutive log entries.
+    This class stores an ordered sequence of :class:`HistoryRecord` entries
+    and provides helpers to search, serialize, and deserialize histories.
+
+    Parameters
+    ----------
+    list_of_entries : iterable of (:class:`HistoryRecord` or tuple), optional
+        Initial entries to populate the history. Tuples must be either
+        ``(title, comments)`` or ``(title, comments, tag)``.
+    **kwargs
+        Passed to :class:`~pykoala.VerboseMixin` (e.g., ``logger``, ``verbose``).
 
     Attributes
     ----------
-    #TODO
-
-    Methods
-    -------
-    #TODO
+    record_entries : list of :class:`HistoryRecord`
+        The ordered list of log entries.
+    tags : list of str
+        Set of unique tags discovered in ``record_entries``.
+    logger : str
+        Logger name.
+    verbose : bool
+        Verbosity flag.
     """
 
     def __init__(self, list_of_entries=None, **kwargs):
@@ -104,20 +150,18 @@ class DataContainerHistory(VerboseMixin):
             self.initialise_record(list_of_entries)
 
     def initialise_record(self, list_of_entries):
-        """Initialise the record from a set of input entries.
-
-        This method initialises the record using a collection of entries. The
-        input can be in the form of a, interable consisting of HistoryRecord objects
-        or an interable containing a 2 or 3 elements iterable (title, comments)
-        or (title, comments, tag).
+        """Populate the history from an iterable of entries.
 
         Parameters
         ----------
-        - list_of_entries: (iterable)
-            Set of entries to be recorded in the log.
+        list_of_entries : iterable
+            Iterable of :class:`HistoryRecord` or tuples. Valid tuple forms are
+            ``(title, comments)`` or ``(title, comments, tag)``.
 
-        Returns
-        -------
+        Raises
+        ------
+        NameError
+            If an element is neither a :class:`HistoryRecord` nor a valid tuple.
         """
         for record in list_of_entries:
             if isinstance(record, HistoryRecord):
@@ -140,15 +184,17 @@ class DataContainerHistory(VerboseMixin):
             self.record_entries.append(record)
 
     def log_record(self, title, comments, tag=None):
-        """Include a new record in the history.
+        """Append a new record to the history.
 
         Parameters
         ----------
-        - title: (str)
-            Title of the record.
-        - comments: (list or str, default=None)
-            List containing the comments of this record. Lines will be splited
-            into different elements of the log.
+        title : str
+            Record title.
+        comments : str or list of str
+            Record comments. If a single string is provided, it is split by
+            newline into multiple lines.
+        tag : str, optional
+            Optional category/tag. New tags are tracked in :attr:`tags`.
         """
         if tag is not None and tag not in self.tags:
             self.tags.append(tag)
@@ -156,20 +202,19 @@ class DataContainerHistory(VerboseMixin):
         self.record_entries.append(record)
 
     def is_record(self, title, comment=None):
-        """Find an record that contains the input information.
+        """Check whether an entry exists.
 
         Parameters
-        -----------
-        - title: (str)
-            Title of the record.
-        - comment: (str, default=None)
-            If provided, the match will require the record to contain the input
-            comment.
+        ----------
+        title : str
+            Title that must match exactly.
+        comment : str, optional
+            If provided, the entry must also contain this comment substring.
 
         Returns
         -------
-        - found: (bool)
-            `True` if the record is found, `False` otherwise.
+        bool
+            ``True`` if a matching entry is found, otherwise ``False``.
         """
         for record in self.record_entries:
             if record.title == title:
@@ -181,20 +226,21 @@ class DataContainerHistory(VerboseMixin):
         return False
 
     def find_record(self, title="", comment="", tag=""):
-        """Return all entries matching a given title.
+        """Return all records whose fields contain the given substrings.
 
         Parameters
         ----------
-        - title: (str, default='')
-            record title str.
-        - comment: (str, default='')
-            record comment str.
-        - tag: (str, default='')
-            record tag str.
+        title : str, default=''
+            Substring to match against the record title.
+        comment : str, default=''
+            Substring to match against the comment text.
+        tag : str, default=''
+            Substring to match against the tag.
+
         Returns
         -------
-        - entries: (list)
-            List of entries associated to the input title, comment and tag.
+        list of :class:`HistoryRecord`
+            All matching entries (possibly empty).
         """
         return [
             record
@@ -205,15 +251,25 @@ class DataContainerHistory(VerboseMixin):
         ]
 
     def dump_to_header(self, header=None):
-        """Write the log into a astropy.fits.Header.
+        """Serialize the history into a FITS header.
 
-        Save the entries of the log in a Header. All entries will be saved using
-        card names `PYKOALAnumber`, where number corresponds to an index ranging
-        from 0 to the number of entries contained in the log.
+        Each entry is written into a sequential ``PYKOALA{index}`` card whose
+        **value** stores the comment text and whose **comment** stores the title.
 
         Parameters
         ----------
+        header : astropy.io.fits.Header, optional
+            Header to append to. If ``None``, a new header is created.
 
+        Returns
+        -------
+        astropy.io.fits.Header
+            The updated header.
+
+        Notes
+        -----
+        Existing ``PYKOALA*`` cards in ``header`` are preserved; new entries are
+        appended after them.
         """
         if header is None:
             header = fits.Header()
@@ -227,15 +283,13 @@ class DataContainerHistory(VerboseMixin):
         return header
 
     def dump_to_text(self, file):
-        """Write the log into a text file
+        """Write the history to a plain-text file.
 
         Parameters
         ----------
-        - file: (str)
-            Output file name.
+        file : str or path-like
+            Output filename.
 
-        Returns
-        -------
         """
         self.vprint("Writting log into text file")
         with open(file, "w") as f:
@@ -244,7 +298,19 @@ class DataContainerHistory(VerboseMixin):
 
     @classmethod
     def get_entries_from_header(cls, header):
-        """Get entries created by PyKOALA from an input FITS Header."""
+        """Deserialize :class:`HistoryRecord` entries from a FITS header.
+
+        Parameters
+        ----------
+        header : astropy.io.fits.Header
+            Header containing ``PYKOALA*`` cards created by
+            :meth:`dump_to_header`.
+
+        Returns
+        -------
+        list of :class:`HistoryRecord`
+            The reconstructed history entries.
+        """
         list_of_entries = []
 
         for title, key in zip(header.comments["PYKOALA*"], header["PYKOALA*"]):
@@ -254,18 +320,19 @@ class DataContainerHistory(VerboseMixin):
 
     @classmethod
     def from_header(cls, header, **kwargs):
-        """Initialise the DataContainerHistory from a FITS Header.
+        """Construct a :class:`DataContainerHistory` from a FITS header.
 
         Parameters
         ----------
-        header : astropy.fits.Header
-            A Header that contains the history records.
-        **kwargs :
-            Additional arguments passed to DataContainerHistory constructor.
-        
+        header : astropy.io.fits.Header
+            Header previously written by :meth:`dump_to_header`.
+        **kwargs
+            Passed to the constructor (e.g., ``logger``, ``verbose``).
+
         Returns
         -------
-        dc_history : :class:`DataContainerHistory`
+        DataContainerHistory
+            New instance populated with the deserialized entries.
         """
         list_of_entries = cls.get_entries_from_header(header)
         return cls(list_of_entries=list_of_entries, **kwargs)
@@ -281,37 +348,43 @@ class DataContainerHistory(VerboseMixin):
 # =============================================================================
 
 
-class Parameter(object):
-    """Class that represents some parameter and associated metadata"""
+# class Parameter(object):
+#     """Class that represents some parameter and associated metadata"""
 
-    def __init__(self) -> None:
-        pass
+#     def __init__(self) -> None:
+#         pass
 
 
 # =============================================================================
 
 
 class DataMask(object):
-    """A mask to store the pixel flags of DataContainers.
+    """Bitmask container for pixel flags associated with a :class:`DataContainer`.
 
-    A mask to store the pixel flags of DataContainers.
+    Parameters
+    ----------
+    shape : tuple of int, optional
+        Shape of the mask to initialize. Required if ``bitmask`` is not given.
+    flag_map : dict[str, tuple[int, str]], optional
+        Mapping from flag name to ``(bit_value, description)``. If omitted,
+        a default map with a single ``"BAD"`` flag is used.
+    bitmask : numpy.ndarray of int, optional
+        Pre-existing integer bitmask. If supplied, ``shape`` is ignored and
+        :attr:`masks` are derived from this array.
 
     Attributes
     ----------
-    - flag_map: dict, default={"CR": 2, "HP": 4, "DP": 8}
-        A mapping between the flag names and their numerical values
-        expressed in powers of two.
-    - bitmask: (np.ndarray)
-        The array containing the bit pixel mask.
-    - masks: dict
-        A dictionary that stores the individual mask in the form of
-        boolean arrays for each flag name.
+    flag_map : dict[str, tuple[int, str]]
+        Mapping of flag names to bit values and description.
+    bitmask : numpy.ndarray of int
+        Integer bitmask array (power-of-two composition).
+    masks : dict[str, numpy.ndarray of bool]
+        Boolean masks per flag name, same shape as :attr:`bitmask`.
 
-    Methods
-    -------
-    - flag_pixels
-    - get_flag_map_from_bitmask
-    - get_flag_map
+    Notes
+    -----
+    A pixel is considered flagged for ``flag_name`` when
+    ``bitmask & flag_map[flag_name][0] > 0``.
     """
 
     def __init__(self, shape=None, flag_map=None, bitmask=None):
@@ -338,16 +411,22 @@ class DataMask(object):
         return np.bitwise_and(self.bitmask, value) > 0
 
     def flag_pixels(self, mask, flag_name, desc=""):
-        """Add a pixel mask corresponding to a flag name.
-
-        Add a pixel mask layer in the bitmask. If the mask already contains
-        information about the same flag, it will be overriden by the
-        new values.
+        """Set or overwrite a named boolean mask.
 
         Parameters
         ----------
-        - mask: np.ndarray
-            Input pixel flag. It must have the same shape as the bitmask.
+        mask : numpy.ndarray of bool
+            Boolean array with the same shape as :attr:`bitmask`.
+        flag_name : str
+            Name of the flag to set.
+        desc : str, optional
+            Description for the flag. If the flag does not exist yet, it is
+            created with a new bit value and this description.
+
+        Raises
+        ------
+        ValueError
+            If ``mask`` has a shape incompatible with :attr:`bitmask`.
         """
         if flag_name not in self.flag_map:
             self.add_new_flag(flag_name, desc=desc)
@@ -359,23 +438,34 @@ class DataMask(object):
         self.masks[flag_name] = mask
 
     def get_flag_map_from_bitmask(self, flag_name):
-        """Get the boolean mask for a given flag name from the bitmask."""
-        return self.__decode_bitmask(self.flag_map[flag_name][0])
-
-    def get_flag_map(self, flag_name=None):
-        """Return the boolean mask that corresponds to the input flags.
+        """Return the boolean mask for a given flag decoded from :attr:`bitmask`.
 
         Parameters
         ----------
-        - flag_name: str or iterable, default=None
-            The flags to be used for constructing the mask. It can be a single
-            flag name or an iterable. If None, the mask will comprise every flag
-            that is included on the bitmask.
+        flag_name : str
+            Name of the flag to decode.
 
         Returns
         -------
-        - mask: np.ndarray
-            An array containing the boolean values for every pixel.
+        numpy.ndarray of bool
+            Boolean selection array for the requested flag.
+        """
+        return self.__decode_bitmask(self.flag_map[flag_name][0])
+
+    def get_flag_map(self, flag_name=None):
+        """Return a combined boolean mask for one or more flags.
+
+        Parameters
+        ----------
+        flag_name : str or iterable of str, optional
+            If ``None``, return a mask of any flagged pixel
+            (i.e., ``bitmask > 0``). If a string or iterable is given, combine the
+            corresponding boolean masks with a logical OR.
+
+        Returns
+        -------
+        numpy.ndarray of bool
+            Boolean mask with the same shape as :attr:`bitmask`.
         """
         if flag_name is not None:
             if type(flag_name) is str:
@@ -389,6 +479,23 @@ class DataMask(object):
             return self.bitmask > 0
 
     def add_new_flag(self, name, value=None, desc=""):
+        """Register a new flag in :attr:`flag_map`.
+
+        Parameters
+        ----------
+        name : str
+            Flag name.
+        value : int, optional
+            Power-of-two integer to represent the new flag. If ``None``, the next
+            available power-of-two is chosen (twice the current maximum).
+        desc : str, optional
+            Human-readable description.
+
+        Notes
+        -----
+        This method does not change :attr:`bitmask`; it only registers metadata and
+        prepares the corresponding boolean mask in :attr:`masks`.
+        """
         if value is None:
             value = max([v[0] for v in self.flag_map.values()]) * 2
         self.flag_map[name] = (value, desc)
@@ -397,37 +504,39 @@ class DataMask(object):
     def plot(self, fig=None, ax=None, show=False,
              vmax=None, vmin=None, title=None,
              max_colorbar_ticks=10):
-        """
-        Plot the integer bitmask map and a per-bit description table.
-        If the bitmask is N-D (N>2), collapse all leading axes via bitwise OR,
-        preserving the last two axes as the image plane.
+        """Plot the integer bitmask plus a per-flag summary table.
+
+        If the bitmask has more than 2 dimensions, all leading axes are collapsed
+        with a bitwise OR, preserving the last two axes as the image plane.
 
         Parameters
         ----------
+        fig : matplotlib.figure.Figure, optional
+            Existing figure to draw on. If omitted and ``ax`` is ``None``, a
+            suitable figure with two rows is created.
         ax : matplotlib.axes.Axes, optional
-            Axes to draw the image on. If None, a new figure is created with
-            two columns (image + table).
-        cmap : str or Colormap, default='tab20'
-            Colormap for the integer bitmask image.
-        show : bool, default True
-            Call plt.show() at the end if True.
-        table_loc : {'right', 'bottom'}, default 'right'
-            Where to place the bit description table relative to the image.
+            Axes to draw the image on. If ``None``, new axes are created as part
+            of a figure layout that also includes a table panel.
+        show : bool, default=False
+            If ``True``, call :func:`matplotlib.pyplot.show` at the end.
         vmax, vmin : float, optional
-            Image limits. By default inferred from data.
+            Color limits for the image. Defaults are inferred from data.
         title : str, optional
-            Title for the image panel. If None, a sensible default is used.
-        max_colorbar_ticks : int, default=20
-            If the number of unique integer values is <= this threshold,
-            colorbar ticks are set exactly on those unique values for readability.
+            Title for the image panel.
+        max_colorbar_ticks : int, default=10
+            If the number of unique integer values in the image is less than or
+            equal to this threshold, colorbar ticks are placed exactly on those
+            values.
 
         Returns
         -------
-        fig, ax_img, ax_tbl : (Figure, Axes, Axes or None)
-            The created figure and axes. ax_tbl can be None if an external `ax`
-            is provided and there is no room for a table.
+        fig : matplotlib.figure.Figure
+            The figure object.
+        ax_img : matplotlib.axes.Axes
+            Axes with the image.
+        ax_tbl : matplotlib.axes.Axes or None
+            Axes with the table (``None`` if no table was created).
         """
-
         if self.bitmask is None:
             raise ValueError("DataMask.bitmask is None.")
 
@@ -536,12 +645,16 @@ class DataMask(object):
         return fig, ax_img, ax_tbl
 
     def dump_to_hdu(self):
-        """Return a ImageHDU containig the mask information.
+        """Serialize the mask to a FITS :class:`~astropy.io.fits.ImageHDU`.
+
+        The header stores the per-flag metadata in cards named ``FLAG_<NAME>`` with
+        the value equal to the integer bit and the card comment equal to the flag
+        description.
 
         Returns
         -------
-        - hdu: ImageHDU
-            An ImageHDU containing the bitmask information.
+        astropy.io.fits.ImageHDU
+            Image HDU named ``"MASK"`` containing the integer bitmask and metadata.
         """
         header = fits.Header()
         header["COMMENT"] = "Each flag KEY is stored using the convention FLAG_KEY"
@@ -554,20 +667,17 @@ class DataMask(object):
 
     @classmethod
     def from_hdu(cls, hdu):
-        """Create a DataMask from an input Header Data Unit.
-        
-        The input header must contain the data corresponding to the bit mask as
-        well as the corresponding flag information in the header.
+        """Construct a :class:`DataMask` from a FITS HDU.
 
         Parameters
         ----------
-        hdu : astropy.fits.HDU
-            Header Data Unit that stores the DataMask information.
-        
+        hdu : astropy.io.fits.ImageHDU
+            HDU produced by :meth:`dump_to_hdu` (name ``"MASK"``).
+
         Returns
         -------
-        datamask : :class:`DataMask`
-            An instance of ``DataMask``.
+        DataMask
+            New instance with :attr:`flag_map` and :attr:`bitmask` restored.
         """
         flag_map = {}
         for k in hdu.header.keys():
@@ -582,22 +692,29 @@ class DataMask(object):
 
 
 class DataContainer(ABC, VerboseMixin):
-    """
-    Abstract class for data containers.
+    """Abstract base class for PyKOALA data containers.
 
-    This class aims to represent any kind of astronomical data: detector (raw)
-    data, row stacked spectra (RSS) data containing fibre spectra or 3D data
-    cubes.
+    Concrete subclasses represent specific data types (for example,
+    :class:`RSS` and :class:`Cube`). A data container bundles the primary
+    science arrays with metadata, a data-quality mask, WCS, the original
+    FITS header, and a reduction history.
 
-    A DataContainer is an ensemble of data and metadata whose information is
-    stored across multiple attributes. The essential information is recorded in
-    the following attributes:
-
-    - ``intensity`` and ``variance`` are the fundamental attirbutes that contain the data.
-    - ``mask`` stores the data quality information associated to each resolution element (i.e. pixel, fibre, spaxel)
-    - ``info`` contains important metadata and data used during the reduction sequence.
-    - ``history`` keeps track of the data reduction process.
-
+    Attributes
+    ----------
+    intensity : astropy.units.Quantity
+        Science data array.
+    variance : astropy.units.Quantity
+        Per-element variance associated with :attr:`intensity`.
+    mask : :class:`DataMask`
+        Bit-flag data-quality mask aligned with :attr:`intensity`.
+    info : dict
+        Auxiliary metadata (for example, name, exposure time, fibre positions).
+    history : :class:`DataContainerHistory`
+        Log of data-reduction operations.
+    header : astropy.io.fits.Header
+        Original FITS header (or an empty header).
+    wcs : astropy.wcs.WCS or None
+        World coordinate system for :attr:`intensity`, if applicable.
     """
 
     @property
@@ -735,7 +852,19 @@ class DataContainer(ABC, VerboseMixin):
             return False
 
     def _to_hdul(self):
-        """Store the DataContainer in a FITS file."""
+        """Build a FITS :class:`~astropy.io.fits.HDUList` for this container.
+
+        The HDU list includes:
+        - ``PRIMARY`` with PyKOALA metadata, original header, and history cards.
+        - ``INTENSITY`` with science data and WCS.
+        - ``VARIANCE`` with variance data and WCS.
+        - ``MASK`` with the serialized :class:`DataMask`.
+
+        Returns
+        -------
+        astropy.io.fits.HDUList
+            HDU list ready to be written to disk.
+        """
         primary = fits.PrimaryHDU()
         primary.header['pykoala0'] = __version__, "PyKOALA version"
         primary.header['pykoala1'] = datetime.now().strftime(
@@ -766,12 +895,18 @@ class DataContainer(ABC, VerboseMixin):
 
     @classmethod
     def _dc_params_from_hdul(cls, hdul):
-        """Extract the basic parameters used to instanciate a DataContainer from an HDUL.
+        """Extract constructor parameters from a PyKOALA FITS file.
 
         Parameters
         ----------
-        hdul : astropy.fits.HDUList
-            Input HDUL used to initialise the basic parameters of the DC.
+        hdul : astropy.io.fits.HDUList
+            HDU list produced by :meth:`_to_hdul`.
+
+        Returns
+        -------
+        dict
+            Dictionary with keys ``history``, ``header``, ``intensity``,
+            ``variance``, ``wcs``, and ``mask`` suitable for ``cls(**params)``.
         """
         dc_params = {}
         dc_params["history"] = DataContainerHistory.from_header(
@@ -792,15 +927,26 @@ class DataContainer(ABC, VerboseMixin):
     
     @abstractmethod
     def from_fits():
-        """Abstract factory method to instanciate a DataContainer from a FITS."""
+        """Create an instance from a PyKOALA-compliant FITS file.
+
+        Implementations must read the HDUs created by :meth:`_to_hdul` and return
+        a fully initialized instance.
+        """
         pass
 
 # =============================================================================
 
 
 class SpectraContainer(DataContainer):
-    """
-    A `DataContainer` containing spectra (`RSS` or `Cube`).
+    """Base class for spectral data containers.
+
+    Extends :class:`DataContainer` by adding a common spectral coordinate
+    :attr:`wavelength`. Subclasses include :class:`RSS` and :class:`Cube`.
+
+    Attributes
+    ----------
+    wavelength : astropy.units.Quantity
+        1D array of wavelength samples shared by all spectra.
     """
 
     @property
@@ -880,29 +1026,37 @@ class SpectraContainer(DataContainer):
 
     def resample_wavelength_grid(self, wavelength, reference_wl=None, mask_threshold=0.0,
                                 **interp_kwargs):
-        """
-        Resample all spectra to a new wavelength grid using flux-conserving interpolation.
+        """Resample all spectra onto a new wavelength grid (flux-conserving).
 
-        This method resamples both intensity and variance. If a :class:`DataMask`
-        exists on the object, it will be propagated by interpolating each named
-        bit-mask using :func:`ancillary.bool_mask_interpolation`.
+        Intensity and variance are resampled independently using
+        :func:`pykoala.ancillary.flux_conserving_interpolation_nd`. If a
+        :class:`DataMask` is present, each named boolean layer is propagated via
+        :func:`pykoala.ancillary.bool_mask_interpolation`.
 
         Parameters
         ----------
-        wavelength : astropy.units.Quantity,
-            Target wavelength grid.
+        wavelength : astropy.units.Quantity
+            Target wavelength grid (1D, monotonically increasing).
+        reference_wl : astropy.units.Quantity, optional
+            Source wavelength grid. Defaults to :attr:`wavelength` of the
+            instance.
+        mask_threshold : float, default=0.0
+            Threshold in ``[0, 1]`` for boolean mask propagation. Values above
+            the threshold are considered ``True`` in the resampled mask.
         **interp_kwargs
-            Keyword arguments forwarded to
-            :func:`ancillary.flux_conserving_interpolation`. If
-            ``return_nan_flag=True`` is provided, NaN-affected output pixels are
-            tracked and combined into/with a mask named ``"interpolated_nans"``.
+            Forwarded to :func:`pykoala.ancillary.flux_conserving_interpolation_nd`.
+            If ``return_nan_flag=True``, any output pixel affected by NaNs in the
+            inputs is tracked into/with the mask flag ``"interpolated_nans"``.
+
+        Raises
+        ------
+        ValueError
+            If ``reference_wl`` has a size inconsistent with the current spectra.
 
         Notes
         -----
-        - Intensity and variance are treated independently with the same interpolator.
-        - If ``return_nan_flag`` is used, this method expects
-          ``flux_conserving_interpolation`` to return a tuple
-          ``(values, nan_flag)`` per spectrum.
+        The method updates :attr:`wavelength`, :attr:`rss_intensity`,
+        and :attr:`rss_variance` in place.
         """
         self.vprint(f"Resampling spectral axis")
         intensity = self.rss_intensity
@@ -961,17 +1115,19 @@ class SpectraContainer(DataContainer):
     
 
     def get_spectra_sorted(self, wave_range=None):
-        """Get the RSS-wise sorted order of the intensity.
-        
+        """Return indices that sort spectra by median flux.
+
         Parameters
         ----------
-        - wave_range: 2-element iterable, ooptional
-            Wavelength limits to compute the median intensity per spatial element.
-        
+        wave_range : tuple of (Quantity or float, Quantity or float), optional
+            Wavelength limits to compute per-spectrum medians. If omitted, the
+            full range is used. Floats are interpreted in the unit of
+            :attr:`wavelength`.
+
         Returns
         -------
-        - sorted_order:
-            Sorted list of indices.
+        numpy.ndarray of int
+            Indices that sort from faintest to brightest median flux.
         """
         if wave_range is None:
             wave_mask = np.ones_like(self.wavelength, dtype=bool)
@@ -1000,42 +1156,46 @@ class SpectraContainer(DataContainer):
         **plot_kwargs,
     ) -> plt.Axes:
         """
-        Plot one or multiple spectra (RSS-like order) as a function of wavelength.
+        Plot one or more spectra (RSS ordering) versus wavelength.
 
         Parameters
         ----------
-        indices
-            Integer index or iterable of indices into `rss_intensity` (axis=0).
-        ax
-            Matplotlib Axes to draw on; if None, a new one is created.
-        wave_range
-            Optional 2-element (min, max) wavelength range. Elements can be floats
-            (assumed same unit as `self.wavelength`) or `Quantity`.
-        show_variance
-            If True, shade +/-1 sigma using `rss_variance` when available.
-        variance_alpha
-            Alpha for the variance shading.
-        labels
-            Optional iterable of labels, one per spectrum. Defaults to `idx {i}`.
-        colors
-            Optional iterable of colors, one per spectrum. Falls back to cycle.
-        normalize
-            Optional normalization applied per spectrum *before* adding offsets.
-            Allowed values:
-                - None: no normalization
-                - "median": divide by median over the plotted wavelength mask
-                - "max": divide by max over the plotted wavelength mask
-        drawstyle
-            Matplotlib drawstyle, e.g., "default", "steps-mid".
-        mask_invalid
-            If True, mask NaNs in intensity/variance before plotting.
+        indices : int or array-like of int
+            Index/indices into ``rss_intensity`` (axis 0).
+        ax : matplotlib.axes.Axes, optional
+            Axes to draw on. If ``None``, a new figure and axes are created.
+        wave_range : tuple, optional
+            ``(wmin, wmax)`` wavelength limits. Elements can be floats
+            (assumed in :attr:`wavelength`.unit) or :class:`~astropy.units.Quantity`.
+        show_variance : bool, default=False
+            If ``True``, shade +/- 1 sigma  using :attr:`rss_variance`.
+        variance_alpha : float, default=0.2
+            Alpha for the variance shading patch.
+        labels : sequence of str, optional
+            One legend label per spectrum. Defaults to ``"idx {i}"``.
+        colors : sequence, optional
+            Matplotlib-compatible colors. Cycles if shorter than number of spectra.
+        normalize : {None, 'median', 'max'}, optional
+            Per-spectrum normalization before plotting.
+        drawstyle : str, default='default'
+            Matplotlib drawstyle (e.g., ``'steps-mid'``).
+        mask_invalid : bool, default=True
+            If ``True``, mask NaNs in intensity/variance before plotting.
+        flux_scale : {'linear','log'}, optional
+            Y-axis scale. If ``None``, stays linear.
         **plot_kwargs
-            Passed to `ax.plot` (e.g., linewidth=1).
+            Forwarded to :meth:`matplotlib.axes.Axes.plot`.
 
         Returns
         -------
+        fig : matplotlib.figure.Figure
+            Figure object (new or owner of ``ax``).
         ax : matplotlib.axes.Axes
-            The axes with the drawn spectra.
+            Axes with the plotted spectra.
+
+        See Also
+        --------
+        :meth:`get_spectra_sorted`
         """
         # ---- prepare inputs
         if isinstance(indices, int):
@@ -1135,7 +1295,12 @@ class SpectraContainer(DataContainer):
         return fig, ax
 
 class RSS(SpectraContainer):
-    """Data Container class for row-stacked spectra (RSS)."""
+    """Row-stacked spectra container.
+
+    Stores spectra as a 2D array with shape ``(n_fibres, n_wavelength)`` and
+    a shared :attr:`~SpectraContainer.wavelength`. Fibre sky positions are
+    stored in :attr:`~DataContainer.info` (keys ``'fib_ra'``, ``'fib_dec'``).
+    """
 
     @property
     def rss_intensity(self):
@@ -1196,23 +1361,33 @@ class RSS(SpectraContainer):
         super().__init__(**kwargs)
 
     def get_centre_of_mass(self, wavelength_step=1, stat=np.nanmedian, power=1.0):
-        """Compute the center of mass (COM) based on the RSS fibre positions
+        """Compute the flux-weighted sky center of mass per wavelength bin.
+
+        The COM is measured over fibre positions (RA, Dec) using flux weights from
+        :attr:`intensity`. Within each wavelength bin of size ``wavelength_step``,
+        a statistic (e.g., median) is applied across the bin.
 
         Parameters
         ----------
-        wavelength_step: int, default=1
-            Number of wavelength points to consider for averaging the COM. When setting it to 1 it will average over
-            all wavelength points.
-        stat: function, default=np.median
-            Function to compute the COM over each wavelength range.
-        power: float (default=1.0)
-            Power the intensity to compute the COM.
+        wavelength_step : int, default=1
+            Bin size along the spectral axis (number of wavelength samples).
+            ``1`` means evaluate at every wavelength sample.
+        stat : callable, default=numpy.nanmedian
+            Reduction statistic applied across the bin (vector -> scalar).
+        power : float, default=1.0
+            If not 1, use ``intensity**power`` as weights.
+
         Returns
         -------
-        x_com: np.array(float)
-            Array containing the COM in the x-axis (RA, columns).
-        y_com: np.array(float)
-            Array containing the COM in the y-axis (DEC, rows).
+        ra_com : astropy.units.Quantity
+            Flux-weighted RA per wavelength sample (same length as
+            :attr:`wavelength`).
+        dec_com : astropy.units.Quantity
+            Flux-weighted Dec per wavelength sample.
+
+        Notes
+        -----
+        Requires ``'fib_ra'`` and ``'fib_dec'`` in :attr:`info`.
         """
         ra = self.info["fib_ra"]
         dec = self.info["fib_dec"]
@@ -1239,24 +1414,28 @@ class RSS(SpectraContainer):
         return ra_com, dec_com
 
     def update_coordinates(self, new_coords=None, offset=None):
-        """Update fibre coordinates.
-
-        Update the fibre sky position by providing new locations of relative
-        offsets.
+        """Update fibre sky positions.
 
         Parameters
         ----------
-        new_fib_coord: (2, n) np.array(float), default=None
-            New fibre coordinates for ra and dec axis, expressed in *deg*.
-        new_fib_coord_offset: np.ndarray, default=None
-            Relative offset in *deg*. If `new_fib_coord` is provided, this will
-            be ignored.
+        new_coords : tuple of (Quantity, Quantity), optional
+            Absolute coordinates ``(ra, dec)`` for all fibres, both 1D arrays
+            with units of degree.
+        offset : tuple of (Quantity, Quantity), optional
+            Offsets ``(d_ra, d_dec)`` to add to the current positions, with units
+            of degree. Ignored if ``new_coords`` is given.
 
-        Returns
-        -------
+        Raises
+        ------
+        NameError
+            If neither ``new_coords`` nor ``offset`` is provided.
 
+        Notes
+        -----
+        The original positions are saved into :attr:`info` as
+        ``'ori_fib_ra'`` and ``'ori_fib_dec'``. A history entry named
+        ``'update_coords'`` is appended.
         """
-
         self.info['ori_fib_ra'], self.info['ori_fib_dec'] = (self.info["fib_ra"].copy(),
                                                              self.info["fib_dec"].copy())
         if new_coords is not None:
@@ -1327,44 +1506,28 @@ class RSS(SpectraContainer):
 
     @classmethod
     def from_fits(cls, filename):
-        """Initialise an RSS from a FITS file.
-        
-        Create an instance of an :class:`RSS` from a FITS file compliant with
-        PyKOALA format.
+        """Read a PyKOALA RSS from a FITS file.
 
         Parameters
         ----------
-        filename : str
-            Path to the FITS file that contains the RSS information. The FITS
-            file must contain the information required to create an instance of
-            an RSS:
+        filename : str or path-like
+            Path to a FITS file produced by :meth:`to_fits`.
 
-            - A primary HDU.
-                Used to initialise the :class:`DataContainerHistory`, and to
-                recover the ``header`` attribute containing the information of
-                the original header.
-            - An ``INTENSITY`` ImageHDU extension.
-                This extension must contain the data corresponding to the
-                ``intensity`` attribute. The header of this extension must also
-                contain the WCS information used to reconstruct the ``wavelength``
-                attribute.
-            - A ``VARIANCE`` ImageHDU extension
-                Same as ``INTENSITY`` for the ``variance`` attribute.
-            - A ``MASK`` ImageHDU extension
-                This extension must contain the data used to initialise the
-                :class:`DataMask` attribute. The header must contain the flag
-                information of every bit used.
-            - A ``INFO`` BinaryTable HDU extension
-                A table containin the data to create the ``info`` attribute.
-                It must contain two columns with the fibre position
-                (``fib_ra``, ``fib_dec``). The header must include the ``exptime``
-                and optionally the ``name`` associated to the RSS.
-        
         Returns
         -------
-        rss : :class:`RSS`
-            An instance of an RSS.
+        RSS
+            New instance with intensity, variance, wavelength, mask, WCS, history,
+            original header, and fibre information loaded.
 
+        Notes
+        -----
+        Expected extensions:
+        - ``PRIMARY``: history and original header
+        - ``INTENSITY``: science data + WCS
+        - ``VARIANCE``: variance data + WCS
+        - ``MASK``: :class:`DataMask`
+        - ``INFO``: binary table with ``fib_ra`` and ``fib_dec``, and header
+            keywords ``NAME``, ``EXPTIME``, ``AIRMASS``, ``FIBDIAM``.
         """
         with fits.open(filename) as hdul:
             # Extract the basic parameters to initialise a DC
@@ -1384,19 +1547,26 @@ class RSS(SpectraContainer):
                    **dc_parameters)
 
     def get_integrated_fibres(self, wavelength_range=None):
-        """Compute the integrated intensity of the RSS fibres.
-        
-        Paramters
-        ---------
-        wavelength_range: 2-element iterable, optional
-            Wavelenght limits used to compute the integrated intensity.
-        
+        """Integrate each fibre over a wavelength range.
+
+        Parameters
+        ----------
+        wavelength_range : tuple of (Quantity or float, Quantity or float), optional
+            Integration limits ``(wmin, wmax)``. Floats are interpreted in the
+            unit of :attr:`wavelength`. If omitted, the full range is used.
+
         Returns
         -------
-        integrated_fibres: 1D np.ndarray
-            Array containing the integrated flux.
-        integrated_variances: 1D np.ndarray
-            Array containing the integrated variance associated to each fibre.
+        integrated_fibres : astropy.units.Quantity
+            1D array with the integrated flux per fibre.
+        integrated_variances : astropy.units.Quantity
+            1D array with the integrated variance per fibre (assuming independent
+            samples; see Notes).
+
+        Notes
+        -----
+        The implementation uses a mean times the number of samples inside the mask,
+        which is equivalent to a rectangle-rule sum on an evenly spaced grid.
         """
         if wavelength_range is not None:
 
@@ -1415,7 +1585,13 @@ class RSS(SpectraContainer):
         return integrated_fibres, integrated_variances
 
     def get_footprint(self):
-        """Compute the spatial fibre coverage of the RSS."""
+        """Return a rectangular sky footprint that encloses all fibre positions.
+
+        Returns
+        -------
+        astropy.units.Quantity
+            Array of shape ``(4, 2)`` with the corners ``(ra, dec)`` in degrees.
+        """
         min_ra, max_ra = self.info['fib_ra'].min(), self.info['fib_ra'].max()
         min_dec, max_dec = self.info['fib_dec'].min(), self.info['fib_dec'].max()
         footprint = np.array([[max_ra.to_value("deg"), max_dec.to_value("deg")],
@@ -1580,7 +1756,12 @@ class RSS(SpectraContainer):
 
 
 class Cube(SpectraContainer):
-    """:class:`SpectraContainer` associated to a 3D data cube."""
+    """:class:`SpectraContainer` for a 3D IFS datacube.
+
+    The primary arrays have shape ``(n_wave, n_row, n_col)``. The spectral axis
+    is the first dimension, compatible with :mod:`astropy.wcs` spectral
+    subcomponents.
+    """
 
     # default_hdul_extensions_map = {"INTENSITY": "INTENSITY",
     #                                "VARIANCE": "VARIANCE"}
@@ -1614,12 +1795,12 @@ class Cube(SpectraContainer):
 
     @property
     def n_cols(self):
-        """Number of spaxel colums"""
+        """Number of spaxel columns (X dimension)."""
         return self.intensity.shape[2]
 
     @property
     def n_rows(self):
-        """Number of spaxel rows"""
+        """Number of spaxel rows (Y dimension)."""
         return self.intensity.shape[1]
 
     @property
@@ -1664,7 +1845,24 @@ class Cube(SpectraContainer):
             original_data.shape[1] * original_data.shape[2])).T
 
     def get_centre_of_mass(self, wavelength_step=1, stat=np.median, power=1.0):
-        """Compute the center of mass of the data cube."""
+        """Flux-weighted image-plane center of mass per wavelength bin.
+
+        Parameters
+        ----------
+        wavelength_step : int, default=1
+            Bin size along the spectral axis (number of wavelength samples).
+        stat : callable, default=numpy.median
+            Reduction statistic across each bin.
+        power : float, default=1.0
+            If not 1, use ``intensity**power`` as weights.
+
+        Returns
+        -------
+        x_com : numpy.ndarray of float
+            COM along columns for each wavelength sample.
+        y_com : numpy.ndarray of float
+            COM along rows for each wavelength sample.
+        """
         x = np.arange(0, self.n_cols, 1)
         y = np.arange(0, self.n_rows, 1)
         x_com = np.empty(self.n_wavelength)
@@ -1681,7 +1879,26 @@ class Cube(SpectraContainer):
         return x_com, y_com
 
     def get_integrated_light_frac(self, frac=0.5):
-        """Compute the integrated spectra that accounts for a given fraction of the total intensity."""
+        """Return the cumulative-light threshold for a given fraction.
+
+        The cube is collapsed spatially to an image by summing over wavelength.
+        Pixels are sorted by brightness, and the cumulative fraction is computed.
+
+        Parameters
+        ----------
+        frac : float, default=0.5
+            Target cumulative fraction in ``(0, 1]``.
+
+        Returns
+        -------
+        float
+            Threshold value in the cumulative array at which ``frac`` is reached.
+
+        Notes
+        -----
+        This method returns the cumulative statistic at the index where the target
+        fraction is first exceeded. It does not return a mask.
+        """
         collapsed_intensity = np.nansum(self.intensity, axis=0)
         sort_intensity = np.sort(collapsed_intensity, axis=(0, 1))
         # Sort from highes to lowest luminosity
@@ -1692,7 +1909,25 @@ class Cube(SpectraContainer):
         return cumulative_intensity[pos]
 
     def get_white_image(self, wave_range=None, s_clip=3.0, frequency_density=False):
-        """Create a white image."""
+        """Create a white-light image over a wavelength interval.
+
+        Parameters
+        ----------
+        wave_range : tuple of (Quantity or float, Quantity or float), optional
+            Wavelength limits ``(wmin, wmax)``. Floats are interpreted in Angstrom.
+            If omitted, the full spectral range is used.
+        s_clip : float or None, default=3.0
+            If not ``None``, perform symmetric sigma-clipping around the median
+            per spaxel using a robust MAD-based standard deviation.
+        frequency_density : bool, default=False
+            If ``True``, convert to per-frequency density using
+            ``nu = c / lambda`` (scaling by ``lambda**2 / c``).
+
+        Returns
+        -------
+        astropy.units.Quantity
+            2D white-light image with the same spatial shape as the cube.
+        """
         if wave_range is not None:
             print("Wavelength : ", wave_range, self.wavelength)
             wave_mask = (
@@ -1723,11 +1958,33 @@ class Cube(SpectraContainer):
         return white_image
 
     def get_footprint(self):
-        """Compute the spatial footprint of the datacube."""
+        """Return the celestial WCS footprint of the datacube.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of world-coordinate polygon vertices as returned by
+            :meth:`astropy.wcs.WCS.calc_footprint`.
+        """
         return self.wcs.celestial.calc_footprint()
 
     def update_coordinates(self, new_coords=None, offset=None):
-        """Update the celestial coordinates of the Cube"""
+        """Update the celestial reference of the cube WCS.
+
+        Parameters
+        ----------
+        new_coords : tuple of (Quantity, Quantity), optional
+            Absolute sky coordinates ``(ra, dec)`` to set in the celestial WCS,
+            both with units of degree.
+        offset : tuple of (Quantity, Quantity), optional
+            Offsets ``(d_ra, d_dec)`` to apply to the current celestial reference,
+            in degrees. Ignored if ``new_coords`` is provided.
+
+        Notes
+        -----
+        Only the celestial axes of :attr:`wcs` are modified. A history entry named
+        ``'update_coords'`` is appended.
+        """
         updated_wcs = ancillary.update_wcs_coords(self.wcs.celestial,
                                         ra_dec_val=new_coords,
                                         ra_dec_offset=offset)
@@ -1739,7 +1996,21 @@ class Cube(SpectraContainer):
 
     def to_fits(self, filename=None, overwrite=False,
                 checksum=False):
-        """Save the Cube into a FITS file."""
+        """Write the cube to a PyKOALA FITS file.
+
+        See :meth:`DataContainer._to_hdul` for the common HDUs. An additional
+        empty ``INFO`` table is appended with basic keywords.
+
+        Parameters
+        ----------
+        filename : str or path-like, optional
+            Output path. If omitted, a timestamped name is generated.
+        overwrite : bool, default=False
+            Overwrite existing file.
+        checksum : bool, default=False
+            Add FITS checksums.
+
+        """
         if filename is None:
             filename = 'cube_{}_{}.fits.gz'.format(
                 self.info.get("name", "frame"),
@@ -1760,14 +2031,26 @@ class Cube(SpectraContainer):
         hdul.close()
         self.vprint(f"File saved as {filename}")
 
-    def close_hdul(self):
-        """Close the HDUL."""
-        if self.hdul is not None:
-            self.vprint(f"[Cube] Closing HDUL")
-            self.hdul.close()
+    # def close_hdul(self):
+    #     """Close the underlying HDUList if present."""
+    #     if self.hdul is not None:
+    #         self.vprint(f"[Cube] Closing HDUL")
+    #         self.hdul.close()
 
     @classmethod
     def from_hdul(cls, hdul):
+        """Construct a :class:`Cube` from an open FITS HDU list.
+
+        Parameters
+        ----------
+        hdul : astropy.io.fits.HDUList
+            Open HDU list created by :meth:`to_fits`.
+
+        Returns
+        -------
+        Cube
+            New instance initialized from ``hdul``.
+        """
         info = {}
         info["name"] = hdul["INFO"].header.get("name")
         info["exptime"] = hdul["INFO"].header.get("exptime")
@@ -1777,39 +2060,27 @@ class Cube(SpectraContainer):
 
     @classmethod
     def from_fits(cls, filename):
-        """Initialise an Cube from a FITS file.
-        
-        Create an instance of an :class:`Cube` from a FITS file compliant with
-        PyKOALA format.
+        """Read a PyKOALA cube from a FITS file.
 
         Parameters
         ----------
-        filename : str
-            Path to the FITS file that contains the RSS information. The FITS
-            file must contain the information required to create an instance of
-            an RSS:
-
-            - A primary HDU.
-                Used to initialise the :class:`DataContainerHistory`, and to
-                recover the ``header`` attribute containing the information of
-                the original header.
-            - An ``INTENSITY`` ImageHDU extension.
-                This extension must contain the data corresponding to the
-                ``intensity`` attribute. The header of this extension must also
-                contain the WCS information used to reconstruct the ``wavelength``
-                attribute.
-            - A ``VARIANCE`` ImageHDU extension
-                Same as ``INTENSITY`` for the ``variance`` attribute.
-            - A ``MASK`` ImageHDU extension
-                This extension must contain the data used to initialise the
-                :class:`DataMask` attribute. The header must contain the flag
-                information of every bit used.
+        filename : str or path-like
+            Path to a FITS file produced by :meth:`to_fits`.
 
         Returns
         -------
-        rss : :class:`RSS`
-            An instance of an RSS.
+        Cube
+            New instance with intensity, variance, wavelength, mask, WCS, history,
+            and original header loaded.
 
+        Notes
+        -----
+        Expected extensions:
+        - ``PRIMARY``: history and original header
+        - ``INTENSITY``: science data + WCS
+        - ``VARIANCE``: variance data + WCS
+        - ``MASK``: :class:`DataMask`
+        - ``INFO``: optional metadata table for the cube
         """
         hdul = fits.open(filename)
         return cls.from_hdul(hdul)
