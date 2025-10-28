@@ -1,3 +1,4 @@
+import matplotlib
 from matplotlib import pyplot as plt
 from matplotlib import colors
 from matplotlib.ticker import AutoMinorLocator
@@ -5,7 +6,7 @@ from matplotlib.collections import PatchCollection
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import ListedColormap
 from matplotlib.patches import Polygon
-
+from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 import numpy as np
 
 from astropy import units as u
@@ -412,7 +413,7 @@ def qc_cube(cube, spax_pct=[75, 90, 99], rng_seed=42):
     return fig
 
 @ancillary.remove_units_dec
-def qc_cubing(rss_weight_maps, exposure_times):
+def qc_cube_coverage(rss_weight_maps, exposure_times, wavelength=None):
     """..."""
     if exposure_times.ndim == 1:
         exposure_times = (rss_weight_maps
@@ -427,22 +428,76 @@ def qc_cubing(rss_weight_maps, exposure_times):
     print("Mean exposure time (s): ", np.nanmean(exposure_times))
     t_im_args = dict(vmin=tp5 * 1.1, vmax=tp95 * 1.1, cmap='gnuplot',
                      interpolation='none', origin='lower', aspect="auto")
-    fig, axs = plt.subplots(ncols=n_rss + 1, nrows=2, sharex=True,
-     sharey=True, constrained_layout=True, gridspec_kw={"hspace": 0.05})
-    for i in range(n_rss):
-        ax = axs[0, i]
-        ax.set_title(f"RSS - {i + 1}")
-        ax.imshow(np.nanmedian(rss_weight_maps[i], axis=0), **w_im_args)
-        ax = axs[1, i]
-        ax.imshow(np.nanmedian(exposure_times[i], axis=0), **t_im_args)
+    
 
-    axs[0, -1].set_title("Mean")
-    mappable = axs[0, -1].imshow(np.nanmedian(np.nanmean(rss_weight_maps, axis=0), axis=0),
+    fig = plt.figure(constrained_layout=True)
+    gs = GridSpec(2, 1, height_ratios=[3, 1], hspace=0.05, figure=fig)
+    gs_images = GridSpecFromSubplotSpec(2, n_rss + 1, subplot_spec=gs[0])
+    axs_images = gs_images.subplots(sharex=True, sharey=True)
+    ax_spec = fig.add_subplot(gs[1])
+
+    for i in range(n_rss):
+        ax = axs_images[0, i]
+        ax.set_title(f"RSS - {i + 1}")
+        ax.imshow(np.nanmean(rss_weight_maps[i], axis=0), **w_im_args)
+        ax = axs_images[1, i]
+        ax.imshow(np.nanmean(exposure_times[i], axis=0), **t_im_args)
+
+    axs_images[0, -1].set_title("Mean")
+    mappable = axs_images[0, -1].imshow(np.nanmean(np.nanmean(rss_weight_maps, axis=0), axis=0),
                       **w_im_args)
-    plt.colorbar(mappable, ax=axs[0, -1], label='Median weight')
-    mappable = axs[1, -1].imshow(np.nanmedian(np.nanmean(exposure_times, axis=0), axis=0),
+    plt.colorbar(mappable, ax=axs_images[0, -1], label='Median weight')
+    mappable = axs_images[1, -1].imshow(np.nanmean(np.nanmean(exposure_times, axis=0), axis=0),
                       **t_im_args)
-    plt.colorbar(mappable, ax=axs[1, -1], label='Median exp. time (s) / pixel')
+    plt.colorbar(mappable, ax=axs_images[1, -1], label='Median exp. time (s) / pixel')
+
+    # Weights as function of wavelength
+    if wavelength is None:
+        wavelength = np.arange(0, rss_weight_maps[0].shape[0]) << u.pixel
+
+    for i in range(n_rss):
+        mean_weight = np.nanmean(rss_weight_maps[i], axis=(1, 2))
+        ax_spec.plot(wavelength, mean_weight, label=f"RSS - {i + 1}")
+    ax_spec.legend(ncol=n_rss, fontsize="x-small", framealpha=0.1)
+    ax_spec.set_xlabel(f"Wavelength axis")
+    ax_spec.set_ylabel("Mean kernel weight")
+    plt.close()
+    return fig
+
+def qc_cube_combination(rss_cubes, final_cube, spax_pct=[75, 90, 90, 95, 99], rng_seed=42):
+    # Select spaxels
+    np.random.seed(rng_seed)
+    white = final_cube.get_white_image()
+    mean_instensity_pos = np.argsort(white.flatten())
+    spaxel_entries = mean_instensity_pos[
+        np.array(mean_instensity_pos.size / 100 * np.array(spax_pct),
+                 dtype=int)]
+    x_spaxel_idx, y_spaxel_idx = np.unravel_index(spaxel_entries,
+                                                  shape=white.shape)
+    # Build figure
+    fig = plt.figure(constrained_layout=True, figsize=(8, 3 * len(spax_pct)))
+    gs = GridSpec(len(spax_pct), 1, hspace=0.05, figure=fig)
+    for i in range(len(spax_pct)):
+        x_spx, y_spx = x_spaxel_idx[i], y_spaxel_idx[i]
+        gs_spaxel = GridSpecFromSubplotSpec(2, 1, height_ratios=[2, 1], subplot_spec=gs[i])
+        ax_int, ax_var = gs_spaxel.subplots(sharex=True)
+        
+        ax_int.annotate(f"({x_spx},{y_spx})", xy=(0.05, 0.95), xycoords="axes fraction", va="top")
+        ax_int.plot(final_cube.wavelength, final_cube.intensity[:, x_spx, y_spx], c="k", label="Final cube")
+        ax_var.plot(final_cube.wavelength, final_cube.variance[:, x_spx, y_spx], c="k")
+        for ith, rss_cube in enumerate(rss_cubes):
+            line = ax_int.plot(rss_cube.wavelength, rss_cube.intensity[:, x_spx, y_spx],
+                               label=rss_cube.info.get("name", f"RSS-{ith}"), lw=0.8)
+            ax_var.plot(rss_cube.wavelength, rss_cube.variance[:, x_spx, y_spx], color=line[0].get_color(),
+                        lw=0.8)
+        
+        threshold = np.nanpercentile(final_cube.intensity[:, x_spx, y_spx].value, 5)
+        ax_int.legend(fontsize="x-small", framealpha=0.4, ncol=len(rss_cubes) + 1)
+        ax_int.set_yscale("symlog", linthresh=threshold)
+        ax_var.set_yscale("log")
+        ax_int.set_ylabel(f"Intensity", fontsize="x-small")
+        ax_var.set_ylabel(f"Variance", fontsize="xx-small")
+    ax_var.set_xlabel(f"Wavelength", fontsize="x-small")
     plt.close()
     return fig
 
@@ -470,6 +525,7 @@ def qc_fibres_on_fov(fov_size, pixel_colum_pos, pixel_row_pos,
     ax.add_patch(patch)
     ax.legend(handles=[patch])
     return fig
+
 # =============================================================================
 # Star profile
 # =============================================================================
@@ -678,3 +734,48 @@ def qc_external_image(ref_image, ref_wcs, external_image, external_image_wcs):
 
 def qc_stellar_extraction():
     pass
+
+
+# =============================================================================
+# RSS
+# =============================================================================
+
+def qc_rss_all_fibres(rss, filename):
+    vprint("Changing matplotlib backend to prevent memory overflow")
+
+    current_bcknd = matplotlib.get_backend()
+    matplotlib.use('agg')
+    try:
+        from matplotlib.backends.backend_pdf import PdfPages
+    except Exception as e:
+        raise e
+
+    with PdfPages(filename) as pdf:
+
+        fig = rss.plot_fibres(data=np.arange(0, rss.intensity.shape[0]),
+        cblabel="Fibre no.")
+        pdf.savefig()
+        plt.close()
+
+        for fibre in range(rss.intensity.shape[0]):
+            fig, axs = plt.subplots(nrows=2, ncols=1, height_ratios=[2, 1],
+            sharex=True)
+            fig.suptitle(f"Fibre index: {fibre}")
+            ax = axs[0]
+            ax.plot(rss.wavelength, rss.intensity[fibre], color="r", lw=0.8)
+            ax.set_ylabel("Intensity")
+            thresh = np.abs(np.nanpercentile(rss.intensity[fibre].value, 99))
+            ax.set_yscale("symlog", linthresh=thresh)
+            ax = axs[1]
+            ax.plot(rss.wavelength, rss.variance[fibre], color="r", lw=0.8)
+            ax.set_ylabel("Variance")
+            ax.set_yscale("log")
+            twax = ax.twinx()
+            twax.plot(rss.wavelength, rss.mask.bitmask[fibre], color="grey", lw=0.8,
+                      alpha=0.9)
+            twax.set_ylabel("Bitmask")
+
+            pdf.savefig()
+            plt.close()
+
+    matplotlib.use(current_bcknd)
