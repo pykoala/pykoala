@@ -1160,8 +1160,6 @@ def build_wcs(
     """
     wcs_dict = {
         # Spatial dimensions
-        "HIERARCH RADECSYSa": radesys,
-        "EQUINOX": equinox,
         "CTYPE1": "RA---TAN",
         "CUNIT1": "deg",
         "CDELT1": spatial_pix_size.to_value("deg"),
