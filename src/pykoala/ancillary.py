@@ -9,6 +9,8 @@ in the current modular scheme.
 # =============================================================================
 # Basics packages
 # =============================================================================
+from typing import Optional, Union
+
 import os
 import numpy as np
 from matplotlib import pyplot as plt
@@ -508,9 +510,9 @@ def flux_conserving_interpolation_nd(
     new_wave: u.Quantity,
     wave: u.Quantity,
     spectra: u.Quantity,
-    mask_nonfinite: bool = True,
-    return_nan_flag: bool = False,
-    extrapolation: str | float = "edges",
+    mask_nonfinite: Optional[bool] = True,
+    return_nan_flag: Optional[bool] = False,
+    extrapolation: Union[str, float] = "edges",
 ):
     """Flux-conserving spectral interpolation for n-D arrays (wavelength last).
 
