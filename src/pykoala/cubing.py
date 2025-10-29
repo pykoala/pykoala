@@ -555,7 +555,6 @@ class CubeInterpolator(VerboseMixin):
         propagate_flags_desc=None,
         flag_stack="or",
         flag_threshold=1e-5,
-        flag_min_count=None,
         # Quality assurance
         qc_plots=False,
         **kwargs,
@@ -645,7 +644,7 @@ class CubeInterpolator(VerboseMixin):
         self.mask_flags = mask_flags
         # Names of flags to be propagated into the final cube
         self._flag_propagation_setup(propagate_flags, propagate_flags_desc,
-                                     flag_stack, flag_threshold, flag_min_count)
+                                     flag_stack, flag_threshold)
 
         # Create variables to store plots and intermediate products
         self.make_qc_plots = qc_plots
@@ -658,7 +657,7 @@ class CubeInterpolator(VerboseMixin):
         self.cube_plots = {}
 
     def _flag_propagation_setup(self, propagate_flags, propagate_flags_desc,
-                                flag_stack, flag_threshold, flag_min_count):
+                                flag_stack, flag_threshold):
         """
         Configure per-flag propagation and allocate storage.
 
@@ -671,8 +670,6 @@ class CubeInterpolator(VerboseMixin):
         flag_threshold : float
             Weight threshold used when marking voxels as touched by a flagged sample
             within one RSS. Values > 0 require a minimum effective weight.
-        flag_min_count : int or None
-            Reserved for alternative stack modes that require a minimum count.
         """
         self.propagate_flags = [] if propagate_flags is None else list(propagate_flags)
         if self.propagate_flags:
@@ -693,21 +690,6 @@ class CubeInterpolator(VerboseMixin):
         self.flag_stack = flag_stack
         # RSS flag propagation threshold
         self.flag_threshold = float(flag_threshold)
-        # 
-        self.flag_min_count = flag_min_count
-
-        # self.rss_flags = []
-        # if self.propagate_flags:
-        #     self.vprint(f"RSS flags: {','.join(self.propagate_flags)}, will be"
-        #                 + " propagated into the final datacube")
-        #     for rss in self.rss_set:
-        #         rss_masks = np.stack(
-        #             [rss.mask.get_flag_map(key) for key in self.propagate_flags],
-        #             axis=0).astype(bool)
-        #         self.rss_flags.append(rss_masks)
-        # else:
-        #     self.rss_flags = [None] * len(self.rss_set)
-
         # Cube flags (n_rss, n_flags, x, y, wl)
         self.all_flags = np.zeros((self.all_datacubes.shape[0],
                                    len(self.propagate_flags),
