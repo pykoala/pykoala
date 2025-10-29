@@ -473,7 +473,7 @@ class DataMask(object):
             else:
                 mask = np.zeros_like(self.bitmask, dtype=bool)
                 for flag in flag_name:
-                    mask |= self.masks[flag]
+                    mask |= self.get_flag_map(flag)
                 return mask
         else:
             return self.bitmask > 0
