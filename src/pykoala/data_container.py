@@ -823,7 +823,10 @@ class DataContainer(ABC, VerboseMixin):
         self._intensity = ancillary.check_unit(kwargs["intensity"])
         self._variance = ancillary.check_unit(kwargs.get("variance",
             np.full_like(self._intensity, np.nan, dtype=type(np.nan))))
-        self._mask = kwargs.get("mask", DataMask(shape=self.intensity.shape))
+        self._mask = kwargs.get("mask", None)
+        if self._mask is None:
+            # Initialise an empty mask
+            self._mask = DataMask(shape=self.intensity.shape)
         self.info = kwargs.get("info", dict())
         self.fill_info()
         # Setup datacontainer logging/verbosity and history
