@@ -1121,9 +1121,7 @@ def build_wcs(
     reference_position,
     spatial_pix_size: u.Quantity,
     spectra_pix_size: u.Quantity,
-    radesys="ICRS    ",
-    equinox=2000.0,
-) -> WCS:
+    ) -> WCS:
     """Create a WCS using cubing information.
 
     Integer pixel values fall at the center of pixels.
