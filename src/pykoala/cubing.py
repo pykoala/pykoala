@@ -1137,6 +1137,10 @@ def build_wcs(
     spectra_pix_size : u.Quantity
         Pixel size along the spectral direction.
 
+    Return
+    ------
+    wcs : astropy.wcs.WCS
+        Target WCS instance.
     """
     wcs_dict = {
         # Spatial dimensions
