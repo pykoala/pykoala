@@ -402,7 +402,7 @@ class DataMask(object):
             for key in self.flag_map.keys():
                 self.masks[key] = np.zeros(shape, dtype=bool)
         else:
-            self.bitmask = bitmask
+            self.bitmask = bitmask.astype(int)
             self.masks = {}
             for key in self.flag_map.keys():
                 self.masks[key] = self.get_flag_map_from_bitmask(key)
