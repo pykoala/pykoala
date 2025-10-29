@@ -270,7 +270,8 @@ def register_dataset_crosscorr(
     data_set,
     *,
     wave_range=None,
-    quick_cube_pix_size=0.5,
+    quick_cube_pix_size=0.5 << u.arcsec,
+    quick_cube_wl_size=50 << u.AA,
     qc_plot=False,
     **crosscorr_kwargs,
 ):
@@ -283,8 +284,10 @@ def register_dataset_crosscorr(
         Sequence to register (len >= 2).
     wave_range : (float, float), optional
         Wavelength range for the white image.
-    quick_cube_pix_size : float, default: 0.5
-        Pixel size (arcsec) for temporary cubes built from RSS.
+    quick_cube_pix_size : u.Quantity, default: 0.5 arcsec
+        Spatial pixel size for temporary cubes built from RSS.
+    quick_cube_wl_size : u.Quantity, default: 50 angstrom
+        Spectral pixel size for temporary cubes built from RSS.
     qc_plot : bool, default: False
         If True, also returns a QC figure.
     **crosscorr_kwargs
@@ -310,11 +313,10 @@ def register_dataset_crosscorr(
     images, wcs_list = [], []
     for dc in data_set:
         if isinstance(dc, RSS):
-            delta_wl = dc.wavelength[1] - dc.wavelength[0]
             cube = make_dummy_cube_from_rss(
                 dc,
                 spa_pix_arcsec=quick_cube_pix_size,
-                spe_pix_angstrom=min(delta_wl * 5, 5 << dc.wavelength.unit),
+                spe_pix_angstrom=quick_cube_wl_size,
                 kernel_pix_arcsec=quick_cube_pix_size,
             )
             img = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
@@ -388,6 +390,7 @@ def find_centroid_in_dc(
     centroider="com",
     com_power=1.0,
     quick_cube_pix_size=0.5,
+    quick_cube_wl_size=50 << u.AA,
     subbox=None,
     full_output=False,
 ):
@@ -425,7 +428,10 @@ def find_centroid_in_dc(
         vprint(
             "[Registration]  Data provided in RSS format --> creating a dummy datacube"
         )
-        cube = make_dummy_cube_from_rss(data_container, quick_cube_pix_size)
+        cube = make_dummy_cube_from_rss(data_container,
+                                        spa_pix_arcsec=quick_cube_pix_size,
+                                        spe_pix_angstrom=quick_cube_wl_size,
+                                        kernel_pix_arcsec=1.5 * quick_cube_pix_size)
         image = cube.get_white_image(wave_range=wave_range, s_clip=3.0)
     elif isinstance(data_container, Cube):
         cube = data_container
