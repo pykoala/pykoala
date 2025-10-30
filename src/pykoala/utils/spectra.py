@@ -267,3 +267,42 @@ def estimate_continuum_and_mask_absorption(
         f"({np.count_nonzero(regions > 0)} pixels)",
     )
     return cont_vals << flux_unit, cont_err << flux_unit, regions
+
+def adaptive_spectra_snr_binning(wave, wave_snr, target_snr=10.0,
+                                 max_bin_size=None):
+    """
+    Group wavelength pixels into bins that reach a target SNR (in quadrature).
+
+    Parameters
+    ----------
+    wave : u.Quantity,
+    wave_snr : np.ndarray
+    target_snr : float
+    max_bin_size : u.Quantity
+    """
+    m = wave.size
+    wave = check_unit(wave, u.angstrom)
+    # Ensure dimensionless units are removed
+    wave_snr = np.asarray(wave_snr)
+    if max_bin_size is None:
+        max_bin_size = np.inf << wave.unit
+    else:
+        max_bin_size = check_unit(max_bin_size, wave.unit)
+
+    bin_slices = []
+    bin_snr = []
+    i = 0
+    target_snr_sq = target_snr**2
+    while i < m:
+        j = i + 1
+        snr2 = wave_snr[i]**2
+        while j < m and (snr2 < target_snr_sq) and ((wave[j]-wave[i]) <= max_bin_size):
+            snr2 += wave_snr[j]**2
+            j += 1
+        # Store the bin edges
+        bin_slices.append(slice(i, j))
+        bin_snr.append(snr2**0.5)
+        i = j
+    # Bin mid point
+    centers = np.array([0.5 * (wave[s.start].value + wave[s.stop - 1].value) for s in bin_slices])
+    return bin_slices, centers << wave.unit, np.array(bin_snr)
