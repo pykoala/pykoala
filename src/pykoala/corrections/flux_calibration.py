@@ -36,7 +36,7 @@ from pykoala import vprint
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.data_container import SpectraContainer, RSS, Cube
 from pykoala.utils.spectra import estimate_continuum_and_mask_absorption, mask_telluric_lines
-from pykoala.utils.math import std_from_mad
+from pykoala.utils.math import std_from_mad, odd_int, savgol_filter_weighted
 from pykoala.utils.io import suppress_warnings
 from pykoala.ancillary import (centre_of_mass, cumulative_1d_moffat,
                                flux_conserving_interpolation, check_unit)
@@ -1052,6 +1052,7 @@ class FluxCalibration(CorrectionBase):
                            obs_variance: Optional[u.Quantity] = None,
                            use_continuum: Optional[bool] = False,
                            cont_window: u.Quantity = 50 << u.AA,
+                           cont_percentile: float = 90.0,
                            cont_kappa_sigma: float = 3.0,
                            savgol_scale: Optional[u.Quantity] = 50 << u.AA,
                            savgol_degree: Optional[int] = 3,
