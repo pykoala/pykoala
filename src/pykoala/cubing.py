@@ -1079,7 +1079,7 @@ def build_wcs(
         "CTYPE3": "WAVE    ",
         "CUNIT3": "angstrom",
         "CDELT3": spectra_pix_size.to_value("angstrom"),
-        "CRPIX3": 0,
+        "CRPIX3": 1,
         "CRVAL3": reference_position[0].to_value("angstrom"),
         "NAXIS3": datacube_shape[0],
     }
@@ -1220,7 +1220,8 @@ def make_dummy_cube_from_rss(rss, spa_pix_arcsec=0.5, kernel_pix_arcsec=1.0
     wcs = build_wcs_from_rss(
         rss,
         spatial_pix_size=spa_pix_arcsec,
-        spectra_pix_size=rss.wavelength[1] - rss.wavelength[0],
+        spectra_pix_size=(
+            rss.wavelength[-1] - rss.wavelength[0]) / rss.wavelength.size,
     )
     interpolator = CubeInterpolator(
         [rss],
