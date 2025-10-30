@@ -78,7 +78,7 @@ def airmass_kasten_young89(
     alt: Optional[Union[float, u.Quantity]] = None,
     pressure: Optional[Union[float, u.Quantity]] = None,
     altitude: Optional[Union[float, u.Quantity]] = None,
-    apply_pressure_scaling: bool = True,
+    apply_pressure_scaling: bool = False,
     clip_horizon: bool = True,
 ) -> float:
     """
