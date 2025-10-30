@@ -2,7 +2,8 @@ import numpy as np
 from math import factorial
 import astropy.units as u
 from typing import Dict, Tuple, Optional
-from scipy.ndimage import percentile_filter, gaussian_filter1d, maximum_filter, label
+from scipy.ndimage import (percentile_filter, gaussian_filter1d,
+                           maximum_filter, generic_filter, label)
 
 
 def odd_int(n: int) -> int:
@@ -312,6 +313,8 @@ def poly_extrapolate_wrapper(
     )
     return wrapped
 
+def nmad_filter(x, size, mode="nearest"):
+    return generic_filter(x, std_from_mad, size=size, mode=mode)
 
 def savgol_filter_weighted(
     y,
