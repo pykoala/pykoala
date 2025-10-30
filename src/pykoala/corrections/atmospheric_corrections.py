@@ -9,14 +9,20 @@ from matplotlib import pyplot as plt
 import numpy as np
 import os
 from astropy import units as u
-from astropy.stats import sigma_clip
+from astropy.stats import sigma_clip, sigma_clipped_stats
+from astropy.wcs.utils import proj_plane_pixel_scales
+from photutils.centroids import centroid_2dg, centroid_com
+from scipy.ndimage import median_filter, label, labeled_comprehension
 # =============================================================================
 # KOALA packages
 # =============================================================================
 from pykoala import vprint
-from pykoala.data_container import SpectraContainer
+from pykoala.data_container import SpectraContainer, RSS
+from pykoala.cubing import make_dummy_cube_from_rss
 from pykoala.corrections.correction import CorrectionBase
 from pykoala.ancillary import check_unit
+from pykoala.utils.spectra import adaptive_spectra_snr_binning
+from pykoala.utils.math import std_from_mad, poly_extrapolate_wrapper, nmad_filter
 
 
 class AtmosphericExtCorrection(CorrectionBase):
@@ -201,7 +207,16 @@ class ADRCorrection(CorrectionBase):
         self._poly_ra = None
         self._poly_dec = None
 
-    def estimate(self, spectra_container, plot=False):
+    def estimate(self, spectra_container, *,
+                 find_source=False,
+                 ref_coords=None,
+                 quick_cube_pix_size=None,
+                 target_bin_size=None,
+                 target_bin_snr=None,
+                 centroider="gauss",
+                 median_filter_window=None,
+                 sigma_clip=1.0,
+                 plot=False):
         """
         Estimate ADR offsets from a spectra container.
 
@@ -217,45 +232,163 @@ class ADRCorrection(CorrectionBase):
         tuple
             Returns polynomial fits for RA and DEC offsets.
         """
-        assert isinstance(spectra_container, SpectraContainer)
-        wave = spectra_container.wavelength.to_value("angstrom")
+        self.vprint("Estimating ADR shift as function of wavelength")
+        if not isinstance(spectra_container, SpectraContainer):
+            raise TypeError("ADR can only be estimated using SpectraContainers")
 
-        com_tracks = []
-        for p in range(1, self.n_com_powers + 1):
-            com = spectra_container.get_centre_of_mass(power=p)
-            com_tracks.append(com)
-        com_tracks = np.array(com_tracks) << com_tracks[0][0].unit
-        com_tracks -= np.nanmedian(com_tracks, axis=2)[:, :, np.newaxis]
-        median_com = np.nanmedian(com_tracks, axis=0)
+        if isinstance(spectra_container, RSS):
+            self.vprint(
+                "Data provided in RSS format: creating a datacube"
+            )
+            if quick_cube_pix_size is None:
+                quick_cube_pix_size = spectra_container.fibre_diameter / 2
+            else:
+                quick_cube_pix_size = check_unit(quick_cube_pix_size, u.arcsec)
 
-        for k in (0, 1):
-            over = np.abs(median_com[k]) > self.max_adr
-            median_com[k][over] = np.nan
+            cube = make_dummy_cube_from_rss(spectra_container, quick_cube_pix_size)
 
-        dra = median_com[0].to_value("arcsec")
-        ddec = median_com[1].to_value("arcsec")
-        dra_clip = sigma_clip(dra, sigma=self.clip_sigma, masked=True)
-        ddec_clip = sigma_clip(ddec, sigma=self.clip_sigma, masked=True)
-
-        m_ra = (~dra_clip.mask) & np.isfinite(dra)
-        m_dec = (~ddec_clip.mask) & np.isfinite(ddec)
-
-        if np.count_nonzero(m_ra) >= self.min_points:
-            self._poly_ra = np.poly1d(np.polyfit(wave[m_ra], dra[m_ra], deg=self.pol_deg))
+        # Bin along spectral axis
+        if target_bin_size is not None:
+            target_bin_size = check_unit(target_bin_size, cube.wavelength.unit)
+            bin_edges = np.arange(cube.wavelength[0].value,
+                                  cube.wavelength[-1].value,
+                                  target_bin_size.value) << target_bin_size.unit
+            bin_edges = np.insert(bin_edges, bin_edges.size, cube.wavelength[-1])
+            idx = np.searchsorted(cube.wavelength, bin_edges, side="right")
+            bin_slices = [slice(low, up) for low, up in zip(idx[:-1], idx[1:])]
+            centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+            collapsed_snr = np.nansum(cube.rss_snr.value**2, axis=0)
+            bin_snr = np.array([
+                np.sqrt(np.nansum(collapsed_snr[s])) for s in bin_slices])
+            # create bin_slices, bin_centers, bin_snr
+        elif target_bin_snr is not None:
+            collapsed_snr = np.nansum(cube.rss_snr**2, axis=0)
+            bin_slices, centers, bin_snr = adaptive_spectra_snr_binning(
+                cube.wavelength,
+                collapsed_snr, target_snr=min_target_snr,
+                max_bin_size=200 << u.AA)
         else:
-            vprint("ADR WARNING: insufficient points for RA fit, using zeros")
+            bin_slices = [slice(i, i + 1) for i in range(cube.wavelength.size)]
+            centers = cube.wavelength.copy()
+            bin_snr = np.sqrt(np.nansum(cube.rss_snr.value**2, axis=0))
+
+        self.vprint(f"ADR will be estimated in {len(bin_slices)} wavelength bins")
+
+        # Choose centroiding kind
+        if centroider == "com":  # Moment-based
+            centroider = centroid_com
+        elif centroider == "gauss":  # Model fit
+            centroider = centroid_2dg
+
+        source_mask = None
+
+        if find_source:
+            self.vprint("Identifying sources on white image")
+            white_image = cube.get_white_image()
+            mean, median, std = sigma_clipped_stats(white_image, sigma=3.0)
+            sources, num_sources = label(white_image > median + 2 * std)
+            if num_sources == 0:
+                self.vprint("No sources found")
+            else:
+                self.vprint(f"Sources found: {num_sources}")
+                self.vprint("Selecting brightest source")
+                lbl_id = np.arange(1, num_sources + 1)
+                fluxes = labeled_comprehension(white_image, sources, lbl_id,
+                                      np.nansum, out_dtype=float, default=0.0)
+                brightest = np.argmax(fluxes)
+                source_mask = sources == lbl_id[brightest]
+
+                src_rows, src_cols = np.where(source_mask)
+                sorted_pixels = np.argsort(white_image[src_rows, src_cols])[::-1]
+                cum_image = np.nancumsum(white_image[source_mask][sorted_pixels])
+                half_light_pixels = np.searchsorted(cum_image / cum_image[-1], 0.9)
+
+                bright_src_rows = src_rows[sorted_pixels][:half_light_pixels]
+                bright_src_cols = src_cols[sorted_pixels][:half_light_pixels]
+                source_mask = np.zeros_like(source_mask)
+                source_mask[bright_src_rows, bright_src_cols] = True
+                n_val = np.count_nonzero(source_mask)
+                self.vprint(f"Source mask contains {n_val} valid pixels")
+
+        all_centroid_ra = np.full(len(bin_slices), fill_value=np.nan) << u.deg
+        all_centroid_dec = np.full(len(bin_slices), fill_value=np.nan) << u.deg
+
+        for ith, _slice in enumerate(bin_slices):
+            median_image = np.nanmedian(cube.intensity[_slice], axis=0)
+            if source_mask is None:
+                background = np.nanmedian(median_image)
+                std = std_from_mad(median_image, axis=None)
+                backsub_image = np.abs(median_image - background) < std
+                mask = backsub_image | ~np.isfinite(median_image) | (
+                    median_image.value < 0)
+            else:
+                mask = ~source_mask
+            if mask.all() or median_image[~mask].sum() == 0:
+                continue
+            try:
+                centroid_pixel = centroider(median_image.value, mask=mask)
+            except Exception as e:
+                self.vprint("An error occurred during centroid estimation: skip")
+                self.vprint(e)
+                continue
+
+            centroid_world = cube.wcs.celestial.pixel_to_world(
+                *np.array(centroid_pixel))
+
+            all_centroid_ra[ith] = centroid_world.ra
+            all_centroid_dec[ith] = centroid_world.dec
+
+        if median_filter_window is not None:
+            self.vprint(
+                f"Applying smoothing median filter (size={median_filter_window})")
+            median_filter_extrap = poly_extrapolate_wrapper(
+                median_filter, axis=-1, polyorder=1, pad_strategy="size"
+                )
+            median_ra =  median_filter(
+                all_centroid_ra.value,
+                size=median_filter_window) << all_centroid_ra.unit
+            median_dec = median_filter(
+                all_centroid_dec.value,
+                size=median_filter_window) << all_centroid_dec.unit
+
+            all_centroid_ra = median_ra
+            all_centroid_dec = median_dec
+
+        if ref_coords is None:
+            ra_ref = np.nanmedian(all_centroid_ra)
+            dec_def = np.nanmedian(all_centroid_dec)
+        else:
+            ra_ref = ref_coords.ra.to_value("deg")
+            dec_ref = ref_coords.dec.to_value("deg")
+        
+        delta_ra = all_centroid_ra - ra_ref
+        delta_dec = all_centroid_dec - dec_def
+        mask = np.isfinite(delta_ra) & np.isfinite(delta_dec)
+
+        if not mask.any():
+            self.vprint("All RA/DEC ADR shifts contain non-finite values")
             self._poly_ra = np.poly1d([0.0])
-
-        if np.count_nonzero(m_dec) >= self.min_points:
-            self._poly_dec = np.poly1d(np.polyfit(wave[m_dec], ddec[m_dec], deg=self.pol_deg))
-        else:
-            vprint("ADR WARNING: insufficient points for DEC fit, using zeros")
             self._poly_dec = np.poly1d([0.0])
+            return self._poly_ra, self._poly_dec, None
+
+        # Fit along RA
+        ra_polfit = np.polyfit(centers.to_value("angstrom")[mask],
+                               delta_ra.to_value("arcsec")[mask],
+                               deg=self.pol_deg, w=bin_snr[mask])
+        self._poly_ra = np.poly1d(ra_polfit)
+
+        # Fit along DEC
+        dec_polfit = np.polyfit(centers.to_value("angstrom")[mask],
+                                delta_dec.to_value("arcsec")[mask],
+                                deg=self.pol_deg, w=bin_snr[mask])
+        self._poly_dec = np.poly1d(dec_polfit)
 
         fig = None
         if plot:
-            fig = self._make_plot(wave, com_tracks, median_com, dra, ddec)
-            #plt.close(fig)
+            self.vprint("Generating ADR QC plot")
+            ra_pix_scale, dec_pix_scale = proj_plane_pixel_scales(cube.wcs.celestial)
+            fig = self._make_plot(cube.wavelength, centers, delta_ra, delta_dec,
+            ra_pix_scale * 3600, dec_pix_scale * 3600)
 
         return self._poly_ra, self._poly_dec, fig
 
@@ -267,8 +400,8 @@ class ADRCorrection(CorrectionBase):
         if self._poly_ra is None or self._poly_dec is None:
             raise RuntimeError("ADR model not estimated. Call estimate() first.")
         lam = wavelength.to_value("angstrom")
-        dra = self._poly_ra(lam) * u.arcsec
-        ddec = self._poly_dec(lam) * u.arcsec
+        dra = self._poly_ra(lam) << u.arcsec
+        ddec = self._poly_dec(lam) << u.arcsec
         return dra, ddec
 
     def apply(self, spectra_container, copy=True):
@@ -301,28 +434,31 @@ class ADRCorrection(CorrectionBase):
         self.record_correction(out, status="applied", comment=comment)
         return out
 
-    def _make_plot(self, wave, com_tracks, median_com, dra, ddec):
-        fig = plt.figure(figsize=(10, 5))
-        ax1 = fig.add_subplot(121)
-        for i in range(com_tracks.shape[0]):
-            ax1.plot(wave, com_tracks[i, 0].to_value("arcsec"), lw=0.7, alpha=0.6)
-        ax1.plot(wave, median_com[0].to_value("arcsec"), c="k", lw=1.0, label="Median")
-        ax1.plot(wave, self._poly_ra(wave), c="fuchsia", lw=1.0, label="Poly fit")
-        ax1.set_ylim(-self.max_adr.value, self.max_adr.value)
-        ax1.set_ylabel("Delta RA (arcsec)")
-        ax1.set_xlabel("Wavelength (Angstrom)")
-        ax1.legend()
+    def _make_plot(self, wave, wave_centers, delta_ra, delta_dec, ra_pix_scale,
+                   dec_pix_scale):
+        fig, ax = plt.subplots(constrained_layout=True)
 
-        ax2 = fig.add_subplot(122)
-        for i in range(com_tracks.shape[0]):
-            ax2.plot(wave, com_tracks[i, 1].to_value("arcsec"), lw=0.7, alpha=0.6)
-        ax2.plot(wave, median_com[1].to_value("arcsec"), c="k", lw=1.0, label="Median")
-        ax2.plot(wave, self._poly_dec(wave), c="fuchsia", lw=1.0, label="Poly fit")
-        ax2.set_ylim(-self.max_adr.value, self.max_adr.value)
-        ax2.set_ylabel("Delta DEC (arcsec)")
-        ax2.set_xlabel("Wavelength (Angstrom)")
-        ax2.legend()
+        ra_poly = self._poly_ra(wave.to_value("AA"))
+        dec_poly = self._poly_dec(wave.to_value("AA"))
 
-        fig.subplots_adjust(wspace=0.3)
+        ax.set_title("ADR distortion")
+        ax.step(wave_centers, delta_ra.to_value("arcsec"),
+                where="mid", c="tomato", lw=1.0, label="RA shift")
+        ax.plot(wave, ra_poly, c="gold",
+                 lw=2.0, label="Poly fit (RA)")
+        ax.step(wave_centers, delta_dec.to_value("arcsec"),
+                where="mid", c="b", lw=1.0, label="DEC shift")
+        ax.plot(wave, dec_poly, c="cyan",
+                 lw=2.0, label="Poly fit (DEC)")
+        max_y = np.nanmax((ra_poly.max(), dec_poly.max()))
+        min_y = np.nanmin((ra_poly.min(), dec_poly.min()))
+
+        ax.set_ylim(min_y * 0.9, max_y * 1.1)
+        ax.set_ylabel("Centroid shift (arcsec)")
+        ax.set_xlabel("Wavelength (Angstrom)")
+        ax.legend(title=f"Cube pix scale ({ra_pix_scale:.2f}, {dec_pix_scale:.2f}) arcsec",
+                  fontsize="x-small")
+
+        #plt.close()
         return fig
 
