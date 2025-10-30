@@ -73,7 +73,7 @@ def _airmass_from_header(header: fits.Header) -> float:
 
     altitude_m = header.get("ALT_OBS", SSO_ALTITUDE)
     return airmass_kasten_young89(
-        zd=zd, pressure=None, altitude=altitude_m, apply_pressure_scaling=True
+        zd=zd, pressure=None, altitude=altitude_m, apply_pressure_scaling=False
     )
 
 def _koala_header(base: fits.Header) -> fits.Header:
