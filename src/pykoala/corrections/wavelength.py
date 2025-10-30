@@ -605,7 +605,7 @@ class WavelengthCorrection(CorrectionBase):
                    offset_path=path)
 
     def apply(self, spectra_container : SpectraContainer) -> SpectraContainer:
-        """Apply a 2D wavelength offset model to a RSS.
+        """Apply a 1D or 2D wavelength offset model to a SpectraContainer.
 
         Parameters
         ----------
@@ -616,9 +616,14 @@ class WavelengthCorrection(CorrectionBase):
         -------
         spectra_container_corrected : :class:`pykoala.rss.spectra_container`
             Corrected copy of the input SpectraContainer.
+        
+        See also
+        --------
+        :class:`WavelengthOffset`
         """
 
-        assert isinstance(spectra_container, SpectraContainer), "Input DataContainer must be a SpectraContainer"
+        if not isinstance(spectra_container, SpectraContainer):
+            raise TypeError("Input DataContainer must be a SpectraContainer")
 
         if self.offset is None or self.offset.offset_data is None:
             raise ValueError("No offset loaded")
@@ -637,46 +642,27 @@ class WavelengthCorrection(CorrectionBase):
         else:
             raise ValueError("Offset units must be pixel or wavelength")
 
-        # per-fibre scalar or vector offsets
+        # Per-fibre scalar or per-fibre offset vector
         off = self.offset.offset_data
-        if off.ndim == 1:
-            if off.size != sc_out.rss_intensity.shape[0]:
-                raise ValueError("offset_data shape is invalid")
-            for i in range(new_intensity.shape[0]):
-                new_intensity[i], new_nan_flag[i] = flux_conserving_interpolation(
-                    x, x - off[i], sc_out.rss_intensity[i],
-                    mask_nonfinite=True, return_nan_flag=True,
-                    extrapolation=np.nan)
-                if hasattr(sc_out, "variance") and sc_out.rss_variance is not None:
-                    new_variance[i], var_flag = flux_conserving_interpolation(
-                        x, x - off[i], sc_out.rss_variance[i],
-                    mask_nonfinite=True, return_nan_flag=True,
-                    extrapolation=np.nan
-                    )
-                    new_nan_flag[i] &= var_flag
-                
-        elif off.ndim == 2:
-            if off.shape != sc_out.rss_intensity.shape:
-                raise ValueError("2D offset_data must match RSS intensity shape")
-            for i in range(sc_out.rss_intensity.shape[0]):
-                new_intensity[i], new_nan_flag[i] = flux_conserving_interpolation(
-                    x, x - off[i], sc_out.rss_intensity[i],
-                    mask_nonfinite=True, return_nan_flag=True,
-                    extrapolation=np.nan
-                )
-                if hasattr(sc_out, "variance") and sc_out.rss_variance is not None:
-                    new_variance[i], var_flag = flux_conserving_interpolation(
-                        x, x - off[i], sc_out.rss_variance[i],
-                    mask_nonfinite=True, return_nan_flag=True,
-                    extrapolation=np.nan
-                    )
-                    new_nan_flag[i] &= var_flag
-        else:
+        if off.ndim > 2:
             raise ValueError("offset_data must be 1D or 2D")
+        if off.shape[0] != sc_out.rss_intensity.shape[0]:
+            raise ValueError("First dimension of offset must match the first dimension of ``rss_intensity``")
+        # Apply the correction to every element
+        for i in range(new_intensity.shape[0]):
+            new_intensity[i], new_nan_flag[i] = flux_conserving_interpolation(
+                x, x - off[i], sc_out.rss_intensity[i],
+                mask_nonfinite=True, return_nan_flag=True,
+                extrapolation=np.nan)
+            new_variance[i], var_flag = flux_conserving_interpolation(
+                x, x - off[i], sc_out.rss_variance[i],
+                mask_nonfinite=True, return_nan_flag=True,
+                extrapolation=np.nan
+                )
+            new_nan_flag[i] &= var_flag
 
         sc_out.rss_intensity = new_intensity
-        if hasattr(sc_out, "variance") and sc_out.rss_variance is not None:
-            sc_out.rss_variance = new_variance
+        sc_out.rss_variance = new_variance
         new_nan_flag = spectra_container.rss_to_original(new_nan_flag)
         sc_out.mask.flag_pixels(new_nan_flag, "interpolated_nans",
                                 desc="telluric absoption contaminated")
