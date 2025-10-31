@@ -1090,15 +1090,8 @@ class SpectraContainer(DataContainer):
 
             self.mask = new_mask
 
-        # Propagate nans
         if "return_nan_flag" in interp_kwargs and interp_kwargs["return_nan_flag"]:
-            interp_nans_mask = np.zeros(new_intensity.shape, dtype=bool)
-            propagate_nans = True
             self.vprint("NaNs will be propagated")
-        else:
-            propagate_nans = False
-
-        if propagate_nans:
             new_intensity, int_nans = ancillary.flux_conserving_interpolation_nd(
                 wavelength, reference_wl, intensity, **interp_kwargs)
             new_variance, var_nans = ancillary.flux_conserving_interpolation_nd(
