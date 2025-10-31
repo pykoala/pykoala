@@ -664,8 +664,7 @@ class WavelengthCorrection(CorrectionBase):
         sc_out.rss_intensity = new_intensity
         sc_out.rss_variance = new_variance
         new_nan_flag = spectra_container.rss_to_original(new_nan_flag)
-        sc_out.mask.flag_pixels(new_nan_flag, "interpolated_nans",
-                                desc="telluric absoption contaminated")
+        sc_out.mask.flag_pixels(new_nan_flag, "interpolated_nans")
         comment = f"wave-offset_unit={self.offset.offset_data.unit}; shape={self.offset.offset_data.shape}"
         self.record_correction(sc_out, status="applied", comment=comment)
         return sc_out
