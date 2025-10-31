@@ -1580,16 +1580,27 @@ class RSS(SpectraContainer):
                                        ) * np.count_nonzero(wave_mask)
         return integrated_fibres, integrated_variances
 
-    def get_footprint(self):
+    def get_footprint(self, science_only=False):
         """Return a rectangular sky footprint that encloses all fibre positions.
 
+        Parameters
+        ----------
+        science_only : bool, optional
+            If ``True``, use only fibres labelled as ``science`` to
+            compute the footprint, otherwise it includes all fibres available.
         Returns
         -------
         astropy.units.Quantity
             Array of shape ``(4, 2)`` with the corners ``(ra, dec)`` in degrees.
         """
-        min_ra, max_ra = self.info['fib_ra'].min(), self.info['fib_ra'].max()
-        min_dec, max_dec = self.info['fib_dec'].min(), self.info['fib_dec'].max()
+        if science_only:
+            sci = self.science_fibres
+            min_ra, max_ra = self.info['fib_ra'][sci].min(), self.info['fib_ra'][sci].max()
+            min_dec, max_dec = self.info['fib_dec'][sci].min(), self.info['fib_dec'][sci].max()
+        else:
+            min_ra, max_ra = self.info['fib_ra'].min(), self.info['fib_ra'].max()
+            min_dec, max_dec = self.info['fib_dec'].min(), self.info['fib_dec'].max()
+
         footprint = np.array([[max_ra.to_value("deg"), max_dec.to_value("deg")],
                               [max_ra.to_value("deg"), min_dec.to_value("deg")],
                               [min_ra.to_value("deg"), max_dec.to_value("deg")],
