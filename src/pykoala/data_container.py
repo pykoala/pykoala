@@ -1006,12 +1006,12 @@ class SpectraContainer(DataContainer):
 
     @abstractmethod
     def rss_to_original(self, rss_shape_data):
-        """Reshape an RSS-like array into the original ``intensity`` shape."""
+        """Reshape an RSS-like array into the original shape."""
         pass
 
     @abstractmethod
     def original_to_rss(self, rss_shape_data):
-        """Reshape the original ``intensity`` shape into an RSS-like array."""
+        """Reshape the original array (e.g. ``intensity``) into an RSS-like array."""
         pass
 
     def __init__(self, **kwargs):
