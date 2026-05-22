@@ -23,6 +23,7 @@ import os
 from astropy import units as u
 from astropy.io import fits
 from astropy.wcs import WCS
+from astropy.coordinates import SkyCoord
 # =============================================================================
 # KOALA packages
 # =============================================================================
@@ -307,18 +308,15 @@ def koala_rss(path_to_file: str) -> RSS:
     if "EXPOSED" in header:
         info["exptime"] = float(header["EXPOSED"]) * u.s
 
-    # KOALA stores centre in degrees in most products; avoid blindly rad2deg.
-    # If values look like radians (|value| < 2π), convert; otherwise assume deg.
-    racen = float(header.get("RACEN", 0.0))
-    deccen = float(header.get("DECCEN", 0.0))
-    if abs(racen) <= 2 * np.pi and abs(deccen) <= 2 * np.pi:
-        racen = np.degrees(racen)
-        deccen = np.degrees(deccen)
-
-    # Per-fibre offsets are in arcsec in the constructed spaxel table.
-    info["fib_ra"] = (racen + koala_spax_table.data["Delta_RA"] / 3600.0) * u.deg
-    info["fib_dec"] = (deccen + koala_spax_table.data["Delta_Dec"] / 3600.0) * u.deg
-
+    racen = float(header["RACEN"]) << u.radian
+    deccen = float(header["DECCEN"]) << u.radian
+    ra_off = koala_spax_table.data["Delta_RA"] << u.arcsec
+    dec_off = koala_spax_table.data["Delta_Dec"] << u.arcsec
+    # IFU FP centre
+    ifu_centre = SkyCoord(racen, deccen)
+    fibre_pos = ifu_centre.spherical_offsets_by(ra_off, dec_off)
+    info["fib_ra"] = fibre_pos.ra 
+    info["fib_dec"] = fibre_pos.dec 
     # Airmass
     try:
         info["airmass"] = _airmass_from_header(header)
