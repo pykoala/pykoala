@@ -164,12 +164,14 @@ class StandardStar:
             Loaded standard star.
         """
         data = np.loadtxt(path, dtype=float, comments="#")
-        if data.ndim != 2 or data.shape[1] not in (2, 3):
+        if data.ndim != 2:
             raise ValueError(f"unrecognized ASCII shape {data.shape}")
+        elif has_error and data.shape[1] < 3:
+            raise ValueError(f"Error column not found in ASCII file with shape {data.shape}")
 
         w = data[:, 0]
         f = data[:, 1]
-        fe = data[:, 2] if (has_error or data.shape[1] == 3) else None
+        fe = data[:, 2] if has_error else None
 
         wunit = wave_unit
         funit = flux_unit
