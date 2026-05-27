@@ -5,7 +5,8 @@ from scipy.ndimage import gaussian_filter1d
 
 # Import the classes from your module
 from pykoala.instruments.mock import mock_rss
-from pykoala.corrections.wavelength import SolarCrossCorrOffset, FibreLSFModel
+from pykoala.corrections.wavelength import SolarCrossCorrOffset
+from pykoala.data_container import FibreLSFModel, GaussianFibreLSFModel
 
 # --------------------------
 # Helpers
@@ -153,54 +154,49 @@ def test_fit_solar_spectra_multi_window(solar_based_data):
 # Tests: FibreLSFModel
 # --------------------------
 
-def test_fibrelsf_from_sparse_and_evaluate(tmp_path, solar_based_data):
-    solar_corr, sc, *_ = solar_based_data
-    wave = sc.wavelength
-    n_fib = sc.rss_intensity.shape[0]
-
-    # Mock sparse window centers (uniform across band)
-    centers = np.linspace(wave[0].value, wave[-1].value, 8) * wave.unit
-    # Simple per-fibre sigma pattern over centers
-    sigma_sparse = np.vstack([
-        1.0 + 0.2*np.sin(np.linspace(0, 2*np.pi, centers.size) + i*0.3)
-        for i in range(n_fib)
-    ])
-
-    lsf = FibreLSFModel.from_sparse(
-        instrument_wavelength=wave,
-        centres=centers,
-        sigma_values=sigma_sparse,
-        kind="spline",
-        degree=3,
-    )
-
-    # Evaluate on native grid
-    sig_eval = lsf.evaluate(wave)  # (n_fib, n_wave)
-    assert sig_eval.shape == (n_fib, wave.size)
-    assert np.isfinite(sig_eval).all()
-
-    # Roundtrip FITS
-    path = tmp_path / "lsf.fits"
-    lsf.to_fits(path.as_posix())
-    lsf2 = FibreLSFModel.from_fits(path.as_posix())
-    np.testing.assert_allclose(lsf2.sigma_pix, lsf.sigma_pix, rtol=0, atol=1e-6)
-    assert np.allclose(lsf2.wavelength.to_value(wave.unit), wave.to_value(wave.unit))
-
-
-def test_fibrelsf_evaluate_clamp_and_error(solar_based_data):
+def test_fibrelsf_get_and_interpolate_along_lsf(solar_based_data):
     _, sc, *_ = solar_based_data
     wave = sc.wavelength
     n_fib = sc.rss_intensity.shape[0]
+    n_kernel = 7
+    lsf_wave_edges = np.linspace(-2, 2, n_kernel + 1) << u.AA
 
-    # Flat sigma model
-    sig = np.full((n_fib, wave.size), 1.0, dtype=float)
-    lsf = FibreLSFModel(wavelength=wave, sigma_pix=sig)
-    lsf.fit_models(kind="poly", degree=0)
+    rng = np.random.default_rng(1234)
+    kernel = rng.random((n_fib, wave.size, n_kernel))
+    kernel /= np.sum(kernel, axis=2, keepdims=True)
 
-    # OK inside domain
-    y = lsf.evaluate(wave, fibre=0, extrapolation="clamp")
-    assert np.isfinite(y).all()
+    lsf = FibreLSFModel(
+        wavelength=wave,
+        lsf_wave_edges=lsf_wave_edges,
+        kernel=kernel,
+    )
 
-    # Error mode outside domain
-    with pytest.raises(ValueError):
-        lsf.evaluate((wave.value - 10.0) * wave.unit, fibre=0, extrapolation="error")
+    fibre_kernel, fibre_edges = lsf.get_fibre_lsf(0)
+    assert fibre_kernel.shape == (wave.size, n_kernel)
+    assert np.allclose(
+        fibre_edges.to_value(u.AA),
+        lsf_wave_edges.to_value(u.AA),
+    )
+
+    new_lsf_wave_edges = np.linspace(-2.5, 2.5, n_kernel + 3) << u.AA
+    lsf.interpolate_along_lsf(new_lsf_wave_edges)
+
+    assert lsf.kernel.shape == (n_fib, wave.size, new_lsf_wave_edges.size - 1)
+    np.testing.assert_allclose(np.sum(lsf.kernel, axis=2), 1.0, rtol=0, atol=1e-8)
+
+
+def test_gaussian_fibrelsfmodel_builds_normalized_kernel(solar_based_data):
+    _, sc, *_ = solar_based_data
+    wave = sc.wavelength
+    n_fib = sc.rss_intensity.shape[0]
+    sigma = np.full((n_fib, wave.size), 1.0) << u.AA
+    lsf_wave_edges = np.linspace(-3, 3, 13) << u.AA
+
+    lsf = GaussianFibreLSFModel(
+        wavelength=wave,
+        sigma=sigma,
+        lsf_wave_edges=lsf_wave_edges,
+    )
+
+    assert lsf.kernel.shape == (n_fib, wave.size, lsf_wave_edges.size - 1)
+    np.testing.assert_allclose(np.sum(lsf.kernel, axis=2), 1.0, rtol=0, atol=1e-8)
