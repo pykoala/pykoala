@@ -3,7 +3,7 @@ from math import factorial
 import astropy.units as u
 from typing import Dict, Tuple, Optional
 from scipy.ndimage import percentile_filter, gaussian_filter1d, maximum_filter, label
-
+from scipy.special import erf
 
 def odd_int(n: int) -> int:
     n = int(max(1, round(n)))
@@ -95,6 +95,12 @@ def integrated_autocorr_time(x: np.ndarray, max_lag: Optional[int] = None) -> fl
         tau += 2.0 * rho
     return max(1.0, tau)
 
+
+def normal_cdf(x, sigma):
+    return 0.5 * (1 + erf(x / (sigma * np.sqrt(2))))
+
+def normal_pdf(x, sigma):
+    return 1 / (sigma * np.sqrt(2 * np.pi)) * np.exp(-0.5 * (x / sigma) ** 2)
 
 ############################ Customised Filters ###############################
 
