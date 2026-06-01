@@ -200,3 +200,28 @@ def test_gaussian_fibrelsfmodel_builds_normalized_kernel(solar_based_data):
 
     assert lsf.kernel.shape == (n_fib, wave.size, lsf_wave_edges.size - 1)
     np.testing.assert_allclose(np.sum(lsf.kernel, axis=2), 1.0, rtol=0, atol=1e-8)
+
+
+def test_fibrelsf_interpolate_wavelength_grid_preserves_normalization(solar_based_data):
+    _, sc, *_ = solar_based_data
+    wave = sc.wavelength
+    n_fib = sc.rss_intensity.shape[0]
+
+    n_kernel = 9
+    lsf_wave_edges = np.linspace(-3, 3, n_kernel + 1) << u.AA
+    rng = np.random.default_rng(77)
+    kernel = rng.random((n_fib, wave.size, n_kernel))
+    kernel /= np.sum(kernel, axis=2, keepdims=True)
+
+    lsf = FibreLSFModel(
+        wavelength=wave,
+        lsf_wave_edges=lsf_wave_edges,
+        kernel=kernel,
+    )
+
+    new_wave = np.linspace(wave[0].value, wave[-1].value, wave.size // 2) << wave.unit
+    lsf.interpolate_wavelength_grid(new_wave)
+
+    assert lsf.kernel.shape == (n_fib, new_wave.size, n_kernel)
+    np.testing.assert_allclose(np.sum(lsf.kernel, axis=2), 1.0, rtol=0, atol=1e-8)
+    assert np.all(lsf.kernel >= 0)

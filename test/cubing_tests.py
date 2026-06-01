@@ -6,6 +6,7 @@ from astropy.wcs import WCS
 
 from pykoala.instruments.mock import mock_rss
 from pykoala import cubing
+from pykoala.data_container import FibreLSFModel, GaussianFibreLSFModel
 from pykoala.plotting.utils import qc_cube
 
 np.random.seed(50)
@@ -118,3 +119,120 @@ if __name__ == "__main__":
     test = TestCubing()
     test.setUpClass()
     test.test_cubing(save=True)
+
+
+# ---------------------------------------------------------------------------
+# LSF propagation tests
+# ---------------------------------------------------------------------------
+
+def _make_rss_with_lsf(ra_cen, dec_cen, n_fibres_1d=5, n_wave=50):
+    """Helper: mock RSS with a GaussianFibreLSFModel attached."""
+    source_kwargs = dict(source_ra=180 * u.deg, source_dec=45 * u.deg)
+    rss = mock_rss(
+        ra_n_fibres=n_fibres_1d,
+        dec_n_fibres=n_fibres_1d,
+        n_wave=n_wave,
+        ra_cen=ra_cen,
+        dec_cen=dec_cen,
+        source_kwargs=source_kwargs,
+    )
+    n_fibres = rss.intensity.shape[0]
+    lsf_wave_edges = np.array([-3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0]) << u.AA
+    sigma = np.full((n_fibres, n_wave), 1.5) << u.AA
+    rss.lsf_model = GaussianFibreLSFModel(
+        wavelength=rss.wavelength,
+        sigma=sigma,
+        lsf_wave_edges=lsf_wave_edges,
+    )
+    return rss
+
+
+class TestLSFCubing(unittest.TestCase):
+    """Tests for LSF propagation through CubeInterpolator."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.rss_1 = _make_rss_with_lsf(180 * u.deg, 45 * u.deg)
+        cls.rss_2 = _make_rss_with_lsf(180 * u.deg - 5 * u.arcsec, 45 * u.deg)
+        cls.rss_list = [cls.rss_1, cls.rss_2]
+
+    def _build_lsf_cube(self):
+        wcs = cubing.build_wcs_from_rss(
+            self.rss_list,
+            spatial_pix_size=1.0 << u.arcsec,
+            spectra_pix_size=50.0 << u.AA,
+        )
+        interpolator = cubing.CubeInterpolator(
+            self.rss_list,
+            wcs=wcs,
+            kernel_scale=2.0 << u.arcsec,
+            cube_lsf=True,
+        )
+        cube = interpolator.build_cube()
+        return cube, interpolator
+
+    def test_cube_lsf_attached(self):
+        """Output cube carries a FibreLSFModel when cube_lsf=True."""
+        cube, _ = self._build_lsf_cube()
+        self.assertIsNotNone(cube.lsf_model)
+        self.assertIsInstance(cube.lsf_model, FibreLSFModel)
+
+    def test_cube_lsf_shape(self):
+        """Stacked LSF kernel has the expected (n_spaxels, n_lsf_wave, n_kernel) shape."""
+        cube, interp = self._build_lsf_cube()
+        n_rows = interp.target_wcs.array_shape[1]
+        n_cols = interp.target_wcs.array_shape[2]
+        n_spaxels = n_rows * n_cols
+        n_lsf_wave = interp.lsf_wavelength.size
+        n_kernel = interp.all_lsf_num.shape[-1]
+        self.assertEqual(
+            cube.lsf_model.kernel.shape, (n_spaxels, n_lsf_wave, n_kernel)
+        )
+
+    def test_cube_lsf_kernel_normalized(self):
+        """Every spaxel kernel row sums to 1 along the kernel axis."""
+        cube, _ = self._build_lsf_cube()
+        kernel = cube.lsf_model.kernel  # (n_spaxels, n_lsf_wave, n_kernel)
+        norm = kernel.sum(axis=-1)      # (n_spaxels, n_lsf_wave)
+        np.testing.assert_allclose(norm, 1.0, atol=1e-6)
+
+    def test_cube_lsf_wavelength_matches_reference(self):
+        """Cube LSF wavelength grid equals the reference RSS LSF wavelength grid."""
+        cube, interp = self._build_lsf_cube()
+        np.testing.assert_allclose(
+            cube.lsf_model.wavelength.to_value(u.AA),
+            interp.lsf_wavelength.to_value(u.AA),
+        )
+
+    def test_cube_lsf_kernel_nonnegative(self):
+        """All kernel values must be >= 0."""
+        cube, _ = self._build_lsf_cube()
+        self.assertTrue(np.all(cube.lsf_model.kernel >= 0))
+
+    def test_cube_lsf_missing_rss_raises(self):
+        """cube_lsf=True must raise ValueError when an RSS lacks lsf_model."""
+        rss_no_lsf = mock_rss(
+            ra_n_fibres=5, dec_n_fibres=5, n_wave=50,
+            source_kwargs=dict(source_ra=180 * u.deg, source_dec=45 * u.deg),
+        )
+        rss_set = [self.rss_1, rss_no_lsf]
+        wcs = cubing.build_wcs_from_rss(
+            rss_set,
+            spatial_pix_size=1.0 << u.arcsec,
+            spectra_pix_size=50.0 << u.AA,
+        )
+        with self.assertRaises(ValueError):
+            cubing.CubeInterpolator(rss_set, wcs=wcs, cube_lsf=True)
+
+    def test_cube_lsf_disabled_by_default(self):
+        """Output cube has no lsf_model when cube_lsf=False (default)."""
+        wcs = cubing.build_wcs_from_rss(
+            self.rss_list,
+            spatial_pix_size=1.0 << u.arcsec,
+            spectra_pix_size=50.0 << u.AA,
+        )
+        interpolator = cubing.CubeInterpolator(
+            self.rss_list, wcs=wcs, kernel_scale=2.0 << u.arcsec,
+        )
+        cube = interpolator.build_cube()
+        self.assertIsNone(cube.lsf_model)
