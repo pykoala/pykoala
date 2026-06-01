@@ -6,6 +6,7 @@ RSS data.
 # Basics packages
 # =============================================================================
 from abc import abstractmethod
+import copy
 import numpy as np
 from scipy.special import erf
 
@@ -20,7 +21,7 @@ from astropy import units as u
 # KOALA packages
 # =============================================================================
 from pykoala import ancillary
-from pykoala.data_container import Cube, RSS
+from pykoala.data_container import Cube, RSS, FibreLSFModel
 from pykoala.plotting.utils import qc_cubing, qc_fibres_on_fov, qc_cube
 from pykoala import vprint, VerboseMixin
 
@@ -538,6 +539,61 @@ class CubeInterpolator(VerboseMixin):
     def kernel(self, kernel):
         self._kernel = kernel
 
+    @property
+    def cube_lsf(self):
+        """Enable or disable cube LSF propagation."""
+        return self._cube_lsf
+
+    @cube_lsf.setter
+    def cube_lsf(self, value):
+        self._cube_lsf = bool(value)
+
+    def _configure_lsf_state(self):
+        """Initialise LSF propagation state for the input RSS set."""
+        available = np.array([getattr(rss, "lsf_model", None) is not None for rss in self.rss_set])
+        self.lsf_available = available
+        self.propagate_lsf = self.cube_lsf
+
+        self.all_lsf_num = None
+        self.all_lsf_den = None
+        self.all_lsf_kernel = None
+        self.lsf_wave_edges = None
+        self.lsf_wavelength = None
+
+        if not self.cube_lsf:
+            self.vprint("LSF propagation disabled (cube_lsf=False)")
+            return
+
+        if not np.any(available):
+            raise ValueError(
+                "cube_lsf=True but no RSS contains an lsf_model; "
+                "cannot propagate LSF to cube"
+            )
+
+        if not np.all(available):
+            missing = np.where(~available)[0].tolist()
+            raise ValueError(
+                "cube_lsf=True requires lsf_model in all input RSS; "
+                + f"missing for indices: {missing}"
+            )
+
+        reference_lsf = self.rss_set[np.where(available)[0][0]].lsf_model
+        self.lsf_wave_edges = reference_lsf.lsf_wave_edges
+        self.lsf_wavelength = reference_lsf.wavelength
+        n_kernel = reference_lsf.kernel.shape[2]
+        n_lsf_wave = reference_lsf.wavelength.size
+        n_rows, n_cols = self.target_wcs.array_shape[1], self.target_wcs.array_shape[2]
+
+        self.all_lsf_num = np.full(
+            (len(self.rss_set), n_lsf_wave, n_rows, n_cols, n_kernel),
+            fill_value=np.nan,
+        )
+        self.all_lsf_den = np.full(
+            (len(self.rss_set), n_lsf_wave, n_rows, n_cols),
+            fill_value=np.nan,
+        )
+        self.all_lsf_kernel = np.full_like(self.all_lsf_num, fill_value=np.nan)
+
     def __init__(
         self,
         rss_set,
@@ -548,6 +604,7 @@ class CubeInterpolator(VerboseMixin):
         adr_set=None,
         mask_flags=None,
         qc_plots=False,
+        cube_lsf=False,
         **kwargs,
     ):
         # Verbosity parameters
@@ -562,6 +619,7 @@ class CubeInterpolator(VerboseMixin):
             self.adr_set = adr_set
         # Names of flags to be used for masking pixels
         self.mask_flags = mask_flags
+        self.cube_lsf = cube_lsf
         # WCS defining the target dimensions of the cube
         if wcs is None:
             self.vprint("Computing WCS using input list of RSS")
@@ -641,6 +699,7 @@ class CubeInterpolator(VerboseMixin):
             self.vprint("Cubes for each individual RSS will be built")
         self.rss_inter_products = {}
         self.cube_plots = {}
+        self._configure_lsf_state()
 
     def _fill_info(self, info):
         """Fill the info metadata using the RSS set.
@@ -691,11 +750,26 @@ class CubeInterpolator(VerboseMixin):
 
         # Save intermediate products
         for ith, rss in enumerate(self.rss_set):
+            if self.propagate_lsf and rss.lsf_model is not None:
+                n_lsf_wave = self.all_lsf_num.shape[1]
+                n_rows, n_cols = self.target_wcs.array_shape[1], self.target_wcs.array_shape[2]
+                n_kernel = self.all_lsf_num.shape[-1]
+                lsf_num_i = np.zeros(
+                    (n_lsf_wave, n_rows, n_cols, n_kernel),
+                    dtype=float,
+                )
+                lsf_den_i = np.zeros((n_lsf_wave, n_rows, n_cols), dtype=float)
+            else:
+                lsf_num_i = None
+                lsf_den_i = None
+
             # Interpolate RSS to data cube
             (
                 datacube_i,
                 datacube_var_i,
                 datacube_weight_i,
+                datacube_lsf_num_i,
+                datacube_lsf_den_i,
                 interp_info,
             ) = self.interpolate_rss(
                 rss,
@@ -703,6 +777,8 @@ class CubeInterpolator(VerboseMixin):
                 datacube=np.zeros(self.target_wcs.array_shape) << rss.intensity.unit,
                 datacube_var=np.zeros(self.target_wcs.array_shape) << rss.variance.unit,
                 datacube_weight=np.zeros(self.target_wcs.array_shape),
+                datacube_lsf_num=lsf_num_i,
+                datacube_lsf_den=lsf_den_i,
                 # Differential Atmospheric Refraction
                 adr_ra_arcsec=self.adr_set[ith][0],
                 adr_dec_arcsec=self.adr_set[ith][1],
@@ -715,6 +791,24 @@ class CubeInterpolator(VerboseMixin):
 
             self.all_weights[ith] = datacube_weight_i
             self.all_exp_time[ith] = datacube_weight_i * self.exposure_times[ith]
+
+            if datacube_lsf_num_i is not None:
+                lsf_valid = datacube_lsf_den_i > 0
+                datacube_lsf_den_i = np.where(lsf_valid, datacube_lsf_den_i, np.nan)
+                datacube_lsf_num_i = np.where(
+                    lsf_valid[..., np.newaxis],
+                    datacube_lsf_num_i,
+                    np.nan,
+                )
+                datacube_lsf_i = datacube_lsf_num_i / datacube_lsf_den_i[..., np.newaxis]
+                datacube_lsf_i = np.nan_to_num(datacube_lsf_i, nan=0.0, posinf=0.0, neginf=0.0)
+                lsf_norm = np.sum(datacube_lsf_i, axis=3, keepdims=True)
+                lsf_norm = np.where(lsf_norm > 0, lsf_norm, np.nan)
+                datacube_lsf_i = datacube_lsf_i / lsf_norm
+
+                self.all_lsf_num[ith] = datacube_lsf_num_i
+                self.all_lsf_den[ith] = datacube_lsf_den_i
+                self.all_lsf_kernel[ith] = datacube_lsf_i
 
             if u.second in rss.intensity.unit.bases:
                 self.all_datacubes[ith] = datacube_i / self.all_weights[ith]
@@ -749,6 +843,43 @@ class CubeInterpolator(VerboseMixin):
         # Create the Cube
         cube = Cube(intensity=datacube, variance=datacube_var,
                     wcs=self.target_wcs, info=info)
+
+        # Stack per-RSS LSF kernels into a single cube LSF model
+        if self.propagate_lsf and self.all_lsf_num is not None:
+            stacked_num = np.nansum(self.all_lsf_num, axis=0)  # (n_lsf_wave, n_rows, n_cols, n_kernel)
+            stacked_den = np.nansum(self.all_lsf_den, axis=0)  # (n_lsf_wave, n_rows, n_cols)
+            valid = stacked_den > 0
+            stacked_kernel = np.where(
+                valid[..., np.newaxis],
+                stacked_num / np.where(valid[..., np.newaxis], stacked_den[..., np.newaxis], 1.0),
+                np.nan,
+            )
+            # Normalize along kernel axis; spaxels with no coverage stay NaN
+            stacked_kernel = np.nan_to_num(stacked_kernel, nan=0.0)
+            lsf_norm = stacked_kernel.sum(axis=-1, keepdims=True)
+            lsf_norm = np.where(lsf_norm > 0, lsf_norm, np.nan)
+            stacked_kernel = stacked_kernel / lsf_norm
+            # Reshape to (n_spaxels, n_lsf_wave, n_kernel) expected by FibreLSFModel
+            n_lsf_wave, n_rows, n_cols, n_kernel = stacked_kernel.shape
+            # Axes: (n_lsf_wave, n_rows, n_cols, n_kernel) -> (n_rows, n_cols, n_lsf_wave, n_kernel)
+            stacked_kernel = stacked_kernel.transpose(1, 2, 0, 3)
+            stacked_kernel = stacked_kernel.reshape(n_rows * n_cols, n_lsf_wave, n_kernel)
+            # Replace remaining NaN spaxels with uniform (flat) kernel so setter validation passes;
+            # those spaxels are masked anyway by the cube intensity being NaN.
+            flat_kernel = np.full(n_kernel, 1.0 / n_kernel)
+            spaxel_all_nan = ~np.isfinite(stacked_kernel).any(axis=(1, 2))
+            stacked_kernel[spaxel_all_nan] = flat_kernel[np.newaxis, :]
+            # Also fix any remaining NaN slices within partially-covered spaxels
+            slice_norm = stacked_kernel.sum(axis=-1, keepdims=True)
+            bad_slices = ~np.isfinite(slice_norm) | (slice_norm <= 0)
+            stacked_kernel = np.where(bad_slices, flat_kernel, stacked_kernel)
+            cube.lsf_model = FibreLSFModel(
+                wavelength=self.lsf_wavelength,
+                lsf_wave_edges=self.lsf_wave_edges,
+                kernel=stacked_kernel,
+            )
+            self.vprint("Cube LSF model assembled and attached")
+
         if self.make_qc_plots:
             self.vprint("Producing quality assessment plots")
             # Fibre coverage and exposure time maps
@@ -763,6 +894,8 @@ class CubeInterpolator(VerboseMixin):
         datacube,
         datacube_var,
         datacube_weight,
+        datacube_lsf_num=None,
+        datacube_lsf_den=None,
         adr_ra_arcsec=None,
         adr_dec_arcsec=None,
     ):
@@ -778,6 +911,10 @@ class CubeInterpolator(VerboseMixin):
             Array that stores the variance associated of a datacube.
         datacube_weights : np.ndarray, optional
             Array that stores the fibre weights of the datacube.
+        datacube_lsf_num : np.ndarray, optional
+            Array that stores the weighted sum of LSF kernels.
+        datacube_lsf_den : np.ndarray, optional
+            Array that stores the net LSF weights.
         adr_ra_arcsec : u.Quantity, optional
             Differential atmospheric refraction offset along the RA direction.
         adr_dec_arcsec : u.Quantity, optional
@@ -793,6 +930,10 @@ class CubeInterpolator(VerboseMixin):
             target WCS.
         datacube_weight : u.Quantity
             Array contanining the sum of all kernels weights of all fibres.
+        datacube_lsf_num : np.ndarray or None
+            Array containing weighted LSF kernel sums.
+        datacube_lsf_den : np.ndarray or None
+            Array containing net LSF weights.
         interm_products : dict
             Dictionary containing intermediate products such as individual
             fibre weights.
@@ -862,6 +1003,23 @@ class CubeInterpolator(VerboseMixin):
             interp_wave = True
         else:
             interp_wave = False
+
+        if datacube_lsf_num is not None and rss.lsf_model is not None:
+            lsf_model = copy.deepcopy(rss.lsf_model)
+            if not np.allclose(
+                lsf_model.lsf_wave_edges.to_value(u.AA),
+                self.lsf_wave_edges.to_value(u.AA),
+            ):
+                lsf_model.interpolate_along_lsf(self.lsf_wave_edges)
+
+            if not np.allclose(
+                lsf_model.wavelength.to_value(u.AA),
+                self.lsf_wavelength.to_value(u.AA),
+            ):
+                lsf_model.interpolate_wavelength_grid(self.lsf_wavelength)
+        else:
+            lsf_model = None
+
         interm_products["fibre_weights"] = []
         for fibre in range(rss.intensity.shape[0]):
             # Spectra interpolation
@@ -880,21 +1038,44 @@ class CubeInterpolator(VerboseMixin):
                 f_variance = rss.variance[fibre]
                 f_mask = mask[fibre]
 
+            if lsf_model is not None:
+                fib_lsf_kernel = lsf_model.kernel[fibre]
+            else:
+                fib_lsf_kernel = None
+
             # Interpolate fibre to cube
-            datacube, datacube_var, datacube_weight = self.interpolate_fibre(
+            (
+                datacube,
+                datacube_var,
+                datacube_weight,
+                datacube_lsf_num,
+                datacube_lsf_den,
+            ) = self.interpolate_fibre(
                 fib_spectra=f_intensity,
                 fib_variance=f_variance,
                 cube=datacube,
                 cube_var=datacube_var,
                 cube_weight=datacube_weight,
+                cube_lsf_num=datacube_lsf_num,
+                cube_lsf_den=datacube_lsf_den,
+                fib_lsf_kernel=fib_lsf_kernel,
                 pix_pos_cols=fibre_pixel_pos_cols[fibre] << u.pixel,
                 pix_pos_rows=fibre_pixel_pos_rows[fibre] << u.pixel,
                 adr_cols=adr_ra_pixel,
                 adr_rows=adr_dec_pixel,
                 fibre_mask=f_mask,
                 interm_products=interm_products,
+                cube_wavelength=cube_wavelength,
+                lsf_wavelength=self.lsf_wavelength,
             )
-        return datacube, datacube_var, datacube_weight, interm_products
+        return (
+            datacube,
+            datacube_var,
+            datacube_weight,
+            datacube_lsf_num,
+            datacube_lsf_den,
+            interm_products,
+        )
 
     def interpolate_fibre(
         self,
@@ -903,6 +1084,9 @@ class CubeInterpolator(VerboseMixin):
         cube,
         cube_var,
         cube_weight,
+        cube_lsf_num,
+        cube_lsf_den,
+        fib_lsf_kernel,
         pix_pos_cols,
         pix_pos_rows,
         adr_cols=None,
@@ -910,6 +1094,8 @@ class CubeInterpolator(VerboseMixin):
         adr_pixel_frac=0.05,
         fibre_mask=None,
         interm_products=None,
+        cube_wavelength=None,
+        lsf_wavelength=None,
     ):
         """Interpolates fibre spectra and variance to a 3D data cube.
 
@@ -925,6 +1111,12 @@ class CubeInterpolator(VerboseMixin):
             Cube to interpolate fibre variance.
         cube_weight: (k, n, m) np.ndarray (float)
             Cube to store fibre spectral weights.
+        cube_lsf_num: (k, n, m, n_kernel) np.ndarray (float)
+            Cube storing weighted LSF kernel sums.
+        cube_lsf_den: (k, n, m) np.ndarray (float)
+            Cube storing net LSF interpolation weights.
+        fib_lsf_kernel: (k, n_kernel) np.ndarray (float)
+            Fibre wavelength-dependent LSF kernels.
         pix_pos_cols: int
             Fibre column pixel position (m).
         pix_pos_rows: int
@@ -952,6 +1144,10 @@ class CubeInterpolator(VerboseMixin):
             Original variance with the fibre data interpolated.
         cube_weight:
             Original datacube weights with the fibre data interpolated.
+        cube_lsf_num:
+            Original LSF numerator array with fibre data interpolated.
+        cube_lsf_den:
+            Original LSF denominator array with fibre data interpolated.
         interm_products : dict
             Dictionary that stores intermediate products and metadata.
         """
@@ -980,6 +1176,13 @@ class CubeInterpolator(VerboseMixin):
 
         pixel_weights = np.ones(fib_spectra.size)
         pixel_weights[nan_pixels] = 0.0
+
+        # Pre-convert wavelength grids to plain values for LSF window matching
+        if cube_lsf_num is not None and cube_lsf_den is not None and fib_lsf_kernel is not None:
+            cube_wave_vals = cube_wavelength.to_value(u.AA)
+            lsf_wave_vals = lsf_wavelength.to_value(u.AA)
+        else:
+            cube_wave_vals = lsf_wave_vals = None
 
         # Loop over wavelength pixels
         fibre_weights = []
@@ -1031,8 +1234,34 @@ class CubeInterpolator(VerboseMixin):
                 pixel_weights[wl_slice, np.newaxis, np.newaxis] * weights,
             )
 
+            # LSF accumulation: reuse spatial weights for lsf_wavelength points
+            # that fall within the current wl_slice cube-wavelength window.
+            if lsf_wave_vals is not None:
+                wl_end = min(wl_range + spectral_window - 1, len(cube_wave_vals) - 1)
+                win_lo = min(cube_wave_vals[wl_range], cube_wave_vals[wl_end])
+                win_hi = max(cube_wave_vals[wl_range], cube_wave_vals[wl_end])
+                lsf_in_window = np.where(
+                    (lsf_wave_vals >= win_lo) & (lsf_wave_vals <= win_hi)
+                )[0]
+                spatial_w = weights[0]  # 2D spatial weights
+                for lw_idx in lsf_in_window:
+                    # Nearest cube wavelength for pixel validity
+                    cw_idx = int(np.clip(
+                        np.searchsorted(cube_wave_vals, lsf_wave_vals[lw_idx]),
+                        0, len(cube_wave_vals) - 1,
+                    ))
+                    pw = pixel_weights[cw_idx]
+                    if pw == 0:
+                        continue
+                    lsf_w = pw * spatial_w
+                    cube_lsf_den[lw_idx, rows_slice, columns_slice] += lsf_w
+                    cube_lsf_num[lw_idx, rows_slice, columns_slice, :] += (
+                        fib_lsf_kernel[lw_idx] * lsf_w[..., np.newaxis]
+                    )
+
         interm_products["fibre_weights"].append(fibre_weights)
-        return cube, cube_var, cube_weight
+
+        return cube, cube_var, cube_weight, cube_lsf_num, cube_lsf_den
 
 
 def build_wcs(
