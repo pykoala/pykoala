@@ -21,6 +21,7 @@ from astropy import constants
 from pykoala import VerboseMixin, __version__
 from pykoala import ancillary
 from pykoala.plotting.utils import plot_image, new_figure, plot_fibres
+from pykoala.utils.math import normal_cdf
 # =============================================================================
 
 
@@ -802,6 +803,15 @@ class RSS(SpectraContainer):
         """Indices of fibres with a science target."""
         return np.delete(np.arange(self.intensity.shape[0]), self.sky_fibres)
 
+    @property
+    def lsf_model(self):
+        """Per-fibre wavelength-dependent LSF model."""
+        return self._lsf_model
+    
+    @lsf_model.setter
+    def lsf_model(self, value):
+        self._lsf_model = value
+
     def __init__(self, **kwargs):
         assert ('wavelength' in kwargs)
         assert ('intensity' in kwargs)
@@ -811,6 +821,7 @@ class RSS(SpectraContainer):
 
         self.fibre_diameter = kwargs.get("fibre_diameter", None)
         self.sky_fibres = kwargs.get("sky_fibres", [])
+        self.lsf_model = kwargs.get("lsf_model", None)
         super().__init__(**kwargs)
 
     def get_centre_of_mass(self, wavelength_step=1, stat=np.nanmedian, power=1.0):
@@ -1200,6 +1211,27 @@ class RSS(SpectraContainer):
 class Cube(SpectraContainer):
     """:class:`SpectraContainer` associated to a 3D data cube."""
 
+    @property
+    def lsf_model(self):
+        """Per-spaxel wavelength-dependent LSF model."""
+        return self._lsf_model
+
+    @lsf_model.setter
+    def lsf_model(self, value):
+        if value is None:
+            self._lsf_model = None
+            return
+        if not isinstance(value, FibreLSFModel):
+            raise TypeError("lsf_model must be a FibreLSFModel or None")
+        expected_spaxels = self.n_rows * self.n_cols
+        if value.kernel.shape[0] != expected_spaxels:
+            raise ValueError(
+                "lsf_model.kernel first dimension must match number of spaxels "
+                + f"({expected_spaxels})"
+            )
+
+        self._lsf_model = value
+
     # default_hdul_extensions_map = {"INTENSITY": "INTENSITY",
     #                                "VARIANCE": "VARIANCE"}
 
@@ -1273,6 +1305,7 @@ class Cube(SpectraContainer):
         #         self.hdul[self.hdul_extensions_map['INTENSITY']].header)
 
         super().__init__(**kwargs)
+        self.lsf_model = kwargs.get("lsf_model", None)
 
 
     def rss_to_original(self, rss_shape_data):
@@ -1371,6 +1404,9 @@ class Cube(SpectraContainer):
         info_header["AIRMASS "] = self.info.get("airmass"), "airmass at centre of FoV"
         hdul.append(fits.BinTableHDU(name="INFO", data=None, header=info_header))
 
+        if self.lsf_model is not None:
+            hdul.extend(self.lsf_model.to_hdu_list())
+
         # Save the HDUL into a FITS file.
         hdul.verify('fix')
         hdul.writeto(filename, overwrite=overwrite, checksum=checksum)
@@ -1390,6 +1426,15 @@ class Cube(SpectraContainer):
         info["exptime"] = hdul["INFO"].header.get("exptime")
         dc_parameters = cls._dc_params_from_hdul(hdul)
         dc_parameters["info"] = info
+
+        if "LSF_KERNEL" in hdul and "LSF_WAVE_EDGES" in hdul:
+            wavelength = dc_parameters["wcs"].spectral.array_index_to_world(
+                np.arange(dc_parameters["intensity"].shape[0])
+            )
+            dc_parameters["lsf_model"] = FibreLSFModel.from_hdul(
+                hdul=hdul,
+                wavelength=wavelength,
+            )
         return cls(**dc_parameters)
 
     @classmethod
@@ -1431,6 +1476,205 @@ class Cube(SpectraContainer):
         hdul = fits.open(filename)
         return cls.from_hdul(hdul)
 
+
+# TODO: inherit from DataContainer
+
+
+class FibreLSFModel:
+    """
+    Per-fibre LSF model.
+
+    Description
+    -----------
+    This class stores a wavelength-dependent LSF model for each fibre, represented
+    as a 3D kernel array (n_fibre, n_wave, n_kernel).
+
+    For a given fibre and wavelength, the kernel is a discretised array that integrates
+    to 1.
+
+    Attributes
+    ----------
+    wavelength : Quantity, shape (n_wave,)
+        Wavelength grid where sigma_pix is defined.
+    lsf_wave_edges: Quantity
+        Wavelength offset array along the kernel defining the wavelength offsets
+        corresponding to each kernel pixel. For example, for a kernel array spanning
+        5 pixels, with a resolution of 0.5 anstrom per pixel, this could be
+        [-1.5, -1.0, -0.5, 0.5, 1.0, 1.5] anstroms.
+    meta : dict
+        Optional metadata (e.g., origin, date, info strings).
+    """
+
+    @property
+    def kernel(self):
+        """LSF kernel array of shape (n_fibre, n_wave, n_kernel)."""
+        return self._kernel
+    
+    @kernel.setter
+    def kernel(self, value):
+        if not np.isfinite(value).all() or (np.any(value < 0)):
+            raise ValueError("kernel must be finite and non-negative")
+        if value.ndim != 3:
+            raise ValueError("kernel must be a 3D array")
+
+        norm = np.sum(value, axis=2, keepdims=True)
+        if not np.isclose(norm, 1.0, atol=1e-6).all():
+            raise ValueError("kernel must be normalized")
+
+        self._kernel = value
+
+    def __init__(self, wavelength, lsf_wave_edges, kernel, meta=None):
+        self.wavelength = ancillary.check_unit(wavelength, u.AA)
+        self.lsf_wave_edges = ancillary.check_unit(lsf_wave_edges, u.AA)
+        self.kernel = np.asarray(kernel, dtype=float)
+        if self.kernel.ndim != 3:
+            raise ValueError("kernel must be 3D: (n_fibre, n_wave, n_kernel)")
+        if self.wavelength.ndim != 1 or self.wavelength.size != self.kernel.shape[1]:
+            raise ValueError("wavelength length must match kernel.shape[1]")
+        if not np.all(np.diff(self.wavelength.to_value(self.wavelength.unit)) > 0):
+            raise ValueError("wavelength must be strictly increasing")
+
+        self.meta = {} if meta is None else dict(meta)
+
+    def get_fibre_lsf(self, fibre_index):
+        """Return the LSF kernel for a given fibre index."""
+        if fibre_index < 0 or fibre_index >= self.kernel.shape[0]:
+            raise IndexError("fibre_index out of range")
+        return self.kernel[fibre_index], self.lsf_wave_edges
+
+    def interpolate_along_lsf(self, new_lsf_wave_edges):
+        new_lsf_wave_edges = ancillary.check_unit(new_lsf_wave_edges, u.AA)
+
+        cumulative = self.kernel.cumsum(axis=2)
+        cumulative = np.concatenate(
+            [np.zeros((*cumulative.shape[:2], 1)), cumulative], axis=2
+        )
+        from scipy.interpolate import interp1d
+        interpolator = interp1d(
+            self.lsf_wave_edges.to_value(u.AA),
+            cumulative,
+            axis=2,
+            bounds_error=False,
+            fill_value=(0, 1),
+        )
+        new_cumulative = interpolator(new_lsf_wave_edges.to_value(u.AA))
+        new_kernel = np.diff(new_cumulative, axis=2)
+        self.kernel = new_kernel
+        self.lsf_wave_edges = new_lsf_wave_edges
+
+    def interpolate_wavelength_grid(self, new_wavelength):
+        """Interpolate kernels along the instrument wavelength axis."""
+        new_wavelength = ancillary.check_unit(new_wavelength, u.AA)
+        if new_wavelength.ndim != 1:
+            raise ValueError("new_wavelength must be a 1D array")
+        if not np.all(np.diff(new_wavelength.to_value(new_wavelength.unit)) > 0):
+            raise ValueError("new_wavelength must be strictly increasing")
+
+        from scipy.interpolate import interp1d
+
+        old_wave = self.wavelength.to_value(u.AA)
+        new_wave = new_wavelength.to_value(u.AA)
+        interpolator = interp1d(
+            old_wave,
+            self.kernel,
+            axis=1,
+            kind="linear",
+            bounds_error=False,
+            fill_value=(self.kernel[:, 0, :], self.kernel[:, -1, :]),
+        )
+        new_kernel = interpolator(new_wave)
+        new_kernel /= np.sum(new_kernel, axis=2, keepdims=True) + 1e-12
+        self.kernel = new_kernel
+        self.wavelength = new_wavelength
+
+    def plot_fibre(self, fibre_index, ax=None, fig_args={}, plot_args={}):
+        """Plot the LSF kernel for a given fibre index."""
+        kernel, lsf_wave_edges = self.get_fibre_lsf(fibre_index)
+        lsf_wave_centers = (lsf_wave_edges[:-1] + lsf_wave_edges[1:]) / 2
+        if ax is None:
+            fig, ax = new_figure(f"Fibre {fibre_index} LSF", **fig_args)
+        else:
+            fig = ax.figure
+    
+        if isinstance(ax, np.ndarray):
+            ax = ax.flat[0]
+        ax.pcolormesh(self.wavelength, lsf_wave_centers, kernel.T,
+                      shading='nearest', **plot_args)
+        ax.set_xlabel("Wavelength offset (AA)")
+        ax.set_ylabel("Wavelength (AA)")
+        return fig, ax
+
+    def to_hdu_list(self, kernel_extname="LSF_KERNEL", edges_extname="LSF_WAVE_EDGES"):
+        """Create FITS HDUs containing the LSF model."""
+        kernel_header = fits.Header()
+        kernel_header["BUNIT"] = "dimensionless"
+        kernel_hdu = fits.ImageHDU(
+            data=self.kernel,
+            name=kernel_extname,
+            header=kernel_header,
+        )
+
+        edges_header = fits.Header()
+        edges_header["BUNIT"] = self.lsf_wave_edges.unit.to_string()
+        edges_hdu = fits.ImageHDU(
+            data=self.lsf_wave_edges.to_value(self.lsf_wave_edges.unit),
+            name=edges_extname,
+            header=edges_header,
+        )
+        return [kernel_hdu, edges_hdu]
+
+    @classmethod
+    def from_hdul(
+        cls,
+        hdul,
+        wavelength,
+        kernel_extname="LSF_KERNEL",
+        edges_extname="LSF_WAVE_EDGES",
+    ):
+        """Build an LSF model from FITS HDUs."""
+        kernel = hdul[kernel_extname].data
+        edge_unit = u.Unit(hdul[edges_extname].header.get("BUNIT", "AA"))
+        lsf_wave_edges = hdul[edges_extname].data << edge_unit
+        return cls(
+            wavelength=wavelength,
+            lsf_wave_edges=lsf_wave_edges,
+            kernel=kernel,
+        )
+
+class GaussianFibreLSFModel(FibreLSFModel):
+    """
+    Wavelength-dependent Gaussian LSF (sigma in pixels) for each fibre.
+
+    Attributes
+    ----------
+    wavelength : Quantity, shape (n_wave,)
+        Wavelength grid where sigma_pix is defined.
+    sigma_pix : ndarray or Quantity, shape (n_fibre, n_wave)
+        Measured sigma in pixels per fibre and wavelength.
+    meta : dict
+        Optional metadata (e.g., origin, date, info strings).
+    models : dict
+        Per-fibre fitted models, filled by fit_models(). Keys are fibre index,
+        value has keys: kind, coeff, knots, degree, s, etc.
+    """
+
+    def __init__(self, wavelength, sigma, lsf_wave_edges, meta=None):
+
+        self.sigma = ancillary.check_unit(sigma, u.AA)
+        kernel = self._generate_gaussian_kernels(self.sigma, lsf_wave_edges)
+        super().__init__(wavelength, lsf_wave_edges, kernel, meta)
+        self.models = {}
+
+    def _generate_gaussian_kernels(self, sigma, lsf_wave_edges):
+        n_fibre, n_wave = sigma.shape
+        n_kernel = len(lsf_wave_edges) - 1
+        kernel = np.zeros((n_fibre, n_wave, n_kernel))
+        for i in range(n_fibre):
+            for j in range(n_wave):
+                cum_norm = normal_cdf(lsf_wave_edges, sigma[i, j])
+                kernel[i, j] = cum_norm[1:] - cum_norm[:-1]
+                kernel[i, j] /= np.sum(kernel[i, j]) + 1e-12
+        return kernel
 
 # =============================================================================
 # Mr Krtxo \(ﾟ▽ﾟ)/
