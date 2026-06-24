@@ -604,66 +604,70 @@ class WavelengthCorrection(CorrectionBase):
         return cls(offset=WavelengthOffset.from_fits(path=path),
                    offset_path=path)
 
-    def apply(self, rss : RSS) -> RSS:
-        """Apply a 2D wavelength offset model to a RSS.
+    def apply(self, spectra_container : SpectraContainer) -> SpectraContainer:
+        """Apply a 1D or 2D wavelength offset model to a SpectraContainer.
 
         Parameters
         ----------
-        rss : :class:`pykoala.rss.RSS`
-            Original Row-Stacked-Spectra object to be corrected.
+        spectra_container : :class:`pykoala.rss.SpectraContainer`
+            Original SpectraContainer object to be corrected.
 
         Returns
         -------
-        rss_corrected : :class:`pykoala.rss.RSS`
-            Corrected copy of the input RSS.
+        spectra_container_corrected : :class:`pykoala.rss.spectra_container`
+            Corrected copy of the input SpectraContainer.
+        
+        See also
+        --------
+        :class:`WavelengthOffset`
         """
 
-        assert isinstance(rss, RSS)
+        if not isinstance(spectra_container, SpectraContainer):
+            raise TypeError("Input DataContainer must be a SpectraContainer")
 
         if self.offset is None or self.offset.offset_data is None:
             raise ValueError("No offset loaded")
         
-        rss_out = rss.copy()
-        self.vprint("Applying correction to input RSS")
+        sc_out = spectra_container.copy()
+
+        new_intensity = np.zeros_like(sc_out.rss_intensity)
+        new_variance = np.zeros_like(sc_out.rss_variance)
+        new_nan_flag = np.zeros(sc_out.rss_variance.shape, dtype=bool)
+        self.vprint("Applying correction to input SpectraContainer")
 
         if self.offset.offset_data.unit == u.pixel:
-            x = np.arange(rss.wavelength.size) << u.pixel
+            x = np.arange(sc_out.wavelength.size) << u.pixel
         elif self.offset.offset_data.unit.is_equivalent(u.AA):
-            x = rss.wavelength.to(self.offset.offset_data.unit)
+            x = sc_out.wavelength.to(self.offset.offset_data.unit)
         else:
             raise ValueError("Offset units must be pixel or wavelength")
 
-        # per-fibre scalar or vector offsets
+        # Per-fibre scalar or per-fibre offset vector
         off = self.offset.offset_data
-        if off.ndim == 1:
-            if off.size != rss.intensity.shape[0]:
-                raise ValueError("offset_data shape is invalid for RSS")
-            for i in range(rss.intensity.shape[0]):
-                rss_out.intensity[i] = flux_conserving_interpolation(
-                    x, x - off[i], rss.intensity[i]
-                )
-                if hasattr(rss, "variance") and rss.variance is not None:
-                    rss_out.variance[i] = flux_conserving_interpolation(
-                        x, x - off[i], rss.variance[i]
-                    )
-        elif off.ndim == 2:
-            if off.shape != rss.intensity.shape:
-                raise ValueError("2D offset_data must match RSS intensity shape")
-            for i in range(rss.intensity.shape[0]):
-                rss_out.intensity[i] = flux_conserving_interpolation(
-                    x, x - off[i], rss.intensity[i]
-                )
-                if hasattr(rss, "variance") and rss.variance is not None:
-                    rss_out.variance[i] = flux_conserving_interpolation(
-                        x, x - off[i], rss.variance[i]
-                    )
-        else:
+        if off.ndim > 2:
             raise ValueError("offset_data must be 1D or 2D")
+        if off.shape[0] != sc_out.rss_intensity.shape[0]:
+            raise ValueError("First dimension of offset must match the first dimension of ``rss_intensity``")
+        # Apply the correction to every element
+        for i in range(new_intensity.shape[0]):
+            new_intensity[i], new_nan_flag[i] = flux_conserving_interpolation(
+                x, x - off[i], sc_out.rss_intensity[i],
+                mask_nonfinite=True, return_nan_flag=True,
+                extrapolation=np.nan)
+            new_variance[i], var_flag = flux_conserving_interpolation(
+                x, x - off[i], sc_out.rss_variance[i],
+                mask_nonfinite=True, return_nan_flag=True,
+                extrapolation=np.nan
+                )
+            new_nan_flag[i] &= var_flag
 
+        sc_out.rss_intensity = new_intensity
+        sc_out.rss_variance = new_variance
+        new_nan_flag = spectra_container.rss_to_original(new_nan_flag)
+        sc_out.mask.flag_pixels(new_nan_flag, "interpolated_nans")
         comment = f"wave-offset_unit={self.offset.offset_data.unit}; shape={self.offset.offset_data.shape}"
-        self.record_correction(rss_out, status="applied", comment=comment)
-
-        return rss_out
+        self.record_correction(sc_out, status="applied", comment=comment)
+        return sc_out
 
 
 class TelluricWavelengthCorrection(WavelengthCorrection):

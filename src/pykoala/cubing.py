@@ -20,8 +20,10 @@ from astropy import units as u
 # KOALA packages
 # =============================================================================
 from pykoala import ancillary
-from pykoala.data_container import Cube, RSS
-from pykoala.plotting.utils import qc_cubing, qc_fibres_on_fov, qc_cube
+from pykoala.data_container import Cube, RSS, DataMask
+from pykoala.plotting.utils import (qc_fibres_on_fov,
+                                    qc_cube_coverage,
+                                    qc_cube, qc_cube_combination)
 from pykoala import vprint, VerboseMixin
 
 
@@ -546,7 +548,14 @@ class CubeInterpolator(VerboseMixin):
         kernel_scale=2.0 << u.arcsec,
         kernel_truncation_radius=3.0,
         adr_set=None,
-        mask_flags=None,
+        # Flag masking
+        mask_flags=["interpolated_nans"],
+        # Flag propagation
+        propagate_flags=None,
+        propagate_flags_desc=None,
+        flag_stack="or",
+        flag_threshold=1e-5,
+        # Quality assurance
         qc_plots=False,
         **kwargs,
     ):
@@ -559,9 +568,11 @@ class CubeInterpolator(VerboseMixin):
         if adr_set is None:
             self.adr_set = [(None, None)] * len(rss_set)
         else:
+            if len(adr_set) != len(rss_set):
+                raise ValueError("adr_set length must match rss_set length")
             self.adr_set = adr_set
-        # Names of flags to be used for masking pixels
-        self.mask_flags = mask_flags
+        self.adr_min_pixel_frac = kwargs.get("adr_min_pixel_frac", 0.05)
+
         # WCS defining the target dimensions of the cube
         if wcs is None:
             self.vprint("Computing WCS using input list of RSS")
@@ -611,15 +622,12 @@ class CubeInterpolator(VerboseMixin):
         )
         self.vprint(f"Output Cube units: {output_unit.to_string()}")
 
-        self.all_datacubes = (
-            np.full(
+        self.all_datacubes = np.full(
                 (len(self.rss_set), *self.target_wcs.array_shape), fill_value=np.nan
-            )
-            << output_unit
-        )
-        self.all_var = (
-            np.full(self.all_datacubes.shape, fill_value=np.nan) << output_unit**2
-        )
+                ) << output_unit
+
+        self.all_var = np.full(self.all_datacubes.shape, fill_value=np.nan
+                               ) << output_unit**2
         # Total weight per spaxel
         self.all_weights = np.full(self.all_datacubes.shape, fill_value=np.nan)
         # Exposure time per spaxel
@@ -632,15 +640,60 @@ class CubeInterpolator(VerboseMixin):
             << u.second
         )
 
+        # Names of flags to be used for masking pixels
+        self.mask_flags = mask_flags
+        # Names of flags to be propagated into the final cube
+        self._flag_propagation_setup(propagate_flags, propagate_flags_desc,
+                                     flag_stack, flag_threshold)
+
         # Create variables to store plots and intermediate products
         self.make_qc_plots = qc_plots
         if self.make_qc_plots:
             self.vprint("QC plots will be generated during cube production")
         self.keep_individual_cubes = kwargs.get("keep_individual_cubes", False)
         if self.keep_individual_cubes:
-            self.vprint("Cubes for each individual RSS will be built")
+            self.vprint("Cubes for each individual RSS will be built and stored in `rss_inter_products`")
         self.rss_inter_products = {}
         self.cube_plots = {}
+
+    def _flag_propagation_setup(self, propagate_flags, propagate_flags_desc,
+                                flag_stack, flag_threshold):
+        """
+        Configure per-flag propagation and allocate storage.
+
+        Parameters
+        ----------
+        propagate_flags : sequence of str or None
+            Flag names to propagate into the cube mask. If ``None``, no propagation.
+        flag_stack : {'or', 'and'}
+            Combination rule across RSS when building the final cube mask.
+        flag_threshold : float
+            Weight threshold used when marking voxels as touched by a flagged sample
+            within one RSS. Values > 0 require a minimum effective weight.
+        """
+        self.propagate_flags = [] if propagate_flags is None else list(propagate_flags)
+        if self.propagate_flags:
+            self.vprint(f"RSS flags: {','.join(self.propagate_flags)}, will be"
+                        + " propagated into the final datacube")
+        if propagate_flags_desc is None:
+            propagate_flags_desc = ["n/a"] * len(self.propagate_flags)
+        elif len(propagate_flags_desc) != len(self.propagate_flags):
+            raise ValueError("Length of flags to propagate does not match the"
+                             + " flag description list")
+
+        self.output_mask_bits = np.power(2,
+            np.arange(1, len(self.propagate_flags) + 1, 1, dtype=int))
+        # Create a new mapping for the output masks
+        self.final_flagmap = {k: (v, d) for k, v, d in zip(
+            self.propagate_flags, self.output_mask_bits, propagate_flags_desc)}
+        # Stacking method
+        self.flag_stack = flag_stack
+        # RSS flag propagation threshold
+        self.flag_threshold = float(flag_threshold)
+        # Cube flags (n_rss, n_flags, x, y, wl)
+        self.all_flags = np.zeros((self.all_datacubes.shape[0],
+                                   len(self.propagate_flags),
+                                   *self.all_datacubes.shape[1:]), dtype=int)
 
     def _fill_info(self, info):
         """Fill the info metadata using the RSS set.
@@ -670,22 +723,23 @@ class CubeInterpolator(VerboseMixin):
         stacking_args=None,
         cube_info={},
     ) -> Cube:
-        """Perform the interpolation of the RSS into a  :class:`Cube`.
+        """
+        Interpolate and stack the RSS set into a single :class:`Cube`.
 
         Parameters
         ----------
-        stacking_method : func, optional
-            Stacking method to use for combining the RSS (See :class:`CubeStacking`).
-        stacking_args : dict, optional
-            Additional arguments passed to the stacking method.
-        cube_info : dict, optional
-            Additional metadata to be included in the final :class:`Cube` or
-            the intermediate RSS products.
+        stacking_method : callable, optional
+            Stacking routine. Must accept ``(all_datacubes, all_var, **kwargs)``
+            and return ``(intensity, variance)``.
+        stacking_args : dict or None, optional
+            Extra keyword arguments forwarded to ``stacking_method``.
+        cube_info : dict or None, optional
+            Additional metadata to embed in the output cube.
 
         Returns
         -------
-        cube : :class:`Cube`
-            The resulting cube from combining the input RSS.
+        cube : Cube
+            The stacked data cube.
         """
         self.vprint("Cubing input RSS set")
 
@@ -696,13 +750,10 @@ class CubeInterpolator(VerboseMixin):
                 datacube_i,
                 datacube_var_i,
                 datacube_weight_i,
+                datacube_flags_i,
                 interp_info,
-            ) = self.interpolate_rss(
-                rss,
-                # Initialise the empty variables
-                datacube=np.zeros(self.target_wcs.array_shape) << rss.intensity.unit,
-                datacube_var=np.zeros(self.target_wcs.array_shape) << rss.variance.unit,
-                datacube_weight=np.zeros(self.target_wcs.array_shape),
+            ) = self._interpolate_rss(
+                rss.copy(),
                 # Differential Atmospheric Refraction
                 adr_ra_arcsec=self.adr_set[ith][0],
                 adr_dec_arcsec=self.adr_set[ith][1],
@@ -723,11 +774,23 @@ class CubeInterpolator(VerboseMixin):
                 self.all_datacubes[ith] = datacube_i / self.all_exp_time[ith]
                 self.all_var[ith] = datacube_var_i / self.all_exp_time[ith] ** 2
 
+            if self.propagate_flags:
+                self.all_flags[ith] = datacube_flags_i
             # Create a single-RSS cube
             if self.keep_individual_cubes:
+                # Create the DataMask
+                if self.propagate_flags:
+                    bitmask = np.sum(self.output_mask_bits[:, None, None, None]
+                                    * datacube_flags_i,
+                                    axis=0)
+                    cube_mask = DataMask(flag_map=self.final_flagmap,
+                                        bitmask=bitmask)
+                else:
+                    cube_mask = None
                 ind_cube = Cube(
                     intensity=self.all_datacubes[ith],
                     variance=self.all_var[ith],
+                    mask=cube_mask,
                     wcs=self.target_wcs,
                     info=dict(kernel_scale=self.kernel.scale_arcsec, name=f"rss_{ith}"),
                 )
@@ -746,58 +809,76 @@ class CubeInterpolator(VerboseMixin):
         )
         info = dict(kernel_scale=self.kernel.scale_arcsec, **cube_info)
         info = self._fill_info(info)
+        # Create the DataMask
+        if self.propagate_flags:
+            self.vprint(f"Creating cube mask")
+            if self.flag_stack == "or":
+                cube_flags = np.bitwise_or.reduce(self.all_flags, axis=0)
+            elif self.flag_stack == "and":
+                cube_flags = np.bitwise_and.reduce(self.all_flags, axis=0)
+            else:
+                raise ValueError("Flag stacking method can only be ``or``/``and``")
+            bitmask = np.sum(self.output_mask_bits[:, None, None, None]
+                             * cube_flags, axis=0)
+            cube_mask = DataMask(flag_map=self.final_flagmap,
+                                bitmask=bitmask)
+        else:
+            cube_mask = None
         # Create the Cube
         cube = Cube(intensity=datacube, variance=datacube_var,
-                    wcs=self.target_wcs, info=info)
+                    wcs=self.target_wcs, info=info, mask=cube_mask)
+
         if self.make_qc_plots:
             self.vprint("Producing quality assessment plots")
             # Fibre coverage and exposure time maps
-            self.cube_plots["weights"] = qc_cubing(self.all_weights, self.all_exp_time)
+            self.cube_plots["weights"] = qc_cube_coverage(self.all_weights, self.all_exp_time,
+                                                          wavelength=cube.wavelength)
             # QC cube maps
             self.cube_plots["stack_cube"] = qc_cube(cube)
+
+            if self.keep_individual_cubes:
+                fig = qc_cube_combination([rss_inter["cube"][0] for rss_inter in self.rss_inter_products.values()],
+                                          cube)
+                self.cube_plots["rss_cube_spectra"] = fig
         return cube
 
-    def interpolate_rss(
+    def _interpolate_rss(
         self,
         rss,
-        datacube,
-        datacube_var,
-        datacube_weight,
         adr_ra_arcsec=None,
         adr_dec_arcsec=None,
     ):
-        """Perform fibre interpolation using a RSS into to a 3D datacube.
+        """
+        Interpolate one RSS into the target cube grid.
 
         Parameters
         ----------
-        rss : :class:`RSS`
-            Target RSS to be interpolated.
-        datacube : u.Quantity, optional
-            Array that stores the intensity associated to a datacube.
-        datacube_var : u.Quantity, optional
-            Array that stores the variance associated of a datacube.
-        datacube_weights : np.ndarray, optional
-            Array that stores the fibre weights of the datacube.
-        adr_ra_arcsec : u.Quantity, optional
-            Differential atmospheric refraction offset along the RA direction.
-        adr_dec_arcsec : u.Quantity, optional
-            Differential atmospheric refraction offset along the DEC direction.
+        rss : RSS
+            Source row-stacked spectra.
+        adr_ra_arcsec, adr_dec_arcsec : array-like or None
+            Per-wavelength DAR offsets along columns (RA) and rows (Dec), expressed
+            in the same spectral sampling as the RSS. If given, they are re-sampled
+            to the cube wavelength grid.
 
         Returns
         -------
-        datacube : u.Quantity
-            Array contanining the interpolated intensity of the RSS into the
-            target WCS.
-        datacube_var : u.Quantity
-            Array contanining the interpolated variance of the RSS into the
-            target WCS.
-        datacube_weight : u.Quantity
-            Array contanining the sum of all kernels weights of all fibres.
+        datacube : ndarray, shape (k, n, m)
+            Accumulated intensity numerator before normalisation by weights/exposure.
+        datacube_var : ndarray, shape (k, n, m)
+            Accumulated variance numerator (weighted-sum of variances).
+        datacube_weight : ndarray, shape (k, n, m)
+            Accumulated effective weights.
+        datacube_masks : ndarray of int, shape (n_flags, k, n, m) or None
+            Per-flag voxel indicators (0/1) for this RSS, or ``None`` if
+            ``rss_flags`` is not provided.
         interm_products : dict
-            Dictionary containing intermediate products such as individual
-            fibre weights.
+            Auxiliary metadata (e.g., fibre pixel coordinates, QC figures).
         """
         self.vprint("Interpolating RSS to cube")
+
+        datacube = np.zeros(self.target_wcs.array_shape) << rss.intensity.unit
+        datacube_var = np.zeros(self.target_wcs.array_shape) << rss.variance.unit
+        datacube_weight = np.zeros(self.target_wcs.array_shape, dtype=float)
 
         # Obtain fibre position in the detector (center of pixel)
         (
@@ -807,7 +888,7 @@ class CubeInterpolator(VerboseMixin):
             SkyCoord(rss.info["fib_ra"], rss.info["fib_dec"])
         )
 
-        # Dictionary that stores additional information
+        # Stores additional ancillary information (QC, debuggin purposes)
         interm_products = {
             "fib_pix_col": fibre_pixel_pos_cols,
             "fib_pix_row": fibre_pixel_pos_rows,
@@ -818,10 +899,11 @@ class CubeInterpolator(VerboseMixin):
             np.arange(self.target_wcs.array_shape[0])
         ).to(rss.wavelength.unit)
 
+        # Compute ADR correction in the focal plane
         if adr_dec_arcsec is not None:
             adr_dec_pixel = adr_dec_arcsec.to(u.pixel, self.kernel.pixel_scale)
-            if cube_wavelength.size != rss.wavelength.size or np.allclose(
-                cube_wavelength, rss.wavelength
+            if cube_wavelength.size != rss.wavelength.size or not np.allclose(
+                cube_wavelength, rss.wavelength, rtol=0.001
             ):
                 adr_dec_pixel = np.interp(
                     cube_wavelength, rss.wavelength, adr_dec_pixel
@@ -830,18 +912,29 @@ class CubeInterpolator(VerboseMixin):
             adr_dec_pixel = None
         if adr_ra_arcsec is not None:
             adr_ra_pixel = adr_ra_arcsec.to(u.pixel, self.kernel.pixel_scale)
-            if cube_wavelength.size != rss.wavelength.size or np.allclose(
-                cube_wavelength, rss.wavelength
+            if cube_wavelength.size != rss.wavelength.size or not np.allclose(
+                cube_wavelength, rss.wavelength, rtol=0.001
             ):
                 adr_ra_pixel = np.interp(cube_wavelength, rss.wavelength, adr_ra_pixel)
         else:
             adr_ra_pixel = None
-        # Interpolate all RSS fibres
-        if self.mask_flags is not None:
-            self.vprint(f"Flagging those pixels with: {self.mask_flags}")
-            mask = rss.mask.get_flag_map(self.mask_flags)
+
+        # Estimate wavelength window to chunck fibres during ADR correction
+        dx = adr_ra_pixel.max() - adr_ra_pixel.min() if adr_ra_pixel is not None else 0.0 << u.pixel
+        dy = adr_dec_pixel.max() - adr_dec_pixel.min() if adr_dec_pixel is not None else 0.0 << u.pixel
+        span = max(dx, dy).value
+        if span <= 0:
+            spectral_window = cube_wavelength.size
         else:
-            mask = np.zeros(rss.intensity.shape, dtype=bool)
+            spectral_window = int(max(1, min(
+                int(self.adr_min_pixel_frac / span * cube_wavelength.size), cube_wavelength.size)))
+
+        # Create slices and compute ADR corrections per wavelength chunck
+        edges = np.arange(0, cube_wavelength.size + spectral_window, spectral_window)
+        edges[-1] = cube_wavelength.size
+        wl_slices = [slice(edges[i], edges[i+1]) for i in range(len(edges)-1)]
+        adr_cols_centres = [0.0 << u.pixel if adr_ra_pixel is None else np.nanmedian(adr_ra_pixel[s]) for s in wl_slices]
+        adr_rows_centres = [0.0 << u.pixel if adr_dec_pixel is None else np.nanmedian(adr_dec_pixel[s]) for s in wl_slices]
 
         # Create a fibre coverage map
         if self.make_qc_plots:
@@ -855,49 +948,69 @@ class CubeInterpolator(VerboseMixin):
             )
             interm_products["qc_fibres_on_fov"] = qc_fig
 
-        if cube_wavelength.size != rss.wavelength.size or np.allclose(
-            cube_wavelength, rss.wavelength
+        # Interpolate the RSS along the spectra axis
+        if cube_wavelength.size != rss.wavelength.size or not np.allclose(
+            cube_wavelength, rss.wavelength, rtol=0.001
         ):
             self.vprint("Fibres will be interpolated to new wavelength grid")
-            interp_wave = True
+
+            rss.resample_wavelength_grid(cube_wavelength,
+                                         extrapolation=np.nan,
+                                         return_nan_flag=True)
+
+        # Flags to be propagated into the cube
+        if self.propagate_flags:
+            rss_flags = np.stack(
+                    [rss.mask.get_flag_map(key) for key in self.propagate_flags],
+                    axis=0).astype(bool)
+            datacube_masks = np.zeros((len(self.propagate_flags), *datacube.shape),
+                                      dtype=int)  # (n_flags, x, y, wl)
         else:
-            interp_wave = False
+            rss_flags, datacube_masks = None, None
+        # Remove RSS masked pixels
+        if self.mask_flags is not None:
+            self.vprint(f"Pixel with flags: {','.join(self.mask_flags)} will be ignored")
+            mask = rss.mask.get_flag_map(self.mask_flags)
+            self.vprint(f"Number of masked pixels {np.count_nonzero(mask)}"
+                        + f" out of {mask.size}")
+        else:
+            mask = np.zeros(rss.intensity.shape, dtype=bool)
+
+        if mask.all():
+            self.vprint("RSS contains no good values")
+            return datacube, datacube_var, datacube_weight, interm_products
+
+        # Fibre-by-fibre interpolation
         interm_products["fibre_weights"] = []
         for fibre in range(rss.intensity.shape[0]):
-            # Spectra interpolation
-            if interp_wave:
-                f_intensity = ancillary.flux_conserving_interpolation(
-                    cube_wavelength, rss.wavelength, rss.intensity[fibre]
-                )
-                f_variance = ancillary.flux_conserving_interpolation(
-                    cube_wavelength, rss.wavelength, rss.variance[fibre]
-                )
-                f_mask = np.interp(cube_wavelength, rss.wavelength, mask[fibre])
-                # Mask all pixels contaminated
-                f_mask = f_mask > 0
-            else:
-                f_intensity = rss.intensity[fibre]
-                f_variance = rss.variance[fibre]
-                f_mask = mask[fibre]
-
+            f_intensity = rss.intensity[fibre]
+            f_variance = rss.variance[fibre]
+            f_mask = mask[fibre]
+            if f_mask.all():
+                self.vprint("Fibre only contains masked values")
+                continue
             # Interpolate fibre to cube
-            datacube, datacube_var, datacube_weight = self.interpolate_fibre(
+            self._interpolate_fibre(
                 fib_spectra=f_intensity,
                 fib_variance=f_variance,
                 cube=datacube,
                 cube_var=datacube_var,
                 cube_weight=datacube_weight,
+                cube_masks=datacube_masks,
                 pix_pos_cols=fibre_pixel_pos_cols[fibre] << u.pixel,
                 pix_pos_rows=fibre_pixel_pos_rows[fibre] << u.pixel,
-                adr_cols=adr_ra_pixel,
-                adr_rows=adr_dec_pixel,
+                wl_slices=wl_slices,
+                adr_cols=adr_cols_centres,
+                adr_rows=adr_rows_centres,
                 fibre_mask=f_mask,
+                propagate_mask=rss_flags[:, fibre] if rss_flags is not None else None,
                 interm_products=interm_products,
             )
-        return datacube, datacube_var, datacube_weight, interm_products
+        return datacube, datacube_var, datacube_weight, datacube_masks, interm_products
 
-    def interpolate_fibre(
+    def _interpolate_fibre(
         self,
+        *,
         fib_spectra,
         fib_variance,
         cube,
@@ -907,86 +1020,65 @@ class CubeInterpolator(VerboseMixin):
         pix_pos_rows,
         adr_cols=None,
         adr_rows=None,
-        adr_pixel_frac=0.05,
+        wl_slices=None,
         fibre_mask=None,
+        cube_masks=None,
+        propagate_mask=None,
         interm_products=None,
     ):
-        """Interpolates fibre spectra and variance to a 3D data cube.
+        """
+        Accumulate one fibre into the cube (in place).
 
         Parameters
         ----------
-        fib_spectra: (k,) np.array(float)
-            Array containing the fibre spectra.
-        fib_variance: (k,) np.array(float)
-            Array containing the fibre variance.
-        cube: (k, n, m) np.ndarray (float)
-            Cube to interpolate fibre spectra.
-        cube_var: (k, n, m) np.ndarray (float)
-            Cube to interpolate fibre variance.
-        cube_weight: (k, n, m) np.ndarray (float)
-            Cube to store fibre spectral weights.
-        pix_pos_cols: int
-            Fibre column pixel position (m).
-        pix_pos_rows: int
-            Fibre row pixel position (n).
-        adr_cols: (k,) np.array(float), optional, default=None
-            Atmospheric Differential Refraction (ADR) of each wavelength point
-            along x (ra)-axis (m) expressed in pixels.
-        adr_rows: (k,) np.array(float), optional, default=None
-            Atmospheric Differential Refraction of each wavelength point along
-            y (dec) -axis (n) expressed in pixels.
-        adr_pixel_frac: float, optional, default=0.05
-            ADR Pixel fraction used to bin the spectral pixels. For each bin,
-            the median ADR correction will be used to
-            correct the range of wavelength.
-        fibre_mask: np.ndarray
-            Boolean array containing the fibre mask.
-        interm_products : dict
-            Dictionary that stores intermediate products and metadata.
+        fib_spectra : array-like, shape (k,)
+            Fibre spectrum.
+        fib_variance : array-like, shape (k,)
+            Fibre variance spectrum.
+        cube, cube_var, cube_weight : arrays, shape (k, n, m)
+            Accumulators for intensity, variance, and effective weights.
+        pix_pos_cols, pix_pos_rows : float
+            Fibre centre in pixel coordinates (columns, rows).
+        cube_masks : ndarray of int, shape (n_flags, k, n, m), optional
+            Per-flag mask accumulators for this RSS; updated in place if provided.
+        adr_cols, adr_rows : sequence of float
+            List of centres (one per ``wl_slice``) for DAR shifts along columns/rows.
+        wl_slices : sequence of slice
+            Wavelength chunks for ADR batching.
+        fibre_mask : array-like of bool, shape (k,), optional
+            Per-wavelength mask for this fibre. Masked wavelengths are excluded.
+        propagate_mask : ndarray of bool, shape (n_flags, k), optional
+            Per-flag per-wavelength mask for this fibre; used to mark cube voxels.
+        interm_products : dict, optional
+            Collector for diagnostics.
 
-        Returns
-        -------
-        cube:
-            Original datacube with the fibre data interpolated.
-        cube_var:
-            Original variance with the fibre data interpolated.
-        cube_weight:
-            Original datacube weights with the fibre data interpolated.
-        interm_products : dict
-            Dictionary that stores intermediate products and metadata.
+        Notes
+        -----
+        The accumulation uses an effective weight per voxel
+        ``w_eff = kernel_weight * pixel_weight``. Both the numerator (intensity)
+        and the variance use ``w_eff``; variance uses ``w_eff**2``.
         """
-        if adr_rows is None and adr_cols is None:
-            adr_rows = np.zeros(fib_spectra.size) << u.pixel
-            adr_cols = np.zeros(fib_spectra.size) << u.pixel
-            spectral_window = fib_spectra.size
-        else:
-            # Estimate spectral window
-            adr_pixel_frac = ancillary.check_unit(adr_pixel_frac, u.pixel)
-            spectral_window = int(
-                np.min(
-                    (
-                        adr_pixel_frac / np.abs(adr_cols[0] - adr_cols[-1]),
-                        adr_pixel_frac / np.abs(adr_rows[0] - adr_rows[-1]),
-                    )
-                )
-                * fib_spectra.size
-            )
-
         # Set NaNs to 0 and discard pixels
         if fibre_mask is None:
             fibre_mask = np.zeros(fib_spectra.shape, dtype=bool)
-        nan_pixels = ~np.isfinite(fib_spectra) | fibre_mask
-        fib_spectra[nan_pixels] = 0.0 << fib_spectra.unit
+        bad_pixels = ~np.isfinite(fib_spectra) | ~np.isfinite(fib_variance) | fibre_mask
 
-        pixel_weights = np.ones(fib_spectra.size)
-        pixel_weights[nan_pixels] = 0.0
+        if bad_pixels.all():
+            self.vprint("Fibre with no valid values")
+            return cube, cube_var, cube_weight
+
+        # Remove the NaNs (easier accumulation)
+        fib_spectra[bad_pixels] = 0.0 << fib_spectra.unit
+        fib_variance[bad_pixels] = 0.0 << fib_variance.unit
+
+        # Create the bad pixel mask
+        bad_pixel_weights = np.where(bad_pixels, 0.0, 1.0)
 
         # Loop over wavelength pixels
         fibre_weights = []
-        for wl_range in range(0, fib_spectra.size, spectral_window):
-            wl_slice = slice(wl_range, wl_range + spectral_window)
+        for wl_slice, cols_adr, rows_adr in zip(wl_slices, adr_cols, adr_rows):
             # Kernel along columns direction (x, ra)
-            kernel_centre_cols = pix_pos_cols - np.nanmedian(adr_cols[wl_slice])
+            kernel_centre_cols = pix_pos_cols - cols_adr
             kernel_offset = self.kernel.scale * self.kernel.truncation_radius
             cols_min = max(int(kernel_centre_cols.value - kernel_offset.value) - 1, 0)
             cols_max = min(
@@ -995,7 +1087,7 @@ class CubeInterpolator(VerboseMixin):
             )
             columns_slice = slice(cols_min, cols_max + 1, 1)
             # Kernel along rows direction (y, dec)
-            kernel_centre_rows = pix_pos_rows - np.nanmedian(adr_rows[wl_slice])
+            kernel_centre_rows = pix_pos_rows - rows_adr
             rows_min = max(int(kernel_centre_rows.value - kernel_offset.value) - 1, 0)
             rows_max = min(
                 int(kernel_centre_rows.value + kernel_offset.value) + 1,
@@ -1003,36 +1095,25 @@ class CubeInterpolator(VerboseMixin):
             )
             rows_slice = slice(rows_min, rows_max + 1, 1)
 
-            if (cols_max < cols_min) | (rows_max < rows_min):
+            if (cols_max < cols_min) or (rows_max < rows_min):
                 continue
 
             # Compute the kernel weight associated to each location
-            weights = self.kernel.kernel_2D(
-                np.arange(cols_min - 0.5, cols_max + 1.5, 1.0) * u.pixel
-                - kernel_centre_cols,
-                np.arange(rows_min - 0.5, rows_max + 1.5, 1.0) * u.pixel
-                - kernel_centre_rows,
-            )
-
-            fibre_weights.append((wl_slice, rows_slice, columns_slice, weights))
-
-            weights = weights[np.newaxis]
+            cols = np.arange(cols_min - 0.5, cols_max + 1.5, 1.0) << u.pixel
+            rows = np.arange(rows_min - 0.5, rows_max + 1.5, 1.0) << u.pixel
+            kernel_weights = self.kernel.kernel_2D(cols - kernel_centre_cols, rows - kernel_centre_rows)
+            fibre_weights.append((wl_slice, rows_slice, columns_slice, kernel_weights))
+            # Final weights = kernel + bad pixel masking
+            weights = kernel_weights[np.newaxis] * bad_pixel_weights[wl_slice, None, None]
             # Add spectra to cube
-            cube[wl_slice, rows_slice, columns_slice] = np.add(
-                cube[wl_slice, rows_slice, columns_slice],
-                fib_spectra[wl_slice, np.newaxis, np.newaxis] * weights,
-            )
-            cube_var[wl_slice, rows_slice, columns_slice] = np.add(
-                cube_var[wl_slice, rows_slice, columns_slice],
-                fib_variance[wl_slice, np.newaxis, np.newaxis] * weights**2,
-            )
-            cube_weight[wl_slice, rows_slice, columns_slice] = np.add(
-                cube_weight[wl_slice, rows_slice, columns_slice],
-                pixel_weights[wl_slice, np.newaxis, np.newaxis] * weights,
-            )
-
+            cube[wl_slice, rows_slice, columns_slice] += fib_spectra[wl_slice, None, None] * weights
+            cube_var[wl_slice, rows_slice, columns_slice] += fib_variance[wl_slice, None, None] * (weights * weights)
+            cube_weight[wl_slice, rows_slice, columns_slice] += weights
+            # Propagate fibre flags into cube
+            if cube_masks is not None:
+                cube_masks[:, wl_slice, rows_slice, columns_slice] = propagate_mask[:, wl_slice, None, None] & (weights[None] > self.flag_threshold)
+        # Store the fibre weights for QC purposes
         interm_products["fibre_weights"].append(fibre_weights)
-        return cube, cube_var, cube_weight
 
 
 def build_wcs(
@@ -1040,9 +1121,7 @@ def build_wcs(
     reference_position,
     spatial_pix_size: u.Quantity,
     spectra_pix_size: u.Quantity,
-    radesys="ICRS    ",
-    equinox=2000.0,
-) -> WCS:
+    ) -> WCS:
     """Create a WCS using cubing information.
 
     Integer pixel values fall at the center of pixels.
@@ -1058,11 +1137,13 @@ def build_wcs(
     spectra_pix_size : u.Quantity
         Pixel size along the spectral direction.
 
+    Return
+    ------
+    wcs : astropy.wcs.WCS
+        Target WCS instance.
     """
     wcs_dict = {
         # Spatial dimensions
-        "RADECSYS": radesys,
-        "EQUINOX": equinox,
         "CTYPE1": "RA---TAN",
         "CUNIT1": "deg",
         "CDELT1": spatial_pix_size.to_value("deg"),
@@ -1077,7 +1158,7 @@ def build_wcs(
         "NAXIS2": datacube_shape[2],
         # Spectral dimension
         "CTYPE3": "WAVE    ",
-        "CUNIT3": "angstrom",
+        "CUNIT3": "Angstrom",
         "CDELT3": spectra_pix_size.to_value("angstrom"),
         "CRPIX3": 0,
         "CRVAL3": reference_position[0].to_value("angstrom"),
@@ -1150,7 +1231,7 @@ def build_wcs_from_rss(
 
     vprint("Combined footprint center: {:.4f}, {:.4f}".format(ra_cen, dec_cen))
     vprint(
-        "Combined footprint Fov: {:.2f}, {:.2f} (arcmin)".format(
+        "Combined footprint Fov: {:.2f}, {:.2f}".format(
             ra_width.to("arcmin"), dec_width.to("arcmin")
         )
     )
@@ -1176,29 +1257,10 @@ def build_wcs_from_rss(
     )
 
 
-def make_white_image_from_array(data_array, wavelength=None, **kwargs):
-    """Create a white image from a 3D data array.
-
-    Parameters
-    ----------
-    data_array : np.ndarray
-        3D data array. First axis must correspond to the spectral dimension.
-    wavelength : np.ndarray
-        Wavelength associated to `data_array`.
-    **kwargs : dict
-        Additional arguments to be passed to :func:`Cube.get_white_image`.
-
-    Return
-    ------
-    white_image : np.ndarray
-        White image array.
-    """
-    vprint("Creating a Cube from input array")
-    cube = Cube(intensity=data_array, wavelength=wavelength)
-    return cube.get_white_image(**kwargs)
-
-
-def make_dummy_cube_from_rss(rss, spa_pix_arcsec=0.5, kernel_pix_arcsec=1.0
+def make_dummy_cube_from_rss(rss, *,
+                             spa_pix_arcsec=0.5,
+                             spe_pix_angstrom=None,
+                             kernel_pix_arcsec=1.0
                              ) -> Cube:
     """Create an empty datacube array from an input RSS.
 
@@ -1206,9 +1268,11 @@ def make_dummy_cube_from_rss(rss, spa_pix_arcsec=0.5, kernel_pix_arcsec=1.0
     ----------
     rss : :class:`RSS`
         Input RSS
-    spa_pix_arcsec : u.Quantity
+    spa_pix_arcsec : u.Quantity, optional
         Spaxel angular size.
-    kernel_pix_arcsec : u.Quantity
+    spe_pix_arcsec : u.Quantity, optional
+        Spaxel spectral size.
+    kernel_pix_arcsec : u.Quantity, optional
         Kernel scale angular size.
 
     Return
@@ -1217,10 +1281,16 @@ def make_dummy_cube_from_rss(rss, spa_pix_arcsec=0.5, kernel_pix_arcsec=1.0
     """
     spa_pix_arcsec = ancillary.check_unit(spa_pix_arcsec, u.arcsec)
     kernel_pix_arcsec = ancillary.check_unit(kernel_pix_arcsec, u.arcsec)
+    if spe_pix_angstrom is None:
+        # Use RSS-native spectra resolution
+        spe_pix_angstrom = rss.wavelength[1] - rss.wavelength[0]
+    else:
+        spe_pix_angstrom = ancillary.check_unit(spe_pix_angstrom, u.AA)
+
     wcs = build_wcs_from_rss(
         rss,
         spatial_pix_size=spa_pix_arcsec,
-        spectra_pix_size=rss.wavelength[1] - rss.wavelength[0],
+        spectra_pix_size=spe_pix_angstrom,
     )
     interpolator = CubeInterpolator(
         [rss],
