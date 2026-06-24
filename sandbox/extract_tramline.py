@@ -11,13 +11,13 @@ p5, p95 = np.nanpercentile(hdul[0].data, [5, 95])
 min_value = minimum_filter(hdul[0].data, size=5)
 max_value = maximum_filter(hdul[0].data, size=5)
 
-back_substracted = hdul[0].data - min_value
-p5, p95 = np.nanpercentile(back_substracted, [5, 95])
+back_subtracted = hdul[0].data - min_value
+p5, p95 = np.nanpercentile(back_subtracted, [5, 95])
 
 # plt.figure()
 #plt.imshow(hdul[0].data, vmin=p5, vmax=p95)
 #plt.colorbar()
-# plt.imshow(back_substracted, vmin=p5, vmax=p95)
+# plt.imshow(back_subtracted, vmin=p5, vmax=p95)
 # plt.colorbar()
 # plt.show()
 
